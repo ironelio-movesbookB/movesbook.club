@@ -5,6 +5,7 @@ import { isClubAccountUserType } from '@/utils/dashboardRouting';
 import {
   createOrUpdateClubNotification,
   deleteNotification,
+  deleteNotificationsInDateRange,
   listClubAdminSentNotifications,
   toggleNotificationVisibility,
 } from '@/lib/notifications/notificationService';
@@ -37,11 +38,26 @@ export async function GET(request: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { searchParams } = new URL(request.url);
+  if (searchParams.get('ownedClubs') === '1') {
+    const clubs = await prisma.club.findMany({
+      where: { adminId: auth.userId },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return NextResponse.json({ clubs });
+  }
+
   try {
+    const statusParam = searchParams.get('status');
+    const status =
+      statusParam === 'active' || statusParam === 'expired' || statusParam === 'all'
+        ? statusParam
+        : 'all';
     const result = await listClubAdminSentNotifications({
       userId: auth.userId,
       clubId: searchParams.get('clubId'),
       search: searchParams.get('q') || '',
+      status,
       page: Number(searchParams.get('page') || '1'),
       pageSize: Number(searchParams.get('pageSize') || '10'),
     });
@@ -58,13 +74,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+
+    if (body?.action === 'delete_range') {
+      const fromDate = typeof body?.fromDate === 'string' ? body.fromDate : '';
+      const toDate = typeof body?.toDate === 'string' ? body.toDate : '';
+      if (!fromDate || !toDate) {
+        return NextResponse.json({ error: 'fromDate and toDate required' }, { status: 400 });
+      }
+      const deleted = await deleteNotificationsInDateRange({
+        source: 'club_admin',
+        submittedByUserId: auth.userId,
+        fromDate,
+        toDate,
+        entityId: typeof body?.clubId === 'string' ? body.clubId : null,
+      });
+      return NextResponse.json({ ok: true, deleted });
+    }
+
     let clubIds: string[] = Array.isArray(body?.clubIds)
       ? body.clubIds.map(String)
       : typeof body?.clubId === 'string' && body.clubId
         ? [body.clubId]
         : [];
 
-    // MY PAGE: all owned clubs when none specified
     if (clubIds.length === 0) {
       const owned = await prisma.club.findMany({
         where: { adminId: auth.userId },

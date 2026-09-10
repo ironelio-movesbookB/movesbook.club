@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
     Bell,
     FileText,
@@ -29,7 +30,7 @@ export default function HeaderBar({
                 </div>
                 <div className="flex flex-col gap-2">
                     <div className="h-[40px] w-[220px] bg-[#b8bbd2] rounded px-3 flex items-center text-blue-900 text-[14px]">
-                        /users/club_user_faccess
+                        /users/clubnotification
                     </div>
                     <div className="flex gap-2">
                         <div className="h-[28px] px-3 bg-green-600 text-white rounded flex items-center text-[12px]">
@@ -47,8 +48,24 @@ export default function HeaderBar({
             </button>
 
             <div className="h-[62px] px-3 bg-[#eeeeee] border border-gray-500 rounded-lg flex items-center gap-3">
-                <MessageCircle size={23} />
-                <Bell size={22} />
+                {/* PHP specific_head: fa-comment-o → Notifies from the club staff */}
+                <Link
+                    href="/users/clubnotification"
+                    title="Notifies from the club staff"
+                    className="text-gray-800 hover:text-teal-800"
+                    aria-label="Notifies from the club staff"
+                >
+                    <MessageCircle size={23} />
+                </Link>
+                {/* PHP specific_head: fa-bell → Notifies from Movesbook */}
+                <Link
+                    href="/users/notification/all/all/movesbook"
+                    title="Notifies from Movesbook"
+                    className="text-gray-800 hover:text-teal-800"
+                    aria-label="Notifies from Movesbook"
+                >
+                    <Bell size={22} />
+                </Link>
                 <Info size={22} className="text-blue-500" />
                 <PlayCircle size={32} className="text-red-600" />
                 <List size={25} />

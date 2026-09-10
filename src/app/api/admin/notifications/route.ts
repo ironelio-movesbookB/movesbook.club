@@ -45,17 +45,31 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    const contentsByLang =
+      body?.contentsByLang && typeof body.contentsByLang === 'object' && !Array.isArray(body.contentsByLang)
+        ? Object.fromEntries(
+            Object.entries(body.contentsByLang as Record<string, unknown>).map(([k, v]) => [
+              k,
+              typeof v === 'string' ? v : '',
+            ]),
+          )
+        : undefined;
+    const audienceLanguages = Array.isArray(body?.audienceLanguages)
+      ? body.audienceLanguages.map(String)
+      : [];
+
     const row = await createOrUpdateStaffNotification({
       title: typeof body?.title === 'string' ? body.title : '',
       description: typeof body?.description === 'string' ? body.description : '',
+      contentsByLang,
+      audienceLanguages,
       path: typeof body?.path === 'string' ? body.path : '',
       untilDate: typeof body?.untilDate === 'string' ? body.untilDate : new Date().toISOString().slice(0, 10),
-      langId: typeof body?.langId === 'string' ? body.langId : '0',
       prioritary: Boolean(body?.prioritary),
       audienceRoles: Array.isArray(body?.audienceRoles) ? body.audienceRoles.map(String) : [],
       usernamesRaw: typeof body?.usernames === 'string' ? body.usernames : '',
       submittedByAdminId: auth.adminUserId,
-      submittedByUserId: auth.isSuperAdmin ? null : null,
+      submittedByUserId: null,
       editId: typeof body?.editId === 'string' ? body.editId : undefined,
     });
     return NextResponse.json({ id: row.id, ok: true });

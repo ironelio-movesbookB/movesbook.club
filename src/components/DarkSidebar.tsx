@@ -2375,7 +2375,7 @@ export default function DarkSidebar({
                   >
                     <Bell className="h-4 w-4 shrink-0 opacity-95" />
                     <span className="leading-snug">
-                      By Movesbook ({notificationCounts.movesbook})
+                      Notifications from movesbook staff ({notificationCounts.movesbook})
                     </span>
                   </button>
                   <button
@@ -2388,6 +2388,27 @@ export default function DarkSidebar({
                         router.push(`/users/clubnotification${qs}`);
                         return;
                       }
+                      if (userType === 'COACH') {
+                        const qs = selectedEntityId
+                          ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                          : '';
+                        router.push(`/users/coachnotification${qs}`);
+                        return;
+                      }
+                      if (isTeamAccountUserType(userType)) {
+                        const qs = selectedEntityId
+                          ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                          : '';
+                        router.push(`/users/teamnotification${qs}`);
+                        return;
+                      }
+                      if (isGroupAccountUserType(userType)) {
+                        const qs = selectedEntityId
+                          ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                          : '';
+                        router.push(`/users/groupnotification${qs}`);
+                        return;
+                      }
                       router.push('/users/notification/all/all/clubs');
                     }}
                     className="flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
@@ -2395,8 +2416,14 @@ export default function DarkSidebar({
                     <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
                     <span className="leading-snug">
                       {isClubAccountUserType(userType)
-                        ? 'Send / Club notifies'
-                        : `By Club Staff (${notificationCounts.clubs})`}
+                        ? 'Notifications from club staff'
+                        : userType === 'COACH'
+                          ? 'Send / Coach notifies'
+                          : isTeamAccountUserType(userType)
+                            ? 'Send / Team notifies'
+                            : isGroupAccountUserType(userType)
+                              ? 'Send / Group notifies'
+                              : `Notifications from club staff (${notificationCounts.clubs})`}
                     </span>
                   </button>
                 </div>
@@ -2971,7 +2998,7 @@ export default function DarkSidebar({
                       >
                         <Bell className="h-4 w-4 shrink-0 opacity-95" />
                         <span className="leading-snug">
-                          By Movesbook ({notificationCounts.movesbook})
+                          Notifications from movesbook staff ({notificationCounts.movesbook})
                         </span>
                       </button>
                       <button
@@ -2984,6 +3011,27 @@ export default function DarkSidebar({
                             router.push(`/users/clubnotification${qs}`);
                             return;
                           }
+                          if (userType === 'COACH') {
+                            const qs = selectedEntityId
+                              ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                              : '';
+                            router.push(`/users/coachnotification${qs}`);
+                            return;
+                          }
+                          if (isTeamAccountUserType(userType)) {
+                            const qs = selectedEntityId
+                              ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                              : '';
+                            router.push(`/users/teamnotification${qs}`);
+                            return;
+                          }
+                          if (isGroupAccountUserType(userType)) {
+                            const qs = selectedEntityId
+                              ? `?entityId=${encodeURIComponent(selectedEntityId)}`
+                              : '';
+                            router.push(`/users/groupnotification${qs}`);
+                            return;
+                          }
                           router.push('/users/notification/all/all/clubs');
                         }}
                         className="flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
@@ -2991,8 +3039,14 @@ export default function DarkSidebar({
                         <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
                         <span className="leading-snug">
                           {isClubAccountUserType(userType)
-                            ? 'Send / Club notifies'
-                            : `By Club Staff (${notificationCounts.clubs})`}
+                            ? 'Notifications from club staff'
+                            : userType === 'COACH'
+                              ? 'Send / Coach notifies'
+                              : isTeamAccountUserType(userType)
+                                ? 'Send / Team notifies'
+                                : isGroupAccountUserType(userType)
+                                  ? 'Send / Group notifies'
+                                  : `Notifications from club staff (${notificationCounts.clubs})`}
                         </span>
                       </button>
                     </div>
