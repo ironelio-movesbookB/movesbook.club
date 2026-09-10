@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import {
+  clearInboxExceptRecentDays,
   getUnreadCounts,
   listInboxForUser,
   markNotificationVisited,
@@ -55,6 +56,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    if (body?.action === 'clear_section') {
+      const source = body?.source === 'clubs' ? 'clubs' : 'movesbook';
+      const result = await clearInboxExceptRecentDays(auth.userId, source);
+      return NextResponse.json({ ok: true, ...result });
+    }
+
     const id = typeof body?.id === 'string' ? body.id : '';
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
     if (body?.action === 'visit') {

@@ -75,15 +75,43 @@ export default function NotificationsInboxPanel({ source }: Props) {
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, visited: true } : i)));
   }
 
+  async function clearSection() {
+    if (
+      !confirm(
+        'Clear section will hide all notifications older than 3 days. Notifications from the last 3 days stay and must be removed manually. Continue?',
+      )
+    ) {
+      return;
+    }
+    const token = userToken();
+    if (!token) return;
+    const res = await fetch('/api/notifications', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'clear_section', source }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'Clear failed');
+      return;
+    }
+    setPage(1);
+    await load();
+    alert(`Cleared ${data.cleared ?? 0} older notification(s).`);
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const title =
     source === 'movesbook' ? 'Notifications by Movesbook' : 'Notifications by Club Staff';
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto text-gray-900">
+    <div className="w-full p-4 md:p-6 text-gray-900">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-gray-900">{title}</h1>
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Link
             href="/users/notification/all/all/movesbook"
             className={`rounded border px-3 py-1.5 ${
@@ -104,6 +132,14 @@ export default function NotificationsInboxPanel({ source }: Props) {
           >
             By Club Staff
           </Link>
+          <button
+            type="button"
+            onClick={() => void clearSection()}
+            className="rounded border border-gray-400 bg-white px-3 py-1.5 text-gray-900 hover:bg-gray-50"
+            title="Hide notifications older than 3 days (keep last 3 days for manual review)"
+          >
+            Clear section
+          </button>
         </div>
       </div>
 
