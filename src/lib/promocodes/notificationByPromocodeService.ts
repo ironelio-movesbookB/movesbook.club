@@ -56,6 +56,15 @@ export type InvitationRow = {
   enable: string;
   emailCount: number;
   emailList: string;
+  /** Invites sent by the current user with this promocode (not global promocode email blob). */
+  inviteEntries: Array<{
+    email: string;
+    username: string | null;
+    registered: boolean;
+    inviteDate: string | null;
+    registrationDate: string | null;
+    subscriptionName: string | null;
+  }>;
   created: string;
   status: 'Registered' | 'Pending';
   senderUsername: string;
@@ -66,6 +75,22 @@ export type InvitationRow = {
   version: string;
 };
 
+/** Outbound invite/registration rows for "Recipients record selected". */
+export type SentRecipientRow = {
+  applyId: number;
+  promocodeId: number;
+  promocodeCode: string;
+  senderUsername: string;
+  receiverLabel: string;
+  receiverEmail: string;
+  registered: boolean;
+  inviteDate: string;
+  registrationDate: string;
+  version: string;
+  status: 'Pending' | 'Registered' | 'Expire' | 'Current' | '--';
+  credits: number;
+};
+
 export type RegisteredUserRow = {
   senderUsername: string;
   senderId: number | null;
@@ -74,6 +99,10 @@ export type RegisteredUserRow = {
   subscriptionStartDate: string;
   subscriptionEndDate: string;
   subscriptionSettingId: number | null;
+  /** Registration date from apply or subscription start. */
+  registrationDate: string;
+  /** Version chosen at registration (receiver_version / subscription name). */
+  versionChosen: string;
   promocodeCode: string;
   promocodeValidTo: string;
   mailDate: string;
@@ -100,6 +129,8 @@ export type ConnectionChartData = {
   totalCredits: number;
   usedCredits: number;
   availableCredits: number;
+  /** Credits earned when this user registered themselves (receiver_credit / credit2). */
+  personalRegistrationCredits: number;
   allowsCurrentUserToEarn: {
     username: string;
     roleName: string;
@@ -131,6 +162,8 @@ export type NotificationByPromocodeDashboard = {
   lastEmailSentDate: string;
   returnIndex: string;
   invitationsData: InvitationRow[];
+  /** Outbound invites for the highlighted "Recipients record selected" grid. */
+  sentRecipients: SentRecipientRow[];
   registeredUsers: RegisteredUserRow[];
   creditRecords: CreditRecordRow[];
   totalCredits: number;
@@ -386,6 +419,21 @@ export async function getNotificationByPromocodeDashboard(params: {
           promocodesList.push(option);
         }
       }
+      // Dedupe by code, keep highest id (rows already ORDER BY id DESC).
+      const seenCodes = new Set<string>();
+      const dedupedGenerated: PromocodeOption[] = [];
+      for (const option of generatedPromocodes) {
+        const codeKey = option.code.trim().toLowerCase();
+        if (!codeKey) {
+          dedupedGenerated.push(option);
+          continue;
+        }
+        if (seenCodes.has(codeKey)) continue;
+        seenCodes.add(codeKey);
+        dedupedGenerated.push(option);
+      }
+      generatedPromocodes.length = 0;
+      generatedPromocodes.push(...dedupedGenerated);
     }
   }
 
@@ -426,19 +474,34 @@ export async function getNotificationByPromocodeDashboard(params: {
   const roles = ROLE_NAMES;
 
   const invitationsData: InvitationRow[] = [];
+  const sentRecipients: SentRecipientRow[] = [];
   if (appliesTable && settingsTable) {
-    const emailNorm = email.trim().toLowerCase();
+    // Match PHP: promocodes the current user received (receiver_id only).
     const receivedInvitations = await prisma.$queryRawUnsafe<ApplyRow[]>(
       `SELECT * FROM \`${appliesTable}\`
-       WHERE receiver_id = ? AND delete_status = 2
-         AND LOWER(TRIM(COALESCE(receiver_email, ''))) = ?
+       WHERE receiver_id = ? AND receiver_id > 0 AND delete_status = 2
        ORDER BY created DESC`,
-      legacyUserId,
-      emailNorm
+      legacyUserId
     );
 
     const promoSelectSql = await buildPromocodeSettingsSelectSql(settingsTable);
     const seenPromocodeIds = new Set<number>();
+
+    // Invites THIS user sent, keyed by promocode — used for Users column + recipients grid.
+    const sentByMe = await prisma.$queryRawUnsafe<ApplyRow[]>(
+      `SELECT * FROM \`${appliesTable}\`
+       WHERE sender_id = ? AND delete_status = 2
+       ORDER BY created DESC`,
+      legacyUserId
+    );
+    const sentByPromo = new Map<number, ApplyRow[]>();
+    for (const row of sentByMe) {
+      const pid = rowNum(row, 'promocode_id');
+      if (pid <= 0) continue;
+      const list = sentByPromo.get(pid) ?? [];
+      list.push(row);
+      sentByPromo.set(pid, list);
+    }
 
     for (const applyRecord of receivedInvitations) {
       const promocodeId = rowNum(applyRecord, 'promocode_id');
@@ -467,8 +530,43 @@ export async function getNotificationByPromocodeDashboard(params: {
         : null;
 
       const version = versionFromIds(rowStr(promocodeData, 'version_id'), subscriptionCodeMap);
-      const emailField = rowStr(promocodeData, 'email');
-      const emailList = emailField ? emailField.split(',').map((e) => e.trim()).filter(Boolean) : [];
+
+      const mySent = sentByPromo.get(promocodeId) ?? [];
+      const inviteEntries: InvitationRow['inviteEntries'] = [];
+      for (const sent of mySent) {
+        const rid = rowNum(sent, 'receiver_id');
+        const receiverEmail = rowStr(sent, 'receiver_email');
+        let username: string | null = null;
+        let subscriptionName: string | null = null;
+        let registrationDate: string | null = null;
+        if (rid > 0) {
+          const ru = (await fetchLegacyUsersByIds([rid])).get(rid);
+          username = ru?.username ?? null;
+          registrationDate =
+            formatDate(rowStr(sent, 'registration_date')) ||
+            formatDate(ru?.subscriptionStartDate) ||
+            formatDate(ru?.created) ||
+            null;
+          if (ru?.subscriptionSettingId && subscriptionsData[ru.subscriptionSettingId]) {
+            subscriptionName = subscriptionsData[ru.subscriptionSettingId];
+          } else {
+            subscriptionName = rowStr(sent, 'receiver_version') || null;
+          }
+        }
+        inviteEntries.push({
+          email: receiverEmail,
+          username,
+          registered: rid > 0,
+          inviteDate: formatDate(sent.created) || null,
+          registrationDate,
+          subscriptionName,
+        });
+      }
+
+      const emailList = inviteEntries
+        .map((e) => (e.registered ? e.username || e.email : e.email))
+        .filter(Boolean)
+        .join(', ');
 
       const receiverId = rowNum(applyRecord, 'receiver_id');
       invitationsData.push({
@@ -478,8 +576,9 @@ export async function getNotificationByPromocodeDashboard(params: {
         usableBy: rowStr(promocodeData, 'usable_by'),
         recipient: rowStr(promocodeData, 'recipient'),
         enable: rowStr(promocodeData, 'enable'),
-        emailCount: emailList.length,
-        emailList: emailField,
+        emailCount: inviteEntries.length,
+        emailList,
+        inviteEntries,
         created: formatDate(applyRecord.created),
         status: receiverId > 0 ? 'Registered' : 'Pending',
         senderUsername: senderUser?.username ?? rowStr(applyRecord, 'sender_email'),
@@ -489,6 +588,64 @@ export async function getNotificationByPromocodeDashboard(params: {
         senderFlagImg,
         version,
       });
+    }
+
+    // Recipients record selected: all outbound invites by current user (pending + registered).
+    for (const sent of sentByMe) {
+      const promocodeId = rowNum(sent, 'promocode_id');
+      if (promocodeId <= 0) continue;
+      const promoRows = await prisma.$queryRawUnsafe<PromoRow[]>(
+        `SELECT ${promoSelectSql} FROM \`${settingsTable}\` WHERE id = ? LIMIT 1`,
+        promocodeId
+      );
+      const promocodeData = promoRows[0];
+      if (!promocodeData) continue;
+
+      const rid = rowNum(sent, 'receiver_id');
+      const receiverEmail = rowStr(sent, 'receiver_email');
+      let receiverLabel = receiverEmail;
+      let registrationDate = '';
+      let versionName = rowStr(sent, 'receiver_version');
+      if (rid > 0) {
+        const ru = (await fetchLegacyUsersByIds([rid])).get(rid);
+        receiverLabel = ru?.username || receiverEmail;
+        registrationDate =
+          formatDate(rowStr(sent, 'registration_date')) ||
+          formatDate(ru?.subscriptionStartDate) ||
+          '';
+        if (!versionName && ru?.subscriptionSettingId && subscriptionsData[ru.subscriptionSettingId]) {
+          versionName = subscriptionsData[ru.subscriptionSettingId];
+        }
+      }
+
+      const validTo = formatDate(promocodeData.valid_to);
+      const today = new Date().toISOString().slice(0, 10);
+      let status: SentRecipientRow['status'] = rid > 0 ? 'Registered' : 'Pending';
+      if (rid > 0 && validTo) status = validTo < today ? 'Expire' : 'Current';
+
+      sentRecipients.push({
+        applyId: rowNum(sent, 'id'),
+        promocodeId,
+        promocodeCode: rowStr(promocodeData, 'code'),
+        senderUsername: email.split('@')[0] || 'me',
+        receiverLabel,
+        receiverEmail,
+        registered: rid > 0,
+        inviteDate: formatDate(sent.created),
+        registrationDate,
+        version: versionName || '--',
+        status,
+        credits: rid > 0 ? rowNum(sent, 'sender_credit') : 0,
+      });
+    }
+
+    // Fill sender username for recipients from current user
+    if (sentRecipients.length > 0) {
+      const me = (await fetchLegacyUsersByIds([legacyUserId])).get(legacyUserId);
+      const myName = me?.username || email;
+      for (const row of sentRecipients) {
+        row.senderUsername = myName;
+      }
     }
   }
 
@@ -532,7 +689,7 @@ export async function getNotificationByPromocodeDashboard(params: {
           receiverVersionName: rowStr(applyRow, 'receiver_version'),
         });
 
-        const needsId = storedSecondaryId !== legacyUserId;
+        const needsId = storedSecondaryId <= 0;
         const needsCredit = storedSecondaryCredit <= 0 && resolvedCredit > 0;
         if (!needsId && !needsCredit) continue;
 
@@ -595,16 +752,27 @@ export async function getNotificationByPromocodeDashboard(params: {
 
     const friendIdList = Array.from(friendIds);
     const placeholders = friendIdList.map(() => '?').join(',');
+    // Only actual registrations (pending invites belong in Recipients record selected).
     const registeredApplies = await prisma.$queryRawUnsafe<ApplyRow[]>(
       `SELECT * FROM \`${appliesTable}\`
-       WHERE sender_id IN (${placeholders}) AND delete_status = 2
+       WHERE sender_id IN (${placeholders}) AND receiver_id > 0 AND delete_status = 2
        ORDER BY created DESC`,
       ...friendIdList
     );
 
+    const seenRegistrationKeys = new Set<string>();
+
     for (const applyData of registeredApplies) {
       const promocodeId = rowNum(applyData, 'promocode_id');
       if (promocodeId <= 0) continue;
+
+      const receiverId = rowNum(applyData, 'receiver_id');
+      if (receiverId <= 0) continue;
+
+      // Deduplicate: one row per receiver (+ promocode) so a single registration is not tracked twice.
+      const dedupeKey = `${receiverId}:${promocodeId}`;
+      if (seenRegistrationKeys.has(dedupeKey)) continue;
+      seenRegistrationKeys.add(dedupeKey);
 
       const promoRows = await prisma.$queryRawUnsafe<PromoRow[]>(
         `SELECT ${promoSelectSql} FROM \`${settingsTable}\` WHERE id = ? LIMIT 1`,
@@ -613,7 +781,6 @@ export async function getNotificationByPromocodeDashboard(params: {
       const promocodeData = promoRows[0];
       if (!promocodeData) continue;
 
-      const receiverId = rowNum(applyData, 'receiver_id');
       let receiverUser: {
         username: string;
         roleId: number | null;
@@ -622,7 +789,7 @@ export async function getNotificationByPromocodeDashboard(params: {
         subscriptionSettingId: number | null;
       };
 
-      if (receiverId > 0) {
+      {
         const ru = (await fetchLegacyUsersByIds([receiverId])).get(receiverId);
         receiverUser = {
           username: ru?.username ?? '',
@@ -636,14 +803,6 @@ export async function getNotificationByPromocodeDashboard(params: {
           receiverId
         );
         receiverUser.roleId = roleRows[0]?.role_id != null ? Number(roleRows[0].role_id) : null;
-      } else {
-        receiverUser = {
-          username: rowStr(applyData, 'receiver_email'),
-          roleId: null,
-          subscriptionStartDate: '',
-          subscriptionEndDate: '',
-          subscriptionSettingId: null,
-        };
       }
 
       const senderId = rowNum(applyData, 'sender_id');
@@ -683,6 +842,20 @@ export async function getNotificationByPromocodeDashboard(params: {
       let status: RegisteredUserRow['status'] = '--';
       if (validTo) status = validTo < today ? 'Expire' : 'Current';
 
+      const registrationDate =
+        formatDate(rowStr(applyData, 'registration_date')) ||
+        formatDate(receiverUser.subscriptionStartDate) ||
+        '';
+
+      let versionChosen = rowStr(applyData, 'receiver_version');
+      if (
+        !versionChosen &&
+        receiverUser.subscriptionSettingId &&
+        subscriptionsData[receiverUser.subscriptionSettingId]
+      ) {
+        versionChosen = subscriptionsData[receiverUser.subscriptionSettingId];
+      }
+
       registeredUsers.push({
         senderUsername,
         senderId: senderIdOut,
@@ -694,6 +867,8 @@ export async function getNotificationByPromocodeDashboard(params: {
             ? receiverUser.subscriptionEndDate
             : '',
         subscriptionSettingId: receiverUser.subscriptionSettingId,
+        registrationDate,
+        versionChosen: versionChosen || '--',
         promocodeCode: rowStr(promocodeData, 'code'),
         promocodeValidTo: validTo,
         mailDate: formatDate(applyData.created),
@@ -717,18 +892,25 @@ export async function getNotificationByPromocodeDashboard(params: {
       legacyUserId
     );
 
+    const seenCreditKeys = new Set<string>();
+
     for (const applyData of creditsApplies) {
       const receiverId = rowNum(applyData, 'receiver_id');
       const senderId = rowNum(applyData, 'sender_id');
       const secondarySenderId = rowNum(applyData, 'secondary_sender_id');
+      const applyId = rowNum(applyData, 'id');
+      const promocodeId = rowNum(applyData, 'promocode_id');
 
       let creditsToShow = 0;
+      let creditRole: 'receiver' | 'sender' | 'secondary' | null = null;
       if (receiverId === legacyUserId) {
         creditsToShow = rowNum(applyData, 'receiver_credit');
         if (creditsToShow <= 0) continue;
+        creditRole = 'receiver';
       } else if (senderId === legacyUserId) {
         creditsToShow = rowNum(applyData, 'sender_credit');
         if (creditsToShow <= 0) continue;
+        creditRole = 'sender';
       } else if (secondarySenderId === legacyUserId) {
         creditsToShow = await resolveSecondaryCreditAmount({
           storedCredit: rowNum(applyData, 'secondary_sender_credit'),
@@ -736,9 +918,20 @@ export async function getNotificationByPromocodeDashboard(params: {
           receiverVersionName: rowStr(applyData, 'receiver_version'),
         });
         if (creditsToShow <= 0) continue;
+        creditRole = 'secondary';
       } else {
         continue;
       }
+
+      // Avoid double-counting the same registration / invite credit rows.
+      const dedupeKey =
+        creditRole === 'receiver'
+          ? `receiver:${promocodeId || applyId}`
+          : creditRole === 'sender'
+            ? `sender:${receiverId || applyId}:${promocodeId || 0}`
+            : `secondary:${applyId}`;
+      if (seenCreditKeys.has(dedupeKey)) continue;
+      seenCreditKeys.add(dedupeKey);
 
       let creditsThanksTo = '-';
       let secondarySenderUsername = '';
@@ -816,6 +1009,7 @@ export async function getNotificationByPromocodeDashboard(params: {
   let allowsCurrentUserToEarn: ConnectionChartData['allowsCurrentUserToEarn'] = null;
   const directRecipients: ConnectionChartData['directRecipients'] = [];
   const indirectRecipients: ConnectionChartData['indirectRecipients'] = [];
+  let personalRegistrationCredits = 0;
 
   let currentUserUsername = '';
   let currentUserRoleName = '';
@@ -827,6 +1021,14 @@ export async function getNotificationByPromocodeDashboard(params: {
   }
 
   if (appliesTable && usersTable) {
+    const selfCreditRows = await prisma.$queryRawUnsafe<{ credit: unknown }[]>(
+      `SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
+       FROM \`${appliesTable}\`
+       WHERE receiver_id = ? AND delete_status = 2`,
+      legacyUserId
+    ).catch(() => [] as { credit: unknown }[]);
+    personalRegistrationCredits = Number(selfCreditRows[0]?.credit ?? 0) || 0;
+
     const allowsRecord = await prisma.$queryRawUnsafe<ApplyRow[]>(
       `SELECT sender_id FROM \`${appliesTable}\`
        WHERE receiver_id = ? AND delete_status = 2
@@ -851,14 +1053,17 @@ export async function getNotificationByPromocodeDashboard(params: {
     }
 
     const directRows = await prisma.$queryRawUnsafe<ApplyRow[]>(
-      `SELECT receiver_id, sender_credit FROM \`${appliesTable}\`
+      `SELECT receiver_id, sender_credit, promocode_id FROM \`${appliesTable}\`
        WHERE sender_id = ? AND receiver_id > 0 AND delete_status = 2
        ORDER BY created DESC`,
       legacyUserId
     );
 
+    const seenDirect = new Set<number>();
     for (const row of directRows) {
       const receiverId = rowNum(row, 'receiver_id');
+      if (!receiverId || seenDirect.has(receiverId)) continue;
+      seenDirect.add(receiverId);
       const ru = (await fetchLegacyUsersByIds([receiverId])).get(receiverId);
       if (!ru) continue;
       const roleRows = await prisma.$queryRawUnsafe<{ role_id: number | null }[]>(
@@ -878,16 +1083,21 @@ export async function getNotificationByPromocodeDashboard(params: {
     if (directRecipientIds.length > 0) {
       const placeholders = directRecipientIds.map(() => '?').join(',');
       const indirectRows = await prisma.$queryRawUnsafe<ApplyRow[]>(
-        `SELECT sender_id, receiver_id, secondary_sender_credit, receiver_version
+        `SELECT sender_id, receiver_id, secondary_sender_credit, receiver_version, promocode_id
          FROM \`${appliesTable}\`
          WHERE sender_id IN (${placeholders}) AND receiver_id > 0 AND delete_status = 2
          ORDER BY created DESC`,
         ...directRecipientIds
       );
 
+      const seenIndirect = new Set<string>();
       for (const row of indirectRows) {
         const receiverId = rowNum(row, 'receiver_id');
         const senderId = rowNum(row, 'sender_id');
+        const promocodeId = rowNum(row, 'promocode_id');
+        const key = `${receiverId}:${promocodeId}`;
+        if (!receiverId || seenIndirect.has(key)) continue;
+        seenIndirect.add(key);
         const ru = (await fetchLegacyUsersByIds([receiverId])).get(receiverId);
         const su = (await fetchLegacyUsersByIds([senderId])).get(senderId);
         if (!ru || !su) continue;
@@ -920,8 +1130,15 @@ export async function getNotificationByPromocodeDashboard(params: {
     }
   }
 
+  // Connection chart total = personal + direct + indirect (client expected layout).
+  const connectionTotal =
+    personalRegistrationCredits +
+    directRecipients.reduce((s, d) => s + d.credits, 0) +
+    indirectRecipients.reduce((s, d) => s + d.credits, 0);
+  // Prefer credit-ledger sum when present; otherwise connection breakdown.
+  const finalTotalCredits = totalCredits > 0 ? totalCredits : connectionTotal;
   const usedCreditsFinal = 0;
-  const availableCreditsFinal = totalCredits - usedCreditsFinal;
+  const availableCreditsFinal = finalTotalCredits;
   const childPromo = await getChildPromoRights(legacyUserId);
 
   return {
@@ -935,17 +1152,19 @@ export async function getNotificationByPromocodeDashboard(params: {
     lastEmailSentDate,
     returnIndex,
     invitationsData,
+    sentRecipients,
     registeredUsers,
     creditRecords,
-    totalCredits,
+    totalCredits: finalTotalCredits,
     usedCredits: usedCreditsFinal,
     availableCredits: availableCreditsFinal,
     connectionChart: {
       currentUserUsername,
       currentUserRoleName,
-      totalCredits,
+      totalCredits: connectionTotal,
       usedCredits: usedCreditsFinal,
-      availableCredits: availableCreditsFinal,
+      availableCredits: connectionTotal,
+      personalRegistrationCredits,
       allowsCurrentUserToEarn,
       directRecipients,
       indirectRecipients,

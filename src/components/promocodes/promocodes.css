@@ -444,20 +444,41 @@
 
 .promo-invite-emails-username {
   color: #0047cc;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   word-break: break-word;
 }
 
 .promo-invite-emails-address {
   color: #cc0000;
-  font-size: 16px;
+  font-size: 13px;
   word-break: break-word;
+}
+
+.promo-invite-emails-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.promo-invite-emails-date {
+  color: #666;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.promo-invite-emails-pending {
+  color: #aa6600;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .promo-invite-emails-registration {
   color: #cc0000;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: bold;
   white-space: nowrap;
 }

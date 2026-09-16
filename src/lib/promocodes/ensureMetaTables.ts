@@ -110,7 +110,31 @@ const DEFAULT_SUBSCRIPTIONS: { id: number; name: string }[] = [
   { id: 9, name: 'Club — Base' },
   { id: 10, name: 'Club — Premium' },
   { id: 11, name: 'Club — Professional' },
+  { id: 12, name: 'Coach — Professional' },
+  { id: 13, name: 'Team — Premium' },
+  { id: 14, name: 'Team — Professional' },
+  { id: 15, name: 'Group — Premium' },
+  { id: 16, name: 'Group — Professional' },
 ];
+
+const SUBSCRIPTION_ROLE_BY_ID: Record<number, number> = {
+  1: 5,
+  2: 5,
+  3: 5,
+  4: 5,
+  5: 6,
+  6: 6,
+  12: 6,
+  7: 7,
+  13: 7,
+  14: 7,
+  8: 9,
+  15: 9,
+  16: 9,
+  9: 8,
+  10: 8,
+  11: 8,
+};
 
 const LEGACY_HELP_HTML_PAGES: { id: number; title: string; langId: number; content: string }[] =
   legacyHelpHtmlPages.map((row) => ({
@@ -350,34 +374,11 @@ export async function ensurePromocodeMetaTables(): Promise<void> {
     `);
   }
 
-  if ((await countRows('subscription_settings')) === 0) {
-    const roleById: Record<number, number> = {
-      1: 5,
-      2: 5,
-      3: 5,
-      4: 5,
-      9: 8,
-      10: 8,
-      11: 8,
-    };
-    for (const row of DEFAULT_SUBSCRIPTIONS) {
-      const roleId = roleById[row.id];
-      if (roleId) {
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO subscription_settings (id, subscription_name, role_id, delete_status)
-           VALUES (?, ?, ?, 2)`,
-          row.id,
-          row.name,
-          roleId
-        );
-      } else {
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO subscription_settings (id, subscription_name, delete_status)
-           VALUES (?, ?, 2)`,
-          row.id,
-          row.name
-        );
-      }
+  if (await tableExists('subscription_settings')) {
+    try {
+      await seedMissingDefaultSubscriptions();
+    } catch (err) {
+      console.warn('subscription_settings seed skipped:', err);
     }
   }
 
@@ -457,6 +458,16 @@ export async function ensurePromocodeMetaTables(): Promise<void> {
           `ALTER TABLE promocode_applies ADD COLUMN invite_expires_at DATE NULL`
         );
       }
+      if (!applyColumns.has('cost_paid')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN cost_paid VARCHAR(64) NULL DEFAULT NULL`
+        );
+      }
+      if (!applyColumns.has('total_payment')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN total_payment VARCHAR(64) NULL DEFAULT NULL`
+        );
+      }
     } catch (err) {
       console.warn('promocode_applies column migration skipped:', err);
     }
@@ -506,12 +517,103 @@ export async function ensurePromocodeMetaTables(): Promise<void> {
     }
   }
 
+  try {
+    const { ensurePromocodeAppSettingsTable } = await import('./promocodeAppSettings');
+    await ensurePromocodeAppSettingsTable();
+  } catch (err) {
+    console.warn('promocode_app_settings bootstrap skipped:', err);
+  }
+
   clearPromocodeTableCache();
   resetQuickRegisterSubscriptionSeedCache();
   if (await tableExists('promocode_settings')) {
     await repairInvalidPromocodeSettingDates('promocode_settings');
   }
   promocodeMetaTablesEnsured = true;
+}
+
+async function seedMissingDefaultSubscriptions(): Promise<void> {
+  if (!(await tableExists('subscription_settings'))) return;
+
+  const columns = await getTableColumns('subscription_settings');
+  const nameCol = pickColumn(columns, ['subscription_name', 'name']) ?? 'subscription_name';
+  const hasRoleId = columns.has('role_id');
+  const hasDeleteStatus = columns.has('delete_status');
+
+  const existingRows = await prisma.$queryRawUnsafe<
+    { id: number | bigint; subscription_name: string | null }[]
+  >(`SELECT id, \`${nameCol}\` AS subscription_name FROM subscription_settings`);
+
+  const existingNames = new Set(
+    existingRows
+      .map((r) => (r.subscription_name ? String(r.subscription_name).trim().toLowerCase() : ''))
+      .filter(Boolean)
+  );
+  const takenIds = new Set(existingRows.map((r) => Number(r.id)));
+
+  for (const row of DEFAULT_SUBSCRIPTIONS) {
+    if (existingNames.has(row.name.trim().toLowerCase())) continue;
+
+    const roleId = SUBSCRIPTION_ROLE_BY_ID[row.id];
+    const useExplicitId = !takenIds.has(row.id);
+
+    try {
+      if (useExplicitId && hasRoleId && roleId && hasDeleteStatus) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (id, \`${nameCol}\`, role_id, delete_status)
+           VALUES (?, ?, ?, 2)`,
+          row.id,
+          row.name,
+          roleId
+        );
+      } else if (useExplicitId && hasRoleId && roleId) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (id, \`${nameCol}\`, role_id)
+           VALUES (?, ?, ?)`,
+          row.id,
+          row.name,
+          roleId
+        );
+      } else if (useExplicitId && hasDeleteStatus) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (id, \`${nameCol}\`, delete_status)
+           VALUES (?, ?, 2)`,
+          row.id,
+          row.name
+        );
+      } else if (useExplicitId) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (id, \`${nameCol}\`)
+           VALUES (?, ?)`,
+          row.id,
+          row.name
+        );
+      } else if (hasRoleId && roleId && hasDeleteStatus) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (\`${nameCol}\`, role_id, delete_status)
+           VALUES (?, ?, 2)`,
+          row.name,
+          roleId
+        );
+      } else if (hasDeleteStatus) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (\`${nameCol}\`, delete_status)
+           VALUES (?, 2)`,
+          row.name
+        );
+      } else {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO subscription_settings (\`${nameCol}\`)
+           VALUES (?)`,
+          row.name
+        );
+      }
+      existingNames.add(row.name.trim().toLowerCase());
+      if (useExplicitId) takenIds.add(row.id);
+    } catch (err) {
+      console.warn(`subscription_settings seed skipped for "${row.name}":`, err);
+    }
+  }
 }
 
 function pickColumn(columns: Set<string>, candidates: string[]): string | null {

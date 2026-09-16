@@ -125,7 +125,7 @@ export async function getChildPromoRights(legacyUserId: number): Promise<ChildPr
 
   if (creatorCol) {
     const countRows = await prisma.$queryRawUnsafe<{ c: number | bigint }[]>(
-      `SELECT COUNT(*) AS c FROM \`${settingsTable}\`
+      `SELECT COUNT(DISTINCT code) AS c FROM \`${settingsTable}\`
        WHERE \`${creatorCol}\` = ? AND delete_status = 2`,
       legacyUserId
     );

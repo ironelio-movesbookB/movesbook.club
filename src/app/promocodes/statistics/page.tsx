@@ -179,12 +179,12 @@ export default function PromocodeStatisticsPage() {
                   (data?.countryMatrix ?? []).map((row) => (
                     <tr key={`${row.countryId}-${row.countryCode}`} className="border-t">
                       <td className="p-2">
-                        {row.countryCode || `ID ${row.countryId}`}
+                        {row.countryName || row.countryCode || `ID ${row.countryId}`}
                       </td>
                       {Array.from({ length: 12 }, (_, i) => {
                         const cell = row.months[i + 1];
                         return (
-                          <td key={i} className="p-2 text-center text-xs">
+                          <td key={i} className="p-2 text-center text-xs" title="invites / registrations">
                             {cell
                               ? `${cell.invitesSent}/${cell.registrations}`
                               : '—'}
@@ -196,6 +196,9 @@ export default function PromocodeStatisticsPage() {
                 )}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-gray-600">
+              Each cell is <strong>invites sent / registrations</strong> for that country and month.
+            </p>
           </div>
         </>
       )}

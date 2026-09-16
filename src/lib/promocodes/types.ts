@@ -37,6 +37,9 @@ export type LegacyUserSnippet = {
   subscriptionEndDate: string | null;
   subscriptionSettingId: number | null;
   firstname: string | null;
+  /** Legacy users.credits balance when the column exists. */
+  credits?: number | null;
+  roleId?: number | null;
 };
 
 export type PromocodeSettingRow = {
@@ -86,6 +89,8 @@ export type PromocodeInviteEntry = {
   email: string;
   username: string | null;
   registered: boolean;
+  /** Date the invite email/apply was created */
+  inviteDate: string | null;
   registrationDate: string | null;
   subscriptionName: string | null;
 };
