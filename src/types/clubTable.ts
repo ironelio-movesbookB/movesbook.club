@@ -93,10 +93,10 @@ export type Member = {
   /** Another receipt shares this row's document type + number. */
   isDuplicate?: boolean;
   /**
-   * Archive of Users A/B/C:
-   * member (Athletes\\Members) | pending | not_member
+   * Archive of Users A/B/C/D:
+   * member | pending | not_member | archived
    */
-  membershipStatus?: 'member' | 'pending' | 'not_member';
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived';
   /** Staff-only archive rows (no pending/not-member actions). */
   isStaffOnly?: boolean;
   options?: React.ReactNode;

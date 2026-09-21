@@ -55,8 +55,8 @@ export type ArchiveFetchParams = {
   sport?: string;
   /** Filter by group of training. */
   groupTrained?: string;
-  /** member | pending | not_member | all */
-  membershipStatus?: 'member' | 'pending' | 'not_member' | 'all';
+  /** member | pending | not_member | archived | all (all = A+B+C, excludes archived) */
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived' | 'all';
 };
 
 export async function fetchClubArchive(
@@ -79,7 +79,7 @@ export async function fetchClubArchive(
   if (params?.recordId) qs.set('recordId', params.recordId);
   if (params?.sport) qs.set('sport', params.sport);
   if (params?.groupTrained) qs.set('groupTrained', params.groupTrained);
-  if (params?.membershipStatus && params.membershipStatus !== 'all') {
+  if (params?.membershipStatus) {
     qs.set('membershipStatus', params.membershipStatus);
   }
   const query = qs.toString();

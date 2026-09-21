@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken, verifyPassword } from '@/lib/auth';
+import {
+  isAddableMemberArchiveStatus,
+  roleValueForMemberArchiveStatus,
+  type AddableMemberArchiveStatus,
+} from '@/lib/club/memberArchiveStatus';
 
 const prisma = new PrismaClient();
 
@@ -28,7 +33,12 @@ export async function POST(
 
     const userId = decoded.userId;
     const clubId = params.clubId;
-    const { username, password } = await request.json();
+    const body = await request.json();
+    const { username, password, membershipStatus: rawStatus } = body as {
+      username?: string;
+      password?: string;
+      membershipStatus?: string;
+    };
 
     if (!username || !password) {
       return NextResponse.json(
@@ -36,6 +46,18 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    if (!rawStatus || !isAddableMemberArchiveStatus(String(rawStatus))) {
+      return NextResponse.json(
+        {
+          error:
+            'membershipStatus is required and must be member, pending, or not_member',
+        },
+        { status: 400 },
+      );
+    }
+    const membershipStatus = rawStatus as AddableMemberArchiveStatus;
+    const role = roleValueForMemberArchiveStatus(membershipStatus);
 
     // Verify user is admin of this club
     const club = await prisma.club.findFirst({
@@ -95,7 +117,7 @@ export async function POST(
       data: {
         clubId: clubId,
         memberId: userToAdd.id,
-        role: 'member',
+        role,
         membershipType: 'Standard',
       },
       include: {
@@ -129,4 +151,3 @@ export async function POST(
     );
   }
 }
-

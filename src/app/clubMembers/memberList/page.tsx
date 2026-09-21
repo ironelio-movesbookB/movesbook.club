@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CalendarClock, Pencil, Trash2, User, UserPlus } from 'lucide-react';
 import ClubMemberArchivePage, { memberTypeBadge } from '@/components/club/members/ClubMemberArchivePage';
 import AddMemberModal from '@/components/AddMemberModal';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import ClubMemberArchiveHeader from './components/status';
 import MemberArchiveTopNav, {
   type MemberArchiveNavMode,
@@ -98,6 +99,7 @@ function MemberListPageContent() {
   const { user } = useAuth();
   const { selectedClubId: contextClubId } = useClubWorkspace();
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [memberPendingDelete, setMemberPendingDelete] = useState<Member | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [addError, setAddError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -163,7 +165,8 @@ function MemberListPageContent() {
   const membershipStatusFilter = useMemo((): MemberArchiveStatus | 'all' => {
     if (archiveSection === 'pending') return 'pending';
     if (archiveSection === 'not-members') return 'not_member';
-    // All the users profiles: athletes + archive nav → show A+B+C
+    if (archiveSection === 'archived') return 'archived';
+    // All the users profiles: athletes + archive nav → show A+B+C (not archived)
     if (archiveSection === 'athletes' && archiveNavMode === 'archive') return 'all';
     // Athletes\\Members dedicated tab → official members only
     if (archiveSection === 'athletes') return 'member';
@@ -173,7 +176,8 @@ function MemberListPageContent() {
   const showMembersArchive =
     archiveSection === 'athletes' ||
     archiveSection === 'pending' ||
-    archiveSection === 'not-members';
+    archiveSection === 'not-members' ||
+    archiveSection === 'archived';
 
   const setArchiveSection = useCallback(
     (section: MemberArchiveSection) => {
@@ -248,57 +252,68 @@ function MemberListPageContent() {
     [clubId, isTeamWorkspace, router, teamId],
   );
 
-  const handleDeleteMember = useCallback(
-    async (member: Member) => {
-      const id = member.memberId || member.id;
-      const resolvedWorkspaceId =
-        workspaceId ||
-        (typeof window !== 'undefined'
-          ? isTeamWorkspace
-            ? localStorage.getItem('selectedTeam')
-            : localStorage.getItem('selectedClub')
-          : null);
-      if (!id || !resolvedWorkspaceId) {
-        window.alert(
-          isTeamWorkspace
-            ? 'Select a team under My Team before managing members.'
-            : 'Select a club under My clubs before managing members.',
-        );
-        return;
-      }
-      const label =
-        [member.surname, member.name].filter(Boolean).join(' ') || member.username || id;
-      if (
-        !window.confirm(
-          `Remove ${label} from this ${isTeamWorkspace ? 'team' : 'club'}? Their Movesbook account will not be deleted.`,
-        )
-      ) {
-        return;
-      }
-      setBusyId(id);
-      setAddError('');
-      try {
-        const url = isTeamWorkspace
-          ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`
-          : withSelectedClubId(
-              `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`,
-            );
-        const res = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() });
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(
-            typeof payload.error === 'string' ? payload.error : 'Failed to remove member',
+  const requestDeleteMember = useCallback((member: Member) => {
+    setAddError('');
+    setMemberPendingDelete(member);
+  }, []);
+
+  const handleConfirmDeleteMember = useCallback(async () => {
+    const member = memberPendingDelete;
+    if (!member) return;
+
+    const id = member.memberId || member.id;
+    const resolvedWorkspaceId =
+      workspaceId ||
+      (typeof window !== 'undefined'
+        ? isTeamWorkspace
+          ? localStorage.getItem('selectedTeam')
+          : localStorage.getItem('selectedClub')
+        : null);
+    if (!id || !resolvedWorkspaceId) {
+      setAddError(
+        isTeamWorkspace
+          ? 'Select a team under My Team before managing members.'
+          : 'Select a club under My clubs before managing members.',
+      );
+      setMemberPendingDelete(null);
+      return;
+    }
+
+    setBusyId(id);
+    setAddError('');
+    try {
+      const url = isTeamWorkspace
+        ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`
+        : withSelectedClubId(
+            `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`,
           );
-        }
-        setRefreshKey((k) => k + 1);
-      } catch (e: unknown) {
-        setAddError(e instanceof Error ? e.message : 'Failed to remove member');
-      } finally {
-        setBusyId(null);
+      const res = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : 'Failed to remove member',
+        );
       }
-    },
-    [isTeamWorkspace, workspaceId],
-  );
+      setMemberPendingDelete(null);
+      setRefreshKey((k) => k + 1);
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : 'Failed to remove member');
+    } finally {
+      setBusyId(null);
+    }
+  }, [isTeamWorkspace, memberPendingDelete, workspaceId]);
+
+  const deleteConfirmMessage = useMemo(() => {
+    if (!memberPendingDelete) return '';
+    const label =
+      [memberPendingDelete.surname, memberPendingDelete.name]
+        .filter(Boolean)
+        .join(' ') ||
+      memberPendingDelete.username ||
+      memberPendingDelete.memberId ||
+      memberPendingDelete.id;
+    return `Remove ${label} from this ${isTeamWorkspace ? 'team' : 'club'}? Their Movesbook account will not be deleted.`;
+  }, [isTeamWorkspace, memberPendingDelete]);
 
   const columns: Column[] = useMemo(
     () => [
@@ -401,7 +416,7 @@ function MemberListPageContent() {
                 type="button"
                 title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
                 disabled={busy}
-                onClick={() => void handleDeleteMember(row)}
+                onClick={() => requestDeleteMember(row)}
                 className="rounded p-1 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" />
@@ -411,7 +426,7 @@ function MemberListPageContent() {
         },
       },
     ],
-    [busyId, handleDeleteMember, isTeamWorkspace, openMemberProfile],
+    [busyId, isTeamWorkspace, openMemberProfile, requestDeleteMember],
   );
 
   const loadCapacity = useCallback(async () => {
@@ -465,7 +480,11 @@ function MemberListPageContent() {
   }, [capacityPayload, settingsRevision]);
 
   const handleAddExistingUser = useCallback(
-    async (data: { username: string; password: string }) => {
+    async (data: {
+      username: string;
+      password: string;
+      membershipStatus?: MemberArchiveStatus;
+    }) => {
       setAddError('');
       const resolvedWorkspaceId =
         workspaceId ||
@@ -481,6 +500,9 @@ function MemberListPageContent() {
             : 'Select a club under My clubs before adding members.',
         );
       }
+      if (!data.membershipStatus) {
+        throw new Error('Please choose which list to put the new member in.');
+      }
 
       const url = isTeamWorkspace
         ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/add`
@@ -493,6 +515,7 @@ function MemberListPageContent() {
         body: JSON.stringify({
           username: data.username,
           password: data.password,
+          membershipStatus: data.membershipStatus,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -555,7 +578,9 @@ function MemberListPageContent() {
             onMembershipStatusChanged={() => setRefreshKey((k) => k + 1)}
             footerHint={
               membershipStatusFilter === 'all'
-                ? 'All profiles: black = Athlete\\Member (green), red = pending (red), blue = not member (blue).'
+                ? 'All profiles: black = Athlete\\Member (green → archive), red = pending, blue = not member. Archived members are under Members Archived.'
+                : membershipStatusFilter === 'archived'
+                  ? 'Members Archived — grey rows. Click the grey circle to restore as Athlete\\Member.'
                 : isTeamWorkspace
                   ? 'Live data from team members in the database.'
                   : 'Live data from club members in the database.'
@@ -577,13 +602,6 @@ function MemberListPageContent() {
             }
           />
         </>
-      ) : archiveSection === 'archived' ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-700">
-          <h2 className="mb-2 text-lg font-bold text-gray-900">Archived</h2>
-          <p>
-            Members who were archived from this club/team will appear here.
-          </p>
-        </div>
       ) : archiveSection === 'parents' ? (
         workspaceId ? (
           <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -617,6 +635,25 @@ function MemberListPageContent() {
         onClose={() => setShowAddMemberModal(false)}
         entityType={isTeamWorkspace ? 'team' : 'club'}
         onAddExistingUser={handleAddExistingUser}
+      />
+
+      <PromocodeConfirmModal
+        open={Boolean(memberPendingDelete)}
+        title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
+        message={deleteConfirmMessage}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        loading={Boolean(
+          memberPendingDelete &&
+            busyId ===
+              (memberPendingDelete.memberId || memberPendingDelete.id),
+        )}
+        onClose={() => {
+          if (busyId) return;
+          setMemberPendingDelete(null);
+        }}
+        onConfirm={() => void handleConfirmDeleteMember()}
       />
     </div>
   );
