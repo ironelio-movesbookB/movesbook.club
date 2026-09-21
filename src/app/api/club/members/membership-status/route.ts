@@ -10,8 +10,8 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
- * PATCH body: { membershipStatus: 'member' | 'pending' | 'not_member' }
- * Updates ClubMember.role / TeamMember.role for Archive of Users A/B/C buckets.
+ * PATCH body: { membershipStatus: 'member' | 'pending' | 'not_member' | 'archived' }
+ * Updates ClubMember.role / TeamMember.role for Archive of Users buckets.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -27,7 +27,10 @@ export async function PATCH(request: NextRequest) {
     }
     if (!isMemberArchiveStatus(statusRaw)) {
       return NextResponse.json(
-        { error: 'membershipStatus must be member, pending, or not_member' },
+        {
+          error:
+            'membershipStatus must be member, pending, not_member, or archived',
+        },
         { status: 400 },
       );
     }

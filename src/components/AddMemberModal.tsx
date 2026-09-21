@@ -2,23 +2,44 @@
 
 import { useState } from 'react';
 import { UserPlus, UserCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import type { MemberArchiveStatus } from '@/lib/club/memberArchiveStatus';
+
+const MEMBERSHIP_LIST_OPTIONS: Array<{
+  value: MemberArchiveStatus;
+  label: string;
+}> = [
+  { value: 'member', label: "In the list of Members" },
+  { value: 'pending', label: 'In the list of Members in pending' },
+  { value: 'not_member', label: 'In the list of Athletes NOT members' },
+];
+
+export type AddMemberExistingPayload = {
+  username: string;
+  password: string;
+  membershipStatus?: MemberArchiveStatus;
+};
+
+export type AddMemberNewPayload = {
+  password: string;
+  username?: string;
+  name?: string;
+  email?: string;
+  membershipStatus?: MemberArchiveStatus;
+};
 
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddNewUser?: (data: {
-    password: string;
-    username?: string;
-    name?: string;
-    email?: string;
-  }) => void | Promise<void>;
-  onAddExistingUser?: (data: {
-    username: string;
-    password: string;
-  }) => void | Promise<void>;
+  onAddNewUser?: (data: AddMemberNewPayload) => void | Promise<void>;
+  onAddExistingUser?: (data: AddMemberExistingPayload) => void | Promise<void>;
   entityType?: 'club' | 'team' | 'group' | 'coaching-group';
   /** Hide the “from scratch” option until that flow is implemented. */
   hideNewUserOption?: boolean;
+  /**
+   * When true (default for club/team), ask which archive list to put the member in
+   * before creating the membership.
+   */
+  askMembershipList?: boolean;
 }
 
 export default function AddMemberModal({
@@ -28,11 +49,18 @@ export default function AddMemberModal({
   onAddExistingUser,
   entityType = 'club',
   hideNewUserOption = false,
+  askMembershipList,
 }: AddMemberModalProps) {
+  const requireMembershipList =
+    askMembershipList ?? (entityType === 'club' || entityType === 'team');
+
   const [activeOption, setActiveOption] = useState<'new' | 'existing' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [membershipStatus, setMembershipStatus] = useState<MemberArchiveStatus | null>(
+    null,
+  );
 
   const [existingUsername, setExistingUsername] = useState('');
   const [existingPassword, setExistingPassword] = useState('');
@@ -55,6 +83,7 @@ export default function AddMemberModal({
     setShowPassword(false);
     setSubmitting(false);
     setError('');
+    setMembershipStatus(null);
   };
 
   const handleCancel = () => {
@@ -74,11 +103,44 @@ export default function AddMemberModal({
     setNewEmail('');
     setNewPassword('');
     setShowPassword(false);
+    setMembershipStatus(null);
   };
+
+  const membershipListField = requireMembershipList ? (
+    <fieldset className="space-y-2 rounded-lg border border-gray-200 p-3">
+      <legend className="px-1 text-sm font-semibold text-gray-800">
+        Put the new member in which list?
+      </legend>
+      {MEMBERSHIP_LIST_OPTIONS.map((opt) => (
+        <label
+          key={opt.value}
+          className="flex cursor-pointer items-start gap-2 text-sm text-gray-800"
+        >
+          <input
+            type="radio"
+            name="membershipStatus"
+            value={opt.value}
+            checked={membershipStatus === opt.value}
+            onChange={() => setMembershipStatus(opt.value)}
+            className="mt-0.5"
+            required={requireMembershipList}
+            disabled={submitting}
+          />
+          <span>{opt.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  ) : null;
 
   const handleSubmitExistingUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!existingUsername.trim() || !existingPassword || !onAddExistingUser || submitting) return;
+    if (!existingUsername.trim() || !existingPassword || !onAddExistingUser || submitting) {
+      return;
+    }
+    if (requireMembershipList && !membershipStatus) {
+      setError('Please choose which list to put the new member in.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -86,6 +148,7 @@ export default function AddMemberModal({
       await onAddExistingUser({
         username: existingUsername.trim(),
         password: existingPassword,
+        ...(membershipStatus ? { membershipStatus } : {}),
       });
       resetForm();
       onClose();
@@ -99,6 +162,10 @@ export default function AddMemberModal({
   const handleSubmitNewUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || !onAddNewUser || submitting) return;
+    if (requireMembershipList && !membershipStatus) {
+      setError('Please choose which list to put the new member in.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -108,6 +175,7 @@ export default function AddMemberModal({
         username: newUsername || undefined,
         name: newName || undefined,
         email: newEmail || undefined,
+        ...(membershipStatus ? { membershipStatus } : {}),
       });
       resetForm();
       onClose();
@@ -206,6 +274,7 @@ export default function AddMemberModal({
                 </button>
               </div>
             </div>
+            {membershipListField}
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="flex gap-3">
               <button
@@ -265,6 +334,7 @@ export default function AddMemberModal({
                 </button>
               </div>
             </div>
+            {onAddNewUser ? membershipListField : null}
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="flex gap-3">
               <button
