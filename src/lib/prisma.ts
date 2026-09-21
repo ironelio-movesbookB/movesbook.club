@@ -187,7 +187,6 @@ function hasStaffPrismaDelegates(client: PrismaClient): boolean {
 
 function clearPrismaClientModuleCache(): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const req = require as NodeRequire;
     for (const key of Object.keys(req.cache || {})) {
       if (key.includes(`${path.sep}@prisma${path.sep}client`) || key.includes(`${path.sep}.prisma${path.sep}client`)) {
