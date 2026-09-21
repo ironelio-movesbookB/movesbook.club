@@ -23,6 +23,7 @@ import {
   normalizeMemberArchiveStatus,
   type MemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import type { Column, Member } from '@/types/clubTable';
 
 type ViewMode = 'all' | 'groups' | 'favourites' | 'group-members';
@@ -42,8 +43,8 @@ type Props = {
   addMemberAction?: ReactNode;
   /**
    * Filter list by archive status.
-   * `all` = All the users profiles (A+B+C).
-   * `member` / `pending` / `not_member` = dedicated sections.
+   * `all` = All the users profiles (A+B+C, excludes archived).
+   * `member` / `pending` / `not_member` / `archived` = dedicated sections.
    */
   membershipStatusFilter?: MemberArchiveStatus | 'all';
   /** Called after a successful status change so parent can refresh. */
@@ -119,6 +120,12 @@ export default function ClubMemberArchivePage({
   const [showGroupNameModal, setShowGroupNameModal] = useState(false);
   const [groupNameInput, setGroupNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [statusConfirm, setStatusConfirm] = useState<{
+    member: Member;
+    next: MemberArchiveStatus;
+    title: string;
+    message: string;
+  } | null>(null);
 
   const loadGroups = useCallback(async () => {
     setGroupsLoading(true);
@@ -254,13 +261,35 @@ export default function ClubMemberArchivePage({
     (row: Member) => {
       if (row.isStaffOnly || saving) return;
       const status = normalizeMemberArchiveStatus(row.membershipStatus);
-      if (status === 'member') return;
+
+      if (status === 'member') {
+        setStatusConfirm({
+          member: row,
+          next: 'archived',
+          title: 'Members Archived',
+          message:
+            'Move this user to the list of Members Archived?',
+        });
+        return;
+      }
 
       if (status === 'pending') {
-        const ok = window.confirm(
-          'Put this user as official Athlete\\Member?',
-        );
-        if (ok) void changeMembershipStatus(row, 'member');
+        setStatusConfirm({
+          member: row,
+          next: 'member',
+          title: 'Athlete\\Member',
+          message: 'Put this user as official Athlete\\Member?',
+        });
+        return;
+      }
+
+      if (status === 'archived') {
+        setStatusConfirm({
+          member: row,
+          next: 'member',
+          title: 'Restore member',
+          message: 'Put this user back as official Athlete\\Member?',
+        });
         return;
       }
 
@@ -284,7 +313,7 @@ export default function ClubMemberArchivePage({
         ...col,
         render: (value: unknown, row: Member) => {
           const status = normalizeMemberArchiveStatus(row.membershipStatus);
-          const clickable = !row.isStaffOnly && status !== 'member';
+          const clickable = !row.isStaffOnly;
           const imageNode = originalRender ? (
             originalRender(value, row)
           ) : value ? (
@@ -299,11 +328,17 @@ export default function ClubMemberArchivePage({
               —
             </span>
           );
+          const title =
+            status === 'member'
+              ? 'Move to Members Archived'
+              : status === 'archived'
+                ? 'Restore as Athlete\\Member'
+                : memberArchiveStatusLabel(status);
           return (
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
-                title={memberArchiveStatusLabel(status)}
+                title={title}
                 disabled={!clickable || saving}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -312,7 +347,7 @@ export default function ClubMemberArchivePage({
                 className={`h-3.5 w-3.5 shrink-0 rounded-full border border-black/10 ${memberArchiveStatusDotClass(
                   status,
                 )} ${clickable ? 'cursor-pointer' : 'cursor-default opacity-90'}`}
-                aria-label={memberArchiveStatusLabel(status)}
+                aria-label={title}
               />
               {imageNode}
             </div>
@@ -819,6 +854,25 @@ export default function ClubMemberArchivePage({
           </div>
         </div>
       ) : null}
+
+      <PromocodeConfirmModal
+        open={Boolean(statusConfirm)}
+        title={statusConfirm?.title ?? 'Confirm'}
+        message={statusConfirm?.message ?? ''}
+        confirmLabel="OK"
+        cancelLabel="Cancel"
+        loading={saving}
+        onClose={() => {
+          if (saving) return;
+          setStatusConfirm(null);
+        }}
+        onConfirm={() => {
+          if (!statusConfirm) return;
+          const { member, next } = statusConfirm;
+          setStatusConfirm(null);
+          void changeMembershipStatus(member, next);
+        }}
+      />
     </>
   );
 }

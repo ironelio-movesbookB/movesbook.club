@@ -47,7 +47,13 @@ function parseArchiveParams(
     groupTrained: sp.get('groupTrained') ?? undefined,
     membershipStatus: (() => {
       const raw = sp.get('membershipStatus');
-      if (raw === 'member' || raw === 'pending' || raw === 'not_member' || raw === 'all') {
+      if (
+        raw === 'member' ||
+        raw === 'pending' ||
+        raw === 'not_member' ||
+        raw === 'archived' ||
+        raw === 'all'
+      ) {
         return raw;
       }
       return undefined;

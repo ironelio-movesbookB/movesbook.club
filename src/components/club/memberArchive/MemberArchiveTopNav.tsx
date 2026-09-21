@@ -43,7 +43,7 @@ function clubOrTeamSections(
   const pending: NavItem = { id: 'pending', label: 'In pending' };
   const notMembers: NavItem = { id: 'not-members', label: 'Not members' };
   const others: NavItem[] = [
-    { id: 'archived', label: 'Archived' },
+    { id: 'archived', label: 'Members Archived' },
     { id: 'parents', label: 'Parents & Tutors' },
     { id: 'staff', label: 'Staff' },
     { id: 'club-profile', label: profileSectionLabel || 'Team\\Club profile' },
@@ -61,7 +61,7 @@ function coachSections(profileSectionLabel: string): NavItem[] {
   return [
     { id: 'athletes', label: 'Members' },
     { id: 'pending', label: 'In pending' },
-    { id: 'archived', label: 'Archived' },
+    { id: 'archived', label: 'Members Archived' },
     { id: 'parents', label: 'Parents & Tutors' },
     { id: 'club-profile', label: profileSectionLabel || 'Coach profile' },
     { id: 'settings', label: 'Settings' },
