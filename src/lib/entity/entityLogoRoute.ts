@@ -26,14 +26,28 @@ export async function handleEntityLogoPost(
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
+    const assetRaw = String(formData.get('asset') ?? 'logo').trim().toLowerCase();
+    const asset = assetRaw === 'banner' ? 'banner' : 'logo';
 
     const result = await saveEntityLogoForOwner(
       kind,
       entityId,
       decoded.userId as string,
       file as File,
+      asset,
     );
-    return NextResponse.json({ success: true, logoUrl: result.logoUrl });
+    if (asset === 'banner') {
+      return NextResponse.json({
+        success: true,
+        bannerUrl: result.bannerUrl ?? result.logoUrl,
+        logoUrl: result.logoUrl,
+      });
+    }
+    return NextResponse.json({
+      success: true,
+      logoUrl: result.logoUrl,
+      bannerUrl: result.bannerUrl,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Internal server error';
     const status =
@@ -62,7 +76,9 @@ export async function handleEntityLogoDelete(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    await removeEntityLogoForOwner(kind, entityId, decoded.userId as string);
+    const assetRaw = request.nextUrl.searchParams.get('asset')?.trim().toLowerCase();
+    const asset = assetRaw === 'banner' ? 'banner' : 'logo';
+    await removeEntityLogoForOwner(kind, entityId, decoded.userId as string, asset);
     return NextResponse.json({ success: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Internal server error';

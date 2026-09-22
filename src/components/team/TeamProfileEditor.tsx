@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { getEntityProfileLabels } from '@/lib/entity/entityProfileLabels';
 import { DEFAULT_ENTITY_SPORT, ENTITY_SPORT_OPTIONS } from '@/lib/sport/entitySportOptions';
 import { emptyTeamProfileForm } from '@/lib/team/teamProfileDefaults';
@@ -9,6 +9,7 @@ import { teamToFormPayload } from '@/lib/team/teamProfilePayload';
 import {
   TEAM_PROFILE_TABS,
   type TeamProfileFormPayload,
+  type TeamProfileSavePayload,
   type TeamProfileTabId,
 } from '@/lib/team/teamProfileTypes';
 import {
@@ -19,9 +20,9 @@ import {
   TeamProfileMainTab,
   TeamSubteamsTab,
 } from '@/components/team/TeamProfileTabPanels';
-import { Field } from '@/components/club/memberProfile/FormBits';
+import { Field, TextSelect } from '@/components/club/memberProfile/FormBits';
 
-export type { TeamProfileFormPayload };
+export type { TeamProfileFormPayload, TeamProfileSavePayload };
 
 type TeamProfileEditorProps = {
   mode: 'create' | 'edit';
@@ -33,7 +34,7 @@ type TeamProfileEditorProps = {
     description?: string | null;
     sport?: string | null;
   };
-  onSave: (payload: TeamProfileFormPayload) => Promise<void>;
+  onSave: (payload: TeamProfileSavePayload) => Promise<void>;
   saving?: boolean;
   onCancel?: () => void;
 };
@@ -52,30 +53,51 @@ export default function TeamProfileEditor({
   const [form, setForm] = useState<TeamProfileFormPayload>(emptyTeamProfileForm);
   const [repeatPassword, setRepeatPassword] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(mode === 'create');
+
+  /** Stable key so parent re-renders don't wipe in-progress logo picks / tab edits. */
+  const hydrateKey =
+    mode === 'edit' && initialTeam
+      ? `${initialTeam.name}\n${initialTeam.sport ?? ''}\n${initialTeam.description ?? ''}`
+      : mode;
 
   useEffect(() => {
     if (mode === 'edit' && initialTeam) {
       const payload = teamToFormPayload(initialTeam);
       setForm(payload);
       setLogoUrl(payload.logoUrl || null);
+      setLogoFile(null);
+      setLogoRemoved(false);
       setRepeatPassword('');
       setError(null);
       setHydrated(true);
     }
-  }, [mode, initialTeam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrateKey is content-derived from initialTeam
+  }, [mode, hydrateKey]);
 
   const handleLogoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = String(reader.result || '');
-      setLogoUrl(url);
-      setForm((f) => ({ ...f, logoUrl: url }));
-    };
-    reader.readAsDataURL(file);
+    setLogoFile(file);
+    setLogoRemoved(false);
+    setLogoUrl((prev) => {
+      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoRemoved(true);
+    setLogoUrl((prev) => {
+      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setForm((f) => ({ ...f, logoUrl: '' }));
   };
 
   const handleSave = async () => {
@@ -112,11 +134,23 @@ export default function TeamProfileEditor({
     try {
       const sports =
         form.sports.length > 0 ? form.sports : [form.sport || DEFAULT_ENTITY_SPORT];
+      const publicLogoUrl =
+        logoRemoved
+          ? ''
+          : logoUrl && !logoUrl.startsWith('blob:') && !logoUrl.startsWith('data:')
+            ? logoUrl
+            : form.logoUrl &&
+                !form.logoUrl.startsWith('blob:') &&
+                !form.logoUrl.startsWith('data:')
+              ? form.logoUrl
+              : '';
       await onSave({
         ...form,
         sports,
         sport: sports[0],
-        logoUrl: logoUrl || form.logoUrl || '',
+        logoUrl: publicLogoUrl,
+        logoFile,
+        removeLogo: logoRemoved,
         username: form.username.trim(),
         officialName: form.officialName.trim() || form.username.trim(),
         directAccess: form.directAccess.trim(),
@@ -168,7 +202,30 @@ export default function TeamProfileEditor({
         <div className="space-y-4 p-4">
           {activeTab === 'team-profile' ? (
             <div className="space-y-4">
-              <Field label="Sports (multicheck)">
+              <Field label="Sport of the team">
+                <TextSelect
+                  value={form.sport}
+                  onChange={(e) => {
+                    const picked = e.target.value;
+                    setForm((f) => {
+                      const current = f.sports?.length ? f.sports : [f.sport];
+                      // Primary sport leads the list; keep any extra sports selected.
+                      const sports = [picked, ...current.filter((s) => s !== picked)];
+                      return { ...f, sports, sport: picked };
+                    });
+                  }}
+                >
+                  {ENTITY_SPORT_OPTIONS.map((sport) => (
+                    <option key={sport} value={sport}>
+                      {sport}
+                    </option>
+                  ))}
+                  {form.sport && !(ENTITY_SPORT_OPTIONS as readonly string[]).includes(form.sport) ? (
+                    <option value={form.sport}>{form.sport}</option>
+                  ) : null}
+                </TextSelect>
+              </Field>
+              <Field label="Other sports">
                 <div className="flex flex-wrap gap-x-4 gap-y-2 rounded border border-gray-300 bg-white px-3 py-2">
                   {ENTITY_SPORT_OPTIONS.map((sport) => {
                     const checked = (form.sports?.length ? form.sports : [form.sport]).includes(
@@ -221,10 +278,7 @@ export default function TeamProfileEditor({
                   </label>
                   <button
                     type="button"
-                    onClick={() => {
-                      setLogoUrl(null);
-                      setForm((f) => ({ ...f, logoUrl: '' }));
-                    }}
+                    onClick={handleRemoveLogo}
                     className="text-sm text-blue-700 hover:underline"
                   >
                     [ Remove Logo ]
@@ -263,34 +317,23 @@ export default function TeamProfileEditor({
             <TeamAdminSportTab form={form} setForm={setForm} />
           ) : null}
 
-          {error ? (
-            <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          ) : null}
+          {error ? <p className="text-center text-sm text-red-600">{error}</p> : null}
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex justify-center gap-6 pt-4">
             <button
               type="button"
-              onClick={() => void handleSave()}
               disabled={saving}
-              className="rounded bg-red-700 px-5 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              onClick={() => void handleSave()}
+              className="rounded-lg border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-10 py-2.5 font-semibold text-white shadow disabled:opacity-60"
             >
-              {saving ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving…
-                </span>
-              ) : (
-                'Save'
-              )}
+              {saving ? 'Saving…' : 'Save'}
             </button>
             {onCancel ? (
               <button
                 type="button"
-                onClick={onCancel}
                 disabled={saving}
-                className="rounded bg-gray-800 px-5 py-2 text-sm font-semibold text-white hover:bg-gray-900 disabled:opacity-60"
+                onClick={onCancel}
+                className="rounded-lg border border-gray-900 bg-gradient-to-b from-gray-700 to-black px-10 py-2.5 font-semibold text-white shadow disabled:opacity-60"
               >
                 Cancel
               </button>

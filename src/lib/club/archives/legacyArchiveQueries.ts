@@ -16,6 +16,11 @@ export type ArchiveQueryParams = {
   sport?: string;
   /** Filter athletes by group of training / team name. */
   groupTrained?: string;
+  /**
+   * Archive of Users membership bucket:
+   * member | pending | not_member | archived | all (A+B+C, excludes archived).
+   */
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived' | 'all';
 };
 
 export type PaginatedArchive<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -71,6 +76,16 @@ function applyFilters(
     const group = params.groupTrained.toLowerCase();
     result = result.filter(
       (row) => String(row.groupTrained ?? row.groupTrainedId ?? '').toLowerCase() === group,
+    );
+  }
+  if (params.membershipStatus && params.membershipStatus !== 'all') {
+    result = result.filter(
+      (row) => String(row.membershipStatus ?? 'member') === params.membershipStatus,
+    );
+  } else {
+    // "all" / unset = active profiles only (A+B+C), hide Members Archived
+    result = result.filter(
+      (row) => String(row.membershipStatus ?? 'member') !== 'archived',
     );
   }
   if (params.orderBy === 'old') {

@@ -5,11 +5,11 @@ import ClubProfileEditor, {
   type ClubProfileSavePayload,
 } from '@/components/club/ClubProfileEditor';
 import TeamProfileEditor, {
-  type TeamProfileFormPayload,
+  type TeamProfileSavePayload,
 } from '@/components/team/TeamProfileEditor';
 import type { ManagedEntityKind } from '@/lib/entity/entityProfileLabels';
 
-export type CreateEntityFormPayload = ClubProfileSavePayload | TeamProfileFormPayload;
+export type CreateEntityFormPayload = ClubProfileSavePayload | TeamProfileSavePayload;
 
 type CreateEntityModalProps = {
   entityKind: ManagedEntityKind;
@@ -55,7 +55,7 @@ export default function CreateEntityModal({
           <TeamProfileEditor
             mode="create"
             adminUsername={adminUsername}
-            onSave={onSave as (payload: TeamProfileFormPayload) => Promise<void>}
+            onSave={onSave as (payload: TeamProfileSavePayload) => Promise<void>}
             saving={saving}
             onCancel={onClose}
           />

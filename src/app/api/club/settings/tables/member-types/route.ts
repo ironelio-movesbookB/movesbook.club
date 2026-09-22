@@ -362,14 +362,47 @@ async function getAuthorizedContext(request: NextRequest) {
   return { userId, legacyUserId, club, userIds };
 }
 
-/** Member profile settings: any authenticated user may read the full type list (PHP parity). */
+/** Member profile settings: read member types for the club being viewed. */
 async function getProfileReadContext(request: NextRequest) {
   const decoded = getTokenPayload(request);
   if (!decoded?.userId) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  return { userId: String(decoded.userId) };
+  const clubId = text(request.nextUrl.searchParams.get('clubId'));
+  if (!clubId) {
+    return { error: NextResponse.json({ error: 'clubId is required' }, { status: 400 }) };
+  }
+
+  const clubRows = await prisma.$queryRaw<{ id: string; adminId: string }[]>`
+    SELECT id, adminId
+    FROM clubs_new
+    WHERE id = ${clubId}
+    LIMIT 1
+  `;
+  const club = clubRows[0];
+  if (!club) {
+    return { error: NextResponse.json({ error: 'Club not found' }, { status: 404 }) };
+  }
+
+  const viewerId = String(decoded.userId);
+  const isAdmin = club.adminId === viewerId;
+  if (!isAdmin) {
+    const membership = await prisma.clubMember.findUnique({
+      where: { clubId_memberId: { clubId, memberId: viewerId } },
+      select: { id: true },
+    });
+    if (!membership) {
+      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+  }
+
+  const legacyAdminId = await getLegacyUserId(club.adminId);
+  const userIds = Array.from(
+    new Set([club.adminId, legacyAdminId].filter(Boolean) as string[]),
+  );
+
+  return { userId: viewerId, club, userIds };
 }
 
 function parsePayload(body: unknown): MemberTypePayload {
@@ -509,6 +542,7 @@ export async function GET(request: NextRequest) {
       const context = await getProfileReadContext(request);
       if ('error' in context) return context.error;
 
+      const userPlaceholders = context.userIds.map(() => '?').join(',');
       const rows = await prisma.$queryRawUnsafe<MemberTypeRow[]>(
         `SELECT membertypes.id, membertypes.user_id, membertypes.club_id,
                 membertypes.member_type_name, membertypes.discount_subscription,
@@ -522,7 +556,14 @@ export async function GET(request: NextRequest) {
          FROM \`${tableName}\` membertypes
          LEFT JOIN \`${modelTable}\` models
            ON CAST(models.id AS CHAR) = CAST(membertypes.membertyp_id AS CHAR)
+         WHERE membertypes.club_id = ?
+            OR (
+              (membertypes.club_id IS NULL OR TRIM(CAST(membertypes.club_id AS CHAR)) = '')
+              AND membertypes.user_id IN (${userPlaceholders})
+            )
          ORDER BY membertypes.member_type_name ASC`,
+        context.club.id,
+        ...context.userIds,
       );
 
       return NextResponse.json({
@@ -555,8 +596,16 @@ export async function GET(request: NextRequest) {
        LEFT JOIN \`${modelTable}\` models
          ON CAST(models.id AS CHAR) = CAST(membertypes.membertyp_id AS CHAR)
        WHERE membertypes.user_id IN (${userPlaceholders})
+         AND (
+           ? IS NULL
+           OR membertypes.club_id = ?
+           OR membertypes.club_id IS NULL
+           OR TRIM(CAST(membertypes.club_id AS CHAR)) = ''
+         )
        ORDER BY membertypes.id DESC`,
-      ...context.userIds
+      ...context.userIds,
+      context.club?.id ?? null,
+      context.club?.id ?? null,
     );
 
     return NextResponse.json({

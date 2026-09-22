@@ -125,7 +125,16 @@ export function mergeTeamDescriptionForSave(
     username: trimOrEmpty(payload.username) || undefined,
     category: sport,
     sports,
-    logoUrl: trimOrEmpty(payload.logoUrl) || undefined,
+    // Keep existing logo when blank (blob/data preview not yet uploaded).
+    // Never persist data:/blob: URLs into description JSON.
+    logoUrl: (() => {
+      const next = trimOrEmpty(payload.logoUrl);
+      if (!next) return trimOrEmpty(prev.logoUrl) || undefined;
+      if (next.startsWith('data:') || next.startsWith('blob:')) {
+        return trimOrEmpty(prev.logoUrl) || undefined;
+      }
+      return next;
+    })(),
     phone: trimOrEmpty(payload.contacts.phone1) || undefined,
     website: trimOrEmpty(payload.contacts.website) || undefined,
     province: trimOrEmpty(payload.legalSite.province) || undefined,

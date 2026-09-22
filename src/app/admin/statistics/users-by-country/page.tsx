@@ -87,6 +87,7 @@ export default function UsersByCountryBarsPage() {
           title={`${STATS_KIND_LABELS[onlyKind as StatsUserKind]} — ${selectedCountry}`}
           subtitle="Distribution of the versions — click a version bar to refresh the users list"
           total={drilldown.total}
+          totalIncome={drilldown.totalIncome}
           bars={drilldown.bars}
           slices={drilldown.slices}
           userKind={onlyKind as StatsUserKind}

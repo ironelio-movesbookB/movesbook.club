@@ -1,5 +1,5 @@
 import { SportType, UserType } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { ensureStaffPrismaModels, prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
 import { normalizeTelegramAccount, isValidSportType } from '@/lib/profileSports';
@@ -228,53 +228,90 @@ function toProfile(item: ClubStaffListItem, user: {
 }
 
 export async function listClubStaff(ctx: ClubAuthContext): Promise<ClubStaffListItem[]> {
-  const club = await prisma.club.findUnique({
-    where: { id: ctx.club.id },
-    select: {
-      admin: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          name: true,
-          firstName: true,
-          surname: true,
-          image: true,
-        },
-      },
-    },
-  });
+  await ensureStaffPrismaModels();
+  const isTeam = ctx.workspaceKind === 'team';
 
-  const staffRows = await prisma.clubStaff.findMany({
-    where: { clubId: ctx.club.id },
-    include: {
-      user: {
+  const adminOwner = isTeam
+    ? await prisma.team.findUnique({
+        where: { id: ctx.club.id },
         select: {
-          id: true,
-          username: true,
-          email: true,
-          name: true,
-          firstName: true,
-          surname: true,
-          image: true,
+          admin: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              name: true,
+              firstName: true,
+              surname: true,
+              image: true,
+            },
+          },
         },
-      },
-    },
-  });
+      })
+    : await prisma.club.findUnique({
+        where: { id: ctx.club.id },
+        select: {
+          admin: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              name: true,
+              firstName: true,
+              surname: true,
+              image: true,
+            },
+          },
+        },
+      });
+
+  const staffRows = isTeam
+    ? await prisma.teamStaff.findMany({
+        where: { teamId: ctx.club.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              name: true,
+              firstName: true,
+              surname: true,
+              image: true,
+            },
+          },
+        },
+      })
+    : await prisma.clubStaff.findMany({
+        where: { clubId: ctx.club.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              name: true,
+              firstName: true,
+              surname: true,
+              image: true,
+            },
+          },
+        },
+      });
 
   const items = staffRows.map(toListItem);
   items.sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: 'base' }));
 
-  if (club?.admin) {
+  if (adminOwner?.admin) {
     items.unshift({
-      id: `admin:${club.admin.id}`,
-      userId: club.admin.id,
-      username: club.admin.username,
-      email: club.admin.email,
-      name: formatDisplayName(club.admin),
-      image: club.admin.image,
-      staffType: 'club_admin',
-      staffTypeLabel: 'Club Admin',
+      id: `admin:${adminOwner.admin.id}`,
+      userId: adminOwner.admin.id,
+      username: adminOwner.admin.username,
+      email: adminOwner.admin.email,
+      name: formatDisplayName(adminOwner.admin),
+      image: adminOwner.admin.image,
+      staffType: isTeam ? 'team_admin' : 'club_admin',
+      staffTypeLabel: isTeam ? 'Team Admin' : 'Club Admin',
       role: 'Director',
       operativeLevel: 'Supervisor',
       userLevels: [],
@@ -289,6 +326,15 @@ export async function getClubStaffById(
   ctx: ClubAuthContext,
   staffId: string,
 ): Promise<ClubStaffProfile | null> {
+  await ensureStaffPrismaModels();
+  if (ctx.workspaceKind === 'team') {
+    const row = await prisma.teamStaff.findFirst({
+      where: { id: staffId, teamId: ctx.club.id },
+      include: { user: { select: userSelect } },
+    });
+    if (!row) return null;
+    return toProfile(toListItem(row), row.user);
+  }
   const row = await prisma.clubStaff.findFirst({
     where: { id: staffId, clubId: ctx.club.id },
     include: { user: { select: userSelect } },
@@ -311,6 +357,7 @@ async function assertUniqueCredentials(username: string, email: string, excludeU
 }
 
 export async function createClubStaff(ctx: ClubAuthContext, input: ClubStaffWriteInput) {
+  await ensureStaffPrismaModels();
   const staffType = normalizeStaffType(input.staffType);
   const role = normalizeRole(input.role);
   const userLevels = normalizeUserLevels(input.userLevels);
@@ -390,16 +437,28 @@ export async function createClubStaff(ctx: ClubAuthContext, input: ClubStaffWrit
       });
     }
 
-    const staff = await tx.clubStaff.create({
-      data: {
-        clubId: ctx.club.id,
-        userId: user.id,
-        staffType,
-        role,
-        userLevels: JSON.stringify(userLevels),
-      },
-      include: { user: { select: userSelect } },
-    });
+    const staff =
+      ctx.workspaceKind === 'team'
+        ? await tx.teamStaff.create({
+            data: {
+              teamId: ctx.club.id,
+              userId: user.id,
+              staffType,
+              role,
+              userLevels: JSON.stringify(userLevels),
+            },
+            include: { user: { select: userSelect } },
+          })
+        : await tx.clubStaff.create({
+            data: {
+              clubId: ctx.club.id,
+              userId: user.id,
+              staffType,
+              role,
+              userLevels: JSON.stringify(userLevels),
+            },
+            include: { user: { select: userSelect } },
+          });
 
     return staff;
   });
@@ -412,10 +471,21 @@ export async function updateClubStaff(
   staffId: string,
   input: ClubStaffWriteInput,
 ) {
-  const existing = await prisma.clubStaff.findFirst({
-    where: { id: staffId, clubId: ctx.club.id },
-    include: { user: { select: { id: true, settings: { select: { adminSettings: true, socialSettings: true } } } } },
-  });
+  await ensureStaffPrismaModels();
+  const isTeam = ctx.workspaceKind === 'team';
+  const existing = isTeam
+    ? await prisma.teamStaff.findFirst({
+        where: { id: staffId, teamId: ctx.club.id },
+        include: {
+          user: { select: { id: true, settings: { select: { adminSettings: true, socialSettings: true } } } },
+        },
+      })
+    : await prisma.clubStaff.findFirst({
+        where: { id: staffId, clubId: ctx.club.id },
+        include: {
+          user: { select: { id: true, settings: { select: { adminSettings: true, socialSettings: true } } } },
+        },
+      });
   if (!existing) throw new Error('Staff member not found.');
 
   const staffType = normalizeStaffType(input.staffType);
@@ -496,35 +566,58 @@ export async function updateClubStaff(
       });
     }
 
-    return tx.clubStaff.update({
-      where: { id: existing.id },
-      data: {
-        staffType,
-        role,
-        userLevels: JSON.stringify(userLevels),
-      },
-      include: { user: { select: userSelect } },
-    });
+    return isTeam
+      ? tx.teamStaff.update({
+          where: { id: existing.id },
+          data: {
+            staffType,
+            role,
+            userLevels: JSON.stringify(userLevels),
+          },
+          include: { user: { select: userSelect } },
+        })
+      : tx.clubStaff.update({
+          where: { id: existing.id },
+          data: {
+            staffType,
+            role,
+            userLevels: JSON.stringify(userLevels),
+          },
+          include: { user: { select: userSelect } },
+        });
   });
 
   return toProfile(toListItem(updated), updated.user);
 }
 
 export async function deleteClubStaff(ctx: ClubAuthContext, staffIds: string[]) {
+  await ensureStaffPrismaModels();
   const ids = [...new Set(staffIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
   if (ids.length === 0) throw new Error('Select at least one staff member.');
 
-  const rows = await prisma.clubStaff.findMany({
-    where: { clubId: ctx.club.id, id: { in: ids } },
-    select: { id: true, userId: true },
-  });
+  const isTeam = ctx.workspaceKind === 'team';
+  const rows = isTeam
+    ? await prisma.teamStaff.findMany({
+        where: { teamId: ctx.club.id, id: { in: ids } },
+        select: { id: true, userId: true },
+      })
+    : await prisma.clubStaff.findMany({
+        where: { clubId: ctx.club.id, id: { in: ids } },
+        select: { id: true, userId: true },
+      });
   if (rows.length === 0) throw new Error('Staff member not found.');
 
   const userIds = rows.map((row) => row.userId);
   await prisma.$transaction(async (tx) => {
-    await tx.clubStaff.deleteMany({
-      where: { clubId: ctx.club.id, id: { in: rows.map((row) => row.id) } },
-    });
+    if (isTeam) {
+      await tx.teamStaff.deleteMany({
+        where: { teamId: ctx.club.id, id: { in: rows.map((row) => row.id) } },
+      });
+    } else {
+      await tx.clubStaff.deleteMany({
+        where: { clubId: ctx.club.id, id: { in: rows.map((row) => row.id) } },
+      });
+    }
     await tx.user.deleteMany({
       where: {
         id: { in: userIds },
@@ -541,10 +634,17 @@ export async function setClubStaffImage(
   staffId: string,
   imagePath: string | null,
 ) {
-  const row = await prisma.clubStaff.findFirst({
-    where: { id: staffId, clubId: ctx.club.id },
-    select: { userId: true },
-  });
+  await ensureStaffPrismaModels();
+  const row =
+    ctx.workspaceKind === 'team'
+      ? await prisma.teamStaff.findFirst({
+          where: { id: staffId, teamId: ctx.club.id },
+          select: { userId: true },
+        })
+      : await prisma.clubStaff.findFirst({
+          where: { id: staffId, clubId: ctx.club.id },
+          select: { userId: true },
+        });
   if (!row) throw new Error('Staff member not found.');
   await prisma.user.update({
     where: { id: row.userId },
@@ -559,6 +659,7 @@ export async function changeClubStaffPassword(
   staffId: string,
   input: { oldPassword: string; newPassword: string },
 ) {
+  await ensureStaffPrismaModels();
   const oldPassword = String(input.oldPassword ?? '');
   const newPassword = String(input.newPassword ?? '');
 

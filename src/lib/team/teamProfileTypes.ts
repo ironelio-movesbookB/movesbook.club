@@ -28,7 +28,7 @@ export type TeamLegalSite = {
   capacity: string;
   sportsScoreboards: string;
   basketsAndNets: string;
-  /** @deprecated kept for older saved profiles */
+  /** Geographic coordinate of the team site (latitude, longitude). */
   geo?: string;
 };
 
@@ -102,6 +102,12 @@ export type TeamProfileFormPayload = {
   /** Empty when not changing password (edit mode). */
   teamPassword: string;
 } & TeamProfileSections;
+
+/** Edit/create save payload — may include a new logo file. */
+export type TeamProfileSavePayload = TeamProfileFormPayload & {
+  logoFile?: File | null;
+  removeLogo?: boolean;
+};
 
 export type TeamProfileTabId =
   | 'team-profile'

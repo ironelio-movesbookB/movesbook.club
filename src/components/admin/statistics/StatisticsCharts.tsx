@@ -16,11 +16,14 @@ import {
   LabelList,
 } from 'recharts';
 import {
-  STATS_KIND_LABELS,
   STATS_USER_KINDS,
   type StatsUserKind,
   type StatsVersionBucket,
 } from '@/lib/admin/statisticsKinds';
+import {
+  slicesForMetric,
+  useStatisticsMetric,
+} from '@/components/admin/statistics/StatisticsMetricToggle';
 import type { StatsSlice } from '@/lib/admin/buildStatistics';
 import { useStatisticsGraphTheme } from '@/components/admin/statistics/StatisticsGraphTheme';
 
@@ -57,13 +60,14 @@ function PieTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ name?: string; value?: number; payload?: StatsSlice }>;
+  payload?: Array<{ name?: string; value?: number; payload?: StatsSlice & { value?: number } }>;
 }) {
   const theme = useStatisticsGraphTheme();
+  const { metricLabel, formatMetricValue } = useStatisticsMetric();
   if (!active || !payload?.[0]) return null;
   const row = payload[0].payload;
   const name = payload[0].name ?? row?.label ?? '';
-  const value = payload[0].value ?? row?.count ?? 0;
+  const value = payload[0].value ?? row?.value ?? row?.count ?? 0;
   const percent = row?.percent;
   return (
     <div
@@ -76,8 +80,9 @@ function PieTooltip({
     >
       <div className="font-semibold">{name}</div>
       <div style={{ color: theme.background.muted }}>
-        {value}
+        {formatMetricValue(Number(value))}
         {percent != null ? ` (${percent}%)` : ''}
+        <span className="ml-1 opacity-70">· {metricLabel}</span>
       </div>
     </div>
   );
@@ -137,18 +142,23 @@ export function StatisticsPieBlock({
   legendValueMode = 'percent',
 }: PieBlockProps) {
   const theme = useStatisticsGraphTheme();
+  const { metric, formatMetricValue, sliceValue } = useStatisticsMetric();
   const resolvedUniform =
     uniformColor ?? (uniformKind ? theme.kindColor(uniformKind) : undefined);
   const resolvedSwatch =
     titleSwatchColor ?? (titleSwatchKind ? theme.kindColor(titleSwatchKind) : undefined);
-  const chartData = useMemo(() => slices.filter((s) => s.count > 0), [slices]);
+  const metricSlices = useMemo(() => slicesForMetric(slices, metric), [slices, metric]);
+  const chartData = useMemo(
+    () => metricSlices.filter((s) => s.value > 0),
+    [metricSlices],
+  );
   const legendData = useMemo(() => {
-    const positive = slices.filter((s) => s.count > 0);
-    const rest = slices.find(
-      (s) => (s.key === '__rest_of_world__' || s.key === '__others__') && s.count === 0,
+    const positive = metricSlices.filter((s) => s.value > 0);
+    const rest = metricSlices.find(
+      (s) => (s.key === '__rest_of_world__' || s.key === '__others__') && s.value === 0,
     );
     return rest ? [...positive, rest] : positive;
-  }, [slices]);
+  }, [metricSlices]);
   const empty = chartData.length === 0;
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
@@ -218,7 +228,7 @@ export function StatisticsPieBlock({
               <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                 <Pie
                   data={chartData}
-                  dataKey="count"
+                  dataKey="value"
                   nameKey="label"
                   cx="50%"
                   cy="50%"
@@ -308,20 +318,20 @@ export function StatisticsPieBlock({
                     <span
                       className="truncate text-base"
                       style={{ color: theme.background.text }}
-                      title={`${entry.label}: ${entry.count} (${entry.percent}%)`}
+                      title={`${entry.label}: ${formatMetricValue(sliceValue(entry))} (${entry.percent}%)`}
                     >
                       {legendValueMode === 'count' ? (
                         <>
                           {entry.label}{' '}
                           <span className="font-bold" style={{ color: theme.background.text }}>
-                            {entry.count}
+                            {formatMetricValue(entry.value)}
                           </span>
                         </>
                       ) : (
                         <>
                           {entry.label} ({entry.percent}%){' '}
                           <span className="font-bold" style={{ color: theme.background.text }}>
-                            {entry.count}
+                            {formatMetricValue(entry.value)}
                           </span>
                         </>
                       )}
@@ -338,7 +348,13 @@ export function StatisticsPieBlock({
 }
 
 type VerticalCountryBarsProps = {
-  rows: Array<{ country: string; byKind: Record<StatsUserKind, number>; total: number }>;
+  rows: Array<{
+    country: string;
+    byKind: Record<StatsUserKind, number>;
+    byKindIncome?: Record<StatsUserKind, number>;
+    total: number;
+    totalIncome?: number;
+  }>;
   /** If set, only render that kind's bar */
   onlyKind?: StatsUserKind | 'all' | 'except_groups';
   /** Fired when a country bar is clicked (single-type mode). null when cleared. */
@@ -373,6 +389,7 @@ export function StatisticsVerticalCountryBars({
   onOpenBarList,
 }: VerticalCountryBarsProps) {
   const theme = useStatisticsGraphTheme();
+  const { metric, formatMetricValue, isIncome } = useStatisticsMetric();
   const kinds =
     onlyKind === 'all' || onlyKind === 'except_groups'
       ? onlyKind === 'except_groups'
@@ -383,6 +400,13 @@ export function StatisticsVerticalCountryBars({
   const singleKindMode = kinds.length === 1;
   const colorFor = (k: StatsUserKind) => theme.kindColor(k);
   const labelFor = (k: StatsUserKind) => SIDE_TABLE_LABELS[k];
+  const cellValue = (
+    row: VerticalCountryBarsProps['rows'][number],
+    k: StatsUserKind,
+  ) =>
+    metric === 'income'
+      ? Number(row.byKindIncome?.[k] ?? 0)
+      : Number(row.byKind[k] ?? 0);
 
   const [hovered, setHovered] = useState<BarFocus | null>(null);
   const [selected, setSelected] = useState<BarFocus | null>(null);
@@ -410,11 +434,11 @@ export function StatisticsVerticalCountryBars({
     let max = 1;
     for (const row of rows) {
       for (const k of kinds) {
-        max = Math.max(max, row.byKind[k] ?? 0);
+        max = Math.max(max, cellValue(row, k));
       }
     }
     return max;
-  }, [rows, kinds]);
+  }, [rows, kinds, metric]);
 
   const axisTicks = useMemo(() => {
     const nice = Math.ceil(maxValue);
@@ -425,8 +449,9 @@ export function StatisticsVerticalCountryBars({
     return ticks;
   }, [maxValue]);
 
-  const rowTotal = (row: { byKind: Record<StatsUserKind, number>; total: number }) =>
-    kinds.reduce((s, k) => s + (row.byKind[k] ?? 0), 0) || row.total;
+  const rowTotal = (row: VerticalCountryBarsProps['rows'][number]) =>
+    kinds.reduce((s, k) => s + cellValue(row, k), 0) ||
+    (metric === 'income' ? Number(row.totalIncome ?? 0) : row.total);
 
   const isCellActive = (country: string, kind: string) => {
     if (!active) return false;
@@ -542,7 +567,7 @@ export function StatisticsVerticalCountryBars({
                       ))}
                     </div>
                     {kinds.map((k) => {
-                      const value = row.byKind[k] ?? 0;
+                      const value = cellValue(row, k);
                       const pct = Math.max(0, Math.min(100, (value / maxValue) * 100));
                       const dimmed = isCellDimmed(row.country, k);
                       const cellActive = isCellActive(row.country, k);
@@ -552,7 +577,7 @@ export function StatisticsVerticalCountryBars({
                           type="button"
                           className="relative z-[1] flex items-center gap-1.5 w-full text-left shrink-0"
                           style={{ height: barTrackH }}
-                          title={`${row.country} · ${labelFor(k)}: ${value}`}
+                          title={`${row.country} · ${labelFor(k)}: ${formatMetricValue(value)}`}
                           onMouseEnter={() => setHovered({ country: row.country, kind: k })}
                           onMouseLeave={() => setHovered({ country: row.country })}
                           onClick={() => handleBarClick(row.country, k)}
@@ -580,10 +605,10 @@ export function StatisticsVerticalCountryBars({
                           </div>
                           {singleKindMode ? (
                             <span
-                              className="w-8 shrink-0 text-right text-xs font-bold tabular-nums"
+                              className="w-12 shrink-0 text-right text-[10px] font-bold tabular-nums"
                               style={{ color: theme.background.text }}
                             >
-                              {value}
+                              {formatMetricValue(value)}
                             </span>
                           ) : null}
                         </button>
@@ -660,7 +685,7 @@ export function StatisticsVerticalCountryBars({
               <div
                 className="flex items-center justify-center px-0.5 text-center border-l font-bold"
                 style={{ color: '#dc2626', borderColor: theme.background.border }}
-                title="Total users in country"
+                title={isIncome ? 'Total income in country' : 'Total users in country'}
               >
                 Totals
               </div>
@@ -685,13 +710,13 @@ export function StatisticsVerticalCountryBars({
                   onMouseLeave={() => setHovered(null)}
                 >
                   {kinds.map((k) => {
-                    const value = row.byKind[k] ?? 0;
+                    const value = cellValue(row, k);
                     const cellActive = isCellActive(row.country, k);
                     return (
                       <button
                         key={k}
                         type="button"
-                        className="flex items-center justify-center border-l first:border-l-0 font-semibold tabular-nums"
+                        className="flex items-center justify-center border-l first:border-l-0 font-semibold tabular-nums text-[10px]"
                         style={{
                           color: value > 0 ? colorFor(k) : theme.background.muted,
                           borderColor: theme.background.border,
@@ -700,20 +725,20 @@ export function StatisticsVerticalCountryBars({
                             ? `inset 0 0 0 1px ${theme.background.accent}`
                             : undefined,
                         }}
-                        title={`${row.country} · ${labelFor(k)}: ${value}`}
+                        title={`${row.country} · ${labelFor(k)}: ${formatMetricValue(value)}`}
                         onClick={() => handleBarClick(row.country, k)}
                       >
-                        {value}
+                        {formatMetricValue(value)}
                       </button>
                     );
                   })}
                   {showTotals ? (
                     <div
-                      className="flex items-center justify-center border-l font-bold tabular-nums"
+                      className="flex items-center justify-center border-l font-bold tabular-nums text-[10px]"
                       style={{ color: '#dc2626', borderColor: theme.background.border }}
-                      title={`${row.country} · Total: ${total}`}
+                      title={`${row.country} · Total: ${formatMetricValue(total)}`}
                     >
-                      {total}
+                      {formatMetricValue(total)}
                     </div>
                   ) : null}
                 </div>
@@ -734,7 +759,7 @@ export function StatisticsVerticalCountryBars({
 }
 
 type VersionsBarsProps = {
-  rows: Array<{ version: StatsVersionBucket; count: number }>;
+  rows: Array<{ version: StatsVersionBucket; count: number; income?: number }>;
   onVersionSelect?: (version: StatsVersionBucket | null) => void;
   /** Open admin/all for users counted in this version bar. */
   onOpenBarList?: (version: StatsVersionBucket) => void;
@@ -751,6 +776,7 @@ function VersionAxisTick({
   counts,
   countColor,
   labelColor,
+  formatValue,
 }: {
   x?: number | string;
   y?: number | string;
@@ -758,6 +784,7 @@ function VersionAxisTick({
   counts: Record<string, number>;
   countColor: string;
   labelColor: string;
+  formatValue: (value: number) => string;
 }) {
   const version = String(payload?.value ?? '');
   const count = counts[version] ?? 0;
@@ -768,9 +795,8 @@ function VersionAxisTick({
       <text dy={14} textAnchor="middle" fill={labelColor} fontSize={12} fontWeight={600}>
         {version}
       </text>
-      {/* Absolute user count (not %) — Base/Premium/Professional already include PFU variants */}
-      <text dy={34} textAnchor="middle" fill={countColor} fontSize={16} fontWeight={800}>
-        {count}
+      <text dy={34} textAnchor="middle" fill={countColor} fontSize={14} fontWeight={800}>
+        {formatValue(count)}
       </text>
     </g>
   );
@@ -785,6 +811,7 @@ export function StatisticsVersionsBars({
   fillColor,
 }: VersionsBarsProps) {
   const theme = useStatisticsGraphTheme();
+  const { metric, metricLabel, formatMetricValue } = useStatisticsMetric();
   const chartHeight = Math.max(height, 200);
   const hostRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
@@ -808,15 +835,17 @@ export function StatisticsVersionsBars({
 
   const data = rows.map((r) => ({
     version: r.version,
-    count: r.count,
+    count: metric === 'income' ? Number(r.income ?? 0) : r.count,
     fill: fillColor ?? theme.versionColor(r.version),
   }));
 
   const countsByVersion = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const r of rows) map[r.version] = r.count;
+    for (const r of rows) {
+      map[r.version] = metric === 'income' ? Number(r.income ?? 0) : r.count;
+    }
     return map;
-  }, [rows]);
+  }, [rows, metric]);
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -864,6 +893,7 @@ export function StatisticsVersionsBars({
                 counts={countsByVersion}
                 countColor={theme.background.accentAlt}
                 labelColor={theme.background.text}
+                formatValue={formatMetricValue}
               />
             )}
             height={58}
@@ -872,9 +902,10 @@ export function StatisticsVersionsBars({
             allowDecimals={false}
             tick={{ fill: theme.background.muted, fontSize: 12 }}
             stroke={theme.background.border}
+            tickFormatter={(v) => formatMetricValue(Number(v))}
           />
           <Tooltip
-            formatter={(value) => [value, 'Users']}
+            formatter={(value) => [formatMetricValue(Number(value)), metricLabel]}
             labelFormatter={(label) => String(label)}
             contentStyle={{
               background: theme.background.panel,
@@ -884,7 +915,7 @@ export function StatisticsVersionsBars({
           />
           <Bar
             dataKey="count"
-            name="Users"
+            name={metricLabel}
             maxBarSize={64}
             cursor="pointer"
             onMouseEnter={(entry) => {
@@ -901,8 +932,9 @@ export function StatisticsVersionsBars({
               dataKey="count"
               position="top"
               fill={theme.background.text}
-              fontSize={13}
+              fontSize={12}
               fontWeight={700}
+              formatter={(value) => formatMetricValue(Number(value ?? 0))}
             />
             {data.map((entry) => {
               const isActive = activeKey === entry.version;

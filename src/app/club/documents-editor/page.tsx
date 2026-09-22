@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
 import { getAuthHeaders } from '@/lib/club/servicePurchasesClient';
 import {
@@ -14,11 +15,16 @@ const CKEditor = dynamic(() => import('@/components/news/CKEditor'), { ssr: fals
 
 type TabId = 'rules' | 'privacy-policy';
 
-export default function DocumentsEditorPage() {
+function DocumentsEditorContent() {
+  const searchParams = useSearchParams();
+  const clubIdFromQuery = searchParams.get('clubId') || '';
+  const tabFromQuery = searchParams.get('tab');
   const { selectedClubId } = useClubWorkspace();
-  const [clubId, setClubId] = useState(selectedClubId || '');
+  const [clubId, setClubId] = useState(clubIdFromQuery || selectedClubId || '');
 
-  const [tab, setTab] = useState<TabId>('rules');
+  const [tab, setTab] = useState<TabId>(
+    tabFromQuery === 'privacy-policy' ? 'privacy-policy' : 'rules',
+  );
   const [clubName, setClubName] = useState('');
   const [canEdit, setCanEdit] = useState(false);
   const [docs, setDocs] = useState<ClubLegalDocuments>({
@@ -31,8 +37,16 @@ export default function DocumentsEditorPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setClubId(selectedClubId || localStorage.getItem('selectedClub') || '');
-  }, [selectedClubId]);
+    setClubId(
+      clubIdFromQuery || selectedClubId || localStorage.getItem('selectedClub') || '',
+    );
+  }, [clubIdFromQuery, selectedClubId]);
+
+  useEffect(() => {
+    if (tabFromQuery === 'rules' || tabFromQuery === 'privacy-policy') {
+      setTab(tabFromQuery);
+    }
+  }, [tabFromQuery]);
 
   useEffect(() => {
     if (!clubId) {
@@ -101,8 +115,8 @@ export default function DocumentsEditorPage() {
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Documents Editor</h1>
         <p className="text-sm text-gray-600">
-          Write the club <strong>Rules</strong> and <strong>Private policy</strong> shown from the
-          Parents / Signatures tabs.
+          Write the club <strong>Rules</strong> and <strong>Privacy policy</strong> shown from My
+          Club overview and the Parents / Signatures tabs.
           {clubName ? (
             <>
               {' '}
@@ -129,7 +143,7 @@ export default function DocumentsEditorPage() {
             tab === 'privacy-policy' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'
           }`}
         >
-          Private policy
+          Privacy policy
         </button>
         {clubId ? (
           <Link
@@ -186,5 +200,13 @@ export default function DocumentsEditorPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function DocumentsEditorPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-gray-500">Loading…</p>}>
+      <DocumentsEditorContent />
+    </Suspense>
   );
 }

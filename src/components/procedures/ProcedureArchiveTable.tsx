@@ -36,6 +36,8 @@ type Props = {
    */
   sort?: ArchiveSortState | null;
   onSortChange?: (next: ArchiveSortState) => void;
+  /** Extra classes on each data row (e.g. status text color). */
+  getRowClassName?: (row: Member) => string;
 };
 
 const ACTION_KEYS = new Set(['edit', 'delete', 'options']);
@@ -56,6 +58,7 @@ export default function ProcedureArchiveTable({
   selectOnlyOpenRest = true,
   sort: controlledSort,
   onSortChange,
+  getRowClassName,
 }: Props) {
   const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(null);
   const sort = controlledSort !== undefined ? controlledSort : internalSort;
@@ -171,12 +174,13 @@ export default function ProcedureArchiveTable({
               const actionHover = row.isDuplicate
                 ? 'group-hover:bg-red-200'
                 : 'group-hover:bg-teal-50';
+              const statusClass = getRowClassName?.(row) ?? '';
               return (
                 <tr
                   key={row.id ?? `${row.name}-${row.insertDate}`}
                   className={`group border-t cursor-pointer ${rowBg} ${rowHover} ${
                     row.isDuplicate ? 'text-red-800' : ''
-                  }`}
+                  } ${statusClass}`}
                   onClick={() => onRowClick?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                 >
@@ -192,7 +196,10 @@ export default function ProcedureArchiveTable({
                     </td>
                   )}
                   {dataColumns.map((col) => (
-                    <td key={String(col.key)} className="px-3 py-2 text-gray-800 whitespace-nowrap">
+                    <td
+                      key={String(col.key)}
+                      className={`px-3 py-2 whitespace-nowrap ${statusClass || 'text-gray-800'}`}
+                    >
                       {col.render
                         ? col.render(row[col.key], row)
                         : (row[col.key] as React.ReactNode) ?? '-'}

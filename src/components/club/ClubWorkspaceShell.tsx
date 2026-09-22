@@ -13,12 +13,17 @@ import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
+  canAccessClubMembersArchive,
   canAccessClubWorkspace,
+  canAccessManagedArchiveShell,
+  isManagedEntityAdminUserType,
+  isTeamAccountUserType,
   showSuggestMovesbookForTab,
 } from '@/utils/dashboardRouting';
 import {
   getClubMyPageDisplayName,
   getFormCreatedClubsSortedByCreatedAt,
+  sortClubsByCreatedAtAsc,
   userHasClubProfile,
 } from '@/lib/club/clubSidebarLabel';
 import {
@@ -49,7 +54,10 @@ import {
 } from '@/lib/admin/subscriptionManageableUsers';
 import { SUBSCRIPTION_SETTINGS_UPDATED_EVENT } from '@/lib/admin/subscriptionSettingsMock';
 import { getDefaultVersionId } from '@/lib/registration/waysToGetStarted';
-import { applyEntityLogoOnSave } from '@/lib/entity/applyEntityLogoOnSave';
+import {
+  applyEntityBannerOnSave,
+  applyEntityLogoOnSave,
+} from '@/lib/entity/applyEntityLogoOnSave';
 import {
   useEntityDirectAccessGuard,
   useEntityDirectAccessLockedForKind,
@@ -127,10 +135,13 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     setMyEntityTabVisible: setMyClubTabVisible,
   });
 
-  const formClubs = useMemo(
-    () => getFormCreatedClubsSortedByCreatedAt(clubs),
-    [clubs],
-  );
+  const isTeamWorkspaceUser = Boolean(user && isTeamAccountUserType(user.userType));
+
+  const formClubs = useMemo(() => {
+    // Teams are not "form-created clubs"; show all owned teams in the shell sidebar.
+    if (isTeamWorkspaceUser) return sortClubsByCreatedAtAsc(clubs);
+    return getFormCreatedClubsSortedByCreatedAt(clubs);
+  }, [clubs, isTeamWorkspaceUser]);
 
   const creatableCompaniesQuota = useMemo((): CreatableCompaniesQuota | null => {
     void settingsRevision;
@@ -158,6 +169,31 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const loadClubs = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) return;
+
+      if (user && isTeamAccountUserType(user.userType)) {
+        const response = await fetch('/api/teams/my-teams', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const list = (data.teams || []) as { id: string }[];
+          setClubs(list);
+          writeClubFormProfileHint(list.length > 0);
+          const savedId = localStorage.getItem('selectedClub');
+          setSelectedClubId((prev) => {
+            if (prev && list.some((t) => t.id === prev)) return prev;
+            if (savedId && list.some((t) => t.id === savedId)) return savedId;
+            if (list[0]?.id) {
+              localStorage.setItem('selectedClub', list[0].id);
+              return list[0].id;
+            }
+            return prev;
+          });
+        }
+        return;
+      }
+
       const response = await fetch('/api/clubs/my-clubs', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -172,7 +208,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     } finally {
       setClubsLoaded(true);
     }
-  }, []);
+  }, [user]);
 
   const loadSubscriptionSettingId = useCallback(async () => {
     try {
@@ -354,19 +390,44 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     if (savedTab) setActiveTab(savedTab);
   }, [pathname, selectedClubId]);
 
+  const canUseClubShell = Boolean(user && canAccessClubWorkspace(user.userType));
+  const onMembersArchivePath = Boolean(pathname?.startsWith('/clubMembers'));
+  const onManagedArchiveShell = Boolean(
+    user && canAccessManagedArchiveShell(user.userType, pathname),
+  );
+  const canUseMembersArchive = Boolean(
+    user &&
+      (canUseClubShell ||
+        onManagedArchiveShell ||
+        (onMembersArchivePath && canAccessClubMembersArchive(user.userType))),
+  );
+  /**
+   * Narrow archive-only shell for non-club users who are not Team/Coach/Group admins.
+   * Team/Coach/Group use my-entity (TEAM'S MANAGEMENT) on archive routes.
+   */
+  const archiveOnlyMembersAccess = Boolean(
+    user &&
+      onMembersArchivePath &&
+      canAccessClubMembersArchive(user.userType) &&
+      !canAccessClubWorkspace(user.userType) &&
+      !isManagedEntityAdminUserType(user.userType),
+  );
+
   useEffect(() => {
+    if (archiveOnlyMembersAccess) return;
     if (clubsLoaded && !hasFormClub && activeTab === 'my-entity') {
       setActiveTab('my-page');
       writeClubWorkspaceTab('my-page');
     }
-  }, [clubsLoaded, hasFormClub, activeTab]);
+  }, [archiveOnlyMembersAccess, clubsLoaded, hasFormClub, activeTab]);
 
   useEffect(() => {
+    if (archiveOnlyMembersAccess) return;
     if (clubsLoaded && !selectedClubId && activeTab === 'my-entity') {
       setActiveTab('my-page');
       writeClubWorkspaceTab('my-page');
     }
-  }, [clubsLoaded, selectedClubId, activeTab]);
+  }, [archiveOnlyMembersAccess, clubsLoaded, selectedClubId, activeTab]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -375,18 +436,41 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user && !canAccessClubWorkspace(user.userType)) {
-      router.push('/my-page');
-    }
-  }, [user, router]);
+    if (!user || loading) return;
+    if (canUseMembersArchive) return;
+    router.push('/my-page');
+  }, [user, loading, router, canUseMembersArchive]);
+
+  /**
+   * Team / Coach / Group on shared archive routes must stay on My Team (my-entity)
+   * so TEAM'S MANAGEMENT → Archives remains clickable.
+   */
+  useEffect(() => {
+    if (!user || loading) return;
+    if (!isManagedEntityAdminUserType(user.userType)) return;
+    if (canAccessClubWorkspace(user.userType)) return;
+    if (!onManagedArchiveShell && !onMembersArchivePath) return;
+
+    setMyClubTabVisible(true);
+    setActiveTab('my-entity');
+    writeClubWorkspaceTab('my-entity');
+  }, [user, loading, onManagedArchiveShell, onMembersArchivePath]);
 
   useEffect(() => {
-    if (user && canAccessClubWorkspace(user.userType)) {
+    if (!archiveOnlyMembersAccess) return;
+    setActiveTab('my-entity');
+    writeClubWorkspaceTab('my-entity');
+    setMyClubTabVisible(true);
+  }, [archiveOnlyMembersAccess]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (canUseClubShell || canUseMembersArchive) {
       void loadClubs();
       void loadBannerProfile();
       void loadTelegramAccount();
     }
-  }, [user, loadClubs, loadBannerProfile, loadTelegramAccount]);
+  }, [user, canUseClubShell, canUseMembersArchive, loadClubs, loadBannerProfile, loadTelegramAccount]);
 
   const handleTabChange = useCallback((tab: ClubWorkspaceTab) => {
     if (tab === 'my-page') {
@@ -405,8 +489,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
   const handleClubSelect = useCallback(
     async (clubId: string) => {
-      const openMyClub = () => {
+      const openWorkspace = () => {
         localStorage.setItem('selectedClub', clubId);
+        if (isTeamWorkspaceUser) {
+          localStorage.setItem('selectedTeam', clubId);
+        }
         setSelectedClubId(clubId);
         writeClubWorkspaceTab('my-entity');
         setActiveTab('my-entity');
@@ -414,17 +501,17 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         showMyClubTab();
       };
 
-      if (!isEntityWorkspaceSession('club')) {
+      if (!isTeamWorkspaceUser && !isEntityWorkspaceSession('club')) {
         const alert = await fetchPcuAlert('login', user?.language || 'en', clubId);
         if (alert) {
-          showAlert(alert, openMyClub);
+          showAlert(alert, openWorkspace);
           return;
         }
       }
 
-      openMyClub();
+      openWorkspace();
     },
-    [showAlert, showMyClubTab, user?.language],
+    [showAlert, showMyClubTab, user?.language, isTeamWorkspaceUser],
   );
 
   const handleMyPageTabClick = useCallback(() => {
@@ -435,25 +522,49 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     setShowChatPanel(false);
     setChatAudience(null);
     setMyPageNewsPanel(null);
+    if (isTeamWorkspaceUser) {
+      router.push('/team/dashboard');
+      return;
+    }
     if (pathname !== '/club/dashboard') {
       router.push('/club/dashboard');
     }
-  }, [hideMyClubTab, pathname, router]);
+  }, [hideMyClubTab, pathname, router, isTeamWorkspaceUser]);
 
   const handleMyClubTabClick = useCallback(() => {
-    const clubId = selectedClubId ?? formClubs[0]?.id ?? null;
-    if (!clubId) return;
+    const entityId = selectedClubId ?? formClubs[0]?.id ?? null;
+    if (!entityId) return;
 
     if (!selectedClubId) {
-      localStorage.setItem('selectedClub', clubId);
-      setSelectedClubId(clubId);
+      localStorage.setItem('selectedClub', entityId);
+      setSelectedClubId(entityId);
     }
 
     writeClubWorkspaceTab('my-entity');
     setActiveTab('my-entity');
     setMyPageNewsPanel(null);
-    router.push(`/my-club?clubId=${encodeURIComponent(clubId)}`);
-  }, [selectedClubId, formClubs, router]);
+    showMyClubTab();
+
+    if (isTeamWorkspaceUser) {
+      localStorage.setItem('selectedTeam', entityId);
+      // Stay on current archive route when already in Archives; otherwise open My Team.
+      if (
+        pathname?.startsWith('/clubMembers') ||
+        pathname?.startsWith('/clubs/') ||
+        pathname?.startsWith('/club/staff')
+      ) {
+        return;
+      }
+      router.push(`/my-team?teamId=${encodeURIComponent(entityId)}`);
+      return;
+    }
+
+    router.push(`/my-club?clubId=${encodeURIComponent(entityId)}`);
+  }, [selectedClubId, formClubs, router, isTeamWorkspaceUser, pathname, showMyClubTab]);
+
+  const handleMyTeamClick = useCallback(() => {
+    handleMyClubTabClick();
+  }, [handleMyClubTabClick]);
 
   const openCreateClubFlow = () => {
     if (creatableCompaniesQuota && !creatableCompaniesQuota.canCreate) {
@@ -493,6 +604,9 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       const clubId = data.club?.id as string | undefined;
       if (clubId && (payload.logoFile || payload.removeLogo)) {
         await applyEntityLogoOnSave('club', clubId, payload);
+      }
+      if (clubId && (payload.bannerFile || payload.removeBanner)) {
+        await applyEntityBannerOnSave('club', clubId, payload);
       }
       await loadClubs();
       if (clubId) {
@@ -565,7 +679,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     [pathname, router],
   );
 
-  if (loading || !user || !canAccessClubWorkspace(user.userType)) {
+  if (loading || !user || !canUseMembersArchive) {
     return null;
   }
 
@@ -625,13 +739,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 entities={formClubs}
                 selectedEntityId={selectedClubId}
                 clubProfileLoaded={clubsLoaded}
-                clubMyClubTabVisible={myClubTabVisible || clubDirectAccessLocked}
-                hideMyPageTab={clubDirectAccessLocked}
+                clubMyClubTabVisible={
+                  myClubTabVisible ||
+                  clubDirectAccessLocked ||
+                  archiveOnlyMembersAccess ||
+                  (isTeamWorkspaceUser && Boolean(selectedClubId))
+                }
+                hideMyPageTab={clubDirectAccessLocked || archiveOnlyMembersAccess}
                 onEntitySelect={handleClubSelect}
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
                 onMyPageClick={handleMyPageTabClick}
                 onMyClubClick={handleMyClubTabClick}
+                onMyTeamClick={isTeamWorkspaceUser ? handleMyTeamClick : undefined}
                 onClubAddSongsPlaylistsClick={() => router.push('/add-songs')}
                 onClubMusicPanelClick={() => router.push('/music-panel')}
                 onIdentificationDevicesClick={() => goToDashboardPanel('identification-devices')}

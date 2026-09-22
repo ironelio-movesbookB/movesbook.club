@@ -1,17 +1,22 @@
 'use client';
 import Image from 'next/image';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CalendarClock, Pencil, Trash2, User, UserPlus } from 'lucide-react';
 import ClubMemberArchivePage, { memberTypeBadge } from '@/components/club/members/ClubMemberArchivePage';
 import AddMemberModal from '@/components/AddMemberModal';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import ClubMemberArchiveHeader from './components/status';
 import MemberArchiveTopNav, {
+  type MemberArchiveNavMode,
+  type MemberArchiveNavRole,
   type MemberArchiveSection,
+  memberArchiveNavSections,
 } from '@/components/club/memberArchive/MemberArchiveTopNav';
 import ArchiveEntityProfilePanel from '@/components/club/memberArchive/ArchiveEntityProfilePanel';
 import AthletesParentsArchive from '@/components/club/memberArchive/AthletesParentsArchive';
+import ClubStaffList from '@/components/club/staff/ClubStaffList';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import {
   computeClubMemberCapacity,
@@ -23,13 +28,55 @@ import {
 } from '@/lib/admin/subscriptionManageableUsers';
 import { SUBSCRIPTION_SETTINGS_UPDATED_EVENT } from '@/lib/admin/subscriptionSettingsMock';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  getArchiveEntityProfileSectionLabel,
+  managedEntityKindFromUserType,
+} from '@/lib/entity/entityProfileLabels';
 import type { Column, Member } from '@/types/clubTable';
 import { staffRowTextClass } from '@/lib/club/clubStaff.constants';
+import type { MemberArchiveStatus } from '@/lib/club/memberArchiveStatus';
 
 type MemberCapacityResponse = {
   subscriptionSettingId: number | null;
   capacity: ClubMemberCapacityStats;
 };
+
+const MEMBER_ARCHIVE_SECTIONS: MemberArchiveSection[] = [
+  'athletes',
+  'pending',
+  'archived',
+  'not-members',
+  'parents',
+  'staff',
+  'club-profile',
+  'settings',
+];
+
+function parseArchiveSection(value: string | null): MemberArchiveSection | null {
+  return MEMBER_ARCHIVE_SECTIONS.find((section) => section === value) ?? null;
+}
+
+function parseArchiveNavMode(value: string | null): MemberArchiveNavMode {
+  return value === 'athletes' ? 'athletes' : 'archive';
+}
+
+function archiveNavRoleFromUserType(
+  userType: string | null | undefined,
+): MemberArchiveNavRole {
+  return managedEntityKindFromUserType(userType) === 'coaching-group'
+    ? 'coach'
+    : 'club-or-team';
+}
+
+/**
+ * Default nav mode from section when `nav` is omitted (e.g. old bookmarks).
+ * Pending / not-members imply Athletes\\Members header; everything else → Archive of Users.
+ */
+function defaultNavModeForSection(section: MemberArchiveSection): MemberArchiveNavMode {
+  if (section === 'pending' || section === 'not-members') return 'athletes';
+  return 'archive';
+}
 
 function formatDisplayDate(value: unknown) {
   if (!value) return '-';
@@ -45,78 +92,228 @@ function formatDisplayDate(value: unknown) {
   return raw;
 }
 
-export default function MemberListPage() {
+function MemberListPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
   const { selectedClubId: contextClubId } = useClubWorkspace();
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [memberPendingDelete, setMemberPendingDelete] = useState<Member | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [addError, setAddError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [archiveSection, setArchiveSection] = useState<MemberArchiveSection>('athletes');
   const [capacityPayload, setCapacityPayload] = useState<MemberCapacityResponse | null>(null);
   const [settingsRevision, setSettingsRevision] = useState(0);
+  const [teamId, setTeamId] = useState<string | null>(null);
+
+  const entityKind = useMemo(
+    () => managedEntityKindFromUserType(user?.userType),
+    [user?.userType],
+  );
+  const isTeamWorkspace = entityKind === 'team';
+
+  const archiveNavRole = useMemo(
+    () => archiveNavRoleFromUserType(user?.userType),
+    [user?.userType],
+  );
+
+  const profileSectionLabel = useMemo(
+    () => getArchiveEntityProfileSectionLabel(entityKind),
+    [entityKind],
+  );
+
+  // ?section= is the source of truth so the sidebar (Archives → Archive of Users) and the
+  // top nav can never disagree about which section is open.
+  const archiveSection = useMemo(() => {
+    const parsed = parseArchiveSection(searchParams?.get('section') ?? null) ?? 'athletes';
+    return parsed;
+  }, [searchParams]);
+
+  const archiveNavMode = useMemo(() => {
+    const fromQuery = searchParams?.get('nav');
+    if (fromQuery === 'athletes' || fromQuery === 'archive') {
+      return parseArchiveNavMode(fromQuery);
+    }
+    return defaultNavModeForSection(archiveSection);
+  }, [archiveSection, searchParams]);
+
+  const allowedNavSections = useMemo(
+    () =>
+      memberArchiveNavSections(archiveNavRole, archiveNavMode, profileSectionLabel),
+    [archiveNavRole, archiveNavMode, profileSectionLabel],
+  );
+
+  // Keep URL valid for the current one-row header (e.g. pending is invalid on Archive of Users nav).
+  useEffect(() => {
+    if (allowedNavSections.includes(archiveSection)) return;
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    params.set('section', 'athletes');
+    if (!params.get('nav')) {
+      params.set('nav', archiveNavMode);
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [
+    allowedNavSections,
+    archiveNavMode,
+    archiveSection,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
+  const membershipStatusFilter = useMemo((): MemberArchiveStatus | 'all' => {
+    if (archiveSection === 'pending') return 'pending';
+    if (archiveSection === 'not-members') return 'not_member';
+    if (archiveSection === 'archived') return 'archived';
+    // All the users profiles: athletes + archive nav → show A+B+C (not archived)
+    if (archiveSection === 'athletes' && archiveNavMode === 'archive') return 'all';
+    // Athletes\\Members dedicated tab → official members only
+    if (archiveSection === 'athletes') return 'member';
+    return 'all';
+  }, [archiveSection, archiveNavMode]);
+
+  const showMembersArchive =
+    archiveSection === 'athletes' ||
+    archiveSection === 'pending' ||
+    archiveSection === 'not-members' ||
+    archiveSection === 'archived';
+
+  const setArchiveSection = useCallback(
+    (section: MemberArchiveSection) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      params.set('section', section);
+      params.set('nav', archiveNavMode);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [archiveNavMode, pathname, router, searchParams],
+  );
 
   const clubId = useMemo(() => {
+    if (isTeamWorkspace) return null;
     if (contextClubId) return contextClubId;
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('selectedClub');
-  }, [contextClubId]);
+  }, [contextClubId, isTeamWorkspace]);
+
+  useEffect(() => {
+    if (!isTeamWorkspace) {
+      setTeamId(null);
+      return;
+    }
+    let cancelled = false;
+    const resolveTeam = async () => {
+      const saved =
+        typeof window !== 'undefined' ? localStorage.getItem('selectedTeam') : null;
+      if (saved) {
+        if (!cancelled) setTeamId(saved);
+        return;
+      }
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        if (!cancelled) setTeamId(null);
+        return;
+      }
+      try {
+        const res = await fetch('/api/teams/my-teams', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          if (!cancelled) setTeamId(null);
+          return;
+        }
+        const data = (await res.json()) as { teams?: Array<{ id: string }> };
+        const first = data.teams?.[0]?.id ?? null;
+        if (first) localStorage.setItem('selectedTeam', first);
+        if (!cancelled) setTeamId(first);
+      } catch {
+        if (!cancelled) setTeamId(null);
+      }
+    };
+    void resolveTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeamWorkspace, refreshKey]);
+
+  const workspaceId = isTeamWorkspace ? teamId : clubId;
 
   const openMemberProfile = useCallback(
     (member: Member, mode: 'view' | 'edit') => {
       const id = member.memberId || member.id;
       if (!id) return;
       const q = new URLSearchParams();
-      if (clubId) q.set('clubId', clubId);
+      if (isTeamWorkspace && teamId) q.set('teamId', teamId);
+      else if (clubId) q.set('clubId', clubId);
       q.set('mode', mode);
       router.push(`/clubMembers/memberProfile/${encodeURIComponent(id)}?${q.toString()}`);
     },
-    [clubId, router],
+    [clubId, isTeamWorkspace, router, teamId],
   );
 
-  const handleDeleteMember = useCallback(
-    async (member: Member) => {
-      const id = member.memberId || member.id;
-      const resolvedClubId =
-        clubId ||
-        (typeof window !== 'undefined' ? localStorage.getItem('selectedClub') : null);
-      if (!id || !resolvedClubId) {
-        window.alert('Select a club under My clubs before managing members.');
-        return;
-      }
-      const label =
-        [member.surname, member.name].filter(Boolean).join(' ') || member.username || id;
-      if (
-        !window.confirm(
-          `Remove ${label} from this club? Their Movesbook account will not be deleted.`,
-        )
-      ) {
-        return;
-      }
-      setBusyId(id);
-      setAddError('');
-      try {
-        const res = await fetch(
-          withSelectedClubId(
-            `/api/clubs/${encodeURIComponent(resolvedClubId)}/members/${encodeURIComponent(id)}`,
-          ),
-          { method: 'DELETE', headers: getAuthHeaders() },
-        );
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(
-            typeof payload.error === 'string' ? payload.error : 'Failed to remove member',
+  const requestDeleteMember = useCallback((member: Member) => {
+    setAddError('');
+    setMemberPendingDelete(member);
+  }, []);
+
+  const handleConfirmDeleteMember = useCallback(async () => {
+    const member = memberPendingDelete;
+    if (!member) return;
+
+    const id = member.memberId || member.id;
+    const resolvedWorkspaceId =
+      workspaceId ||
+      (typeof window !== 'undefined'
+        ? isTeamWorkspace
+          ? localStorage.getItem('selectedTeam')
+          : localStorage.getItem('selectedClub')
+        : null);
+    if (!id || !resolvedWorkspaceId) {
+      setAddError(
+        isTeamWorkspace
+          ? 'Select a team under My Team before managing members.'
+          : 'Select a club under My clubs before managing members.',
+      );
+      setMemberPendingDelete(null);
+      return;
+    }
+
+    setBusyId(id);
+    setAddError('');
+    try {
+      const url = isTeamWorkspace
+        ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`
+        : withSelectedClubId(
+            `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`,
           );
-        }
-        setRefreshKey((k) => k + 1);
-      } catch (e: unknown) {
-        setAddError(e instanceof Error ? e.message : 'Failed to remove member');
-      } finally {
-        setBusyId(null);
+      const res = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : 'Failed to remove member',
+        );
       }
-    },
-    [clubId],
-  );
+      setMemberPendingDelete(null);
+      setRefreshKey((k) => k + 1);
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : 'Failed to remove member');
+    } finally {
+      setBusyId(null);
+    }
+  }, [isTeamWorkspace, memberPendingDelete, workspaceId]);
+
+  const deleteConfirmMessage = useMemo(() => {
+    if (!memberPendingDelete) return '';
+    const label =
+      [memberPendingDelete.surname, memberPendingDelete.name]
+        .filter(Boolean)
+        .join(' ') ||
+      memberPendingDelete.username ||
+      memberPendingDelete.memberId ||
+      memberPendingDelete.id;
+    return `Remove ${label} from this ${isTeamWorkspace ? 'team' : 'club'}? Their Movesbook account will not be deleted.`;
+  }, [isTeamWorkspace, memberPendingDelete]);
 
   const columns: Column[] = useMemo(
     () => [
@@ -128,13 +325,13 @@ export default function MemberListPage() {
             <Image
               src={String(value)}
               alt=""
-              className="mx-auto h-10 w-10 rounded-full object-cover"
+              className="h-10 w-10 rounded-full object-cover"
               width={40}
               height={40}
               unoptimized
             />
           ) : (
-            <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400">
               —
             </span>
           ),
@@ -153,10 +350,14 @@ export default function MemberListPage() {
         header: 'Operator',
         render: (value, row) => {
           const label = String(value ?? 'Member');
-          const colorClass = staffRowTextClass({
-            staffType: String(row.staffType ?? ''),
-            role: String(row.staffRole ?? ''),
-          });
+          const staffType = String(row.staffType ?? '');
+          // Keep A/B/C row colors; only staff types get their own accent.
+          const colorClass = staffType
+            ? staffRowTextClass({
+                staffType,
+                role: String(row.staffRole ?? ''),
+              })
+            : undefined;
           return <span className={colorClass}>{label}</span>;
         },
       },
@@ -213,9 +414,9 @@ export default function MemberListPage() {
               </button>
               <button
                 type="button"
-                title="Remove from club"
+                title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
                 disabled={busy}
-                onClick={() => void handleDeleteMember(row)}
+                onClick={() => requestDeleteMember(row)}
                 className="rounded p-1 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" />
@@ -225,11 +426,11 @@ export default function MemberListPage() {
         },
       },
     ],
-    [busyId, handleDeleteMember, openMemberProfile],
+    [busyId, isTeamWorkspace, openMemberProfile, requestDeleteMember],
   );
 
   const loadCapacity = useCallback(async () => {
-    if (!clubId) {
+    if (isTeamWorkspace || !clubId) {
       setCapacityPayload(null);
       return;
     }
@@ -241,7 +442,7 @@ export default function MemberListPage() {
     } catch {
       setCapacityPayload(null);
     }
-  }, [clubId]);
+  }, [clubId, isTeamWorkspace]);
 
   useEffect(() => {
     void loadCapacity();
@@ -279,26 +480,44 @@ export default function MemberListPage() {
   }, [capacityPayload, settingsRevision]);
 
   const handleAddExistingUser = useCallback(
-    async (data: { username: string; password: string }) => {
+    async (data: {
+      username: string;
+      password: string;
+      membershipStatus?: MemberArchiveStatus;
+    }) => {
       setAddError('');
-      const resolvedClubId =
-        clubId ||
-        (typeof window !== 'undefined' ? localStorage.getItem('selectedClub') : null);
-      if (!resolvedClubId) {
-        throw new Error('Select a club under My clubs before adding members.');
+      const resolvedWorkspaceId =
+        workspaceId ||
+        (typeof window !== 'undefined'
+          ? isTeamWorkspace
+            ? localStorage.getItem('selectedTeam')
+            : localStorage.getItem('selectedClub')
+          : null);
+      if (!resolvedWorkspaceId) {
+        throw new Error(
+          isTeamWorkspace
+            ? 'Select a team under My Team before adding members.'
+            : 'Select a club under My clubs before adding members.',
+        );
+      }
+      if (!data.membershipStatus) {
+        throw new Error('Please choose which list to put the new member in.');
       }
 
-      const response = await fetch(
-        withSelectedClubId(`/api/clubs/${encodeURIComponent(resolvedClubId)}/members/add`),
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            username: data.username,
-            password: data.password,
-          }),
-        },
-      );
+      const url = isTeamWorkspace
+        ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/add`
+        : withSelectedClubId(
+            `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/add`,
+          );
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
+          membershipStatus: data.membershipStatus,
+        }),
+      });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
@@ -308,18 +527,22 @@ export default function MemberListPage() {
 
       setRefreshKey((k) => k + 1);
     },
-    [clubId],
+    [isTeamWorkspace, workspaceId],
   );
 
   return (
     <div className="w-full h-full flex flex-col p-4 gap-4">
-      <MemberArchiveTopNav active={archiveSection} onChange={setArchiveSection} />
+      <MemberArchiveTopNav
+        active={archiveSection}
+        onChange={setArchiveSection}
+        profileSectionLabel={profileSectionLabel}
+        navRole={archiveNavRole}
+        navMode={archiveNavMode}
+      />
 
-      {archiveSection === 'athletes' ? (
+      {showMembersArchive ? (
         <>
-          <ArchiveEntityProfilePanel clubId={clubId} />
-
-          {capacity ? (
+          {archiveSection === 'athletes' && capacity && !isTeamWorkspace ? (
             <ClubMemberArchiveHeader
               capacity={capacity}
               onPurchaseMembers={() => {
@@ -333,15 +556,17 @@ export default function MemberListPage() {
             />
           ) : null}
 
-          {!capacity && clubId ? (
+          {archiveSection === 'athletes' && !capacity && clubId && !isTeamWorkspace ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               Loading member capacity from your subscription version…
             </div>
           ) : null}
 
-          {!clubId ? (
+          {!workspaceId ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Select a club workspace to view member capacity from your subscription version.
+              {isTeamWorkspace
+                ? 'Select a team under My Team to view members.'
+                : 'Select a club workspace to view member capacity from your subscription version.'}
             </div>
           ) : null}
 
@@ -349,39 +574,55 @@ export default function MemberListPage() {
           <ClubMemberArchivePage
             columns={columns}
             refreshKey={refreshKey}
-            footerHint="Live data from club members in the database."
+            membershipStatusFilter={membershipStatusFilter}
+            onMembershipStatusChanged={() => setRefreshKey((k) => k + 1)}
+            footerHint={
+              membershipStatusFilter === 'all'
+                ? 'All profiles: black = Athlete\\Member (green → archive), red = pending, blue = not member. Archived members are under Members Archived.'
+                : membershipStatusFilter === 'archived'
+                  ? 'Members Archived — grey rows. Click the grey circle to restore as Athlete\\Member.'
+                : isTeamWorkspace
+                  ? 'Live data from team members in the database.'
+                  : 'Live data from club members in the database.'
+            }
             addMemberAction={
-              <button
-                type="button"
-                onClick={() => {
-                  setAddError('');
-                  setShowAddMemberModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-50"
-              >
-                <UserPlus className="h-4 w-4" />
-                Add a member
-              </button>
+              archiveSection === 'athletes' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddError('');
+                    setShowAddMemberModal(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add a member
+                </button>
+              ) : null
             }
           />
         </>
-      ) : archiveSection === 'parents' && clubId ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <AthletesParentsArchive clubId={clubId} />
-        </div>
+      ) : archiveSection === 'parents' ? (
+        workspaceId ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <AthletesParentsArchive
+              clubId={isTeamWorkspace ? null : workspaceId}
+              teamId={isTeamWorkspace ? workspaceId : null}
+            />
+          </div>
+        ) : (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {isTeamWorkspace
+              ? 'Select a team under My Team to view parents & tutors.'
+              : 'Select a club workspace to view parents & tutors.'}
+          </div>
+        )
       ) : archiveSection === 'staff' ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-700">
-          <h2 className="mb-2 text-lg font-bold text-gray-900">Staff</h2>
-          <p className="mb-3">
-            Manage Operator / Collaborator / Coadmin staff for this club.
-          </p>
-          <a
-            href="/club/staff"
-            className="inline-flex rounded bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-800"
-          >
-            Open Staff archive
-          </a>
+        <div className="min-h-0 flex-1">
+          <ClubStaffList />
         </div>
+      ) : archiveSection === 'club-profile' ? (
+        <ArchiveEntityProfilePanel clubId={clubId} />
       ) : (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-700">
           <h2 className="mb-2 text-lg font-bold text-gray-900">Settings</h2>
@@ -392,9 +633,36 @@ export default function MemberListPage() {
       <AddMemberModal
         isOpen={showAddMemberModal}
         onClose={() => setShowAddMemberModal(false)}
-        entityType="club"
+        entityType={isTeamWorkspace ? 'team' : 'club'}
         onAddExistingUser={handleAddExistingUser}
       />
+
+      <PromocodeConfirmModal
+        open={Boolean(memberPendingDelete)}
+        title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
+        message={deleteConfirmMessage}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        loading={Boolean(
+          memberPendingDelete &&
+            busyId ===
+              (memberPendingDelete.memberId || memberPendingDelete.id),
+        )}
+        onClose={() => {
+          if (busyId) return;
+          setMemberPendingDelete(null);
+        }}
+        onConfirm={() => void handleConfirmDeleteMember()}
+      />
     </div>
+  );
+}
+
+export default function MemberListPage() {
+  return (
+    <Suspense fallback={<p className="p-4 text-sm text-gray-500">Loading…</p>}>
+      <MemberListPageContent />
+    </Suspense>
   );
 }

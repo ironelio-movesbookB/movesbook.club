@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import TablesTabs from '@/components/club-settings/TablesTabs';
+import { withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 
 type MemberTypeModel = {
   id: string;
@@ -184,7 +185,7 @@ export default function ClubTablesMemberTypePage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(API_PATH, {
+      const response = await fetch(withSelectedClubId(API_PATH), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         signal
       });
@@ -310,7 +311,7 @@ export default function ClubTablesMemberTypePage() {
       setSuccess(null);
 
       const token = localStorage.getItem('token');
-      const response = await fetch(API_PATH, {
+      const response = await fetch(withSelectedClubId(API_PATH), {
         method: draft.id ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -350,7 +351,9 @@ export default function ClubTablesMemberTypePage() {
       setSuccess(null);
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_PATH}?id=${encodeURIComponent(deleteTarget.id)}`, {
+      const response = await fetch(
+        withSelectedClubId(`${API_PATH}?id=${encodeURIComponent(deleteTarget.id)}`),
+        {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });

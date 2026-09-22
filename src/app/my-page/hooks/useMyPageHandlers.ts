@@ -31,9 +31,9 @@ export function useMyPageHandlers() {
     window.location.href = `/my-coaching-group?groupId=${groupId}`;
   };
 
+  // Athlete membership select — store only (admin /my-team is for team accounts).
   const handleMyTeamSelect = (teamId: string) => {
     storeSelectedEntity('Team', teamId);
-    window.location.href = `/my-team?teamId=${teamId}`;
   };
 
   const handleMyClubSelect = (clubId: string) => {

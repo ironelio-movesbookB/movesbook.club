@@ -17,6 +17,11 @@ import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { getDashboardPathForUserType, isClubAccountUserType } from '@/utils/dashboardRouting';
 import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
 import MemberSelfProfilePanel from '@/components/profile/MemberSelfProfilePanel';
+import ClubReferencesDisplay from '@/components/club/ClubReferencesDisplay';
+import {
+  getClubReferencesHtmlForDisplay,
+  parseClubDescriptionMeta,
+} from '@/lib/club/clubSidebarLabel';
 
 const CKEditorComponent = dynamic(() => import('@/components/news/CKEditor'), {
   ssr: false,
@@ -832,17 +837,38 @@ export default function UserProfile({
               My Clubs
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profile.clubMemberships.map((membership) => (
-                <div
-                  key={membership.club.id}
-                  className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 hover:shadow-lg transition-all border border-blue-200"
-                >
-                  <h3 className="font-semibold text-lg text-gray-800">{membership.club.name}</h3>
-                  {membership.club.description && (
-                    <p className="text-sm text-gray-600 mt-2">{membership.club.description}</p>
-                  )}
-                </div>
-              ))}
+              {profile.clubMemberships.map((membership) => {
+                const meta = parseClubDescriptionMeta(membership.club.description);
+                const referencesHtml = getClubReferencesHtmlForDisplay(
+                  membership.club.description,
+                );
+                const locationLine = [meta.location, meta.region, meta.country]
+                  .map((v) => String(v || '').trim())
+                  .filter(Boolean)
+                  .join(', ');
+                return (
+                  <div
+                    key={membership.club.id}
+                    className="overflow-hidden rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50 shadow-sm"
+                  >
+                    <div className="p-4">
+                      <h3 className="font-semibold text-lg text-gray-800">
+                        {membership.club.name}
+                      </h3>
+                      {locationLine ? (
+                        <p className="mt-1 text-xs text-gray-500">{locationLine}</p>
+                      ) : null}
+                    </div>
+                    <div className="border-t border-blue-100 bg-white/80 px-2 pb-2">
+                      <ClubReferencesDisplay
+                        variant="club"
+                        referencesHtml={referencesHtml || meta.referencesHtml}
+                        referencesLevel={meta.referencesLevel}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

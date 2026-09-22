@@ -181,6 +181,9 @@ export async function createClubMemberGroup(
   name: string,
   memberIds: string[]
 ) {
+  if (ctx.workspaceKind === 'team') {
+    throw new Error('Member groups are not available for team workspaces yet.');
+  }
   const trimmed = name.trim();
   if (!trimmed) {
     throw new Error('Group name is required');
@@ -261,6 +264,9 @@ export async function deleteClubMemberGroup(ctx: ClubAuthContext, groupId: strin
 }
 
 export async function addClubMemberFavourites(ctx: ClubAuthContext, memberIds: string[]) {
+  if (ctx.workspaceKind === 'team') {
+    throw new Error('Favourites are not available for team workspaces yet.');
+  }
   const validIds = await validateMemberIds(ctx.club.id, memberIds);
   if (validIds.length === 0) {
     throw new Error('Select at least one club member');

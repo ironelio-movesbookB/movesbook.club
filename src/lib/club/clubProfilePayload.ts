@@ -4,12 +4,16 @@ import {
 } from '@/lib/club/clubSidebarLabel';
 import { defaultClubSubscriptionEndDate } from '@/lib/admin/clubSubscriptionStatus';
 
-import { DEFAULT_ENTITY_SPORT } from '@/lib/sport/entitySportOptions';
+import { DEFAULT_ENTITY_SPORT, normalizeEntitySport } from '@/lib/sport/entitySportOptions';
 
 export type ClubProfileFormPayload = {
   username: string;
+  /** Single main sport — drives sport-specific fields and behaviour. */
   category: string;
-  /** Multicheck sports; category stays the primary (first) sport. */
+  /**
+   * Other sports (multicheck). May still include the main sport as index 0 for
+   * older rows; loaders treat `category` as the authority for main sport.
+   */
   sports: string[];
   country: string;
   region: string;
@@ -22,6 +26,8 @@ export type ClubProfileFormPayload = {
   phone: string;
   website: string;
   logoUrl: string;
+  /** Wide banner shown on the club main page. */
+  bannerUrl?: string;
   directAccess: string;
   officialName: string;
   directRegistrationCode: string;
@@ -35,12 +41,20 @@ export type ClubProfileFormPayload = {
 export type ClubProfileSavePayload = ClubProfileFormPayload & {
   logoFile?: File | null;
   removeLogo?: boolean;
+  bannerFile?: File | null;
+  removeBanner?: boolean;
 };
 
 export function clubProfilePayloadForApi(
   payload: ClubProfileSavePayload,
 ): ClubProfileFormPayload {
-  const { logoFile: _logoFile, removeLogo: _removeLogo, ...rest } = payload;
+  const {
+    logoFile: _logoFile,
+    removeLogo: _removeLogo,
+    bannerFile: _bannerFile,
+    removeBanner: _removeBanner,
+    ...rest
+  } = payload;
   return rest;
 }
 
@@ -50,15 +64,30 @@ export function clubToFormPayload(club: {
   location?: string | null;
 }): ClubProfileFormPayload {
   const meta = parseClubDescriptionMeta(club.description);
-  const sports =
+  const storedSports =
     Array.isArray(meta.sports) && meta.sports.length > 0
       ? meta.sports.map(String).filter(Boolean)
-      : meta.category?.trim()
-        ? [meta.category.trim()]
-        : [DEFAULT_ENTITY_SPORT];
+      : [];
+  const mainSport = normalizeEntitySport(
+    meta.category?.trim() || storedSports[0] || DEFAULT_ENTITY_SPORT,
+  );
+  const otherSports = storedSports
+    .map((s) => normalizeEntitySport(s, mainSport))
+    .filter((s, i, arr) => s !== mainSport && arr.indexOf(s) === i);
+  // Persist shape keeps main first for legacy readers of sports[0].
+  const sports = [mainSport, ...otherSports];
+  const teamContacts =
+    meta.teamProfile &&
+    typeof meta.teamProfile === 'object' &&
+    'contacts' in meta.teamProfile &&
+    meta.teamProfile.contacts &&
+    typeof meta.teamProfile.contacts === 'object'
+      ? (meta.teamProfile.contacts as { website?: string })
+      : null;
+  const teamWebsite = String(teamContacts?.website ?? '').trim();
   return {
     username: meta.username?.trim() ?? '',
-    category: sports[0] || meta.category?.trim() || DEFAULT_ENTITY_SPORT,
+    category: mainSport,
     sports,
     country: meta.country?.trim() ?? 'Italy',
     region: meta.region?.trim() ?? '',
@@ -69,8 +98,9 @@ export function clubToFormPayload(club: {
     geo: meta.geo?.trim() ?? '',
     mail: meta.mail?.trim() ?? '',
     phone: meta.phone?.trim() ?? '',
-    website: meta.website?.trim() ?? '',
+    website: meta.website?.trim() || teamWebsite,
     logoUrl: meta.logoUrl?.trim() ?? '',
+    bannerUrl: meta.bannerUrl?.trim() ?? '',
     directAccess: meta.directAccess?.trim() ?? '',
     officialName: club.name?.trim() ?? '',
     directRegistrationCode: meta.directRegistrationCode?.trim() ?? '',
@@ -94,18 +124,27 @@ export function mergeClubSubscriptionDates(
   return JSON.stringify(meta);
 }
 
+function storedPublicUrl(value: string | null | undefined): string | undefined {
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  // Never persist inline data/blob URLs into description JSON (truncates / corrupts meta).
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return undefined;
+  return raw;
+}
+
 export function mergeClubDescriptionForSave(
   existingDescription: string | null | undefined,
   payload: ClubProfileFormPayload,
   options?: { clubPasswordHash?: string; isCreate?: boolean },
 ): string {
   const prev = parseClubDescriptionMeta(existingDescription);
-  const sports =
-    Array.isArray(payload.sports) && payload.sports.length > 0
-      ? payload.sports.map((s) => s.trim()).filter(Boolean)
-      : payload.category.trim()
-        ? [payload.category.trim()]
-        : [];
+  const mainSport = normalizeEntitySport(
+    payload.category.trim() || payload.sports[0] || DEFAULT_ENTITY_SPORT,
+  );
+  const otherSports = (Array.isArray(payload.sports) ? payload.sports : [])
+    .map((s) => normalizeEntitySport(s, mainSport))
+    .filter((s, i, arr) => s !== mainSport && arr.indexOf(s) === i);
+  const sports = [mainSport, ...otherSports];
   const meta: ClubDescriptionMeta = {
     ...prev,
     createdViaForm: true,
@@ -114,8 +153,8 @@ export function mergeClubDescriptionForSave(
       prev.subscriptionEnd?.trim() ||
       (options?.isCreate ? defaultClubSubscriptionEndDate() : undefined),
     username: payload.username.trim() || undefined,
-    category: (sports[0] || payload.category.trim()) || undefined,
-    sports: sports.length ? sports : undefined,
+    category: mainSport,
+    sports,
     country: payload.country.trim() || undefined,
     region: payload.region.trim() || undefined,
     province: payload.province.trim() || undefined,
@@ -125,7 +164,18 @@ export function mergeClubDescriptionForSave(
     mail: payload.mail.trim() || undefined,
     phone: payload.phone.trim() || undefined,
     website: payload.website.trim() || undefined,
-    logoUrl: payload.logoUrl.trim() || undefined,
+    // Keep existing logo/banner when the form sends a blank (e.g. blob preview
+    // not yet written into payload). Explicit removal is done via the logo/banner
+    // DELETE API before this merge, which clears prev.logoUrl / prev.bannerUrl.
+    // Never write data:/blob: URLs — those come from local previews only.
+    logoUrl:
+      storedPublicUrl(payload.logoUrl) ||
+      storedPublicUrl(prev.logoUrl) ||
+      undefined,
+    bannerUrl:
+      storedPublicUrl(payload.bannerUrl) ||
+      storedPublicUrl(prev.bannerUrl) ||
+      undefined,
     directAccess: payload.directAccess.trim() || undefined,
     directRegistrationCode: payload.directRegistrationCode.trim() || undefined,
     clubPasswordHash: options?.clubPasswordHash ?? prev.clubPasswordHash,

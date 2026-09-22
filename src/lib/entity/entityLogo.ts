@@ -52,3 +52,26 @@ export function mergeLogoUrlIntoDescription(
   }
   return JSON.stringify(meta);
 }
+
+export function getBannerUrlFromEntityDescription(
+  description: string | null | undefined,
+): string | null {
+  const meta = parseClubDescriptionMeta(description);
+  return resolveEntityLogoUrl(meta.bannerUrl);
+}
+
+export function mergeBannerUrlIntoDescription(
+  existingDescription: string | null | undefined,
+  bannerUrl: string | null | undefined,
+): string {
+  const prev = parseClubDescriptionMeta(existingDescription);
+  const meta = {
+    ...prev,
+    createdViaForm: prev.createdViaForm ?? true,
+    bannerUrl: bannerUrl?.trim() ? bannerUrl.trim() : undefined,
+  };
+  if (!meta.bannerUrl) {
+    delete (meta as { bannerUrl?: string }).bannerUrl;
+  }
+  return JSON.stringify(meta);
+}

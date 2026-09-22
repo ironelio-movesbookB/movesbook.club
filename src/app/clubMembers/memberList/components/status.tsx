@@ -20,9 +20,9 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-xl bg-gradient-to-r ${gradient} p-5 text-white shadow-md min-w-[160px] flex-1`}
+      className={`min-w-0 rounded-xl bg-gradient-to-r ${gradient} p-5 text-white shadow-md`}
     >
-      <p className="text-sm font-medium opacity-95">{title}</p>
+      <p className="truncate text-sm font-medium opacity-95">{title}</p>
       <p className="mt-2 text-3xl font-bold leading-none">{value}</p>
     </div>
   );
@@ -39,10 +39,10 @@ export default function ClubMemberArchiveHeader({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Archive of Members of the Club</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Archive of Users</h1>
 
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Current Members"
             value={String(capacity.currentMembers)}
@@ -65,21 +65,23 @@ export default function ClubMemberArchiveHeader({
           />
         </div>
 
-        <div className="flex shrink-0 flex-col items-stretch gap-3 xl:w-56">
-          <button
-            type="button"
-            onClick={onPurchaseMembers}
-            className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-3 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
-          >
-            Purchase members
-          </button>
-          <button
-            type="button"
-            onClick={onStatusAccounts}
-            className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-3 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
-          >
-            Status accounts
-          </button>
+        <div className="flex shrink-0 flex-col items-start gap-3">
+          <div className="flex flex-wrap items-stretch gap-3">
+            <button
+              type="button"
+              onClick={onPurchaseMembers}
+              className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
+            >
+              Purchase members
+            </button>
+            <button
+              type="button"
+              onClick={onStatusAccounts}
+              className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
+            >
+              Status accounts
+            </button>
+          </div>
           <p className="flex items-start gap-1 text-sm font-semibold text-red-600">
             <span>
               Expiration date of the Subscription:{' '}

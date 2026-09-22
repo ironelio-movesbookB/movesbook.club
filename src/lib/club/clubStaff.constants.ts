@@ -77,7 +77,7 @@ export type ClubStaffListItem = {
   email: string;
   name: string;
   image: string | null;
-  staffType: 'club_admin' | ClubStaffType;
+  staffType: 'club_admin' | 'team_admin' | ClubStaffType;
   staffTypeLabel: string;
   role: string;
   operativeLevel: string;
@@ -115,12 +115,13 @@ export function isClubStaffUserLevel(value: string): value is ClubStaffUserLevel
 
 export function staffTypeLabel(type: string): string {
   if (type === 'club_admin') return 'Club Admin';
+  if (type === 'team_admin') return 'Team Admin';
   const match = CLUB_STAFF_TYPES.find((item) => item.value === type);
   return match?.label ?? type;
 }
 
 export function operativeLevelForStaffType(type: string): string {
-  if (type === 'club_admin' || type === 'coadmin') return 'Supervisor';
+  if (type === 'club_admin' || type === 'team_admin' || type === 'coadmin') return 'Supervisor';
   return 'Staff user';
 }
 

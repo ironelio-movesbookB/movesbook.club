@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Keep Prisma out of the webpack bundle so model delegates (e.g. teamStaff) match generate.
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
+  },
   typescript: {
     // Merged main still has type errors outside promocode. Do not patch unrelated
     // routes to ship this branch; typecheck those files on their own branches.

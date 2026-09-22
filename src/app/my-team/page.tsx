@@ -88,26 +88,73 @@ function MyTeamContent() {
     }
   }, [user, authLoading, router]);
 
+  // Resolve teamId: direct-access lock, selectedTeam, or first owned team.
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || !user || teamId) return;
+
     const lock = getEntityDirectAccessLock();
-    if (!teamId) {
-      if (lock?.kind === 'team') {
-        router.replace(getEntityDirectAccessProfilePath(lock));
-        return;
-      }
-      if (user && isTeamAccountUserType(user.userType)) {
-        router.replace('/team/dashboard');
-        return;
-      }
-      setLoading(false);
-    } else {
-      if (lock?.kind === 'team' && teamId !== lock.entityId) {
-        router.replace(getEntityDirectAccessProfilePath(lock));
-        return;
-      }
-      loadTeamData();
+    if (lock?.kind === 'team') {
+      router.replace(getEntityDirectAccessProfilePath(lock));
+      return;
     }
+
+    if (!isTeamAccountUserType(user.userType)) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const resolveTeam = async () => {
+      const saved =
+        typeof window !== 'undefined' ? localStorage.getItem('selectedTeam') : null;
+      if (saved) {
+        if (!cancelled) {
+          router.replace(`/my-team?teamId=${encodeURIComponent(saved)}`);
+        }
+        return;
+      }
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        if (!token) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+        const res = await fetch('/api/teams/my-teams', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+        const data = (await res.json()) as { teams?: Array<{ id: string }> };
+        const first = data.teams?.[0]?.id ?? null;
+        if (first) {
+          localStorage.setItem('selectedTeam', first);
+          if (!cancelled) {
+            router.replace(`/my-team?teamId=${encodeURIComponent(first)}`);
+          }
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!cancelled) setLoading(false);
+    };
+    void resolveTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, teamId, router]);
+
+  useEffect(() => {
+    if (authLoading || !user || !teamId) return;
+    const lock = getEntityDirectAccessLock();
+    if (lock?.kind === 'team' && teamId !== lock.entityId) {
+      router.replace(getEntityDirectAccessProfilePath(lock));
+      return;
+    }
+    loadTeamData();
   }, [teamId, user, router, authLoading, loadTeamData]);
 
   // Don't render if not authenticated
@@ -219,12 +266,14 @@ function MyTeamContent() {
               <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 flex flex-col items-center justify-center">
                 <Users className="w-16 h-16 text-gray-400 mb-4" />
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">No Team Selected</h3>
-                <p className="text-gray-600 mb-6">Please select a team from My Page to view team details.</p>
+                <p className="text-gray-600 mb-6">
+                  Create or select a team from the Team dashboard, then open My Team again.
+                </p>
                 <button
-                  onClick={() => window.location.href = '/my-page'}
+                  onClick={() => router.push('/team/dashboard')}
                   className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700"
                 >
-                  Go to My Page
+                  Go to Team dashboard
                 </button>
               </div>
             ) : (

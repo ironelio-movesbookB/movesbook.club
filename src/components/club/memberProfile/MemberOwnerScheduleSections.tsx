@@ -25,10 +25,20 @@ function clampSize(value: string, max = 5): string {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, max);
 }
 
+/** Weight-style decimal: up to 3 digits + optional . + 1 decimal (000.0). */
 function clampDecimal(value: string): string {
   const cleaned = value.replace(/[^\d.]/g, '');
   const parts = cleaned.split('.');
   const whole = (parts[0] || '').slice(0, 3);
+  const frac = (parts[1] || '').slice(0, 1);
+  return parts.length > 1 ? `${whole}.${frac}` : whole;
+}
+
+/** Shoe size: numeric 00.0 (2 digits + optional . + 1 decimal). */
+function clampShoeSize(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, '');
+  const parts = cleaned.split('.');
+  const whole = (parts[0] || '').slice(0, 2);
   const frac = (parts[1] || '').slice(0, 1);
   return parts.length > 1 ? `${whole}.${frac}` : whole;
 }
@@ -213,10 +223,12 @@ export default function MemberOwnerScheduleSections({
               <option value="pounds">pounds</option>
             </TextSelect>
           </Field>
-          <Field label="Jersey size (max 5)">
+          <Field label="Jersey size (alphanumeric, max 5)">
             <TextInput
               disabled={readOnly}
               maxLength={5}
+              inputMode="text"
+              autoComplete="off"
               value={body.jerseySize}
               onChange={(e) =>
                 onChange({
@@ -226,10 +238,12 @@ export default function MemberOwnerScheduleSections({
               }
             />
           </Field>
-          <Field label="Shorts size (max 5)">
+          <Field label="Shorts size (alphanumeric, max 5)">
             <TextInput
               disabled={readOnly}
               maxLength={5}
+              inputMode="text"
+              autoComplete="off"
               value={body.shortsSize}
               onChange={(e) =>
                 onChange({
@@ -239,15 +253,17 @@ export default function MemberOwnerScheduleSections({
               }
             />
           </Field>
-          <Field label="Shoe size (max 5)">
+          <Field label="Shoe size (00.0)">
             <TextInput
               disabled={readOnly}
-              maxLength={5}
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="00.0"
               value={body.shoeSize}
               onChange={(e) =>
                 onChange({
                   ...owner,
-                  bodyMeasurements: { ...body, shoeSize: clampSize(e.target.value) },
+                  bodyMeasurements: { ...body, shoeSize: clampShoeSize(e.target.value) },
                 })
               }
             />

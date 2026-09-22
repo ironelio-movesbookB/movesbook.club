@@ -107,6 +107,7 @@ export default function AllTypesByCountryPage() {
             title={`${selection.kindLabel} — ${selection.countryLabel}`}
             subtitle="Distribution of the versions"
             total={drilldown.total}
+            totalIncome={drilldown.totalIncome}
             bars={drilldown.bars}
             slices={drilldown.slices}
             userKind={selection.kind}

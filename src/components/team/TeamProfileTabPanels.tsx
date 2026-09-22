@@ -1,7 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { COUNTRIES } from '@/lib/news/countries';
+import { getRegionsForCountry } from '@/constants/countryRegions.constants';
 import type { TeamProfileFormPayload } from '@/lib/team/teamProfileTypes';
 import {
   CheckRow,
@@ -12,6 +13,15 @@ import {
   TextInput,
   TextSelect,
 } from '@/components/club/memberProfile/FormBits';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+import {
+  emptySportDropdownCatalog,
+  normalizeSportDropdownCatalog,
+  optionsForSportParameter,
+  TEAM_PROFILE_PARAM_KEY_BY_FIELD,
+  type SportDropdownCatalog,
+} from '@/lib/sport/sportDropdownParameters';
 
 type PanelProps = {
   form: TeamProfileFormPayload;
@@ -19,26 +29,82 @@ type PanelProps = {
   readOnly?: boolean;
 };
 
-/** Dropdown fed later by Super Admin → Sport settings → Teams parameter settings. */
+function useSportDropdownCatalog() {
+  const [catalog, setCatalog] = useState<SportDropdownCatalog>(emptySportDropdownCatalog());
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/sport-dropdown-parameters', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setCatalog(normalizeSportDropdownCatalog(json.catalog));
+      } catch {
+        /* empty */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return catalog;
+}
+
+/** Dropdown fed by Super Admin → Dropdown parameters for sport. */
 function SportParamSelect({
   label,
+  paramKey,
+  sport,
+  catalog,
   value,
   onChange,
   disabled,
 }: {
   label: string;
+  paramKey: string;
+  sport: string;
+  catalog: SportDropdownCatalog;
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const { currentLanguage } = useLanguage();
+  const sportKey = normalizeEntitySport(sport || 'Football');
+  const options = useMemo(
+    () =>
+      optionsForSportParameter(
+        catalog,
+        sportKey,
+        paramKey,
+        currentLanguage || 'eng',
+      ),
+    [catalog, sportKey, paramKey, currentLanguage],
+  );
+  const empty = options.length === 0;
+
   return (
     <Field
       label={`${label} **`}
-      hint="Filled from Super Admin → Sport settings → Teams parameter settings"
+      hint={
+        empty
+          ? `Options from Super Admin → Tools Settings → Dropdown parameters for sport (${sportKey}).`
+          : undefined
+      }
     >
-      <TextSelect value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <TextSelect
+        value={value}
+        disabled={disabled || empty}
+        onChange={(e) => onChange(e.target.value)}
+      >
         <option value="">—</option>
-        {value ? <option value={value}>{value}</option> : null}
+        {options.map((o) => (
+          <option key={o.id} value={o.label}>
+            {o.label}
+          </option>
+        ))}
+        {value && !options.some((o) => o.label === value) ? (
+          <option value={value}>{value}</option>
+        ) : null}
       </TextSelect>
     </Field>
   );
@@ -66,6 +132,13 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
   const patchLegal = (patch: Partial<TeamProfileFormPayload['legalSite']>) =>
     setForm((f) => ({ ...f, legalSite: { ...f.legalSite, ...patch } }));
 
+  const catalog = useSportDropdownCatalog();
+  const sport = form.sport || form.sports?.[0] || 'Football';
+
+  const regionOptions = form.legalSite.country.trim()
+    ? getRegionsForCountry(form.legalSite.country)
+    : [];
+
   return (
     <div className="space-y-4">
       <SectionCard title="Main data" tone="red">
@@ -83,7 +156,7 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             onChange={(e) => patchMain({ shortName: e.target.value })}
           />
         </Field>
-        <Field label="Official team name">
+        <Field label="Official whole team name">
           <TextInput
             value={form.officialName}
             disabled={readOnly}
@@ -92,6 +165,9 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
         </Field>
         <SportParamSelect
           label="Company type"
+          paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.companyType}
+          sport={sport}
+          catalog={catalog}
           value={form.mainData.companyType}
           disabled={readOnly}
           onChange={(v) => patchMain({ companyType: v })}
@@ -99,6 +175,9 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <SportParamSelect
             label="Federation name"
+            paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.federationName}
+            sport={sport}
+            catalog={catalog}
             value={form.mainData.federationName}
             disabled={readOnly}
             onChange={(v) => patchMain({ federationName: v })}
@@ -133,6 +212,9 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
         <Row3>
           <SportParamSelect
             label="Registered at"
+            paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.registeredAt}
+            sport={sport}
+            catalog={catalog}
             value={form.mainData.registeredAt}
             disabled={readOnly}
             onChange={(v) => patchMain({ registeredAt: v })}
@@ -157,7 +239,11 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
           <TextInput
             value={form.mainData.fiscalCode}
             disabled={readOnly}
-            onChange={(e) => patchMain({ fiscalCode: e.target.value })}
+            onChange={(e) =>
+              patchMain({
+                fiscalCode: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
+              })
+            }
           />
         </Field>
         <Field label="Social colors">
@@ -189,7 +275,9 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             inputMode="numeric"
             value={form.legalSite.zipCode}
             disabled={readOnly}
-            onChange={(e) => patchLegal({ zipCode: e.target.value })}
+            onChange={(e) =>
+              patchLegal({ zipCode: e.target.value.replace(/[^\d]/g, '') })
+            }
           />
         </Field>
         <Field label="Province">
@@ -212,6 +300,33 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             ))}
           </TextSelect>
         </Field>
+        <Field label="Region">
+          <TextSelect
+            value={form.legalSite.region}
+            disabled={readOnly}
+            onChange={(e) => patchLegal({ region: e.target.value })}
+          >
+            <option value="">
+              {form.legalSite.country.trim() ? 'Select region' : 'Select country first'}
+            </option>
+            {regionOptions.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+            {form.legalSite.region && !regionOptions.includes(form.legalSite.region) ? (
+              <option value={form.legalSite.region}>{form.legalSite.region}</option>
+            ) : null}
+          </TextSelect>
+        </Field>
+        <Field label="Geographic coordinate">
+          <TextInput
+            placeholder="45.4642, 9.1900"
+            value={form.legalSite.geo ?? ''}
+            disabled={readOnly}
+            onChange={(e) => patchLegal({ geo: e.target.value })}
+          />
+        </Field>
         <Field label="Main playing field">
           <TextInput
             value={form.legalSite.mainPlayingField}
@@ -228,12 +343,15 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
         </Field>
         <SportParamSelect
           label="Field type"
+          paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.fieldType}
+          sport={sport}
+          catalog={catalog}
           value={form.legalSite.fieldType}
           disabled={readOnly}
           onChange={(v) => patchLegal({ fieldType: v })}
         />
         <CheckRow
-          label={'Approval yes\\no'}
+          label={'Approval check yes\\no'}
           checked={form.legalSite.approvalCheck}
           disabled={readOnly}
           onChange={(v) => patchLegal({ approvalCheck: v })}
@@ -243,7 +361,9 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             inputMode="numeric"
             value={form.legalSite.capacity}
             disabled={readOnly}
-            onChange={(e) => patchLegal({ capacity: e.target.value })}
+            onChange={(e) =>
+              patchLegal({ capacity: e.target.value.replace(/[^\d]/g, '') })
+            }
           />
         </Field>
         <Field label="Sports scoreboards">
@@ -446,6 +566,13 @@ export function TeamFederalTab({ form, setForm, readOnly }: PanelProps) {
           onChange={(e) => patch({ provincialDelegation: e.target.value })}
         />
       </Field>
+      <Field label="Federation registration number">
+        <TextInput
+          value={form.federal.registrationNumber}
+          disabled={readOnly}
+          onChange={(e) => patch({ registrationNumber: e.target.value })}
+        />
+      </Field>
       <Field label="Affiliation date">
         <TextInput
           type="date"
@@ -483,11 +610,16 @@ export function TeamFederalTab({ form, setForm, readOnly }: PanelProps) {
 export function TeamSubteamsTab({ form, setForm, readOnly }: PanelProps) {
   const patch = (patch: Partial<TeamProfileFormPayload['federal']>) =>
     setForm((f) => ({ ...f, federal: { ...f.federal, ...patch } }));
+  const catalog = useSportDropdownCatalog();
+  const sport = form.sport || form.sports?.[0] || 'Football';
 
   return (
     <SectionCard title="Subteams and Categories" tone="blue">
       <SportParamSelect
         label="Main category"
+        paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.mainCategory}
+        sport={sport}
+        catalog={catalog}
         value={form.federal.mainCategory}
         disabled={readOnly}
         onChange={(v) => patch({ mainCategory: v })}
@@ -508,6 +640,9 @@ export function TeamSubteamsTab({ form, setForm, readOnly }: PanelProps) {
       </Field>
       <SportParamSelect
         label="Other categories"
+        paramKey={TEAM_PROFILE_PARAM_KEY_BY_FIELD.otherCategories}
+        sport={sport}
+        catalog={catalog}
         value={form.federal.otherCategories}
         disabled={readOnly}
         onChange={(v) => patch({ otherCategories: v })}
@@ -558,6 +693,13 @@ export function TeamAdminSportTab({ form, setForm, readOnly }: PanelProps) {
             onChange={(e) => patch({ youthSectorManager: e.target.value })}
           />
         </Field>
+        <Field label="IBAN (alphanumeric)">
+          <TextInput
+            value={form.adminSport.iban}
+            disabled={readOnly}
+            onChange={(e) => patch({ iban: e.target.value })}
+          />
+        </Field>
         <Field label="SDI Invoicing Code (numeric)">
           <TextInput
             inputMode="numeric"
@@ -566,17 +708,10 @@ export function TeamAdminSportTab({ form, setForm, readOnly }: PanelProps) {
             onChange={(e) => patch({ sdiInvoicingCode: e.target.value })}
           />
         </Field>
-        <Field label="IBAN (alphanumeric)">
-          <TextInput
-            value={form.adminSport.iban}
-            disabled={readOnly}
-            onChange={(e) => patch({ iban: e.target.value })}
-          />
-        </Field>
       </SectionCard>
 
       <SectionCard title="Sport data" tone="blue">
-        <Field label="Main coach">
+        <Field label="Allenatore prima squadra">
           <TextInput
             value={form.adminSport.headCoach}
             disabled={readOnly}

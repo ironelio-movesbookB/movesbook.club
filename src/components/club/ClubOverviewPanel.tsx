@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -13,12 +13,18 @@ import {
 } from 'lucide-react';
 import UserProfile from '@/components/UserProfile';
 import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
+import ClubInfoContactsForm from '@/components/club/ClubInfoContactsForm';
 import ClubReferencesDisplay from '@/components/club/ClubReferencesDisplay';
 import ManagedEntitySidebarAvatar from '@/components/entity/ManagedEntitySidebarAvatar';
 import {
   getClubProfileDisplayRows,
   parseClubDescriptionMeta,
 } from '@/lib/club/clubSidebarLabel';
+import {
+  clubLegalDocumentHref,
+  getClubLegalDocuments,
+  type ClubLegalDocKind,
+} from '@/lib/club/clubLegalDocuments';
 
 export type ClubOverviewTabId =
   | 'admin-profile'
@@ -28,6 +34,7 @@ export type ClubOverviewTabId =
   | 'sharings'
   | 'direct-access'
   | 'notifications'
+  | 'rules'
   | 'privacy'
   | 'permissions';
 
@@ -40,6 +47,7 @@ const OVERVIEW_TABS: { id: ClubOverviewTabId; label: string }[] = [
   { id: 'direct-access', label: 'Direct Access' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'privacy', label: 'Privacy' },
+  { id: 'rules', label: 'Rules' },
   { id: 'permissions', label: 'Permissions' },
 ];
 
@@ -157,6 +165,38 @@ function OverviewTabBar({
   onTabChange: (id: ClubOverviewTabId) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(max > 2 && el.scrollLeft < max - 2);
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    const onScroll = () => updateScrollState();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateScrollState) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', updateScrollState);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, []);
+
+  const scrollByDir = (dir: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
+  };
 
   const selectTab = (id: ClubOverviewTabId) => {
     onTabChange(id);
@@ -164,38 +204,66 @@ function OverviewTabBar({
       const btn = scrollRef.current?.querySelector<HTMLButtonElement>(
         `[data-overview-tab="${id}"]`,
       );
-      btn?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+      btn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      requestAnimationFrame(updateScrollState);
     });
   };
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex w-full min-w-0 max-w-full items-stretch gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth scrollbar-thin"
-      role="tablist"
-      aria-label="Club overview sections"
-    >
-      {OVERVIEW_TABS.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            data-overview-tab={tab.id}
-            aria-selected={isActive}
-            onClick={() => selectTab(tab.id)}
-            className={`shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-xs sm:text-sm font-semibold transition-colors ${
-              isActive
-                ? 'border-b-2 border-blue-600 text-blue-600 -mb-px'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-      <span className="shrink-0 w-4" aria-hidden />
+    <div className="relative flex w-full min-w-0 items-stretch gap-1">
+      <button
+        type="button"
+        aria-label="Scroll tabs left"
+        disabled={!canScrollLeft}
+        onClick={() => scrollByDir('left')}
+        className={`my-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-opacity ${
+          canScrollLeft ? 'hover:bg-gray-50 opacity-100' : 'opacity-30 pointer-events-none'
+        }`}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+
+      <div
+        ref={scrollRef}
+        className="flex min-w-0 flex-1 items-stretch gap-0 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+        aria-label="Club overview sections"
+      >
+        {OVERVIEW_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              data-overview-tab={tab.id}
+              aria-selected={isActive}
+              onClick={() => selectTab(tab.id)}
+              className={`shrink-0 whitespace-nowrap px-3 py-3 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${
+                isActive
+                  ? 'border-b-2 border-blue-600 text-blue-600 -mb-px'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+        {/* Keep the last tab fully visible when scrolled to the end */}
+        <span className="shrink-0 w-6 sm:w-8" aria-hidden />
+      </div>
+
+      <button
+        type="button"
+        aria-label="Scroll tabs right"
+        disabled={!canScrollRight}
+        onClick={() => scrollByDir('right')}
+        className={`my-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-opacity ${
+          canScrollRight ? 'hover:bg-gray-50 opacity-100' : 'opacity-30 pointer-events-none'
+        }`}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -211,6 +279,63 @@ function TabPlaceholder({ title, children }: { title: string; children?: ReactNo
   );
 }
 
+function ClubLegalDocTab({
+  clubId,
+  kind,
+  html,
+}: {
+  clubId: string;
+  kind: ClubLegalDocKind;
+  html: string;
+}) {
+  const title = kind === 'rules' ? 'Rules' : 'Privacy policy';
+  const previewHref = clubLegalDocumentHref(clubId, kind);
+  const editorHref = `/club/documents-editor?clubId=${encodeURIComponent(clubId)}&tab=${kind}`;
+
+  return (
+    <div className="space-y-4 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+          <p className="text-sm text-gray-600">
+            Same document as in Documents Editor — shown to members from Signatures.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={previewHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          >
+            Open in new window
+          </Link>
+          <Link
+            href={editorHref}
+            className="rounded bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800"
+          >
+            Edit in Documents Editor
+          </Link>
+        </div>
+      </div>
+      {html.trim() ? (
+        <article
+          className="prose prose-sm max-w-none rounded-lg border border-gray-200 bg-white p-4 sm:prose-base sm:p-6"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      ) : (
+        <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600">
+          This document has not been written yet. Use{' '}
+          <Link href={editorHref} className="font-semibold text-red-700 underline">
+            Documents Editor
+          </Link>{' '}
+          to add it.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function ClubOverviewPanel({
   club,
   members,
@@ -221,18 +346,13 @@ export default function ClubOverviewPanel({
 
   const profileRows = club ? getClubProfileDisplayRows(club) : [];
   const meta = club ? parseClubDescriptionMeta(club.description) : {};
+  const legalDocs = club ? getClubLegalDocuments(club.description) : { rulesHtml: '', privacyPolicyHtml: '' };
 
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8 flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full overflow-hidden">
       {/* 1. Header */}
-      <header className="flex items-center justify-between mb-6 shrink-0">
+      <header className="mb-6 shrink-0">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Club Overview</h2>
-        <Link
-          href={clubProfileEditHref}
-          className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:shadow-lg transition-all"
-        >
-          Manage Club
-        </Link>
       </header>
 
       {/* 2. Statistics cards */}
@@ -285,9 +405,17 @@ export default function ClubOverviewPanel({
       <div className="flex-1 min-h-[280px] bg-white pt-6" role="tabpanel">
         {activeTab === 'admin-profile' && (
           <div className="space-y-4 p-6">
-            <p className="text-sm text-gray-600">
-              Club administrator account — personal details for the owner of this club.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-gray-600">
+                Club administrator account — personal details for the owner of this club.
+              </p>
+              <Link
+                href={clubProfileEditHref}
+                className="shrink-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:shadow-lg transition-all"
+              >
+                Manage Club
+              </Link>
+            </div>
             <div className="rounded-lg border border-gray-200 overflow-hidden">
               <UserProfile embedded embeddedVariant="admin-profile" />
             </div>
@@ -347,12 +475,22 @@ export default function ClubOverviewPanel({
         )}
 
         {activeTab === 'contact-info' && (
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-gray-600">
-              Club administrator contact details. Fields marked &quot;Show in Club admin info&quot; can
-              be shared on the club overview for members.
-            </p>
-            <ClubAdminInfoForm />
+          <div className="p-6 space-y-8">
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Club administrator contact details. Fields marked &quot;Show in Club admin info&quot; can
+                be shared on the club overview for members.
+              </p>
+              <ClubAdminInfoForm />
+            </div>
+            {club?.id ? (
+              <div className="space-y-4 border-t border-gray-200 pt-8">
+                <p className="text-sm text-gray-600">
+                  Club entity contacts (Website, Email, PEC, phones, and social links).
+                </p>
+                <ClubInfoContactsForm clubId={club.id} />
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -389,7 +527,19 @@ export default function ClubOverviewPanel({
           </div>
         )}
 
-        {['sharings', 'notifications', 'privacy', 'permissions'].includes(activeTab) && (
+        {activeTab === 'rules' && club ? (
+          <ClubLegalDocTab clubId={club.id} kind="rules" html={legalDocs.rulesHtml} />
+        ) : null}
+
+        {activeTab === 'privacy' && club ? (
+          <ClubLegalDocTab
+            clubId={club.id}
+            kind="privacy-policy"
+            html={legalDocs.privacyPolicyHtml}
+          />
+        ) : null}
+
+        {['sharings', 'notifications', 'permissions'].includes(activeTab) && (
             <div className="p-6">
               <TabPlaceholder title={OVERVIEW_TABS.find((t) => t.id === activeTab)?.label ?? ''} />
             </div>

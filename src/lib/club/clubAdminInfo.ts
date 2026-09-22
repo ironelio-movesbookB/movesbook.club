@@ -7,6 +7,7 @@ export const CLUB_ADMIN_SOCIAL_PLATFORMS = [
   'LinkedIn',
   'YouTube',
   'WhatsApp',
+  'Telegram',
   'TikTok',
   'Other',
 ] as const;
@@ -35,6 +36,7 @@ export type ClubAdminInfo = {
   linkedin: ClubAdminPublicLink;
   blogSite: ClubAdminPublicLink;
   googleMap: ClubAdminPublicLink;
+  telegram: ClubAdminPublicLink;
   aboutMe: string;
 };
 
@@ -58,6 +60,7 @@ export const EMPTY_CLUB_ADMIN_INFO: ClubAdminInfo = {
   linkedin: { ...EMPTY_CLUB_ADMIN_PUBLIC_LINK },
   blogSite: { ...EMPTY_CLUB_ADMIN_PUBLIC_LINK },
   googleMap: { ...EMPTY_CLUB_ADMIN_PUBLIC_LINK },
+  telegram: { ...EMPTY_CLUB_ADMIN_PUBLIC_LINK },
   aboutMe: '',
 };
 
@@ -106,6 +109,7 @@ export function parseClubAdminInfo(raw: unknown): ClubAdminInfo {
     linkedin: parsePublicLink(o.linkedin),
     blogSite: parsePublicLink(o.blogSite),
     googleMap: parsePublicLink(o.googleMap),
+    telegram: parsePublicLink(o.telegram),
     aboutMe: typeof o.aboutMe === 'string' ? o.aboutMe : '',
   };
 }
@@ -133,7 +137,14 @@ export function mergeClubAdminInfoIntoSocialSettings(
 export const CLUB_ADMIN_PUBLIC_LINK_FIELDS: {
   key: keyof Pick<
     ClubAdminInfo,
-    'myWebsite' | 'whatsapp' | 'instagram' | 'youtube' | 'linkedin' | 'blogSite' | 'googleMap'
+    | 'myWebsite'
+    | 'whatsapp'
+    | 'instagram'
+    | 'youtube'
+    | 'linkedin'
+    | 'blogSite'
+    | 'googleMap'
+    | 'telegram'
   >;
   label: string;
 }[] = [
@@ -144,6 +155,7 @@ export const CLUB_ADMIN_PUBLIC_LINK_FIELDS: {
   { key: 'linkedin', label: 'LinkedIn' },
   { key: 'blogSite', label: 'My blog site' },
   { key: 'googleMap', label: 'Google map' },
+  { key: 'telegram', label: 'Telegram' },
 ];
 
 export type ClubAdminPublicContactRow = {

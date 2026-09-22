@@ -4,7 +4,9 @@ import { join, extname } from 'path';
 import { getServerPublicDir } from '@/lib/serverPublicDir';
 import {
   ENTITY_LOGO_UPLOAD_DIR,
+  getBannerUrlFromEntityDescription,
   getLogoUrlFromEntityDescription,
+  mergeBannerUrlIntoDescription,
   mergeLogoUrlIntoDescription,
   type ManagedEntityLogoKind,
 } from '@/lib/entity/entityLogo';
@@ -14,6 +16,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
 
 type EntityRow = { id: string; description: string | null };
+type EntityImageAsset = 'logo' | 'banner';
 
 async function loadClub(clubId: string, adminId: string): Promise<EntityRow | null> {
   const rows = await prisma.$queryRaw<EntityRow[]>`
@@ -130,7 +133,8 @@ export async function saveEntityLogoForOwner(
   entityId: string,
   adminId: string,
   file: File,
-): Promise<{ logoUrl: string }> {
+  asset: EntityImageAsset = 'logo',
+): Promise<{ logoUrl: string; bannerUrl?: string }> {
   if (file.size > MAX_BYTES) {
     throw new Error('File size exceeds 5MB limit');
   }
@@ -149,7 +153,8 @@ export async function saveEntityLogoForOwner(
   const ext = extensionForFile(file, extFromName);
 
   const idPrefix = entityId.slice(0, 8);
-  const fileName = `${kind}_${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const assetPrefix = asset === 'banner' ? 'banner' : kind;
+  const fileName = `${assetPrefix}_${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
   const uploadDir = join(getServerPublicDir(), 'uploads', ENTITY_LOGO_UPLOAD_DIR);
   if (!existsSync(uploadDir)) {
     await mkdir(uploadDir, { recursive: true });
@@ -157,23 +162,45 @@ export async function saveEntityLogoForOwner(
   await writeFile(join(uploadDir, fileName), buffer);
 
   const publicPath = `/uploads/${ENTITY_LOGO_UPLOAD_DIR}/${fileName}`;
+  if (asset === 'banner') {
+    const oldBanner = getBannerUrlFromEntityDescription(entity.description);
+    await deletePublicLogoFile(oldBanner);
+    const description = mergeBannerUrlIntoDescription(entity.description, publicPath);
+    await persistDescription(kind, entityId, adminId, description);
+    return {
+      logoUrl: getLogoUrlFromEntityDescription(description) ?? '',
+      bannerUrl: publicPath,
+    };
+  }
+
   const oldLogo = getLogoUrlFromEntityDescription(entity.description);
   await deletePublicLogoFile(oldLogo);
 
   const description = mergeLogoUrlIntoDescription(entity.description, publicPath);
   await persistDescription(kind, entityId, adminId, description);
 
-  return { logoUrl: publicPath };
+  return {
+    logoUrl: publicPath,
+    bannerUrl: getBannerUrlFromEntityDescription(description) ?? undefined,
+  };
 }
 
 export async function removeEntityLogoForOwner(
   kind: ManagedEntityLogoKind,
   entityId: string,
   adminId: string,
+  asset: EntityImageAsset = 'logo',
 ): Promise<void> {
   const entity = await loadEntity(kind, entityId, adminId);
   if (!entity) {
     throw new Error('Entity not found or access denied');
+  }
+  if (asset === 'banner') {
+    const oldBanner = getBannerUrlFromEntityDescription(entity.description);
+    await deletePublicLogoFile(oldBanner);
+    const description = mergeBannerUrlIntoDescription(entity.description, null);
+    await persistDescription(kind, entityId, adminId, description);
+    return;
   }
   const oldLogo = getLogoUrlFromEntityDescription(entity.description);
   await deletePublicLogoFile(oldLogo);

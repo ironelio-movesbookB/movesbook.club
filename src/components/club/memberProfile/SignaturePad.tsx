@@ -20,18 +20,23 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const hasInk = useRef(false);
+  /** Latest committed data URL — survives React state lag before Save. */
+  const latestValueRef = useRef(value || '');
 
   useImperativeHandle(ref, () => ({
     getValue: () => {
       const canvas = canvasRef.current;
-      if (!canvas) return value || '';
-      // Only read canvas when the user drew on it; otherwise keep stored value.
-      if (!hasInk.current) return value || '';
-      return canvas.toDataURL('image/png');
+      if (canvas && hasInk.current) {
+        const fromCanvas = canvas.toDataURL('image/png');
+        latestValueRef.current = fromCanvas;
+        return fromCanvas;
+      }
+      return latestValueRef.current || value || '';
     },
   }));
 
   useEffect(() => {
+    latestValueRef.current = value || '';
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -50,30 +55,39 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
     img.src = value;
   }, [value]);
 
-  const pos = (e: React.MouseEvent | React.TouchEvent) => {
+  const pos = (e: React.PointerEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const point = 'touches' in e ? e.touches[0] : e;
     return {
-      x: (point.clientX - rect.left) * scaleX,
-      y: (point.clientY - rect.top) * scaleY,
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
     };
   };
 
-  const start = (e: React.MouseEvent | React.TouchEvent) => {
+  const commit = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasInk.current) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    latestValueRef.current = dataUrl;
+    onChange(dataUrl);
+  };
+
+  const start = (e: React.PointerEvent) => {
     if (disabled) return;
     e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    canvas.setPointerCapture(e.pointerId);
     drawing.current = true;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
     const { x, y } = pos(e);
     ctx.beginPath();
     ctx.moveTo(x, y);
   };
 
-  const move = (e: React.MouseEvent | React.TouchEvent) => {
+  const move = (e: React.PointerEvent) => {
     if (!drawing.current || disabled) return;
     e.preventDefault();
     const ctx = canvasRef.current?.getContext('2d');
@@ -87,11 +101,15 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
     hasInk.current = true;
   };
 
-  const end = () => {
+  const end = (e: React.PointerEvent) => {
     if (!drawing.current) return;
     drawing.current = false;
-    const canvas = canvasRef.current;
-    if (canvas) onChange(canvas.toDataURL('image/png'));
+    try {
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    commit();
   };
 
   const clear = () => {
@@ -100,6 +118,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     hasInk.current = false;
+    latestValueRef.current = '';
     onChange('');
   };
 
@@ -110,13 +129,10 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
         width={480}
         height={160}
         className="w-full max-w-lg touch-none rounded border border-gray-400 bg-white"
-        onMouseDown={start}
-        onMouseMove={move}
-        onMouseUp={end}
-        onMouseLeave={end}
-        onTouchStart={start}
-        onTouchMove={move}
-        onTouchEnd={end}
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
       />
       {!disabled ? (
         <button

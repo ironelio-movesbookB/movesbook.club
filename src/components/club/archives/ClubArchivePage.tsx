@@ -19,6 +19,12 @@ type Props = {
   footerHint?: string;
   emptyMessage?: string;
   showFilters?: boolean;
+  /** Show row checkboxes (without requiring delete handlers). */
+  selectable?: boolean;
+  /** Prefer this club when the admin owns more than one. */
+  clubId?: string | null;
+  /** Prefer this team when the admin is a Team Admin. */
+  teamId?: string | null;
   headerAction?: ReactNode;
   /** Bump to force a reload (e.g. after adding a member). */
   refreshKey?: number;
@@ -35,6 +41,9 @@ export default function ClubArchivePage({
   footerHint,
   emptyMessage = 'No records found.',
   showFilters = true,
+  selectable = false,
+  clubId,
+  teamId,
   headerAction,
   refreshKey = 0,
   onEditItem,
@@ -57,6 +66,8 @@ export default function ClubArchivePage({
         page,
         pageSize,
         direction: archiveType === 'cash-movements' ? direction : undefined,
+        clubId: clubId || undefined,
+        teamId: teamId || undefined,
         ...filters.applied,
       });
       setTotal(res.total);
@@ -103,7 +114,18 @@ export default function ClubArchivePage({
       setLoading(false);
     }
     void refreshKey; // parent bump forces reload
-  }, [archiveType, filters.applied, direction, page, pageSize, onEditItem, onDeleteItem, refreshKey]);
+  }, [
+    archiveType,
+    filters.applied,
+    direction,
+    page,
+    pageSize,
+    clubId,
+    teamId,
+    onEditItem,
+    onDeleteItem,
+    refreshKey,
+  ]);
 
   useEffect(() => {
     load();
@@ -168,11 +190,11 @@ export default function ClubArchivePage({
         rows={data}
         loading={loading}
         emptyMessage={emptyMessage}
-        selectable={!!onDeleteItem}
+        selectable={selectable || !!onDeleteItem}
         selectOnlyOpenRest={false}
-        selectedIds={onDeleteItem ? selectedIds : undefined}
+        selectedIds={selectable || onDeleteItem ? selectedIds : undefined}
         onToggleSelect={
-          onDeleteItem
+          selectable || onDeleteItem
             ? (row) => {
                 if (!row.id) return;
                 setSelectedIds((prev) => {
@@ -185,7 +207,7 @@ export default function ClubArchivePage({
             : undefined
         }
         onToggleSelectAll={
-          onDeleteItem
+          selectable || onDeleteItem
             ? (checked) => {
                 if (!checked) {
                   setSelectedIds(new Set());

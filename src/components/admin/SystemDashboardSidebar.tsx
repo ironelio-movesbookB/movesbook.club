@@ -520,6 +520,10 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
           href: '/settings?section=tools&tab=commonDailyActions'
         },
         {
+          label: 'Dropdown parameters for sport',
+          href: '/settings?section=tools&tab=sportDropdownParameters'
+        },
+        {
           label: 'Parameters for calc workouts',
           hasSubmenu: true,
           id: 'workout_calc_params',

@@ -1,4 +1,5 @@
 import { getRegionsForCountry } from '@/constants/countryRegions.constants';
+import { COUNTRIES } from '@/lib/news/countries';
 import type {
   CountryExtendedSettings,
   CountryPartnerRecord,
@@ -148,6 +149,35 @@ export function loadCountryExtendedSettings(
   const stored = readAll()[key];
   if (stored) return stored;
   return defaultExtendedForCountry(countryId, countryName);
+}
+
+/**
+ * Regions for a country dropdown: prefers Countries-admin saved list
+ * (localStorage from /countries → Edit → Regions), else static defaults.
+ */
+export function resolveRegionsForCountryName(countryName: string): string[] {
+  const trimmed = countryName.trim();
+  if (!trimmed) return [];
+
+  if (typeof window !== 'undefined') {
+    const idx = COUNTRIES.findIndex(
+      (name) => name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (idx >= 0) {
+      const countryId = idx + 1;
+      const stored = readAll()[String(countryId)];
+      if (stored?.regions?.length) {
+        const names = stored.regions
+          .map((r) => String(r.name || '').trim())
+          .filter(Boolean);
+        if (names.length) {
+          return Array.from(new Set([...names, 'Other']));
+        }
+      }
+    }
+  }
+
+  return getRegionsForCountry(trimmed);
 }
 
 export function saveCountryExtendedSettings(

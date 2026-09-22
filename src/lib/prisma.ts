@@ -79,14 +79,16 @@ function wrapModelDelegate(delegate: object): object {
 }
 
 export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop, receiver) {
+  get(_target, prop, _receiver) {
     const client = getClient();
 
     if (typeof prop === 'symbol') {
-      return Reflect.get(client, prop, receiver);
+      return Reflect.get(client, prop, client);
     }
 
-    const value = Reflect.get(client, prop, receiver);
+    // Use `client` as receiver so Prisma model getters bind to the real instance
+    // (Passing the empty Proxy breaks delegates like teamStaff under HMR.)
+    const value = Reflect.get(client, prop, client);
 
     if (typeof value === 'function') {
       if (skipDevMutex.has(prop as string)) {
@@ -171,6 +173,58 @@ export async function ensureLoginLogPrismaModels(): Promise<void> {
   if (!hasLoginLogDelegates(getClient())) {
     throw new Error(
       'Prisma client is missing login log models. Run `npx prisma generate` and restart `npm run dev`.',
+    );
+  }
+  await prismaConnect();
+}
+
+function hasStaffPrismaDelegates(client: PrismaClient): boolean {
+  return (
+    typeof (client as { teamStaff?: { findMany?: unknown } }).teamStaff?.findMany === 'function' &&
+    typeof client.clubStaff?.findMany === 'function'
+  );
+}
+
+function clearPrismaClientModuleCache(): void {
+  try {
+    const req = require as NodeRequire;
+    for (const key of Object.keys(req.cache || {})) {
+      if (key.includes(`${path.sep}@prisma${path.sep}client`) || key.includes(`${path.sep}.prisma${path.sep}client`)) {
+        delete req.cache[key];
+      }
+    }
+  } catch {
+    // ignore — ESM / edge may not expose require.cache
+  }
+}
+
+/**
+ * Dev HMR can cache a PrismaClient from before TeamStaff existed.
+ * Reset and re-import @prisma/client so teamStaff/clubStaff delegates exist.
+ */
+export async function ensureStaffPrismaModels(): Promise<void> {
+  if (hasStaffPrismaDelegates(getClient())) {
+    await prismaConnect();
+    return;
+  }
+
+  await assignFreshPrismaClient();
+  if (hasStaffPrismaDelegates(getClient())) {
+    await prismaConnect();
+    return;
+  }
+
+  await resetPrismaClient();
+  clearPrismaClientModuleCache();
+  const { PrismaClient: FreshPrismaClient } = await import('@prisma/client');
+  globalForPrisma.prisma = new FreshPrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+  globalForPrisma.prismaConnectPromise = undefined;
+
+  if (!hasStaffPrismaDelegates(getClient())) {
+    throw new Error(
+      'Prisma client is missing teamStaff/clubStaff. Run `npx prisma generate` and restart `npm run dev`.',
     );
   }
   await prismaConnect();

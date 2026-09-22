@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -27,12 +26,31 @@ type Props = {
   saving: boolean;
   message: string;
   setMessage: (msg: string) => void;
+  onChange: (next: MemberProfileBundle) => void;
   onReload: () => void;
   onSaveVisibility: () => void;
 };
 
 const fieldClass =
   'w-full border border-slate-800 rounded px-2 py-1.5 text-sm bg-white text-black placeholder:text-slate-500';
+
+/** Poster identity for optimistic notes (must be the logged-in user, not the member profile). */
+function getSessionAuthor(): { label: string; image: string | null } {
+  if (typeof window === 'undefined') return { label: 'You', image: null };
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return { label: 'You', image: null };
+    const u = JSON.parse(raw) as {
+      username?: string;
+      name?: string;
+      image?: string | null;
+    };
+    const label = String(u.username || u.name || 'You').trim() || 'You';
+    return { label, image: u.image ?? null };
+  } catch {
+    return { label: 'You', image: null };
+  }
+}
 
 export default function CoachNotesPanel({
   data,
@@ -42,6 +60,7 @@ export default function CoachNotesPanel({
   saving,
   message,
   setMessage,
+  onChange,
   onReload,
   onSaveVisibility,
 }: Props) {
@@ -50,8 +69,6 @@ export default function CoachNotesPanel({
   const canPost = isAdmin && !readOnlyClub;
   const canMemberReply = isMember && club.visibility.notesCoachComments;
 
-  const [leftView, setLeftView] = useState<'list' | 'thread'>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -67,8 +84,8 @@ export default function CoachNotesPanel({
   const [uploadingImages, setUploadingImages] = useState(false);
   const [posting, setPosting] = useState(false);
 
-  const [replyBody, setReplyBody] = useState('');
-  const [replySending, setReplySending] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replySendingId, setReplySendingId] = useState<string | null>(null);
   const [pictureLightbox, setPictureLightbox] = useState<{ urls: string[]; index: number } | null>(
     null,
   );
@@ -90,19 +107,10 @@ export default function CoachNotesPanel({
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const selected = notes.find((n) => n.id === selectedId) ?? null;
 
-  const openThread = (id: string) => {
-    setSelectedId(id);
-    setLeftView('thread');
-    setReplyBody('');
-  };
-
-  const backToList = () => {
-    setLeftView('list');
-    setSelectedId(null);
-    setReplyBody('');
-  };
+  const canReplyToNote = (item: (typeof notes)[number]) =>
+    isAdmin ||
+    (canMemberReply && item.commentsEnabled && item.visibleToMember);
 
   const resetCoachNotes = async () => {
     if (!window.confirm('Reset all coach reflections and member replies?')) return;
@@ -116,7 +124,7 @@ export default function CoachNotesPanel({
       );
       if (!res.ok) throw new Error('Reset failed');
       setMessage('Coach notes reset.');
-      backToList();
+      setReplyDrafts({});
       onReload();
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Reset failed');
@@ -164,6 +172,13 @@ export default function CoachNotesPanel({
       return;
     }
     setPosting(true);
+    const title = composerObject.trim();
+    const body = composerBody.trim();
+    const imageUrls = composerImages.map((img) => img.url);
+    const enableFrom = composerEnableFrom;
+    const enableTo = composerEnableTo;
+    const showAtLogin = composerShowAtLogin;
+    const showAtLogout = composerShowAtLogout;
     try {
       const res = await fetch(
         withSelectedClubId(
@@ -174,20 +189,47 @@ export default function CoachNotesPanel({
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             kind: 'coach',
-            title: composerObject.trim(),
-            body: composerBody.trim(),
+            title,
+            body,
             visibleToMember: club.visibility.notesCoach,
             commentsEnabled: club.visibility.notesCoachComments,
-            imageUrls: composerImages.map((img) => img.url),
-            enableFrom: composerEnableFrom || null,
-            enableTo: composerEnableTo || null,
-            showAtLogin: composerShowAtLogin,
-            showAtLogout: composerShowAtLogout,
+            imageUrls,
+            enableFrom: enableFrom || null,
+            enableTo: enableTo || null,
+            showAtLogin,
+            showAtLogout,
           }),
         },
       );
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Failed to post');
+
+      const noteId = String(json.note?.id || `local-${Date.now()}`);
+      const author = getSessionAuthor();
+
+      onChange({
+        ...data,
+        coachNotes: [
+          {
+            id: noteId,
+            title,
+            body,
+            createdAt: new Date().toISOString(),
+            authorLabel: author.label,
+            authorImage: author.image,
+            visibleToMember: club.visibility.notesCoach,
+            commentsEnabled: club.visibility.notesCoachComments,
+            imageUrls,
+            enableFrom,
+            enableTo,
+            showAtLogin,
+            showAtLogout,
+            replies: [],
+          },
+          ...data.coachNotes,
+        ],
+      });
+
       setComposerObject('');
       setComposerBody('');
       setComposerImages([]);
@@ -196,7 +238,6 @@ export default function CoachNotesPanel({
       setComposerShowAtLogin(false);
       setComposerShowAtLogout(false);
       setMessage('Reflection posted.');
-      onReload();
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Failed to post');
     } finally {
@@ -204,9 +245,10 @@ export default function CoachNotesPanel({
     }
   };
 
-  const postReply = async () => {
-    if (!selected || !replyBody.trim()) return;
-    setReplySending(true);
+  const postReply = async (noteId: string) => {
+    const body = (replyDrafts[noteId] || '').trim();
+    if (!body) return;
+    setReplySendingId(noteId);
     try {
       const res = await fetch(
         withSelectedClubId(
@@ -217,27 +259,45 @@ export default function CoachNotesPanel({
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             kind: 'coach',
-            body: replyBody.trim(),
-            parentId: selected.id,
+            body,
+            parentId: noteId,
           }),
         },
       );
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Failed to reply');
-      setReplyBody('');
+
+      const replyId = String(json.note?.id || `local-${Date.now()}`);
+      const author = getSessionAuthor();
+
+      // Patch local notes — avoid full profile reload / tab remount flash.
+      onChange({
+        ...data,
+        coachNotes: data.coachNotes.map((n) =>
+          n.id === noteId
+            ? {
+                ...n,
+                replies: [
+                  {
+                    id: replyId,
+                    body,
+                    createdAt: new Date().toISOString(),
+                    authorLabel: author.label,
+                  },
+                  ...n.replies,
+                ],
+              }
+            : n,
+        ),
+      });
+      setReplyDrafts((prev) => ({ ...prev, [noteId]: '' }));
       setMessage('Reply posted.');
-      onReload();
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Failed to reply');
     } finally {
-      setReplySending(false);
+      setReplySendingId(null);
     }
   };
-
-  const showReplyBox =
-    selected &&
-    (isAdmin ||
-      (canMemberReply && selected.commentsEnabled && selected.visibleToMember));
 
   return (
     <div>
@@ -315,50 +375,47 @@ export default function CoachNotesPanel({
             <div className="font-semibold text-slate-800 text-base">
               {isAdmin ? 'Coach reflections' : 'Reflections from your coach'}
             </div>
-            {leftView === 'list' ? (
-              <div className="mt-2 flex flex-wrap gap-2 items-center text-xs">
-                <input
-                  type="search"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setSearchQuery(searchInput);
-                      setPage(1);
-                    }
-                  }}
-                  className="border border-slate-800 rounded px-2 py-1 text-xs bg-white flex-1 min-w-[120px]"
-                  placeholder="Title, message…"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
+            <div className="mt-2 flex flex-wrap gap-2 items-center text-xs">
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
                     setSearchQuery(searchInput);
                     setPage(1);
-                  }}
-                  className="px-2 py-1 rounded font-medium bg-[#c43c54] text-white"
-                >
-                  Search
-                </button>
-              </div>
-            ) : null}
+                  }
+                }}
+                className="border border-slate-800 rounded px-2 py-1 text-xs bg-white flex-1 min-w-[120px]"
+                placeholder="Title, message…"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery(searchInput);
+                  setPage(1);
+                }}
+                className="px-2 py-1 rounded font-medium bg-[#c43c54] text-white"
+              >
+                Search
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
-            {leftView === 'list' ? (
-              notes.length === 0 ? (
-                <p className="text-sm text-slate-500 p-2">No coach reflections yet.</p>
-              ) : pageItems.length === 0 ? (
-                <p className="text-sm text-slate-500 p-2">No matches.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {pageItems.map((item) => (
-                    <li key={item.id} className="border border-slate-200 rounded bg-white">
-                      <button
-                        type="button"
-                        onClick={() => openThread(item.id)}
-                        className="w-full text-left p-2 flex gap-2 hover:bg-slate-50"
-                      >
+            {notes.length === 0 ? (
+              <p className="text-sm text-slate-500 p-2">No coach reflections yet.</p>
+            ) : pageItems.length === 0 ? (
+              <p className="text-sm text-slate-500 p-2">No matches.</p>
+            ) : (
+              <ul className="space-y-3">
+                {pageItems.map((item) => {
+                  const showReplyBox = canReplyToNote(item);
+                  const draft = replyDrafts[item.id] || '';
+                  const sending = replySendingId === item.id;
+                  return (
+                    <li key={item.id} className="border border-slate-200 rounded bg-white p-2">
+                      <div className="flex gap-2">
                         {item.authorImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -373,9 +430,7 @@ export default function CoachNotesPanel({
                           <div className="font-semibold text-slate-900 text-[13px] leading-snug bg-sky-50 border border-sky-100 px-1.5 py-0.5 inline-block max-w-full">
                             {item.title ? `< ${item.title} >` : '< Reflection >'}
                           </div>
-                          <p className="text-slate-600 text-xs mt-1 line-clamp-2 whitespace-pre-wrap">
-                            {item.body}
-                          </p>
+                          <p className="text-slate-800 text-sm mt-1 whitespace-pre-wrap">{item.body}</p>
                           <div className="text-[11px] text-slate-500 mt-1">
                             Posted by{' '}
                             <span className="font-medium text-slate-700">{item.authorLabel}</span> —{' '}
@@ -395,19 +450,18 @@ export default function CoachNotesPanel({
                                 : ''}
                             </div>
                           ) : null}
-                          <div className="mt-1 text-[11px] text-[#c43c54] font-medium">Reply</div>
                         </div>
-                      </button>
+                      </div>
+
                       {item.imageUrls.length > 0 ? (
-                        <div className="px-2 pb-2 -mt-1 flex gap-1.5 flex-wrap border-t border-slate-100">
+                        <div className="mt-2 flex gap-1.5 flex-wrap">
                           {item.imageUrls.slice(0, MAX_SUPPORT_IMAGES).map((src, imgIdx) => (
                             <button
                               key={src}
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPictureLightbox({ urls: item.imageUrls, index: imgIdx });
-                              }}
+                              onClick={() =>
+                                setPictureLightbox({ urls: item.imageUrls, index: imgIdx })
+                              }
                               className="rounded border border-slate-200 overflow-hidden"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -416,86 +470,63 @@ export default function CoachNotesPanel({
                           ))}
                         </div>
                       ) : null}
+
+                      {item.replies.length > 0 ? (
+                        <ul className="mt-3 space-y-2 border-t border-slate-100 pt-2">
+                          {item.replies.map((r) => (
+                            <li
+                              key={r.id}
+                              className="rounded p-2 text-xs bg-slate-50 border border-slate-200 ml-2"
+                            >
+                              <span className="font-semibold text-slate-600">{r.authorLabel}</span>
+                              <p className="mt-1 whitespace-pre-wrap text-slate-800">{r.body}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                {new Date(r.createdAt).toLocaleString()}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+
+                      {showReplyBox ? (
+                        <div className="mt-3 border-t border-slate-100 pt-2">
+                          <textarea
+                            value={draft}
+                            onChange={(e) =>
+                              setReplyDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                e.preventDefault();
+                                if (!sending && draft.trim()) void postReply(item.id);
+                              }
+                            }}
+                            rows={3}
+                            placeholder="Reply… (Ctrl+Enter to send)"
+                            className={`${fieldClass} text-xs py-1`}
+                          />
+                          <button
+                            type="button"
+                            disabled={sending || !draft.trim()}
+                            onClick={() => void postReply(item.id)}
+                            className="mt-2 text-sm font-medium text-[#c43c54] underline disabled:opacity-50"
+                          >
+                            {sending ? 'Sending…' : 'Reply'}
+                          </button>
+                        </div>
+                      ) : isMember ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Comments are not available for this reflection.
+                        </p>
+                      ) : null}
                     </li>
-                  ))}
-                </ul>
-              )
-            ) : selected ? (
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={backToList}
-                  className="inline-flex items-center gap-1 text-sm text-[#9b1d3d] font-medium"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to list
-                </button>
-                <div>
-                  <h4 className="font-semibold text-slate-900">
-                    {selected.title || 'Reflection'}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {selected.authorLabel} · {new Date(selected.createdAt).toLocaleString()}
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{selected.body}</p>
-                  {selected.imageUrls.length > 0 ? (
-                    <div className="mt-2 flex gap-1.5 flex-wrap">
-                      {selected.imageUrls.map((src, imgIdx) => (
-                        <button
-                          key={src}
-                          type="button"
-                          onClick={() => setPictureLightbox({ urls: selected.imageUrls, index: imgIdx })}
-                          className="rounded border border-slate-200 overflow-hidden"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={src} alt="" className="h-20 w-20 object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <ul className="space-y-2">
-                  {selected.replies.map((r) => (
-                    <li
-                      key={r.id}
-                      className="rounded p-2 text-xs bg-slate-50 border border-slate-200"
-                    >
-                      <span className="font-semibold text-slate-600">{r.authorLabel}</span>
-                      <p className="mt-1 whitespace-pre-wrap text-slate-800">{r.body}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-                {showReplyBox ? (
-                  <div className="pt-2 border-t border-slate-200">
-                    <textarea
-                      value={replyBody}
-                      onChange={(e) => setReplyBody(e.target.value)}
-                      rows={3}
-                      placeholder="Reply…"
-                      className={`${fieldClass} text-xs py-1`}
-                    />
-                    <button
-                      type="button"
-                      disabled={replySending || !replyBody.trim()}
-                      onClick={() => void postReply()}
-                      className="mt-2 w-full py-2 rounded bg-[#c43c54] text-white text-xs font-semibold disabled:opacity-50"
-                    >
-                      {replySending ? 'Sending…' : 'Reply'}
-                    </button>
-                  </div>
-                ) : isMember ? (
-                  <p className="text-xs text-slate-500">Comments are not available for this reflection.</p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">Reflection not found.</p>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
-          {leftView === 'list' && filtered.length > pageSize ? (
+          {filtered.length > pageSize ? (
             <div className="border-t border-slate-200 px-2 py-2 flex items-center justify-between text-xs">
               <span>
                 Page {page} / {totalPages}

@@ -28,6 +28,7 @@ import {
 } from '@/hooks/useEntityDirectAccessGuard';
 import { clearEntityCompanyLoginSession, isEntityWorkspaceSession } from '@/lib/entity/entityDirectAccessSession';
 import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashboardNav';
+import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 
 function TeamDashboardContent() {
@@ -108,6 +109,7 @@ function TeamDashboardContent() {
         clearEntityCompanyLoginSession();
         hideMyEntityTab();
       }
+      writeClubWorkspaceTab(tab);
       setActiveTab(tab);
     },
     [hideMyEntityTab, setActiveTab],
@@ -116,9 +118,15 @@ function TeamDashboardContent() {
   const handleTeamSelectWithTab = useCallback(
     (teamId: string) => {
       showMyEntityTab();
+      writeClubWorkspaceTab('my-entity');
+      setActiveTab('my-entity');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedClub', teamId);
+        localStorage.setItem('selectedTeam', teamId);
+      }
       handleTeamSelect(teamId);
     },
-    [showMyEntityTab, handleTeamSelect],
+    [showMyEntityTab, handleTeamSelect, setActiveTab],
   );
 
   // Reset workout section when switching to my-page; hide My Team tab on My Page

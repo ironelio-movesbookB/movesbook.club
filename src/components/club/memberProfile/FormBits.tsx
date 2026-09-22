@@ -37,21 +37,25 @@ export function Field({
   label,
   children,
   hint,
+  action,
   labelClassName,
 }: {
   label: string;
   children: ReactNode;
-  hint?: string;
+  hint?: ReactNode;
+  /** Optional control aligned to the right of the label (e.g. Open on Map). */
+  action?: ReactNode;
   labelClassName?: string;
 }) {
   return (
-    <label className="block text-sm">
-      <span className={`mb-1 block font-semibold text-gray-800 ${labelClassName || ''}`}>
-        {label}
-      </span>
+    <div className="block text-sm">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className={`font-semibold text-gray-800 ${labelClassName || ''}`}>{label}</label>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {children}
-      {hint ? <span className="mt-1 block text-xs text-gray-500">{hint}</span> : null}
-    </label>
+      {hint ? <div className="mt-1 text-xs text-gray-500">{hint}</div> : null}
+    </div>
   );
 }
 

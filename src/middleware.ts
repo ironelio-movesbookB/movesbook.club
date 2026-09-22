@@ -55,6 +55,8 @@ const publicApiRoutes = [
   '/api/public/',
   /** Used by admin editors (Settings, subscriptions, recipes) — token is often in localStorage only */
   '/api/translate',
+  /** Global sport dropdown catalog — GET is public; PUT still requires Super Admin in the route */
+  '/api/admin/sport-dropdown-parameters',
 ];
 
 /** Public share links (read-only workout day / session). */

@@ -63,19 +63,22 @@ export function useAuth() {
     if (logoutInFlight.current) return;
     logoutInFlight.current = true;
 
-    const onDone = () => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(fallbackTimer);
       window.removeEventListener(MEMBER_NOTE_LOGOUT_DONE_EVENT, onDone);
       finishLogout();
     };
+
+    const onDone = () => settle();
     window.addEventListener(MEMBER_NOTE_LOGOUT_DONE_EVENT, onDone);
     window.dispatchEvent(new Event(MEMBER_NOTE_LOGOUT_EVENT));
 
     // Fallback if host does not respond (e.g. no docs / fetch hang).
-    window.setTimeout(() => {
-      if (logoutInFlight.current) {
-        window.removeEventListener(MEMBER_NOTE_LOGOUT_DONE_EVENT, onDone);
-        finishLogout();
-      }
+    const fallbackTimer = window.setTimeout(() => {
+      if (logoutInFlight.current) settle();
     }, 8000);
   }, [finishLogout]);
 

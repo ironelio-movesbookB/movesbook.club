@@ -23,6 +23,11 @@ export type PaginatedResult<T> = {
 export type ClubAuthContext = {
   userId: string;
   club: { id: string; name: string };
+  /**
+   * Archive of Users is shared by Club and Team.
+   * When `team`, `club.id` is the selected team id (same shape for list helpers).
+   */
+  workspaceKind?: 'club' | 'team';
 };
 
 export type ProcedureRecordDto = {

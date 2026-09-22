@@ -70,7 +70,7 @@ export default function TypeByCountryPage() {
       title="Pie of distribution of a type of user"
       description="Select a user type and see its distribution across the top 15 countries (+ Others). Click a country to see version distribution."
       totalUsers={block?.total ?? data?.totalUsers ?? 0}
-      incomeEuro={data?.incomeEuro ?? 0}
+      incomeEuro={block?.totalIncome ?? data?.incomeEuro ?? 0}
       loading={loading}
       error={error}
       filters={
@@ -105,6 +105,7 @@ export default function TypeByCountryPage() {
           title={`${block?.label ?? 'Type'} — ${selectedCountry.label}`}
           subtitle="Distribution of the versions"
           total={drilldown.total}
+          totalIncome={drilldown.totalIncome}
           bars={drilldown.bars}
           slices={drilldown.slices}
           userKind={singleKind}
