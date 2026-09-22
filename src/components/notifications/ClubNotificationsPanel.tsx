@@ -20,9 +20,11 @@ type StatusFilter = 'all' | 'active' | 'expired';
 type Props = {
   /** When set = MY CLUB (one club). When omitted = MY PAGE (all owned clubs). */
   clubId?: string | null;
+  /** Prefill For Club Staff when opened from Quick menu */
+  initialAudienceKind?: 'members' | 'staff';
 };
 
-export default function ClubNotificationsPanel({ clubId }: Props) {
+export default function ClubNotificationsPanel({ clubId, initialAudienceKind = 'members' }: Props) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -42,7 +44,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
   const [path, setPath] = useState('');
   const [untilDate, setUntilDate] = useState(today());
   const [prioritary, setPrioritary] = useState(false);
-  const [audienceKind, setAudienceKind] = useState<'members' | 'staff'>('members');
+  const [audienceKind, setAudienceKind] = useState<'members' | 'staff'>(initialAudienceKind);
   const [selectedClubIds, setSelectedClubIds] = useState<string[]>([]);
   const [rangeFrom, setRangeFrom] = useState(today());
   const [rangeTo, setRangeTo] = useState(today());
@@ -110,7 +112,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     setPath('');
     setUntilDate(today());
     setPrioritary(false);
-    setAudienceKind('members');
+    setAudienceKind(initialAudienceKind);
     setSelectedClubIds(clubId ? [clubId] : []);
     setFormError('');
   }
@@ -119,6 +121,13 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     resetForm();
     setModalOpen(true);
   }
+
+  useEffect(() => {
+    if (initialAudienceKind === 'staff') {
+      openCreate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when landing with ?audience=staff
+  }, []);
 
   function openEdit(item: NotificationDto) {
     setEditId(item.id);
@@ -239,10 +248,11 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     <div className="w-full p-4 md:p-6 text-gray-900">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Posted by Club staff</h1>
+          <h1 className="text-xl font-bold text-gray-900">Notifications for the Club Staff</h1>
           <p className="text-sm text-gray-600 mt-1">{scopeLabel}</p>
           <p className="text-xs text-gray-500 mt-1">
-            Single-user targeting is not available here — use Messages or Chat.
+            Broadcast notifies among club admin and staff (no reply). Use “Post messages for the Club Staff” for
+            conversations with replies.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

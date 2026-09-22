@@ -15,7 +15,9 @@ import {
   ImagePlus,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
+import type { ThreadListSort } from '@/lib/messages/userThreads';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getAuthToken } from '@/utils/auth.utils';
 import VersionHistoryPanel, {
@@ -49,7 +51,20 @@ type FeedItem = {
   myReaction?: 'L' | 'D' | null;
   status?: string | null;
   imageUrls?: string[];
+  isInappropriate?: boolean;
 };
+
+const THREAD_SORT_OPTIONS: { value: ThreadListSort | ''; labelKey: string }[] = [
+  { value: '', labelKey: 'staff_sort_date_desc' },
+  { value: 'date_asc', labelKey: 'staff_sort_date_asc' },
+  { value: 'date_desc', labelKey: 'staff_sort_date_desc' },
+  { value: 'like', labelKey: 'staff_sort_like' },
+  { value: 'dislike', labelKey: 'staff_sort_dislike' },
+];
+
+function replyCountFromMessageCount(messageCount?: number): number {
+  return Math.max(0, (messageCount ?? 1) - 1);
+}
 
 type ComposerImage = {
   id: string;
@@ -156,7 +171,13 @@ export default function StaffMessagesExperience({
   const [appliedFromDate, setAppliedFromDate] = useState('');
   const [appliedToDate, setAppliedToDate] = useState('');
   const [appliedStatus, setAppliedStatus] = useState('');
+  const [filterSeeInappropriates, setFilterSeeInappropriates] = useState(false);
+  const [appliedSeeInappropriates, setAppliedSeeInappropriates] = useState(false);
+  const [listSort, setListSort] = useState<ThreadListSort | ''>('');
   const [reactingId, setReactingId] = useState<string | null>(null);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [supportItems, setSupportItems] = useState<FeedItem[]>([]);
   const [reviewItems, setReviewItems] = useState<FeedItem[]>([]);
@@ -291,6 +312,8 @@ export default function StaffMessagesExperience({
       if (appliedFromDate) qs.set('from', appliedFromDate);
       if (appliedToDate) qs.set('to', appliedToDate);
       if (appliedStatus) qs.set('status', appliedStatus);
+      if (appliedSeeInappropriates) qs.set('inappropriate', '1');
+      if (listSort) qs.set('sort', listSort);
       const data = await authFetch(`/api/messages/support?${qs}`);
       setSupportItems(data.items || []);
       setFeedTotal(data.total ?? 0);
@@ -304,9 +327,11 @@ export default function StaffMessagesExperience({
     appliedFromDate,
     appliedStatus,
     appliedToDate,
+    appliedSeeInappropriates,
     authFetch,
     currentPageOnly,
     filterLang,
+    listSort,
     page,
     pageSize,
     postByMe,
@@ -334,6 +359,8 @@ export default function StaffMessagesExperience({
       }
       if (appliedFromDate) qs.set('from', appliedFromDate);
       if (appliedToDate) qs.set('to', appliedToDate);
+      if (appliedSeeInappropriates) qs.set('inappropriate', '1');
+      if (listSort) qs.set('sort', listSort);
       const data = await authFetch(`/api/messages/reviews?${qs}`);
       setReviewItems(data.items || []);
       setFeedTotal(data.total ?? 0);
@@ -346,9 +373,11 @@ export default function StaffMessagesExperience({
   }, [
     appliedFromDate,
     appliedToDate,
+    appliedSeeInappropriates,
     authFetch,
     currentPageOnly,
     filterLang,
+    listSort,
     page,
     pageSize,
     postByMe,
@@ -613,9 +642,106 @@ export default function StaffMessagesExperience({
     setAppliedFromDate(filterFromDate);
     setAppliedToDate(filterToDate);
     setAppliedStatus(filterStatus);
+    setAppliedSeeInappropriates(filterSeeInappropriates);
     setPage(1);
     setSectionFilterOpen(false);
   };
+
+  const markThreadInappropriate = useCallback(
+    async (threadId: string, e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (markingId) return;
+      setMarkingId(threadId);
+      try {
+        await authFetch(`/api/messages/threads/${threadId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isInappropriate: true }),
+        });
+        const markListed = (prev: FeedItem[]) =>
+          prev.map((item) =>
+            item.id === threadId ? { ...item, isInappropriate: true } : item,
+          );
+        setSupportItems(markListed);
+        setReviewItems(markListed);
+      } catch {
+        /* staff-only or network */
+      } finally {
+        setMarkingId(null);
+      }
+    },
+    [authFetch, markingId],
+  );
+
+  const deleteThread = useCallback(
+    async (threadId: string, e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (deletingId) return;
+      if (!window.confirm(t('staff_delete_confirm'))) return;
+      setDeletingId(threadId);
+      try {
+        await authFetch(`/api/messages/threads/${threadId}`, { method: 'DELETE' });
+        setSupportItems((prev) => prev.filter((item) => item.id !== threadId));
+        setReviewItems((prev) => prev.filter((item) => item.id !== threadId));
+        if (selectedThreadId === threadId) backToList();
+        void (mainTab === 'support' ? loadSupportFeed() : loadReviewsMine());
+      } catch {
+        setSendError(t('messages_error_send'));
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [
+      authFetch,
+      deletingId,
+      loadReviewsMine,
+      loadSupportFeed,
+      mainTab,
+      selectedThreadId,
+      t,
+    ],
+  );
+
+  const bulkDeleteByDateRange = useCallback(async () => {
+    if (!filterFromDate || !filterToDate) return;
+    if (!window.confirm(t('staff_bulk_delete_confirm'))) return;
+    setBulkDeleting(true);
+    setSendError(null);
+    try {
+      const qs = new URLSearchParams({
+        from: filterFromDate,
+        to: filterToDate,
+      });
+      if (mainTab === 'support') {
+        qs.set('category', subPage);
+      }
+      const path =
+        mainTab === 'support'
+          ? `/api/messages/support?${qs}`
+          : `/api/messages/reviews?${qs}`;
+      await authFetch(path, { method: 'DELETE' });
+      setSectionFilterOpen(false);
+      setAppliedFromDate(filterFromDate);
+      setAppliedToDate(filterToDate);
+      setPage(1);
+      if (mainTab === 'support') await loadSupportFeed();
+      else await loadReviewsMine();
+    } catch {
+      setSendError(t('messages_error_send'));
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [
+    authFetch,
+    filterFromDate,
+    filterToDate,
+    loadReviewsMine,
+    loadSupportFeed,
+    mainTab,
+    subPage,
+    t,
+  ]);
 
   const shellClass =
     variant === 'page'
@@ -916,6 +1042,23 @@ export default function StaffMessagesExperience({
                                 )}
                               </select>
                             </label>
+                            <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={filterSeeInappropriates}
+                                onChange={(e) => setFilterSeeInappropriates(e.target.checked)}
+                                className="rounded border-slate-300"
+                              />
+                              <span className="text-slate-700">{t('staff_filter_see_inappropriates')}</span>
+                            </label>
+                            <button
+                              type="button"
+                              disabled={bulkDeleting || !filterFromDate || !filterToDate}
+                              onClick={() => void bulkDeleteByDateRange()}
+                              className="w-full mb-3 px-2 py-1.5 rounded bg-red-700 text-white text-[11px] font-semibold disabled:opacity-40"
+                            >
+                              {t('staff_bulk_delete_range')}
+                            </button>
                             <div className="flex gap-2 justify-end">
                               <button
                                 type="button"
@@ -935,6 +1078,22 @@ export default function StaffMessagesExperience({
                           </div>
                         )}
                       </div>
+                      <select
+                        value={listSort}
+                        onChange={(e) => {
+                          setListSort(e.target.value as ThreadListSort | '');
+                          setPage(1);
+                        }}
+                        aria-label={t('staff_sort_by')}
+                        className="border border-slate-300 rounded px-2 py-1 text-xs bg-white max-w-[140px]"
+                      >
+                        <option value="">{t('staff_sort_by')}</option>
+                        {THREAD_SORT_OPTIONS.filter((o) => o.value !== '').map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(opt.labelKey)}
+                          </option>
+                        ))}
+                      </select>
                       {isSupportWorkflowCategory(subPage) ? (
                         <select
                           value={appliedStatus}
@@ -1093,6 +1252,23 @@ export default function StaffMessagesExperience({
                                 className="mt-0.5 w-full border border-slate-300 rounded px-2 py-1"
                               />
                             </label>
+                            <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={filterSeeInappropriates}
+                                onChange={(e) => setFilterSeeInappropriates(e.target.checked)}
+                                className="rounded border-slate-300"
+                              />
+                              <span className="text-slate-700">{t('staff_filter_see_inappropriates')}</span>
+                            </label>
+                            <button
+                              type="button"
+                              disabled={bulkDeleting || !filterFromDate || !filterToDate}
+                              onClick={() => void bulkDeleteByDateRange()}
+                              className="w-full mb-3 px-2 py-1.5 rounded bg-red-700 text-white text-[11px] font-semibold disabled:opacity-40"
+                            >
+                              {t('staff_bulk_delete_range')}
+                            </button>
                             <div className="flex gap-2 justify-end">
                               <button
                                 type="button"
@@ -1112,6 +1288,22 @@ export default function StaffMessagesExperience({
                           </div>
                         )}
                       </div>
+                      <select
+                        value={listSort}
+                        onChange={(e) => {
+                          setListSort(e.target.value as ThreadListSort | '');
+                          setPage(1);
+                        }}
+                        aria-label={t('staff_sort_by')}
+                        className="border border-slate-300 rounded px-2 py-1 text-xs bg-white max-w-[140px]"
+                      >
+                        <option value="">{t('staff_sort_by')}</option>
+                        {THREAD_SORT_OPTIONS.filter((o) => o.value !== '').map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(opt.labelKey)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <ListPageSelector
                       page={page}
@@ -1178,10 +1370,39 @@ export default function StaffMessagesExperience({
                                     </span>
                                   </div>
                                 ) : null}
-                                <div className="mt-1 text-[11px] text-[#c43c54] font-medium">
-                                  {t('staff_reply')} · {t('staff_mark_spam')}
+                                <div className="mt-1 text-[11px] font-medium flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                                  <span className="text-[#c43c54]">
+                                    {t('staff_reply')}:{' '}
+                                    <span className="text-slate-700">
+                                      {replyCountFromMessageCount(item.messageCount)}
+                                    </span>
+                                  </span>
+                                  <span className="text-slate-400">·</span>
+                                  {item.isInappropriate ? (
+                                    <span className="text-slate-500">{t('staff_marked_inappropriate')}</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={markingId === item.id}
+                                      onClick={(e) => void markThreadInappropriate(item.id, e)}
+                                      className="text-[#c43c54] hover:underline disabled:opacity-50"
+                                    >
+                                      {t('staff_mark_spam')}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
+                            </button>
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0 items-end justify-start pt-0.5">
+                            <button
+                              type="button"
+                              title={t('staff_delete')}
+                              disabled={deletingId === item.id}
+                              onClick={(e) => void deleteThread(item.id, e)}
+                              className="p-1 rounded text-slate-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                           {mainTab === 'support' && (

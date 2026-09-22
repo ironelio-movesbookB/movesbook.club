@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, type MouseEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
-import type { SupportCategory } from '@/lib/messages/userThreads';
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Trash2, X } from 'lucide-react';
+import type { SupportCategory, ThreadListSort } from '@/lib/messages/userThreads';
 import { MAX_SUPPORT_IMAGES } from '@/lib/messages/supportImages';
 import ThreadPathOpenLink from '@/components/messages/ThreadPathOpenLink';
 import AdminPcuDatePicker from '@/components/admin/AdminPcuDatePicker';
@@ -26,7 +26,20 @@ type FeedItem = {
   author?: string;
   imageUrls?: string[];
   status?: string | null;
+  isInappropriate?: boolean;
 };
+
+const THREAD_SORT_OPTIONS: { value: ThreadListSort | ''; label: string }[] = [
+  { value: '', label: 'Default (recent update)' },
+  { value: 'date_asc', label: 'Date ascending' },
+  { value: 'date_desc', label: 'Date descending' },
+  { value: 'like', label: 'I like' },
+  { value: 'dislike', label: 'I dislike' },
+];
+
+function replyCountFromMessageCount(messageCount?: number): number {
+  return Math.max(0, (messageCount ?? 1) - 1);
+}
 
 type ThreadDetail = {
   thread: {
@@ -63,6 +76,8 @@ type Props = {
   title: string;
   description: string;
   emptyMessage?: string;
+  /** Force list to inappropriate-only (Comments inappropriate section) */
+  inappropriateOnly?: boolean;
 };
 
 export default function AdminCustomerFeedbackPanel({
@@ -73,6 +88,7 @@ export default function AdminCustomerFeedbackPanel({
   title,
   description,
   emptyMessage = 'No user submissions yet.',
+  inappropriateOnly = false,
 }: Props) {
   const [langOptions, setLangOptions] = useState<LangOption[]>([]);
   const [filterLang, setFilterLang] = useState('');
@@ -84,7 +100,19 @@ export default function AdminCustomerFeedbackPanel({
   const [appliedFromDate, setAppliedFromDate] = useState('');
   const [appliedToDate, setAppliedToDate] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterSeeInappropriates, setFilterSeeInappropriates] = useState(inappropriateOnly);
+  const [appliedSeeInappropriates, setAppliedSeeInappropriates] = useState(inappropriateOnly);
+  const [listSort, setListSort] = useState<ThreadListSort | ''>('');
   const [statusSaving, setStatusSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [composeSending, setComposeSending] = useState(false);
+  const [composeError, setComposeError] = useState('');
 
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,6 +207,8 @@ export default function AdminCustomerFeedbackPanel({
         if (recentOnly) qs.set('recent', '1');
         if (appliedFromDate) qs.set('from', appliedFromDate);
         if (appliedToDate) qs.set('to', appliedToDate);
+        if (appliedSeeInappropriates) qs.set('inappropriate', '1');
+        if (listSort) qs.set('sort', listSort);
         const data = await authFetch(`/api/messages/reviews?${qs}`);
         setItems(data.items || []);
       } else {
@@ -191,6 +221,8 @@ export default function AdminCustomerFeedbackPanel({
         if (appliedFromDate) qs.set('from', appliedFromDate);
         if (appliedToDate) qs.set('to', appliedToDate);
         if (filterStatus) qs.set('status', filterStatus);
+        if (appliedSeeInappropriates) qs.set('inappropriate', '1');
+        if (listSort) qs.set('sort', listSort);
         const data = await authFetch(`/api/messages/support?${qs}`);
         setItems(data.items || []);
       }
@@ -209,6 +241,8 @@ export default function AdminCustomerFeedbackPanel({
     excludeBugs,
     filterLang,
     filterStatus,
+    appliedSeeInappropriates,
+    listSort,
     kind,
     recentOnly,
   ]);
@@ -220,8 +254,135 @@ export default function AdminCustomerFeedbackPanel({
   const applyDateFilter = () => {
     setAppliedFromDate(filterFromDate);
     setAppliedToDate(filterToDate);
+    setAppliedSeeInappropriates(filterSeeInappropriates);
     setFilterOpen(false);
   };
+
+  const composeButtonLabel = (() => {
+    if (kind === 'review') return 'Add a review';
+    if (category === 'question') return 'Add a question';
+    if (category === 'suggestion') return 'Add a suggestion';
+    if (category === 'problem') return 'Add a problem';
+    return 'Add feedback';
+  })();
+
+  const submitCompose = useCallback(async () => {
+    if (!composeBody.trim()) return;
+    setComposeSending(true);
+    setComposeError('');
+    try {
+      const path = kind === 'review' ? '/api/messages/reviews' : '/api/messages/support';
+      const body: Record<string, string> = {
+        body: composeBody.trim(),
+        subject: composeSubject.trim(),
+      };
+      if (kind === 'support' && category) {
+        body.supportCategory = category;
+      }
+      await authFetch(path, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setComposeOpen(false);
+      setComposeSubject('');
+      setComposeBody('');
+      await loadItems();
+    } catch (e) {
+      setComposeError(e instanceof Error ? e.message : 'Failed to post');
+    } finally {
+      setComposeSending(false);
+    }
+  }, [authFetch, category, composeBody, composeSubject, kind, loadItems]);
+
+  const markThreadInappropriate = useCallback(
+    async (threadId: string, e: MouseEvent, next = true) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (markingId) return;
+      setMarkingId(threadId);
+      try {
+        await authFetch(`/api/messages/threads/${threadId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isInappropriate: next }),
+        });
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === threadId ? { ...item, isInappropriate: next } : item,
+          ),
+        );
+      } catch {
+        /* ignore */
+      } finally {
+        setMarkingId(null);
+      }
+    },
+    [authFetch, markingId],
+  );
+
+  const deleteThread = useCallback(
+    async (threadId: string, e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (deletingId) return;
+      if (!window.confirm('Delete this submission? This cannot be undone.')) return;
+      setDeletingId(threadId);
+      try {
+        await authFetch(`/api/messages/threads/${threadId}`, { method: 'DELETE' });
+        setItems((prev) => prev.filter((item) => item.id !== threadId));
+        if (selectedId === threadId) {
+          setSelectedId(null);
+          setThreadDetail(null);
+        }
+        await loadItems();
+      } catch {
+        setError('Failed to delete.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [authFetch, deletingId, loadItems, selectedId],
+  );
+
+  const bulkDeleteByDateRange = useCallback(async () => {
+    if (!filterFromDate || !filterToDate) return;
+    if (!window.confirm('Delete all submissions in the selected date range? This cannot be undone.')) {
+      return;
+    }
+    setBulkDeleting(true);
+    setError('');
+    try {
+      const qs = new URLSearchParams({ from: filterFromDate, to: filterToDate });
+      if (kind === 'support') {
+        if (category) qs.set('category', category);
+        if (bugsOnly) qs.set('bugs', '1');
+        if (excludeBugs) qs.set('excludeBugs', '1');
+      }
+      const path =
+        kind === 'support'
+          ? `/api/messages/support?${qs}`
+          : `/api/messages/reviews?${qs}`;
+      await authFetch(path, { method: 'DELETE' });
+      setFilterOpen(false);
+      setAppliedFromDate(filterFromDate);
+      setAppliedToDate(filterToDate);
+      setSelectedId(null);
+      setThreadDetail(null);
+      await loadItems();
+    } catch {
+      setError('Bulk delete failed.');
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [
+    authFetch,
+    bugsOnly,
+    category,
+    excludeBugs,
+    filterFromDate,
+    filterToDate,
+    kind,
+    loadItems,
+  ]);
 
   const openThread = useCallback(
     async (id: string) => {
@@ -297,9 +458,21 @@ export default function AdminCustomerFeedbackPanel({
 
   return (
     <div className="w-full p-2 sm:p-3">
-      <div className="mb-3">
-        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-        <p className="text-sm text-slate-600 mt-1">{description}</p>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+          <p className="text-sm text-slate-600 mt-1">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setComposeError('');
+            setComposeOpen(true);
+          }}
+          className="shrink-0 px-4 py-2 rounded bg-[#058592] text-white text-sm font-semibold hover:bg-[#047080]"
+        >
+          {composeButtonLabel}
+        </button>
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm">
@@ -357,6 +530,19 @@ export default function AdminCustomerFeedbackPanel({
             >
               Recent (14 days)
             </button>
+            <select
+              value={listSort}
+              onChange={(e) => setListSort(e.target.value as ThreadListSort | '')}
+              className="border border-slate-300 rounded px-2 py-1.5 text-sm"
+              aria-label="Sort by"
+            >
+              <option value="">Sort by</option>
+              {THREAD_SORT_OPTIONS.filter((o) => o.value !== '').map((opt) => (
+                <option key={opt.value || 'default'} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
             <div className="relative">
               <button
                 type="button"
@@ -420,10 +606,11 @@ export default function AdminCustomerFeedbackPanel({
                             : 'border-slate-200 hover:bg-slate-50'
                         }`}
                       >
+                        <div className="flex items-start">
                         <button
                           type="button"
                           onClick={() => void openThread(item.id)}
-                          className="w-full text-left p-3"
+                          className="flex-1 text-left p-3 min-w-0"
                         >
                           <div className="font-semibold text-slate-900 text-sm leading-snug">
                             {item.title}
@@ -433,7 +620,34 @@ export default function AdminCustomerFeedbackPanel({
                           ) : null}
                           <div className="text-[11px] text-slate-500 mt-1.5">
                             {item.author || '—'} · {new Date(item.updatedAt).toLocaleString()}
-                            {item.messageCount != null ? ` · ${item.messageCount} msg` : ''}
+                          </div>
+                          <div className="text-[11px] mt-1 flex flex-wrap items-center gap-x-1">
+                            <span className="text-[#058592] font-medium">
+                              Reply:{' '}
+                              <span className="text-slate-700">
+                                {replyCountFromMessageCount(item.messageCount)}
+                              </span>
+                            </span>
+                            <span className="text-slate-300">·</span>
+                            {item.isInappropriate ? (
+                              <button
+                                type="button"
+                                disabled={markingId === item.id}
+                                onClick={(e) => void markThreadInappropriate(item.id, e, false)}
+                                className="text-[#058592] hover:underline disabled:opacity-50"
+                              >
+                                Untag inappropriate
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={markingId === item.id}
+                                onClick={(e) => void markThreadInappropriate(item.id, e, true)}
+                                className="text-[#058592] hover:underline disabled:opacity-50"
+                              >
+                                Mark as inappropriate
+                              </button>
+                            )}
                           </div>
                           {showWorkflowStatus ? (
                             <div className="mt-1.5">
@@ -443,6 +657,16 @@ export default function AdminCustomerFeedbackPanel({
                             </div>
                           ) : null}
                         </button>
+                        <button
+                          type="button"
+                          title="Delete"
+                          disabled={deletingId === item.id}
+                          onClick={(e) => void deleteThread(item.id, e)}
+                          className="shrink-0 px-2 self-start mt-2 mr-1 text-slate-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        </div>
                         {showPictures && item.imageUrls && item.imageUrls.length > 0 ? (
                           <div className="px-3 pb-3 flex gap-1.5 flex-wrap">
                             {item.imageUrls.slice(0, MAX_SUPPORT_IMAGES).map((src, imgIdx) => (
@@ -670,6 +894,23 @@ export default function AdminCustomerFeedbackPanel({
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterSeeInappropriates}
+                onChange={(e) => setFilterSeeInappropriates(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              <span className="text-slate-700">See the inappropriates</span>
+            </label>
+            <button
+              type="button"
+              disabled={bulkDeleting || !filterFromDate || !filterToDate}
+              onClick={() => void bulkDeleteByDateRange()}
+              className="w-full mb-4 px-3 py-2 rounded bg-red-700 text-white text-xs font-semibold disabled:opacity-40"
+            >
+              Delete submissions in date range
+            </button>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
@@ -684,6 +925,72 @@ export default function AdminCustomerFeedbackPanel({
                 className="px-3 py-1.5 rounded bg-[#058592] text-white text-xs font-semibold"
               >
                 Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {composeOpen ? (
+        <div
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={composeButtonLabel}
+          onClick={() => setComposeOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-slate-300 bg-white shadow-2xl p-4 text-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+              <h3 className="font-semibold text-slate-900">{composeButtonLabel}</h3>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setComposeOpen(false)}
+                className="rounded p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <label className="block mb-2">
+              <span className="text-xs font-medium text-slate-600">Subject (optional)</span>
+              <input
+                type="text"
+                value={composeSubject}
+                onChange={(e) => setComposeSubject(e.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <label className="block mb-3">
+              <span className="text-xs font-medium text-slate-600">Message</span>
+              <textarea
+                value={composeBody}
+                onChange={(e) => setComposeBody(e.target.value)}
+                rows={5}
+                className={fieldClass}
+                placeholder="Write your message…"
+              />
+            </label>
+            {composeError ? (
+              <p className="text-xs text-red-600 mb-2">{composeError}</p>
+            ) : null}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setComposeOpen(false)}
+                className="px-3 py-1.5 rounded bg-slate-200 text-slate-800 text-xs font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={composeSending || !composeBody.trim()}
+                onClick={() => void submitCompose()}
+                className="px-3 py-1.5 rounded bg-[#058592] text-white text-xs font-semibold disabled:opacity-50"
+              >
+                Post
               </button>
             </div>
           </div>

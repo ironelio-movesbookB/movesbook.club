@@ -4,8 +4,10 @@ import { requireMessageAuth } from '@/lib/messages/messageAuth';
 import {
   addReplyToThread,
   canReplyToThread,
+  deleteMessageThread,
   getThreadForUser,
   updateSupportThreadStatus,
+  updateThreadInappropriate,
 } from '@/lib/messages/userThreads';
 import { isSupportWorkflowStatus } from '@/lib/messages/supportStatus';
 
@@ -45,6 +47,16 @@ export async function PATCH(
 
   try {
     const body = await request.json().catch(() => ({}));
+
+    if (typeof body?.isInappropriate === 'boolean') {
+      const updated = await updateThreadInappropriate(id, body.isInappropriate);
+      if (!updated) {
+        return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+      }
+      const detail = await getThreadForUser(id, auth.userId, true);
+      return NextResponse.json(detail ?? { thread: updated });
+    }
+
     const status = body?.status;
     if (!isSupportWorkflowStatus(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
@@ -63,6 +75,25 @@ export async function PATCH(
   } catch (e) {
     console.error('PATCH /api/messages/threads/[id]', e);
     return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireMessageAuth(request);
+  if (!auth?.isStaff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { id } = await params;
+
+  try {
+    const ok = await deleteMessageThread(id);
+    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /api/messages/threads/[id]', e);
+    return NextResponse.json({ error: 'Failed to delete thread' }, { status: 500 });
   }
 }
 

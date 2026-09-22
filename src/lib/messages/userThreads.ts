@@ -96,6 +96,8 @@ function senderDisplayName(
   return name || u.username || 'Movesbook user';
 }
 
+export type ThreadListSort = 'date_asc' | 'date_desc' | 'like' | 'dislike';
+
 export type SupportFeedFilters = {
   category?: SupportCategory | '';
   languageCode?: string;
@@ -109,6 +111,9 @@ export type SupportFeedFilters = {
   status?: string;
   fromDate?: string;
   toDate?: string;
+  inappropriateOnly?: boolean;
+  excludeInappropriate?: boolean;
+  sort?: ThreadListSort | '';
   page?: number;
   pageSize?: number;
 };
@@ -130,11 +135,53 @@ export type PaginatedFeedResult = {
     myReaction: 'L' | 'D' | null;
     status: string | null;
     imageUrls: string[];
+    isInappropriate?: boolean;
   }>;
   total: number;
   page: number;
   pageSize: number;
 };
+
+function resolveThreadListOrderBy(
+  sort: ThreadListSort | '' | undefined,
+): Prisma.UserMessageThreadOrderByWithRelationInput {
+  switch (sort) {
+    case 'date_asc':
+      return { createdAt: 'asc' };
+    case 'date_desc':
+      return { createdAt: 'desc' };
+    case 'like':
+      return { likeCount: 'desc' };
+    case 'dislike':
+      return { dislikeCount: 'desc' };
+    default:
+      return { updatedAt: 'desc' };
+  }
+}
+
+function buildCreatedAtRange(filters: {
+  fromDate?: string;
+  toDate?: string;
+  recentOnly?: boolean;
+}): Prisma.DateTimeFilter | null {
+  const from = filters.fromDate?.trim() ? new Date(filters.fromDate) : null;
+  const to = filters.toDate?.trim() ? new Date(filters.toDate) : null;
+  if (to && !Number.isNaN(to.getTime())) {
+    to.setHours(23, 59, 59, 999);
+  }
+
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (filters.recentOnly) {
+    createdAt.gte = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  }
+  if (from && !Number.isNaN(from.getTime())) {
+    createdAt.gte = from;
+  }
+  if (to && !Number.isNaN(to.getTime())) {
+    createdAt.lte = to;
+  }
+  return Object.keys(createdAt).length ? createdAt : null;
+}
 
 function buildSearchWhere(q: string): Prisma.UserMessageThreadWhereInput {
   const term = q.trim();
@@ -168,6 +215,7 @@ function mapSupportThreads(
     likeCount?: number;
     dislikeCount?: number;
     status?: string | null;
+    isInappropriate?: boolean;
     imageUrls?: string[] | string | null;
     user: AuthorFields & { superAdminId: string | null; image?: string | null };
     _count: { messages: number };
@@ -194,6 +242,7 @@ function mapSupportThreads(
       ? th.likes[0].reaction
       : null) as 'L' | 'D' | null,
     status: th.status ?? null,
+    isInappropriate: th.isInappropriate ?? false,
     imageUrls: Array.isArray(th.imageUrls)
       ? normalizeSupportImageUrls(th.imageUrls)
       : parseSupportImageUrlsJson(typeof th.imageUrls === 'string' ? th.imageUrls : null),
@@ -209,22 +258,7 @@ export async function listSupportFeed(
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = Math.min(50, Math.max(5, filters.pageSize ?? 5));
 
-  const from = filters.fromDate?.trim() ? new Date(filters.fromDate) : null;
-  const to = filters.toDate?.trim() ? new Date(filters.toDate) : null;
-  if (to && !Number.isNaN(to.getTime())) {
-    to.setHours(23, 59, 59, 999);
-  }
-
-  const createdAt: Prisma.DateTimeFilter = {};
-  if (filters.recentOnly) {
-    createdAt.gte = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  }
-  if (from && !Number.isNaN(from.getTime())) {
-    createdAt.gte = from;
-  }
-  if (to && !Number.isNaN(to.getTime())) {
-    createdAt.lte = to;
-  }
+  const createdAtRange = buildCreatedAtRange(filters);
 
   const searchWhere = buildSearchWhere(filters.searchQuery || '');
   const pathWhere: Prisma.UserMessageThreadWhereInput | null =
@@ -256,7 +290,9 @@ export async function listSupportFeed(
           }
         : {}),
     ...(filters.languageCode ? { languageCode: filters.languageCode } : {}),
-    ...(Object.keys(createdAt).length ? { createdAt } : {}),
+    ...(createdAtRange ? { createdAt: createdAtRange } : {}),
+    ...(filters.inappropriateOnly ? { isInappropriate: true } : {}),
+    ...(filters.excludeInappropriate ? { isInappropriate: false } : {}),
     ...(filters.status
       ? (buildStatusWhere(filters.status) as Prisma.UserMessageThreadWhereInput)
       : {}),
@@ -274,7 +310,7 @@ export async function listSupportFeed(
     prisma.userMessageThread.count({ where }),
     prisma.userMessageThread.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: resolveThreadListOrderBy(filters.sort),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
@@ -503,26 +539,18 @@ export async function listAllReviews(filters?: {
   recentOnly?: boolean;
   currentPageOnly?: boolean;
   currentPath?: string;
+  inappropriateOnly?: boolean;
+  excludeInappropriate?: boolean;
+  sort?: ThreadListSort | '';
 }): Promise<PaginatedFeedResult> {
   const page = Math.max(1, filters?.page ?? 1);
   const pageSize = Math.min(50, Math.max(5, filters?.pageSize ?? 5));
 
-  const from = filters?.fromDate?.trim() ? new Date(filters.fromDate) : null;
-  const to = filters?.toDate?.trim() ? new Date(filters.toDate) : null;
-  if (to && !Number.isNaN(to.getTime())) {
-    to.setHours(23, 59, 59, 999);
-  }
-
-  const createdAt: Prisma.DateTimeFilter = {};
-  if (filters?.recentOnly) {
-    createdAt.gte = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  }
-  if (from && !Number.isNaN(from.getTime())) {
-    createdAt.gte = from;
-  }
-  if (to && !Number.isNaN(to.getTime())) {
-    createdAt.lte = to;
-  }
+  const createdAtRange = buildCreatedAtRange({
+    fromDate: filters?.fromDate,
+    toDate: filters?.toDate,
+    recentOnly: filters?.recentOnly,
+  });
 
   const searchWhere = buildSearchWhere(filters?.searchQuery || '');
   const pathWhere: Prisma.UserMessageThreadWhereInput | null =
@@ -539,7 +567,9 @@ export async function listAllReviews(filters?: {
     kind: 'REVIEW',
     ...(filters?.userId ? { userId: filters.userId } : {}),
     ...(filters?.languageCode ? { languageCode: filters.languageCode } : {}),
-    ...(Object.keys(createdAt).length ? { createdAt } : {}),
+    ...(createdAtRange ? { createdAt: createdAtRange } : {}),
+    ...(filters?.inappropriateOnly ? { isInappropriate: true } : {}),
+    ...(filters?.excludeInappropriate ? { isInappropriate: false } : {}),
     ...(searchWhere.OR || pathWhere
       ? {
           AND: [
@@ -554,7 +584,7 @@ export async function listAllReviews(filters?: {
     prisma.userMessageThread.count({ where }),
     prisma.userMessageThread.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: resolveThreadListOrderBy(filters?.sort),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
@@ -593,11 +623,12 @@ export async function listAllReviews(filters?: {
       author: formatAuthor(th.user, superAdminNames),
       authorImage: null,
       isMine: viewerId ? th.userId === viewerId : false,
-      likeCount: 0,
-      dislikeCount: 0,
+      likeCount: th.likeCount ?? 0,
+      dislikeCount: th.dislikeCount ?? 0,
       myReaction: null as 'L' | 'D' | null,
       status: null,
       imageUrls: [] as string[],
+      isInappropriate: th.isInappropriate ?? false,
     })),
     total,
     page,
@@ -822,6 +853,85 @@ export async function updateSupportThreadStatus(
   }
 
   return { id: threadId, status };
+}
+
+/** Staff-only: mark thread as inappropriate / restore. */
+export async function updateThreadInappropriate(
+  threadId: string,
+  isInappropriate: boolean,
+): Promise<{ id: string; isInappropriate: boolean } | null> {
+  const thread = await prisma.userMessageThread.findUnique({ where: { id: threadId } });
+  if (!thread) return null;
+  const updated = await prisma.userMessageThread.update({
+    where: { id: threadId },
+    data: { isInappropriate },
+    select: { id: true, isInappropriate: true },
+  });
+  return updated;
+}
+
+export async function deleteMessageThread(threadId: string): Promise<boolean> {
+  const thread = await prisma.userMessageThread.findUnique({ where: { id: threadId } });
+  if (!thread) return false;
+  await prisma.userMessageThread.delete({ where: { id: threadId } });
+  return true;
+}
+
+function parseBulkDeleteDateRange(fromDate: string, toDate: string): { from: Date; to: Date } | null {
+  const from = fromDate?.trim() ? new Date(fromDate) : null;
+  const to = toDate?.trim() ? new Date(toDate) : null;
+  if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+export async function bulkDeleteSupportThreadsByDate(params: {
+  fromDate: string;
+  toDate: string;
+  category?: SupportCategory | '';
+  bugsOnly?: boolean;
+  excludeBugs?: boolean;
+}): Promise<number> {
+  const range = parseBulkDeleteDateRange(params.fromDate, params.toDate);
+  if (!range) return 0;
+
+  const where: Prisma.UserMessageThreadWhereInput = {
+    kind: 'SUPPORT',
+    createdAt: { gte: range.from, lte: range.to },
+    ...(params.bugsOnly
+      ? {
+          supportCategory: 'problem',
+          errorMessage: { not: null },
+          NOT: { errorMessage: '' },
+        }
+      : params.category
+        ? {
+            supportCategory: params.category,
+            ...(params.excludeBugs
+              ? { OR: [{ errorMessage: null }, { errorMessage: '' }] }
+              : {}),
+          }
+        : {}),
+  };
+
+  const result = await prisma.userMessageThread.deleteMany({ where });
+  return result.count;
+}
+
+export async function bulkDeleteReviewThreadsByDate(params: {
+  fromDate: string;
+  toDate: string;
+}): Promise<number> {
+  const range = parseBulkDeleteDateRange(params.fromDate, params.toDate);
+  if (!range) return 0;
+
+  const result = await prisma.userMessageThread.deleteMany({
+    where: {
+      kind: 'REVIEW',
+      createdAt: { gte: range.from, lte: range.to },
+    },
+  });
+  return result.count;
 }
 
 export async function addReplyToThread(params: {

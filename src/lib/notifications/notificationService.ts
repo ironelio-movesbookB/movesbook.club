@@ -2,6 +2,7 @@ import type { Notification, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   expandStaffAudienceRoles,
+  hasMeaningfulNotificationHtml,
   isClubAudienceKind,
   isNotificationSource,
   isOrgNotificationSource,
@@ -18,6 +19,9 @@ import {
   type NotificationSource,
   type StaffAudienceRole,
 } from '@/lib/notifications/audience';
+
+/** Public Movesbook mark used on staff-sent notification cards. */
+export const MOVESBOOK_STAFF_LOGO_URL = '/img/logo.png';
 
 export type NotificationDto = {
   id: string;
@@ -36,11 +40,16 @@ export type NotificationDto = {
   audienceKind: ClubAudienceKind;
   audienceLanguages: string[];
   contentsByLang: Record<string, string>;
+  titlesByLang: Record<string, string>;
   submittedByUserId: string | null;
   submittedByAdminId: string | null;
   submittedByName: string | null;
   submittedByUsername: string | null;
   submittedByImage: string | null;
+  /** Inbox logo: Movesbook brand or club/team/user avatar */
+  senderLogoUrl: string | null;
+  /** Official name shown beside logo */
+  senderOfficialName: string | null;
   createdAt: string;
   visited: boolean;
 };
@@ -70,12 +79,7 @@ function formatDateOnly(d: Date): string {
 }
 
 function hasMeaningfulHtml(html: string): boolean {
-  const text = html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return text.length > 0;
+  return hasMeaningfulNotificationHtml(html);
 }
 
 function mapRow(
@@ -91,16 +95,30 @@ function mapRow(
   profileLang?: string,
 ): NotificationDto {
   const contentsByLang = parseJsonStringRecord(row.contentsByLangJson);
+  const titlesByLang = parseJsonStringRecord(
+    (row as Notification & { titlesByLangJson?: string | null }).titlesByLangJson,
+  );
   const audienceLanguages = parseJsonStringArray(row.audienceLanguagesJson);
   const resolvedDescription =
     profileLang != null
       ? resolveNotificationHtmlForLanguage(contentsByLang, profileLang, row.description)
       : row.description;
+  const resolvedTitle =
+    profileLang != null
+      ? resolveNotificationHtmlForLanguage(titlesByLang, profileLang, row.title)
+      : row.title;
+
+  const isMovesbook = row.source === 'movesbook_staff';
+  const senderOfficialName =
+    row.submittedByUser?.name || row.submittedByUser?.username || (isMovesbook ? 'Movesbook Staff' : null);
+  const senderLogoUrl = isMovesbook
+    ? MOVESBOOK_STAFF_LOGO_URL
+    : row.submittedByUser?.image || null;
 
   return {
     id: row.id,
     source: (isNotificationSource(row.source) ? row.source : 'movesbook_staff') as NotificationSource,
-    title: row.title,
+    title: resolvedTitle,
     description: resolvedDescription,
     path: row.path,
     untilDate: formatDateOnly(row.untilDate),
@@ -114,11 +132,14 @@ function mapRow(
     audienceKind: isClubAudienceKind(row.audienceKind) ? row.audienceKind : 'members',
     audienceLanguages,
     contentsByLang,
+    titlesByLang,
     submittedByUserId: row.submittedByUserId,
     submittedByAdminId: row.submittedByAdminId,
     submittedByName: row.submittedByUser?.name ?? null,
     submittedByUsername: row.submittedByUser?.username ?? null,
     submittedByImage: row.submittedByUser?.image ?? null,
+    senderLogoUrl,
+    senderOfficialName,
     createdAt: row.createdAt.toISOString(),
     visited: visitedIds ? visitedIds.has(row.id) : false,
   };
@@ -145,9 +166,11 @@ function buildStaffBodyFields(input: {
   title: string;
   description?: string;
   contentsByLang?: Record<string, string>;
+  titlesByLang?: Record<string, string>;
   audienceLanguages?: string[];
 }) {
   const contentsByLang = { ...(input.contentsByLang ?? {}) };
+  const titlesByLang = { ...(input.titlesByLang ?? {}) };
   const description =
     (typeof input.description === 'string' && input.description.trim()
       ? input.description
@@ -163,13 +186,25 @@ function buildStaffBodyFields(input: {
     contentsByLang.en = description;
   }
 
+  const title =
+    (typeof input.title === 'string' && input.title.trim() ? input.title.trim() : '') ||
+    (titlesByLang.en || '').trim() ||
+    Object.values(titlesByLang).find((v) => String(v ?? '').trim())?.trim() ||
+    '';
+
+  if (!titlesByLang.en && title) {
+    titlesByLang.en = title;
+  }
+
   const audienceLanguages = (input.audienceLanguages ?? [])
     .map((l) => normalizeProfileLanguage(l))
     .filter(Boolean);
 
   return {
+    title,
     description,
     contentsByLangJson: toJsonStringRecord(contentsByLang),
+    titlesByLangJson: toJsonStringRecord(titlesByLang),
     audienceLanguagesJson: toJsonStringArray(audienceLanguages),
     langId: audienceLanguages.length === 0 ? '0' : audienceLanguages.join(','),
   };
@@ -179,6 +214,7 @@ export type CreateStaffNotificationInput = {
   title: string;
   description?: string;
   contentsByLang?: Record<string, string>;
+  titlesByLang?: Record<string, string>;
   audienceLanguages?: string[];
   path?: string;
   untilDate: string;
@@ -192,9 +228,6 @@ export type CreateStaffNotificationInput = {
 };
 
 export async function createOrUpdateStaffNotification(input: CreateStaffNotificationInput) {
-  const title = input.title.trim();
-  if (!title) throw new Error('Object (title) is required');
-
   const roles = (input.audienceRoles ?? []).filter(isStaffAudienceRole) as StaffAudienceRole[];
   const usernames = parseUsernameInput(input.usernamesRaw ?? '');
   if (roles.length === 0 && usernames.length === 0) {
@@ -207,10 +240,11 @@ export async function createOrUpdateStaffNotification(input: CreateStaffNotifica
   }
 
   const bodyFields = buildStaffBodyFields(input);
+  if (!bodyFields.title) throw new Error('Object (title) is required');
 
   const data = {
     source: 'movesbook_staff' as const,
-    title,
+    title: bodyFields.title,
     description: bodyFields.description,
     path: input.path?.trim() || null,
     untilDate: toDateOnly(input.untilDate),
@@ -226,6 +260,7 @@ export async function createOrUpdateStaffNotification(input: CreateStaffNotifica
     audienceKind: 'members',
     audienceLanguagesJson: bodyFields.audienceLanguagesJson,
     contentsByLangJson: bodyFields.contentsByLangJson,
+    titlesByLangJson: bodyFields.titlesByLangJson,
   };
 
   if (input.editId) {
@@ -785,7 +820,8 @@ export async function deleteNotification(id: string, opts?: { source?: Notificat
 /** Delete notifications created between fromDate and toDate (inclusive, by createdAt). */
 export async function deleteNotificationsInDateRange(opts: {
   source: NotificationSource;
-  submittedByUserId: string;
+  submittedByUserId?: string | null;
+  submittedByAdminId?: string | null;
   fromDate: string;
   toDate: string;
   entityId?: string | null;
@@ -796,9 +832,10 @@ export async function deleteNotificationsInDateRange(opts: {
 
   const where: Record<string, unknown> = {
     source: opts.source,
-    submittedByUserId: opts.submittedByUserId,
     createdAt: { gte: from, lte: to },
   };
+  if (opts.submittedByUserId) where.submittedByUserId = opts.submittedByUserId;
+  if (opts.submittedByAdminId) where.submittedByAdminId = opts.submittedByAdminId;
   if (opts.entityId?.trim()) {
     where.clubIdsJson = { contains: opts.entityId.trim() };
   }

@@ -34,10 +34,10 @@ export default function AdminNotifiesPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [rangeOpen, setRangeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [editId, setEditId] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
   const [path, setPath] = useState('');
   const [untilDate, setUntilDate] = useState(today());
   const [prioritary, setPrioritary] = useState(false);
@@ -46,6 +46,9 @@ export default function AdminNotifiesPanel() {
   const [audienceLanguages, setAudienceLanguages] = useState<string[]>([]);
   const [composeLang, setComposeLang] = useState('en');
   const [contentsByLang, setContentsByLang] = useState<Record<string, string>>({ en: '' });
+  const [titlesByLang, setTitlesByLang] = useState<Record<string, string>>({ en: '' });
+  const [rangeFrom, setRangeFrom] = useState(today());
+  const [rangeTo, setRangeTo] = useState(today());
 
   const langEditor = useLangHtmlEditor(composeLang, setComposeLang, contentsByLang, setContentsByLang);
 
@@ -87,7 +90,6 @@ export default function AdminNotifiesPanel() {
 
   function resetForm() {
     setEditId(null);
-    setTitle('');
     setPath('');
     setUntilDate(today());
     setPrioritary(false);
@@ -96,6 +98,7 @@ export default function AdminNotifiesPanel() {
     setAudienceLanguages([]);
     setComposeLang('en');
     setContentsByLang({ en: '' });
+    setTitlesByLang({ en: '' });
     setFormError('');
   }
 
@@ -106,7 +109,6 @@ export default function AdminNotifiesPanel() {
 
   function openEdit(item: NotificationDto) {
     setEditId(item.id);
-    setTitle(item.title);
     setPath(item.path || '');
     setUntilDate(item.untilDate);
     setPrioritary(item.prioritary);
@@ -119,6 +121,12 @@ export default function AdminNotifiesPanel() {
         : { en: item.description || '' };
     if (!byLang.en) byLang.en = item.description || '';
     setContentsByLang(byLang);
+    const titleMap =
+      item.titlesByLang && Object.keys(item.titlesByLang).length > 0
+        ? { ...item.titlesByLang }
+        : { en: item.title || '' };
+    if (!titleMap.en) titleMap.en = item.title || '';
+    setTitlesByLang(titleMap);
     setComposeLang('en');
     setFormError('');
     setModalOpen(true);
@@ -131,6 +139,7 @@ export default function AdminNotifiesPanel() {
     setFormError('');
     try {
       const htmlByLang = langEditor.getHtmlByLangForSave();
+      const title = (titlesByLang.en || Object.values(titlesByLang).find((v) => v.trim()) || '').trim();
       const res = await fetch('/api/admin/notifications', {
         method: 'POST',
         headers: {
@@ -140,6 +149,7 @@ export default function AdminNotifiesPanel() {
         body: JSON.stringify({
           editId: editId || undefined,
           title,
+          titlesByLang,
           path,
           untilDate,
           prioritary,
@@ -187,20 +197,59 @@ export default function AdminNotifiesPanel() {
     await load();
   }
 
+  async function deleteRange() {
+    const token = adminToken();
+    if (!token) return;
+    if (!confirm(`Delete notifications from ${rangeFrom} to ${rangeTo}?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete_range',
+          fromDate: rangeFrom,
+          toDate: rangeTo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      setRangeOpen(false);
+      await load();
+      alert(`Deleted ${data.deleted ?? 0} notification(s).`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="w-full p-4 md:p-6 text-gray-900">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-gray-900">Notifications (Movesbook Staff)</h1>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-1 rounded bg-red-700 px-3 py-1.5 text-sm font-semibold text-white"
-        >
-          <Plus className="h-4 w-4" />
-          Add new
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setRangeOpen(true)}
+            className="rounded border border-gray-400 bg-white px-3 py-1.5 text-sm text-gray-900"
+          >
+            Multiple deletion
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1 rounded bg-red-700 px-3 py-1.5 text-sm font-semibold text-white"
+          >
+            <Plus className="h-4 w-4" />
+            Add new
+          </button>
+        </div>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2 items-center">
@@ -386,12 +435,6 @@ export default function AdminNotifiesPanel() {
               </div>
 
               <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Object"
-                className={fieldClass}
-              />
-              <input
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
                 placeholder="Path (optional)"
@@ -413,10 +456,18 @@ export default function AdminNotifiesPanel() {
                       }`}
                     >
                       {lang.code.toUpperCase()}
-                      {contentsByLang[lang.code]?.trim() ? ' ✓' : ''}
+                      {contentsByLang[lang.code]?.trim() || titlesByLang[lang.code]?.trim() ? ' ✓' : ''}
                     </button>
                   ))}
                 </div>
+                <input
+                  value={titlesByLang[composeLang] ?? ''}
+                  onChange={(e) =>
+                    setTitlesByLang((prev) => ({ ...prev, [composeLang]: e.target.value }))
+                  }
+                  placeholder="Object (title for this language)"
+                  className={`${fieldClass} mb-2`}
+                />
                 <div className="border border-gray-300 rounded overflow-hidden bg-white">
                   <CKEditor
                     value={langEditor.editorValue}
@@ -479,6 +530,46 @@ export default function AdminNotifiesPanel() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rangeOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded bg-white p-4 shadow-lg text-gray-900 space-y-3">
+            <h3 className="font-semibold">Multiple deletion (from..to..)</h3>
+            <div className="flex gap-2 items-center text-sm">
+              <input
+                type="date"
+                value={rangeFrom}
+                onChange={(e) => setRangeFrom(e.target.value)}
+                className="border rounded px-2 py-1"
+              />
+              <span>to</span>
+              <input
+                type="date"
+                value={rangeTo}
+                onChange={(e) => setRangeTo(e.target.value)}
+                className="border rounded px-2 py-1"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRangeOpen(false)}
+                className="rounded bg-gray-200 px-3 py-1.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void deleteRange()}
+                className="rounded bg-red-700 px-3 py-1.5 text-sm text-white"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
