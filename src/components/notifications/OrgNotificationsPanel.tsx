@@ -250,7 +250,7 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
             onClick={() => setRangeOpen(true)}
             className="rounded border border-gray-400 bg-white px-3 py-1.5 text-sm"
           >
-            Delete from..to..
+            Multiple deletion
           </button>
           <button
             type="button"
@@ -411,7 +411,7 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
       {rangeOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded bg-white p-4 shadow-lg space-y-3">
-            <h3 className="font-semibold">Delete from..to..</h3>
+            <h3 className="font-semibold">Multiple deletion (from..to..)</h3>
             <div className="flex gap-2 items-center text-sm">
               <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} className="border rounded px-2 py-1" />
               <span>to</span>

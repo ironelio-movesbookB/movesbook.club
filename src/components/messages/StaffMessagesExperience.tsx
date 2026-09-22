@@ -52,6 +52,7 @@ type FeedItem = {
   status?: string | null;
   imageUrls?: string[];
   isInappropriate?: boolean;
+  awaitingStaffReply?: boolean;
 };
 
 const THREAD_SORT_OPTIONS: { value: ThreadListSort | ''; labelKey: string }[] = [
@@ -1373,7 +1374,13 @@ export default function StaffMessagesExperience({
                                 <div className="mt-1 text-[11px] font-medium flex flex-wrap items-center gap-x-1 gap-y-0.5">
                                   <span className="text-[#c43c54]">
                                     {t('staff_reply')}:{' '}
-                                    <span className="text-slate-700">
+                                    <span
+                                      className={
+                                        item.awaitingStaffReply
+                                          ? 'text-red-600 font-semibold'
+                                          : 'text-slate-700'
+                                      }
+                                    >
                                       {replyCountFromMessageCount(item.messageCount)}
                                     </span>
                                   </span>

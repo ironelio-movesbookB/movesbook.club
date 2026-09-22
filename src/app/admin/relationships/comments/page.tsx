@@ -10,9 +10,8 @@ export default function AdminCommentsInappropriatePage() {
   return (
     <AdminRelationshipAuthShell>
       <AdminCustomerFeedbackPanel
-        kind="support"
-        excludeBugs
-        inappropriateOnly
+        kind="review"
+        aggregateInappropriate
         title="Comments inappropriate"
         description="Posts marked as inappropriate across Reviews, Feedbacks, Questions, Suggestions, and Problems. Remove or untag them here."
         emptyMessage="No inappropriate posts."

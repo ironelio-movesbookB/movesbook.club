@@ -136,6 +136,9 @@ export type PaginatedFeedResult = {
     status: string | null;
     imageUrls: string[];
     isInappropriate?: boolean;
+    /** True when the latest message is from a non-staff user (staff should reply). */
+    awaitingStaffReply?: boolean;
+    threadKind?: UserThreadKind;
   }>;
   total: number;
   page: number;
@@ -202,6 +205,36 @@ function buildSearchWhere(q: string): Prisma.UserMessageThreadWhereInput {
       { messages: { some: { body: { contains: term } } } },
     ],
   };
+}
+
+/** Latest message per thread: true when staff has not replied last. */
+async function loadAwaitingStaffReplyByThreadId(
+  threadIds: string[],
+): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>();
+  if (!threadIds.length) return map;
+  const placeholders = threadIds.map(() => '?').join(',');
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ threadId: string; isStaff: number | boolean }>
+    >(
+      `SELECT um.threadId, um.isStaff
+       FROM user_thread_messages um
+       INNER JOIN (
+         SELECT threadId, MAX(createdAt) AS maxCreated
+         FROM user_thread_messages
+         WHERE threadId IN (${placeholders})
+         GROUP BY threadId
+       ) latest ON um.threadId = latest.threadId AND um.createdAt = latest.maxCreated`,
+      ...threadIds,
+    );
+    for (const row of rows) {
+      map.set(String(row.threadId), !Boolean(row.isStaff));
+    }
+  } catch {
+    /* ignore */
+  }
+  return map;
 }
 
 function mapSupportThreads(
@@ -408,6 +441,7 @@ export async function listSupportFeed(
   }
 
   const superAdminNames = await loadSuperAdminNames(threads.map((th) => th.user.superAdminId));
+  const awaitingById = await loadAwaitingStaffReplyByThreadId(threadIds);
 
   return {
     items: mapSupportThreads(
@@ -424,7 +458,10 @@ export async function listSupportFeed(
       }),
       viewerId,
       superAdminNames,
-    ),
+    ).map((item) => ({
+      ...item,
+      awaitingStaffReply: awaitingById.get(item.id) ?? false,
+    })),
     total,
     page,
     pageSize,
@@ -610,6 +647,8 @@ export async function listAllReviews(filters?: {
 
   const viewerId = filters?.viewerId || filters?.userId || '';
   const superAdminNames = await loadSuperAdminNames(threads.map((th) => th.user.superAdminId));
+  const threadIds = threads.map((th) => th.id);
+  const awaitingById = await loadAwaitingStaffReplyByThreadId(threadIds);
 
   return {
     items: threads.map((th) => ({
@@ -629,7 +668,123 @@ export async function listAllReviews(filters?: {
       status: null,
       imageUrls: [] as string[],
       isInappropriate: th.isInappropriate ?? false,
+      awaitingStaffReply: awaitingById.get(th.id) ?? false,
     })),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+/** Staff moderation: all inappropriate review + support threads (any category). */
+export async function listInappropriateFeed(filters?: {
+  searchQuery?: string;
+  page?: number;
+  pageSize?: number;
+  languageCode?: string;
+  fromDate?: string;
+  toDate?: string;
+  recentOnly?: boolean;
+  sort?: ThreadListSort | '';
+}): Promise<PaginatedFeedResult> {
+  await ensureSupportThreadExtras();
+
+  const page = Math.max(1, filters?.page ?? 1);
+  const pageSize = Math.min(50, Math.max(5, filters?.pageSize ?? 5));
+
+  const createdAtRange = buildCreatedAtRange({
+    fromDate: filters?.fromDate,
+    toDate: filters?.toDate,
+    recentOnly: filters?.recentOnly,
+  });
+
+  const searchWhere = buildSearchWhere(filters?.searchQuery || '');
+
+  const where: Prisma.UserMessageThreadWhereInput = {
+    isInappropriate: true,
+    kind: { in: ['REVIEW', 'SUPPORT'] },
+    ...(filters?.languageCode ? { languageCode: filters.languageCode } : {}),
+    ...(createdAtRange ? { createdAt: createdAtRange } : {}),
+    ...(searchWhere.OR ? searchWhere : {}),
+  };
+
+  const [total, threads] = await Promise.all([
+    prisma.userMessageThread.count({ where }),
+    prisma.userMessageThread.findMany({
+      where,
+      orderBy: resolveThreadListOrderBy(filters?.sort),
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            firstName: true,
+            surname: true,
+            image: true,
+            superAdminId: true,
+          },
+        },
+        _count: { select: { messages: true } },
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { body: true },
+        },
+      },
+    }),
+  ]);
+
+  const threadIds = threads.map((th) => th.id);
+  const awaitingById = await loadAwaitingStaffReplyByThreadId(threadIds);
+  const imageUrlsById = new Map<string, string[]>();
+
+  if (threadIds.length) {
+    const placeholders = threadIds.map(() => '?').join(',');
+    try {
+      const rows = await prisma.$queryRawUnsafe<Array<{ id: string; imageUrls: string | null }>>(
+        `SELECT id, imageUrls FROM user_message_threads WHERE id IN (${placeholders})`,
+        ...threadIds,
+      );
+      for (const row of rows) {
+        imageUrlsById.set(String(row.id), parseSupportImageUrlsJson(row.imageUrls ?? null));
+      }
+    } catch {
+      /* column may be missing */
+    }
+  }
+
+  const superAdminNames = await loadSuperAdminNames(threads.map((th) => th.user.superAdminId));
+
+  return {
+    items: threads.map((th) => {
+      const isReview = th.kind === 'REVIEW';
+      const title = isReview
+        ? th.subject || 'Review discussion'
+        : wrapAngle(th.subject || 'Feedback');
+      return {
+        id: th.id,
+        title,
+        excerpt: th.messages[0] ? excerptFromBody(th.messages[0].body) : '',
+        updatedAt: th.updatedAt.toISOString(),
+        messageCount: th._count.messages,
+        supportCategory: th.supportCategory,
+        languageCode: th.languageCode,
+        author: formatAuthor(th.user, superAdminNames),
+        authorImage: th.user.image ?? null,
+        isMine: false,
+        likeCount: th.likeCount ?? 0,
+        dislikeCount: th.dislikeCount ?? 0,
+        myReaction: null as 'L' | 'D' | null,
+        status: th.status ?? null,
+        imageUrls: imageUrlsById.get(th.id) ?? [],
+        isInappropriate: true,
+        awaitingStaffReply: awaitingById.get(th.id) ?? false,
+        threadKind: th.kind,
+      };
+    }),
     total,
     page,
     pageSize,
@@ -1012,6 +1167,11 @@ export async function ensureSupportThreadExtras(): Promise<void> {
     if (!names.has('imageUrls')) {
       await prisma.$executeRawUnsafe(
         `ALTER TABLE user_message_threads ADD COLUMN imageUrls TEXT NULL`,
+      );
+    }
+    if (!names.has('isInappropriate')) {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE user_message_threads ADD COLUMN isInappropriate BOOLEAN NOT NULL DEFAULT 0`,
       );
     }
 

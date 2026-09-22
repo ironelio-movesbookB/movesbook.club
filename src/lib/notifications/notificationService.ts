@@ -1,5 +1,6 @@
 import type { Notification, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getLogoUrlFromEntityDescription } from '@/lib/entity/entityLogo';
 import {
   expandStaffAudienceRoles,
   hasMeaningfulNotificationHtml,
@@ -143,6 +144,87 @@ function mapRow(
     createdAt: row.createdAt.toISOString(),
     visited: visitedIds ? visitedIds.has(row.id) : false,
   };
+}
+
+/** Resolve club/team/group logo + official name for org-sourced inbox cards. */
+async function enrichOrgSenderDisplay(items: NotificationDto[]): Promise<NotificationDto[]> {
+  const orgItems = items.filter((i) => i.source !== 'movesbook_staff' && i.clubIds.length > 0);
+  if (orgItems.length === 0) return items;
+
+  const clubIds = Array.from(new Set(orgItems.flatMap((i) => i.clubIds)));
+  const teamIds = Array.from(
+    new Set(orgItems.filter((i) => i.source === 'team_admin').flatMap((i) => i.clubIds)),
+  );
+  const groupIds = Array.from(
+    new Set(orgItems.filter((i) => i.source === 'group_admin').flatMap((i) => i.clubIds)),
+  );
+  const coachGroupIds = Array.from(
+    new Set(orgItems.filter((i) => i.source === 'coach').flatMap((i) => i.clubIds)),
+  );
+
+  const [clubs, teams, groups, coachingGroups] = await Promise.all([
+    clubIds.length
+      ? prisma.club.findMany({
+          where: { id: { in: clubIds } },
+          select: { id: true, name: true, description: true },
+        })
+      : Promise.resolve([]),
+    teamIds.length
+      ? prisma.team.findMany({
+          where: { id: { in: teamIds } },
+          select: { id: true, name: true, description: true },
+        })
+      : Promise.resolve([]),
+    groupIds.length
+      ? prisma.group.findMany({
+          where: { id: { in: groupIds } },
+          select: { id: true, name: true, description: true },
+        })
+      : Promise.resolve([]),
+    coachGroupIds.length
+      ? prisma.coachingGroup.findMany({
+          where: { id: { in: coachGroupIds } },
+          select: { id: true, name: true, description: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const clubMap = new Map(clubs.map((c) => [c.id, c]));
+  const teamMap = new Map(teams.map((c) => [c.id, c]));
+  const groupMap = new Map(groups.map((c) => [c.id, c]));
+  const coachMap = new Map(coachingGroups.map((c) => [c.id, c]));
+
+  return items.map((item) => {
+    if (item.source === 'movesbook_staff') {
+      return {
+        ...item,
+        senderLogoUrl: MOVESBOOK_STAFF_LOGO_URL,
+        senderOfficialName: item.senderOfficialName || 'Movesbook Staff',
+      };
+    }
+    const entityId = item.clubIds[0];
+    if (!entityId) {
+      return {
+        ...item,
+        senderLogoUrl: item.submittedByImage || item.senderLogoUrl,
+        senderOfficialName:
+          item.submittedByName || item.submittedByUsername || item.senderOfficialName,
+      };
+    }
+    let entity: { name: string; description: string | null } | undefined;
+    if (item.source === 'club_admin') entity = clubMap.get(entityId);
+    else if (item.source === 'team_admin') entity = teamMap.get(entityId);
+    else if (item.source === 'group_admin') entity = groupMap.get(entityId);
+    else if (item.source === 'coach') entity = coachMap.get(entityId);
+
+    const logo = entity ? getLogoUrlFromEntityDescription(entity.description) : null;
+    return {
+      ...item,
+      senderLogoUrl: logo || item.submittedByImage || item.senderLogoUrl,
+      senderOfficialName:
+        entity?.name || item.submittedByName || item.submittedByUsername || item.senderOfficialName,
+    };
+  });
 }
 
 async function resolveUsernamesToIds(usernames: string[]): Promise<{ userIds: string[]; missing: string[] }> {
@@ -714,7 +796,7 @@ export async function listInboxForUser(params: {
     );
 
     return {
-      items: slice.map((r) => mapRow(r, visited, profileLang)),
+      items: await enrichOrgSenderDisplay(slice.map((r) => mapRow(r, visited, profileLang))),
       total: matched.length,
       page,
       pageSize,
@@ -758,7 +840,9 @@ export async function listInboxForUser(params: {
   );
 
   return {
-    items: slice.map((r) => mapRow(r as Parameters<typeof mapRow>[0], visited, profileLang)),
+    items: await enrichOrgSenderDisplay(
+      slice.map((r) => mapRow(r as Parameters<typeof mapRow>[0], visited, profileLang)),
+    ),
     total: matched.length,
     page,
     pageSize,

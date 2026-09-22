@@ -1,7 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState, type MouseEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ImagePlus,
+  RefreshCw,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type { SupportCategory, ThreadListSort } from '@/lib/messages/userThreads';
 import { MAX_SUPPORT_IMAGES } from '@/lib/messages/supportImages';
 import ThreadPathOpenLink from '@/components/messages/ThreadPathOpenLink';
@@ -27,6 +36,9 @@ type FeedItem = {
   imageUrls?: string[];
   status?: string | null;
   isInappropriate?: boolean;
+  awaitingStaffReply?: boolean;
+  supportCategory?: string | null;
+  threadKind?: string;
 };
 
 const THREAD_SORT_OPTIONS: { value: ThreadListSort | ''; label: string }[] = [
@@ -78,6 +90,8 @@ type Props = {
   emptyMessage?: string;
   /** Force list to inappropriate-only (Comments inappropriate section) */
   inappropriateOnly?: boolean;
+  /** Load all inappropriate review + support threads (Super Admin comments page) */
+  aggregateInappropriate?: boolean;
 };
 
 export default function AdminCustomerFeedbackPanel({
@@ -89,6 +103,7 @@ export default function AdminCustomerFeedbackPanel({
   description,
   emptyMessage = 'No user submissions yet.',
   inappropriateOnly = false,
+  aggregateInappropriate = false,
 }: Props) {
   const [langOptions, setLangOptions] = useState<LangOption[]>([]);
   const [filterLang, setFilterLang] = useState('');
@@ -109,10 +124,18 @@ export default function AdminCustomerFeedbackPanel({
   const [markingId, setMarkingId] = useState<string | null>(null);
 
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeLang, setComposeLang] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
+  const [composePath, setComposePath] = useState('');
   const [composeBody, setComposeBody] = useState('');
+  const [composeErrorMsg, setComposeErrorMsg] = useState('');
+  const [composeImages, setComposeImages] = useState<
+    Array<{ id: string; url: string; preview: string }>
+  >([]);
+  const [composeUploadingImages, setComposeUploadingImages] = useState(false);
   const [composeSending, setComposeSending] = useState(false);
   const [composeError, setComposeError] = useState('');
+  const composeFileInputRef = useRef<HTMLInputElement>(null);
 
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,11 +216,100 @@ export default function AdminCustomerFeedbackPanel({
     });
   }, []);
 
+  const resetCompose = useCallback(() => {
+    setComposeLang('');
+    setComposeSubject('');
+    setComposePath('');
+    setComposeBody('');
+    setComposeErrorMsg('');
+    setComposeImages((prev) => {
+      prev.forEach((img) => {
+        if (img.preview.startsWith('blob:')) URL.revokeObjectURL(img.preview);
+      });
+      return [];
+    });
+    setComposeError('');
+  }, []);
+
+  const removeComposeImage = useCallback((id: string) => {
+    setComposeImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+      if (target?.preview.startsWith('blob:')) URL.revokeObjectURL(target.preview);
+      return prev.filter((img) => img.id !== id);
+    });
+  }, []);
+
+  const handleComposeImagesSelected = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      const remaining = MAX_SUPPORT_IMAGES - composeImages.length;
+      if (remaining <= 0) {
+        setComposeError(`Maximum ${MAX_SUPPORT_IMAGES} pictures.`);
+        return;
+      }
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        setComposeError('Admin session not found.');
+        return;
+      }
+      setComposeUploadingImages(true);
+      setComposeError('');
+      try {
+        const picked = Array.from(files).slice(0, remaining);
+        for (const file of picked) {
+          if (!file.type.startsWith('image/')) continue;
+          const form = new FormData();
+          form.append('file', file);
+          const res = await fetch('/api/messages/support/upload-image', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.path) {
+            setComposeError('Picture upload failed.');
+            continue;
+          }
+          const preview = URL.createObjectURL(file);
+          setComposeImages((prev) => {
+            if (prev.length >= MAX_SUPPORT_IMAGES) {
+              URL.revokeObjectURL(preview);
+              return prev;
+            }
+            return [
+              ...prev,
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                url: String(data.path),
+                preview,
+              },
+            ];
+          });
+        }
+      } catch {
+        setComposeError('Picture upload failed.');
+      } finally {
+        setComposeUploadingImages(false);
+        if (composeFileInputRef.current) composeFileInputRef.current.value = '';
+      }
+    },
+    [composeImages.length],
+  );
+
   const loadItems = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      if (kind === 'review') {
+      if (aggregateInappropriate) {
+        const qs = new URLSearchParams({ pageSize: '50' });
+        if (filterLang) qs.set('lang', filterLang);
+        if (recentOnly) qs.set('recent', '1');
+        if (appliedFromDate) qs.set('from', appliedFromDate);
+        if (appliedToDate) qs.set('to', appliedToDate);
+        if (listSort) qs.set('sort', listSort);
+        const data = await authFetch(`/api/messages/inappropriate?${qs}`);
+        setItems(data.items || []);
+      } else if (kind === 'review') {
         const qs = new URLSearchParams({
           admin: '1',
           community: '1',
@@ -245,6 +357,7 @@ export default function AdminCustomerFeedbackPanel({
     listSort,
     kind,
     recentOnly,
+    aggregateInappropriate,
   ]);
 
   useEffect(() => {
@@ -272,27 +385,45 @@ export default function AdminCustomerFeedbackPanel({
     setComposeError('');
     try {
       const path = kind === 'review' ? '/api/messages/reviews' : '/api/messages/support';
-      const body: Record<string, string> = {
+      const payload: Record<string, unknown> = {
         body: composeBody.trim(),
         subject: composeSubject.trim(),
+        languageCode: composeLang || undefined,
+        pathStaff: composePath.trim() || undefined,
+        realPath: typeof window !== 'undefined' ? window.location.pathname : undefined,
       };
-      if (kind === 'support' && category) {
-        body.supportCategory = category;
+      if (kind === 'support') {
+        if (category) payload.supportCategory = category;
+        if (category === 'problem') {
+          payload.errorMessage = composeErrorMsg.trim() || undefined;
+        }
+        payload.imageUrls = composeImages.map((img) => img.url).slice(0, MAX_SUPPORT_IMAGES);
       }
       await authFetch(path, {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
       setComposeOpen(false);
-      setComposeSubject('');
-      setComposeBody('');
+      resetCompose();
       await loadItems();
     } catch (e) {
       setComposeError(e instanceof Error ? e.message : 'Failed to post');
     } finally {
       setComposeSending(false);
     }
-  }, [authFetch, category, composeBody, composeSubject, kind, loadItems]);
+  }, [
+    authFetch,
+    category,
+    composeBody,
+    composeErrorMsg,
+    composeImages,
+    composeLang,
+    composePath,
+    composeSubject,
+    kind,
+    loadItems,
+    resetCompose,
+  ]);
 
   const markThreadInappropriate = useCallback(
     async (threadId: string, e: MouseEvent, next = true) => {
@@ -305,18 +436,21 @@ export default function AdminCustomerFeedbackPanel({
           method: 'PATCH',
           body: JSON.stringify({ isInappropriate: next }),
         });
-        setItems((prev) =>
-          prev.map((item) =>
+        setItems((prev) => {
+          if (aggregateInappropriate && !next) {
+            return prev.filter((item) => item.id !== threadId);
+          }
+          return prev.map((item) =>
             item.id === threadId ? { ...item, isInappropriate: next } : item,
-          ),
-        );
+          );
+        });
       } catch {
         /* ignore */
       } finally {
         setMarkingId(null);
       }
     },
-    [authFetch, markingId],
+    [aggregateInappropriate, authFetch, markingId],
   );
 
   const deleteThread = useCallback(
@@ -390,7 +524,8 @@ export default function AdminCustomerFeedbackPanel({
       setDetailLoading(true);
       setReplyError('');
       try {
-        const communityQs = kind === 'review' ? '?communityReview=1' : '';
+        const communityQs =
+          !aggregateInappropriate && kind === 'review' ? '?communityReview=1' : '';
         const data = await authFetch(`/api/messages/threads/${id}${communityQs}`);
         setThreadDetail(data);
       } catch {
@@ -400,7 +535,7 @@ export default function AdminCustomerFeedbackPanel({
         setDetailLoading(false);
       }
     },
-    [authFetch, kind],
+    [aggregateInappropriate, authFetch, kind],
   );
 
   const submitReply = useCallback(async () => {
@@ -445,7 +580,14 @@ export default function AdminCustomerFeedbackPanel({
     [authFetch, selectedId],
   );
 
-  const showWorkflowStatus = kind === 'support' && isSupportWorkflowCategory(category);
+  const showWorkflowStatus =
+    !aggregateInappropriate && kind === 'support' && isSupportWorkflowCategory(category);
+  const itemShowsWorkflowStatus = (item: FeedItem) =>
+    aggregateInappropriate
+      ? isSupportWorkflowCategory(
+          (item.supportCategory || '') as SupportCategory,
+        )
+      : showWorkflowStatus;
   const filteredItems = items.filter((item) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
@@ -463,16 +605,18 @@ export default function AdminCustomerFeedbackPanel({
           <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
           <p className="text-sm text-slate-600 mt-1">{description}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setComposeError('');
-            setComposeOpen(true);
-          }}
-          className="shrink-0 px-4 py-2 rounded bg-[#058592] text-white text-sm font-semibold hover:bg-[#047080]"
-        >
-          {composeButtonLabel}
-        </button>
+        {!aggregateInappropriate ? (
+          <button
+            type="button"
+            onClick={() => {
+              resetCompose();
+              setComposeOpen(true);
+            }}
+            className="shrink-0 px-4 py-2 rounded bg-[#058592] text-white text-sm font-semibold hover:bg-[#047080]"
+          >
+            {composeButtonLabel}
+          </button>
+        ) : null}
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm">
@@ -624,7 +768,11 @@ export default function AdminCustomerFeedbackPanel({
                           <div className="text-[11px] mt-1 flex flex-wrap items-center gap-x-1">
                             <span className="text-[#058592] font-medium">
                               Reply:{' '}
-                              <span className="text-slate-700">
+                              <span
+                                className={
+                                  item.awaitingStaffReply ? 'text-red-600 font-semibold' : 'text-slate-700'
+                                }
+                              >
                                 {replyCountFromMessageCount(item.messageCount)}
                               </span>
                             </span>
@@ -649,7 +797,7 @@ export default function AdminCustomerFeedbackPanel({
                               </button>
                             )}
                           </div>
-                          {showWorkflowStatus ? (
+                          {itemShowsWorkflowStatus(item) ? (
                             <div className="mt-1.5">
                               <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-red-600 border border-slate-200">
                                 {supportWorkflowStatusLabel(item.status)}
@@ -667,7 +815,9 @@ export default function AdminCustomerFeedbackPanel({
                           <Trash2 className="w-4 h-4" />
                         </button>
                         </div>
-                        {showPictures && item.imageUrls && item.imageUrls.length > 0 ? (
+                        {(showPictures || aggregateInappropriate) &&
+                        item.imageUrls &&
+                        item.imageUrls.length > 0 ? (
                           <div className="px-3 pb-3 flex gap-1.5 flex-wrap">
                             {item.imageUrls.slice(0, MAX_SUPPORT_IMAGES).map((src, imgIdx) => (
                               <button
@@ -714,7 +864,11 @@ export default function AdminCustomerFeedbackPanel({
                       {threadDetail.thread.authorName} ·{' '}
                       {new Date(threadDetail.thread.updatedAt).toLocaleString()}
                     </p>
-                    {showWorkflowStatus ? (
+                    {(aggregateInappropriate
+                      ? isSupportWorkflowCategory(
+                          (threadDetail.thread.supportCategory || '') as SupportCategory,
+                        )
+                      : showWorkflowStatus) ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <label className="text-xs font-semibold text-slate-700" htmlFor="edit-status">
                           Edit status
@@ -755,7 +909,8 @@ export default function AdminCustomerFeedbackPanel({
                         Error: {threadDetail.thread.errorMessage}
                       </p>
                     ) : null}
-                    {showPictures &&
+                    {(showPictures ||
+                      (aggregateInappropriate && threadDetail.thread.kind === 'SUPPORT')) &&
                     threadDetail.thread.imageUrls &&
                     threadDetail.thread.imageUrls.length > 0 ? (
                       <div className="mt-2 flex gap-1.5 flex-wrap">
@@ -933,14 +1088,14 @@ export default function AdminCustomerFeedbackPanel({
 
       {composeOpen ? (
         <div
-          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-label={composeButtonLabel}
           onClick={() => setComposeOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-lg border border-slate-300 bg-white shadow-2xl p-4 text-sm"
+            className="w-full max-w-lg my-auto rounded-lg border border-slate-300 bg-white shadow-2xl p-4 text-sm max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
@@ -954,25 +1109,119 @@ export default function AdminCustomerFeedbackPanel({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
             <label className="block mb-2">
-              <span className="text-xs font-medium text-slate-600">Subject (optional)</span>
+              <span className="text-xs font-medium text-slate-600">Language</span>
+              <select
+                value={composeLang}
+                onChange={(e) => setComposeLang(e.target.value)}
+                className={`${fieldClass} mb-0`}
+              >
+                <option value="">Select language</option>
+                {langOptions.map((l) => (
+                  <option key={l.id} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block mb-2">
+              <span className="text-xs font-medium text-slate-600">Object / subject</span>
               <input
                 type="text"
                 value={composeSubject}
                 onChange={(e) => setComposeSubject(e.target.value)}
+                placeholder="Object / subject"
                 className={fieldClass}
               />
             </label>
-            <label className="block mb-3">
+
+            <label className="block mb-2">
+              <span className="text-xs font-medium text-slate-600">Path (staff)</span>
+              <input
+                type="text"
+                value={composePath}
+                onChange={(e) => setComposePath(e.target.value)}
+                placeholder="Path (staff)"
+                className={fieldClass}
+              />
+            </label>
+
+            {kind === 'support' && category === 'problem' ? (
+              <label className="block mb-2">
+                <span className="text-xs font-medium text-slate-600">Error message</span>
+                <input
+                  type="text"
+                  value={composeErrorMsg}
+                  onChange={(e) => setComposeErrorMsg(e.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+            ) : null}
+
+            <label className="block mb-2">
               <span className="text-xs font-medium text-slate-600">Message</span>
               <textarea
                 value={composeBody}
                 onChange={(e) => setComposeBody(e.target.value)}
-                rows={5}
+                rows={6}
                 className={fieldClass}
                 placeholder="Write your message…"
               />
             </label>
+
+            {kind === 'support' ? (
+              <div className="mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    disabled={
+                      composeUploadingImages || composeImages.length >= MAX_SUPPORT_IMAGES
+                    }
+                    onClick={() => composeFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-slate-400 rounded bg-white hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                    {composeUploadingImages ? 'Uploading…' : 'Add pictures'}
+                  </button>
+                  <span className="text-[11px] text-slate-600">
+                    Up to {MAX_SUPPORT_IMAGES} images ({composeImages.length}/{MAX_SUPPORT_IMAGES})
+                  </span>
+                  <input
+                    ref={composeFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => void handleComposeImagesSelected(e.target.files)}
+                  />
+                </div>
+                {composeImages.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {composeImages.map((img) => (
+                      <div
+                        key={img.id}
+                        className="relative h-20 w-20 rounded border border-slate-300 overflow-hidden bg-white"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.preview || img.url} alt="" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          title="Remove picture"
+                          aria-label="Remove picture"
+                          onClick={() => removeComposeImage(img.id)}
+                          className="absolute top-0.5 right-0.5 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {composeError ? (
               <p className="text-xs text-red-600 mb-2">{composeError}</p>
             ) : null}
@@ -986,7 +1235,9 @@ export default function AdminCustomerFeedbackPanel({
               </button>
               <button
                 type="button"
-                disabled={composeSending || !composeBody.trim()}
+                disabled={
+                  composeSending || composeUploadingImages || !composeBody.trim()
+                }
                 onClick={() => void submitCompose()}
                 className="px-3 py-1.5 rounded bg-[#058592] text-white text-xs font-semibold disabled:opacity-50"
               >
