@@ -3,6 +3,7 @@ import {
   type ClubDescriptionMeta,
 } from '@/lib/club/clubSidebarLabel';
 import { defaultClubSubscriptionEndDate } from '@/lib/admin/clubSubscriptionStatus';
+import { resolveEntityLogoUrl } from '@/lib/entity/entityLogo';
 
 import { DEFAULT_ENTITY_SPORT, normalizeEntitySport } from '@/lib/sport/entitySportOptions';
 
@@ -99,8 +100,8 @@ export function clubToFormPayload(club: {
     mail: meta.mail?.trim() ?? '',
     phone: meta.phone?.trim() ?? '',
     website: meta.website?.trim() || teamWebsite,
-    logoUrl: meta.logoUrl?.trim() ?? '',
-    bannerUrl: meta.bannerUrl?.trim() ?? '',
+    logoUrl: resolveEntityLogoUrl(meta.logoUrl) ?? '',
+    bannerUrl: resolveEntityLogoUrl(meta.bannerUrl) ?? '',
     directAccess: meta.directAccess?.trim() ?? '',
     officialName: club.name?.trim() ?? '',
     directRegistrationCode: meta.directRegistrationCode?.trim() ?? '',
@@ -129,6 +130,10 @@ function storedPublicUrl(value: string | null | undefined): string | undefined {
   if (!raw) return undefined;
   // Never persist inline data/blob URLs into description JSON (truncates / corrupts meta).
   if (raw.startsWith('data:') || raw.startsWith('blob:')) return undefined;
+  // Forms may hold `/api/media/uploads/...` for display; store canonical disk path.
+  if (raw.startsWith('/api/media/uploads/')) {
+    return `/uploads/${raw.slice('/api/media/uploads/'.length)}`;
+  }
   return raw;
 }
 
