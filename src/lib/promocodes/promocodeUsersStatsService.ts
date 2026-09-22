@@ -47,6 +47,59 @@ function daysBetween(from: Date, to: Date): number {
   return Math.max(0, Math.floor(ms / (24 * 60 * 60 * 1000)));
 }
 
+function creditOf(row: Record<string, unknown>, key: string): number {
+  const n = Number(row[key] ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isPendingInvite(row: Record<string, unknown>): boolean {
+  return !(Number(row.receiver_id ?? 0) > 0);
+}
+
+/** Keep one row per receiver+promocode (prefer highest id / latest). */
+function dedupeAppliesByReceiverPromocode(
+  rows: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    const receiverId = Number(row.receiver_id ?? 0);
+    const promocodeId = Number(row.promocode_id ?? 0);
+    const email = String(row.receiver_email ?? '')
+      .trim()
+      .toLowerCase();
+    const key =
+      receiverId > 0
+        ? `id:${receiverId}:${promocodeId}`
+        : `email:${email}:${promocodeId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+async function resolveSecondaryCreditFromVersion(
+  storedCredit: number,
+  receiverVersionName: string
+): Promise<number> {
+  if (storedCredit > 0) return storedCredit;
+  if (!receiverVersionName.trim()) return 0;
+  const settingsTable = await getSubscriptionSettingsTable();
+  if (!settingsTable) return 0;
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ credit1: unknown }[]>(
+      `SELECT credit1 FROM \`${settingsTable}\`
+       WHERE subscription_name = ? LIMIT 1`,
+      receiverVersionName.trim()
+    );
+    const n = Number(rows[0]?.credit1 ?? 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function listUsersOfPromocodes(params: {
   search?: string;
   page?: number;
@@ -216,34 +269,67 @@ export async function listUsersOfPromocodes(params: {
     }
 
     let creditsEarned = 0;
-    let creditsUsed = 0;
+    // Purchase/spend feature is not implemented yet — always report used = 0.
+    const creditsUsed = 0;
     try {
+      // Deduped SUM of credits by role. Include receiver_credit (self-registration).
       if (applyColumns.has('sender_credit')) {
         const earnedRows = await prisma.$queryRawUnsafe<{ total: string | number | null }[]>(
-          `SELECT COALESCE(SUM(CAST(sender_credit AS DECIMAL(12,2))), 0) AS total
-           FROM \`${appliesTable}\`
-           WHERE sender_id = ? AND delete_status = 2 AND receiver_id > 0`,
+          `SELECT COALESCE(SUM(t.credit), 0) AS total FROM (
+             SELECT MAX(CAST(sender_credit AS DECIMAL(12,2))) AS credit
+             FROM \`${appliesTable}\`
+             WHERE sender_id = ? AND delete_status = 2 AND receiver_id > 0
+             GROUP BY receiver_id, promocode_id
+           ) t`,
           id
         );
         creditsEarned = Number(earnedRows[0]?.total ?? 0) || 0;
       }
       if (applyColumns.has('secondary_sender_credit') && applyColumns.has('secondary_sender_id')) {
-        const secRows = await prisma.$queryRawUnsafe<{ total: string | number | null }[]>(
-          `SELECT COALESCE(SUM(CAST(secondary_sender_credit AS DECIMAL(12,2))), 0) AS total
+        const secRows = await prisma.$queryRawUnsafe<
+          {
+            receiver_id: number | bigint | null;
+            promocode_id: number | bigint | null;
+            secondary_sender_credit: unknown;
+            receiver_version: string | null;
+          }[]
+        >(
+          `SELECT receiver_id, promocode_id, secondary_sender_credit, receiver_version
            FROM \`${appliesTable}\`
            WHERE secondary_sender_id = ? AND delete_status = 2 AND receiver_id > 0`,
           id
         );
-        creditsEarned += Number(secRows[0]?.total ?? 0) || 0;
+        const seenSec = new Set<string>();
+        for (const row of secRows) {
+          const rid = Number(row.receiver_id ?? 0);
+          const pid = Number(row.promocode_id ?? 0);
+          const key = `${rid}:${pid}`;
+          if (!rid || seenSec.has(key)) continue;
+          seenSec.add(key);
+          const resolved = await resolveSecondaryCreditFromVersion(
+            Number(row.secondary_sender_credit ?? 0) || 0,
+            row.receiver_version != null ? String(row.receiver_version) : ''
+          );
+          creditsEarned += resolved;
+        }
+      }
+      if (applyColumns.has('receiver_credit')) {
+        const recvRows = await prisma.$queryRawUnsafe<{ total: string | number | null }[]>(
+          `SELECT COALESCE(SUM(t.credit), 0) AS total FROM (
+             SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
+             FROM \`${appliesTable}\`
+             WHERE receiver_id = ? AND delete_status = 2 AND receiver_id > 0
+             GROUP BY promocode_id
+           ) t`,
+          id
+        );
+        creditsEarned += Number(recvRows[0]?.total ?? 0) || 0;
       }
     } catch {
       /* ignore */
     }
 
-    const creditsRemain = user.credits != null ? Number(user.credits) : 0;
-    if (Number.isFinite(creditsRemain) && creditsEarned > creditsRemain) {
-      creditsUsed = Math.max(0, creditsEarned - creditsRemain);
-    }
+    const creditsRemain = Math.max(0, creditsEarned - creditsUsed);
 
     let lastInviteDate: string | null = null;
     let daysSinceLastInvite: number | null = null;
@@ -313,15 +399,6 @@ export async function listUsersOfPromocodes(params: {
   return { items, total, page, pageSize };
 }
 
-function isPendingInvite(row: Record<string, unknown>): boolean {
-  return !(row.receiver_id != null && Number(row.receiver_id) > 0);
-}
-
-function creditOf(row: Record<string, unknown>, key: string): number {
-  const n = Number(row[key] ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
 export async function listInvitesAndRegistrationsForUser(legacyUserId: number) {
   const appliesTable = await getPromocodeAppliesTable();
   const settingsTable = await getPromocodeSettingsTable();
@@ -349,13 +426,14 @@ export async function listInvitesAndRegistrationsForUser(legacyUserId: number) {
        LEFT JOIN \`${settingsTable}\` ps ON ps.id = pa.promocode_id`
     : `SELECT * FROM \`${appliesTable}\` pa`;
 
-  const invites = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+  const invitesRaw = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
     `${selectSql}
      WHERE pa.sender_id = ? AND pa.delete_status = 2
      ORDER BY pa.created DESC
      LIMIT 200`,
     legacyUserId
   );
+  const invites = dedupeAppliesByReceiverPromocode(invitesRaw);
 
   const registrations = invites.filter((row) => !isPendingInvite(row));
   const friendIds = Array.from(
@@ -365,21 +443,47 @@ export async function listInvitesAndRegistrationsForUser(legacyUserId: number) {
   let friendInvites: Record<string, unknown>[] = [];
   if (friendIds.length > 0) {
     const placeholders = friendIds.map(() => '?').join(',');
-    friendInvites = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    const friendInvitesRaw = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `${selectSql}
        WHERE pa.sender_id IN (${placeholders}) AND pa.delete_status = 2
        ORDER BY pa.created DESC
        LIMIT 400`,
       ...friendIds
     );
+    friendInvites = dedupeAppliesByReceiverPromocode(friendInvitesRaw);
   }
 
   const friendRegistrations = friendInvites.filter((row) => !isPendingInvite(row));
   const pendingInvites = invites.filter(isPendingInvite);
   const pendingFriendInvites = friendInvites.filter(isPendingInvite);
+
+  // Self-registration credit for this user
+  let selfRegistrationCredit = 0;
+  try {
+    const selfRows = await prisma.$queryRawUnsafe<{ credit: unknown }[]>(
+      `SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
+       FROM \`${appliesTable}\`
+       WHERE receiver_id = ? AND delete_status = 2`,
+      legacyUserId
+    );
+    selfRegistrationCredit = Number(selfRows[0]?.credit ?? 0) || 0;
+  } catch {
+    selfRegistrationCredit = 0;
+  }
+
   const creditsEarned =
+    selfRegistrationCredit +
     registrations.reduce((sum, row) => sum + creditOf(row, 'sender_credit'), 0) +
-    friendRegistrations.reduce((sum, row) => sum + creditOf(row, 'secondary_sender_credit'), 0);
+    (
+      await Promise.all(
+        friendRegistrations.map((row) =>
+          resolveSecondaryCreditFromVersion(
+            creditOf(row, 'secondary_sender_credit'),
+            String(row.receiver_version ?? '')
+          )
+        )
+      )
+    ).reduce((sum, n) => sum + n, 0);
 
   return {
     invites: [...invites, ...friendInvites],
@@ -394,6 +498,10 @@ export async function listInvitesAndRegistrationsForUser(legacyUserId: number) {
       friendOfFriendRegistrations: friendRegistrations.length,
       connectedRegistrations: registrations.length + friendRegistrations.length,
       creditsEarned,
+      // Spend feature not live yet
+      creditsUsed: 0,
+      creditsAvailable: creditsEarned,
+      selfRegistrationCredit,
     },
   };
 }
@@ -405,6 +513,7 @@ export async function listConnectionChartForUser(legacyUserId: number) {
     return {
       currentUserUsername: '',
       thanksTo: null as { username: string } | null,
+      personalRegistrationCredits: 0,
       direct: [] as { username: string; credits: number }[],
       indirect: [] as { username: string; credits: number; senderUsername: string }[],
     };
@@ -420,22 +529,43 @@ export async function listConnectionChartForUser(legacyUserId: number) {
   const thanksId = thanksRows[0]?.sender_id != null ? Number(thanksRows[0].sender_id) : 0;
   const thanksUser = thanksId > 0 ? (await fetchLegacyUsersByIds([thanksId])).get(thanksId) : null;
 
+  let personalRegistrationCredits = 0;
+  try {
+    const selfRows = await prisma.$queryRawUnsafe<{ credit: unknown }[]>(
+      `SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
+       FROM \`${appliesTable}\`
+       WHERE receiver_id = ? AND delete_status = 2`,
+      legacyUserId
+    );
+    personalRegistrationCredits = Number(selfRows[0]?.credit ?? 0) || 0;
+  } catch {
+    personalRegistrationCredits = 0;
+  }
+
   const directRows = await prisma.$queryRawUnsafe<
-    { receiver_id: number | bigint | null; sender_credit: unknown }[]
+    { receiver_id: number | bigint | null; sender_credit: unknown; promocode_id: number | null }[]
   >(
-    `SELECT receiver_id, sender_credit FROM \`${appliesTable}\`
+    `SELECT receiver_id, sender_credit, promocode_id FROM \`${appliesTable}\`
      WHERE sender_id = ? AND receiver_id > 0 AND delete_status = 2
      ORDER BY created DESC`,
     legacyUserId
   );
-  const directIds = directRows.map((r) => Number(r.receiver_id)).filter((id) => id > 0);
+  const seenDirect = new Set<number>();
+  const directIds: number[] = [];
+  const directCreditById = new Map<number, number>();
+  for (const row of directRows) {
+    const id = Number(row.receiver_id);
+    if (!id || seenDirect.has(id)) continue;
+    seenDirect.add(id);
+    directIds.push(id);
+    directCreditById.set(id, Number(row.sender_credit ?? 0) || 0);
+  }
   const directUsers = await fetchLegacyUsersByIds(directIds);
-  const direct = directRows
-    .map((row) => {
-      const id = Number(row.receiver_id);
+  const direct = directIds
+    .map((id) => {
       const u = directUsers.get(id);
       if (!u) return null;
-      return { username: u.username ?? '', credits: Number(row.sender_credit ?? 0) || 0 };
+      return { username: u.username ?? '', credits: directCreditById.get(id) ?? 0 };
     })
     .filter((v): v is { username: string; credits: number } => v != null);
 
@@ -447,36 +577,49 @@ export async function listConnectionChartForUser(legacyUserId: number) {
         sender_id: number | bigint | null;
         receiver_id: number | bigint | null;
         secondary_sender_credit: unknown;
+        receiver_version: string | null;
+        promocode_id: number | null;
       }[]
     >(
-      `SELECT sender_id, receiver_id, secondary_sender_credit FROM \`${appliesTable}\`
+      `SELECT sender_id, receiver_id, secondary_sender_credit, receiver_version, promocode_id
+       FROM \`${appliesTable}\`
        WHERE sender_id IN (${placeholders}) AND receiver_id > 0 AND delete_status = 2
        ORDER BY created DESC`,
       ...directIds
     );
+    const seenIndirect = new Set<string>();
     const allIds = Array.from(
       new Set(
         indirectRows.flatMap((r) => [Number(r.sender_id), Number(r.receiver_id)]).filter((id) => id > 0)
       )
     );
     const people = await fetchLegacyUsersByIds(allIds);
-    indirect = indirectRows
-      .map((row) => {
-        const ru = people.get(Number(row.receiver_id));
-        const su = people.get(Number(row.sender_id));
-        if (!ru || !su) return null;
-        return {
-          username: ru.username ?? '',
-          credits: Number(row.secondary_sender_credit ?? 0) || 0,
-          senderUsername: su.username ?? '',
-        };
-      })
-      .filter((v): v is { username: string; credits: number; senderUsername: string } => v != null);
+    for (const row of indirectRows) {
+      const receiverId = Number(row.receiver_id);
+      const senderId = Number(row.sender_id);
+      const promocodeId = Number(row.promocode_id ?? 0);
+      const key = `${receiverId}:${promocodeId}`;
+      if (!receiverId || seenIndirect.has(key)) continue;
+      seenIndirect.add(key);
+      const ru = people.get(receiverId);
+      const su = people.get(senderId);
+      if (!ru || !su) continue;
+      const credits = await resolveSecondaryCreditFromVersion(
+        Number(row.secondary_sender_credit ?? 0) || 0,
+        row.receiver_version != null ? String(row.receiver_version) : ''
+      );
+      indirect.push({
+        username: ru.username ?? '',
+        credits,
+        senderUsername: su.username ?? '',
+      });
+    }
   }
 
   return {
     currentUserUsername: current?.username ?? '',
     thanksTo: thanksUser ? { username: thanksUser.username ?? '' } : null,
+    personalRegistrationCredits,
     direct,
     indirect,
   };
@@ -485,11 +628,11 @@ export async function listConnectionChartForUser(legacyUserId: number) {
 export async function listCreditsForUser(legacyUserId: number) {
   const appliesTable = await getPromocodeAppliesTable();
   if (!appliesTable || legacyUserId <= 0) {
-    return { asSender: [], asSecondary: [] };
+    return { asSender: [], asSecondary: [], asReceiver: [] as Record<string, unknown>[] };
   }
   const cols = await getTableColumns(appliesTable);
 
-  const asSender = cols.has('sender_credit')
+  const asSenderRaw = cols.has('sender_credit')
     ? await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
         `SELECT * FROM \`${appliesTable}\`
          WHERE sender_id = ? AND delete_status = 2 AND receiver_id > 0
@@ -498,7 +641,7 @@ export async function listCreditsForUser(legacyUserId: number) {
       )
     : [];
 
-  const asSecondary =
+  const asSecondaryRaw =
     cols.has('secondary_sender_id') && cols.has('secondary_sender_credit')
       ? await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
           `SELECT * FROM \`${appliesTable}\`
@@ -508,5 +651,28 @@ export async function listCreditsForUser(legacyUserId: number) {
         )
       : [];
 
-  return { asSender, asSecondary };
+  const asReceiverRaw = cols.has('receiver_credit')
+    ? await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+        `SELECT * FROM \`${appliesTable}\`
+         WHERE receiver_id = ? AND delete_status = 2 AND receiver_id > 0
+           AND CAST(COALESCE(receiver_credit, 0) AS DECIMAL(12,2)) > 0
+         ORDER BY created DESC LIMIT 50`,
+        legacyUserId
+      )
+    : [];
+
+  const asSecondary = [];
+  for (const row of dedupeAppliesByReceiverPromocode(asSecondaryRaw)) {
+    const resolved = await resolveSecondaryCreditFromVersion(
+      creditOf(row, 'secondary_sender_credit'),
+      String(row.receiver_version ?? '')
+    );
+    asSecondary.push({ ...row, secondary_sender_credit: resolved });
+  }
+
+  return {
+    asSender: dedupeAppliesByReceiverPromocode(asSenderRaw),
+    asSecondary,
+    asReceiver: dedupeAppliesByReceiverPromocode(asReceiverRaw),
+  };
 }

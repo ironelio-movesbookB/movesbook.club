@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { COUNTRIES_WITH_CODES } from '@/lib/news/countries';
 import { ensurePromocodeMetaTables } from './ensureMetaTables';
 
 export type PromocodeStatisticsResult = {
@@ -12,6 +13,7 @@ export type PromocodeStatisticsResult = {
   countryMatrix: Array<{
     countryId: number;
     countryCode: string;
+    countryName: string;
     months: Record<number, { invitesSent: number; registrations: number }>;
   }>;
   totals: {
@@ -20,6 +22,16 @@ export type PromocodeStatisticsResult = {
     successRate: number;
   };
 };
+
+function countryNameFromCode(code: string, countryId: number): string {
+  const cc = (code || '').trim().toUpperCase();
+  if (cc) {
+    const match = COUNTRIES_WITH_CODES.find((c) => c.id.toUpperCase() === cc);
+    if (match?.name) return match.name;
+  }
+  if (countryId <= 0) return 'Unknown / not set';
+  return `Country #${countryId}`;
+}
 
 function ymdParts(date?: Date | string | null): { year: number; month: number } {
   const d = date ? new Date(date) : new Date();
@@ -133,6 +145,7 @@ export async function getStatistics(year: number): Promise<PromocodeStatisticsRe
     {
       countryId: number;
       countryCode: string;
+      countryName: string;
       months: Record<number, { invitesSent: number; registrations: number }>;
     }
   >();
@@ -159,6 +172,7 @@ export async function getStatistics(year: number): Promise<PromocodeStatisticsRe
     const entry = countryMap.get(key) ?? {
       countryId,
       countryCode,
+      countryName: countryNameFromCode(countryCode, countryId),
       months: {},
     };
     const cm = entry.months[month] ?? { invitesSent: 0, registrations: 0 };
