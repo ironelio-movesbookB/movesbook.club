@@ -144,6 +144,7 @@ export default function PromocodeSettingsTable({
                           email,
                           username: null,
                           registered: false,
+                          inviteDate: null,
                           registrationDate: null,
                           subscriptionName: null,
                         }));

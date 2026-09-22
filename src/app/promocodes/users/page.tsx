@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import PromocodesTabs from '@/components/promocodes/PromocodesTabs';
 import PromocodesPagination from '@/components/promocodes/PromocodeAppliesTable';
+import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
 import PromocodeAssetImage from '@/components/promocodes/PromocodeAssetImage';
 import {
   PROMOCODE_NO_FLAG_IMAGE,
@@ -19,6 +20,7 @@ export default function PromocodeUsersPage() {
   const [data, setData] = useState<PaginatedResult<PromocodeUserRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -37,10 +39,15 @@ export default function PromocodeUsersPage() {
       connectedRegistrations: number;
       creditsEarned: number;
     };
-    credits: { asSender: Record<string, unknown>[]; asSecondary: Record<string, unknown>[] };
+    credits: {
+      asSender: Record<string, unknown>[];
+      asSecondary: Record<string, unknown>[];
+      asReceiver: Record<string, unknown>[];
+    };
     connections: {
       currentUserUsername: string;
       thanksTo: { username: string } | null;
+      personalRegistrationCredits: number;
       direct: { username: string; credits: number }[];
       indirect: { username: string; credits: number; senderUsername: string }[];
     } | null;
@@ -52,7 +59,7 @@ export default function PromocodeUsersPage() {
     try {
       const params = new URLSearchParams({
         page: String(page),
-        pageSize: '15',
+        pageSize: String(pageSize),
       });
       if (appliedSearch.trim()) params.set('search', appliedSearch.trim());
       const res = await promocodesFetch(`/api/admin/promocodes/users?${params}`);
@@ -63,7 +70,7 @@ export default function PromocodeUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, appliedSearch]);
+  }, [page, pageSize, appliedSearch]);
 
   useEffect(() => {
     if (ready) void load();
@@ -94,7 +101,7 @@ export default function PromocodeUsersPage() {
             connectedRegistrations: 0,
             creditsEarned: 0,
           },
-          credits: json.credits ?? { asSender: [], asSecondary: [] },
+          credits: json.credits ?? { asSender: [], asSecondary: [], asReceiver: [] },
           connections: json.connections ?? null,
         });
       })
@@ -158,7 +165,16 @@ export default function PromocodeUsersPage() {
 
       {detailTab === 'users' && (
         <>
-          <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <PromocodePageSizeSelect
+              value={pageSize}
+              onChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+            <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
           {loading ? (
             <div className="py-12 text-center text-gray-500">Loading…</div>
           ) : (
@@ -298,13 +314,16 @@ export default function PromocodeUsersPage() {
                         <th className="p-2">Promocode</th>
                         <th className="p-2">Date mail</th>
                         <th className="p-2">Registered</th>
+                        <th className="p-2">Registration date</th>
+                        <th className="p-2">Expiring date</th>
+                        <th className="p-2">Cost paid</th>
                         <th className="p-2">Credits</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(detail?.invites ?? []).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="p-4 text-gray-500">
+                          <td colSpan={9} className="p-4 text-gray-500">
                             No invites.
                           </td>
                         </tr>
@@ -316,6 +335,13 @@ export default function PromocodeUsersPage() {
                             <td className="p-2">{String(row.promocode_code ?? row.promocode_id ?? '')}</td>
                             <td className="p-2">{String(row.created ?? '').slice(0, 10)}</td>
                             <td className="p-2">{Number(row.receiver_id ?? 0) > 0 ? 'Yes' : 'No'}</td>
+                            <td className="p-2">
+                              {String(row.registration_date ?? row.subscription_start_date ?? '').slice(0, 10) || '--'}
+                            </td>
+                            <td className="p-2">
+                              {String(row.subscription_end_date ?? '').slice(0, 10) || '--'}
+                            </td>
+                            <td className="p-2">{String(row.cost_paid ?? row.total_payment ?? '--')}</td>
                             <td className="p-2">{String(row.sender_credit ?? '')}</td>
                           </tr>
                         ))
@@ -333,30 +359,70 @@ export default function PromocodeUsersPage() {
                         <th className="p-2">Credits thanks to</th>
                         <th className="p-2">Registered user</th>
                         <th className="p-2">Version</th>
+                        <th className="p-2">Registration date</th>
+                        <th className="p-2">Expiring date</th>
+                        <th className="p-2">Cost paid</th>
                         <th className="p-2">Credits</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...(detail?.credits.asSender ?? []), ...(detail?.credits.asSecondary ?? [])].length === 0 ? (
+                      {[
+                        ...(detail?.credits.asReceiver ?? []),
+                        ...(detail?.credits.asSender ?? []),
+                        ...(detail?.credits.asSecondary ?? []),
+                      ].length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-4 text-gray-500">
+                          <td colSpan={8} className="p-4 text-gray-500">
                             No credits earned.
                           </td>
                         </tr>
                       ) : (
-                        [...(detail?.credits.asSender ?? []), ...(detail?.credits.asSecondary ?? [])].map(
-                          (row, idx) => (
-                            <tr key={idx} className="border-t">
-                              <td className="p-2">{String(row.sender_email ?? '')}</td>
-                              <td className="p-2">{String(row.secondary_sender_username ?? '')}</td>
-                              <td className="p-2">{String(row.receiver_email ?? '')}</td>
-                              <td className="p-2">{String(row.receiver_version ?? '')}</td>
-                              <td className="p-2">
-                                {String(row.sender_credit ?? row.secondary_sender_credit ?? '')}
-                              </td>
-                            </tr>
-                          )
-                        )
+                        [
+                          ...(detail?.credits.asReceiver ?? []).map((row) => ({
+                            ...row,
+                            _role: 'receiver' as const,
+                          })),
+                          ...(detail?.credits.asSender ?? []).map((row) => ({
+                            ...row,
+                            _role: 'sender' as const,
+                          })),
+                          ...(detail?.credits.asSecondary ?? []).map((row) => ({
+                            ...row,
+                            _role: 'secondary' as const,
+                          })),
+                        ].map((row, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="p-2">{String(row.sender_email ?? '')}</td>
+                            <td className="p-2">
+                              {row._role === 'receiver'
+                                ? '-'
+                                : String(row.secondary_sender_username ?? '')}
+                            </td>
+                            <td className="p-2">
+                              {row._role === 'receiver'
+                                ? selectedUser?.username ?? String(row.receiver_email ?? '')
+                                : String(row.receiver_email ?? '')}
+                            </td>
+                            <td className="p-2">{String(row.receiver_version ?? '')}</td>
+                            <td className="p-2">
+                              {String(row.registration_date ?? row.subscription_start_date ?? '').slice(0, 10) ||
+                                '--'}
+                            </td>
+                            <td className="p-2">
+                              {String(row.subscription_end_date ?? '').slice(0, 10) || '--'}
+                            </td>
+                            <td className="p-2">{String(row.cost_paid ?? row.total_payment ?? '--')}</td>
+                            <td className="p-2">
+                              {String(
+                                row._role === 'receiver'
+                                  ? row.receiver_credit
+                                  : row._role === 'secondary'
+                                    ? row.secondary_sender_credit
+                                    : row.sender_credit ?? ''
+                              )}
+                            </td>
+                          </tr>
+                        ))
                       )}
                     </tbody>
                   </table>
@@ -366,8 +432,8 @@ export default function PromocodeUsersPage() {
                 <div className="text-sm space-y-3">
                   <p>
                     Credits earned: <strong>{selectedUser.creditsEarned.toFixed(2)}</strong>
-                    {' · '}used <strong>{selectedUser.creditsUsed.toFixed(2)}</strong>
-                    {' · '}available <strong>{selectedUser.creditsRemain.toFixed(2)}</strong>
+                    {' · '}used <strong>0.00</strong>
+                    {' · '}available <strong>{selectedUser.creditsEarned.toFixed(2)}</strong>
                   </p>
                   {detail?.connections?.thanksTo ? (
                     <p>
@@ -380,6 +446,13 @@ export default function PromocodeUsersPage() {
                   ) : (
                     <p>No upstream promocode sender recorded.</p>
                   )}
+                  <div>
+                    <div className="font-bold mb-1">Personal registration</div>
+                    <p>
+                      {selectedUser.username} —{' '}
+                      {(detail?.connections?.personalRegistrationCredits ?? 0).toFixed(2)}
+                    </p>
+                  </div>
                   <div>
                     <div className="font-bold mb-1">Direct recipients who registered</div>
                     {(detail?.connections?.direct ?? []).length === 0 ? (

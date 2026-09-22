@@ -32,17 +32,44 @@ function resolvePanel(panel: string | null): 'user-types' | 'foods-and-dishes' {
 function UserTypesPanel() {
   const [checkDiscount100, setCheckDiscount100] = useState(true);
   const [discountEvery100, setDiscountEvery100] = useState('0');
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('movesbook_discount_every_100');
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { enabled?: boolean; percent?: string };
-      if (typeof parsed.enabled === 'boolean') setCheckDiscount100(parsed.enabled);
-      if (typeof parsed.percent === 'string') setDiscountEvery100(parsed.percent);
-    } catch {
-      /* ignore */
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = localStorage.getItem('movesbook_discount_every_100');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { enabled?: boolean; percent?: string | number };
+          if (!cancelled && typeof parsed.enabled === 'boolean') setCheckDiscount100(parsed.enabled);
+          if (!cancelled && parsed.percent != null) setDiscountEvery100(String(parsed.percent));
+        }
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const { getAdminBearerToken } = await import('@/lib/admin/clientAdminAuth');
+        const token = getAdminBearerToken();
+        if (!token) return;
+        const res = await fetch('/api/admin/promocodes/discount-every-100', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { enabled?: boolean; percent?: number };
+        if (typeof data.enabled === 'boolean') setCheckDiscount100(data.enabled);
+        if (data.percent != null) setDiscountEvery100(String(data.percent));
+        localStorage.setItem(
+          'movesbook_discount_every_100',
+          JSON.stringify({ enabled: Boolean(data.enabled), percent: String(data.percent ?? 0) })
+        );
+      } catch {
+        /* keep localStorage cache */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persistDiscount100 = (enabled: boolean, percent: string) => {
@@ -50,6 +77,26 @@ function UserTypesPanel() {
       'movesbook_discount_every_100',
       JSON.stringify({ enabled, percent })
     );
+    void (async () => {
+      try {
+        setSavingDiscount(true);
+        const { getAdminBearerToken } = await import('@/lib/admin/clientAdminAuth');
+        const token = getAdminBearerToken();
+        if (!token) return;
+        await fetch('/api/admin/promocodes/discount-every-100', {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ enabled, percent: Number(percent) || 0 }),
+        });
+      } catch {
+        /* localStorage already updated as cache */
+      } finally {
+        setSavingDiscount(false);
+      }
+    })();
   };
 
   return (
@@ -119,6 +166,7 @@ function UserTypesPanel() {
             }}
             className="w-20 border border-gray-300 px-2 py-1 rounded-sm"
           />
+          {savingDiscount ? <span className="text-xs text-gray-400">Saving…</span> : null}
         </div>
       </div>
 

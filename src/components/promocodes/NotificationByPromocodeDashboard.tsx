@@ -14,6 +14,10 @@ import {
 } from '@/components/promocodes/promocodeImageUrls';
 import { formatChartCredits } from '@/lib/promocodes/formatPromocodeCredits';
 import PromocodeAssetImage from '@/components/promocodes/PromocodeAssetImage';
+import PromocodeInviteEmailsModal from '@/components/promocodes/PromocodeInviteEmailsModal';
+import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
+import PromocodesPagination from '@/components/promocodes/PromocodeAppliesTable';
+import type { PromocodeInviteEntry } from '@/lib/promocodes/types';
 import '@/components/promocodes/notification-by-promocode.css';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -29,7 +33,13 @@ import {
 } from '@/utils/socialShareUrls';
 
 type TabId = 'suggest' | 'invitations' | 'registered' | 'credits' | 'connections';
+type InvitationsSubTab = 'generated' | 'recipients' | 'allRecipients';
 type ShareChannel = 'WhatsApp' | 'Telegram' | 'SMS';
+
+function paginateRows<T>(rows: T[], page: number, pageSize: number): T[] {
+  const start = (page - 1) * pageSize;
+  return rows.slice(start, start + pageSize);
+}
 
 async function userPromocodeFetch(path: string, init?: RequestInit) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -87,13 +97,55 @@ export default function NotificationByPromocodeDashboardView() {
   const [promocodeId, setPromocodeId] = useState('');
   const [validEndDate, setValidEndDate] = useState('');
   const [highlightedPromoId, setHighlightedPromoId] = useState<number | null>(null);
+  const [invitationsSubTab, setInvitationsSubTab] = useState<InvitationsSubTab>('generated');
+  const [inviteEmailsOpen, setInviteEmailsOpen] = useState(false);
+  const [inviteEmailEntries, setInviteEmailEntries] = useState<PromocodeInviteEntry[]>([]);
+  const [pageSize, setPageSize] = useState(10);
+  const [invitationsPage, setInvitationsPage] = useState(1);
+  const [recipientsPage, setRecipientsPage] = useState(1);
+  const [registeredPage, setRegisteredPage] = useState(1);
+  const [creditsPage, setCreditsPage] = useState(1);
   const [introMessage, setIntroMessage] = useState('');
   const [introText, setIntroText] = useState(SUGGEST_MOVESBOOK_INTRO_EN);
   const [shareChannel, setShareChannel] = useState<ShareChannel>('WhatsApp');
   const [smsPhone, setSmsPhone] = useState('');
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
-  const { currentLanguage } = useLanguage();
+  const { currentLanguage, setLanguage } = useLanguage();
   const invitePopupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isItalian = (currentLanguage || '').toLowerCase().startsWith('it');
+  const tabLabels = useMemo(() => {
+    if (!isItalian) {
+      return {
+        suggest: 'Suggest Movesbook',
+        invitations: 'List of invitations sent',
+        registered: 'User who registered',
+        credits: 'Credits earned',
+        connections: 'Connections chart',
+        generated: 'Promocodes generated',
+      };
+    }
+    return {
+      suggest: 'Suggerisci Movesbook',
+      invitations: 'Elenco inviti inviati',
+      registered: 'Utenti registrati',
+      credits: 'Crediti guadagnati',
+      connections: 'Grafico connessioni',
+      generated: 'Codici promozionali generati',
+    };
+  }, [isItalian]);
+
+  const recordLinkShare = useCallback(async (promoId: number) => {
+    if (!promoId) return;
+    try {
+      await userPromocodeFetch('/api/users/notification-by-promocode/record-link-share', {
+        method: 'POST',
+        body: JSON.stringify({ promocodeId: promoId }),
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -159,6 +211,18 @@ export default function NotificationByPromocodeDashboardView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { language?: string; preferredLanguage?: string };
+      const lang = (parsed.language || parsed.preferredLanguage || '').trim();
+      if (lang) setLanguage(lang);
+    } catch {
+      /* ignore */
+    }
+  }, [setLanguage]);
 
   useEffect(() => {
     void fetchSuggestMovesbookIntroText(currentLanguage || 'en').then(setIntroText);
@@ -266,10 +330,12 @@ export default function NotificationByPromocodeDashboardView() {
 
     const inviter =
       data?.connectionChart.currentUserUsername?.trim() ||
-      data?.registeredUsers[0]?.senderUsername?.trim() ||
       '';
-    const params = new URLSearchParams({ promocode: code });
-    if (inviter) params.set('inviter', inviter);
+    if (!inviter) {
+      window.alert('Unable to determine your username for the invite link. Please refresh and try again.');
+      return null;
+    }
+    const params = new URLSearchParams({ promocode: code, inviter });
     if (currentLanguage) params.set('lang', currentLanguage);
     const registerUrl = `${window.location.origin}/users/quickRegister?${params.toString()}`;
 
@@ -284,6 +350,8 @@ export default function NotificationByPromocodeDashboardView() {
     const payload = buildInviteSharePayload();
     if (!payload) return;
 
+    const selectedId = Number(promocodeId) || data?.promocode.id || 0;
+
     if (mode === 'SMS') {
       const phone = smsPhone.trim();
       if (!phone) {
@@ -296,6 +364,7 @@ export default function NotificationByPromocodeDashboardView() {
         return;
       }
       openExternalShareUrl(buildSmsShareUrl(phone, payload.text));
+      void recordLinkShare(selectedId);
       return;
     }
 
@@ -305,6 +374,7 @@ export default function NotificationByPromocodeDashboardView() {
         : buildTelegramSharePickerUrl(payload.registerUrl, payload.text);
 
     openExternalShareUrl(url);
+    void recordLinkShare(selectedId);
   };
 
   const inviteShareLink = useMemo(() => {
@@ -313,7 +383,6 @@ export default function NotificationByPromocodeDashboardView() {
     if (!code || typeof window === 'undefined') return '';
     const inviter =
       data?.connectionChart.currentUserUsername?.trim() ||
-      data?.registeredUsers[0]?.senderUsername?.trim() ||
       '';
     const params = new URLSearchParams({ promocode: code });
     if (inviter) params.set('inviter', inviter);
@@ -330,6 +399,7 @@ export default function NotificationByPromocodeDashboardView() {
       await navigator.clipboard.writeText(inviteShareLink);
       setInviteLinkCopied(true);
       window.setTimeout(() => setInviteLinkCopied(false), 2000);
+      void recordLinkShare(Number(promocodeId) || data?.promocode.id || 0);
     } catch {
       window.alert(`Copy this link manually:\n\n${inviteShareLink}`);
     }
@@ -344,11 +414,11 @@ export default function NotificationByPromocodeDashboardView() {
   }
 
   const tabs: { id: TabId; label: string; show: boolean }[] = [
-    { id: 'suggest', label: 'Suggest Movesbook', show: data.showSuggestTab },
-    { id: 'invitations', label: 'List of invitations sent', show: true },
-    { id: 'registered', label: 'User who registered', show: true },
-    { id: 'credits', label: 'Credits earned', show: true },
-    { id: 'connections', label: 'Connections chart', show: true },
+    { id: 'suggest', label: tabLabels.suggest, show: data.showSuggestTab },
+    { id: 'invitations', label: tabLabels.invitations, show: true },
+    { id: 'registered', label: tabLabels.registered, show: true },
+    { id: 'credits', label: tabLabels.credits, show: true },
+    { id: 'connections', label: tabLabels.connections, show: true },
   ];
 
   return (
@@ -374,8 +444,20 @@ export default function NotificationByPromocodeDashboardView() {
 
       {data.showSuggestTab && activeTab === 'suggest' && (
         <div style={{ padding: 20 }}>
+          <div style={{ marginBottom: 16, maxWidth: 900, width: '100%' }}>
+            {/* Banner is optional; hide if asset is missing */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/suggest-movesbook-banner.jpg"
+              alt=""
+              style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          </div>
           <h1 style={{ fontSize: 28, color: '#7b0a26', margin: '0 0 16px', fontWeight: 700 }}>
-            Suggest Movesbook
+            {tabLabels.suggest}
           </h1>
           <p style={{ fontSize: 16, lineHeight: 1.55, margin: '0 0 20px', maxWidth: 820 }}>
             {introText}
@@ -496,7 +578,7 @@ export default function NotificationByPromocodeDashboardView() {
 
           {data.generatedPromocodes.length > 0 ? (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Promocodes generated</div>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>{tabLabels.generated}</div>
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {data.generatedPromocodes.map((p) => (
                   <li key={p.id}>
@@ -639,102 +721,242 @@ export default function NotificationByPromocodeDashboardView() {
         <div style={{ padding: 20 }}>
           <div className="sub-tab-bar">
             <ul>
-              <li><a href="#" className="active" onClick={(e) => e.preventDefault()}>Promocode generated</a></li>
               <li>
                 <a
                   href="#"
+                  className={invitationsSubTab === 'generated' ? 'active' : ''}
                   onClick={(e) => {
                     e.preventDefault();
-                    if (highlightedPromoId) {
-                      window.open(`/promocodes/promoDetail/${highlightedPromoId}`, '_blank');
+                    setInvitationsSubTab('generated');
+                  }}
+                >
+                  Promocode generated
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#"
+                  className={invitationsSubTab === 'recipients' ? 'active' : ''}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!highlightedPromoId) {
+                      window.alert('Please select a promocode row first.');
+                      return;
                     }
+                    setInvitationsSubTab('recipients');
+                    setRecipientsPage(1);
                   }}
                 >
                   Recipients record selected
                 </a>
               </li>
+              <li>
+                <a
+                  href="#"
+                  className={invitationsSubTab === 'allRecipients' ? 'active' : ''}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setInvitationsSubTab('allRecipients');
+                    setRecipientsPage(1);
+                  }}
+                >
+                  All recipients promocodes used
+                </a>
+              </li>
             </ul>
           </div>
-          <table className="print-table">
-            <thead>
-              <tr>
-                <th>&nbsp;</th>
-                <th>Promocode</th>
-                <th>Flag</th>
-                <th>Photo</th>
-                <th>Sender</th>
-                <th>Version</th>
-                <th>Usage</th>
-                <th>Users</th>
-                <th>Expedition name</th>
-                <th>Created</th>
-                <th>Status</th>
-                <th>Enable</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.invitationsData.length === 0 ? (
-                <tr><td colSpan={12} style={{ padding: 20 }}>No invitations received yet.</td></tr>
-              ) : (
-                data.invitationsData.map((row) => (
-                  <tr
-                    key={row.applyId}
-                    className={highlightedPromoId === row.promocodeId ? 'highlighted' : ''}
-                    onClick={() => setHighlightedPromoId(row.promocodeId)}
-                  >
-                    <td><input type="checkbox" readOnly checked={highlightedPromoId === row.promocodeId} /></td>
-                    <td>{row.promocodeCode}</td>
-                    <td>
-                      <PromocodeAssetImage
-                        src={promocodeFlagImageUrl(row.senderFlagImg, { countryCode: row.countryCode })}
-                        fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
-                        countryCode={row.countryCode}
-                        alt=""
-                        className="inline-block"
-                        style={{ height: 23 }}
-                      />
-                    </td>
-                    <td>
-                      <Image src={promocodeProfileImageUrl(row.senderImage)} alt="" style={{ height: 55 }} width={55} height={55} unoptimized />
-                    </td>
-                    <td>{row.senderUsername}<br />{row.countryCode}</td>
-                    <td>{row.version}</td>
-                    <td>{row.usableBy}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="secondary-link"
-                        style={{ background: 'none', border: 'none' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (row.emailList) window.alert(row.emailList);
-                        }}
-                      >
-                        {row.emailCount}
-                      </button>
-                    </td>
-                    <td>{row.recipient}</td>
-                    <td>{row.created}</td>
-                    <td>{row.status}</td>
-                    <td>{row.enable}</td>
+
+          {invitationsSubTab === 'generated' ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <PromocodePageSizeSelect
+                  value={pageSize}
+                  onChange={(size) => {
+                    setPageSize(size);
+                    setInvitationsPage(1);
+                  }}
+                />
+              </div>
+              <table className="print-table">
+                <thead>
+                  <tr>
+                    <th>&nbsp;</th>
+                    <th>Promocode</th>
+                    <th>Flag</th>
+                    <th>Photo</th>
+                    <th>Sender</th>
+                    <th>Version</th>
+                    <th>Usage</th>
+                    <th>Users</th>
+                    <th>Expedition name</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th>Enable</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {data.invitationsData.length === 0 ? (
+                    <tr><td colSpan={12} style={{ padding: 20 }}>No invitations received yet.</td></tr>
+                  ) : (
+                    paginateRows(data.invitationsData, invitationsPage, pageSize).map((row) => (
+                      <tr
+                        key={row.applyId}
+                        className={highlightedPromoId === row.promocodeId ? 'highlighted' : ''}
+                        onClick={() => setHighlightedPromoId(row.promocodeId)}
+                      >
+                        <td><input type="checkbox" readOnly checked={highlightedPromoId === row.promocodeId} /></td>
+                        <td>{row.promocodeCode}</td>
+                        <td>
+                          <PromocodeAssetImage
+                            src={promocodeFlagImageUrl(row.senderFlagImg, { countryCode: row.countryCode })}
+                            fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
+                            countryCode={row.countryCode}
+                            alt=""
+                            className="inline-block"
+                            style={{ height: 23 }}
+                          />
+                        </td>
+                        <td>
+                          <Image src={promocodeProfileImageUrl(row.senderImage)} alt="" style={{ height: 55 }} width={55} height={55} unoptimized />
+                        </td>
+                        <td>{row.senderUsername}<br />{row.countryCode}</td>
+                        <td>{row.version}</td>
+                        <td>{row.usableBy}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary-link"
+                            style={{ background: 'none', border: 'none' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInviteEmailEntries(row.inviteEntries ?? []);
+                              setInviteEmailsOpen(true);
+                            }}
+                          >
+                            {row.emailCount}
+                          </button>
+                        </td>
+                        <td>{row.recipient}</td>
+                        <td>{row.created}</td>
+                        <td>{row.status}</td>
+                        <td>{row.enable}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              <PromocodesPagination
+                page={invitationsPage}
+                totalPages={Math.max(1, Math.ceil(data.invitationsData.length / pageSize))}
+                onPageChange={setInvitationsPage}
+              />
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 13, color: '#555' }}>
+                  {invitationsSubTab === 'allRecipients' ? (
+                    <>All recipients across promocodes you used (in your account)</>
+                  ) : (
+                    <>
+                      Recipients for promocode{' '}
+                      <strong>
+                        {data.invitationsData.find((r) => r.promocodeId === highlightedPromoId)?.promocodeCode ||
+                          (data.sentRecipients ?? []).find((r) => r.promocodeId === highlightedPromoId)?.promocodeCode ||
+                          highlightedPromoId}
+                      </strong>
+                      {' '}(invites you sent — stays in your account)
+                    </>
+                  )}
+                </div>
+                <PromocodePageSizeSelect
+                  value={pageSize}
+                  onChange={(size) => {
+                    setPageSize(size);
+                    setRecipientsPage(1);
+                  }}
+                />
+              </div>
+              {(() => {
+                const recipients =
+                  invitationsSubTab === 'allRecipients'
+                    ? data.sentRecipients ?? []
+                    : (data.sentRecipients ?? []).filter((r) => r.promocodeId === highlightedPromoId);
+                return (
+                  <>
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th>Sender</th>
+                          <th>Receiver</th>
+                          <th>Promocode</th>
+                          <th>Date of invite</th>
+                          <th>Date of registration</th>
+                          <th>Version</th>
+                          <th>Status</th>
+                          <th>Credit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recipients.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} style={{ padding: 20 }}>
+                              {invitationsSubTab === 'allRecipients'
+                                ? 'No invitations sent yet.'
+                                : 'No invitations sent yet with this promocode.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          paginateRows(recipients, recipientsPage, pageSize).map((row) => (
+                            <tr key={row.applyId}>
+                              <td>{row.senderUsername}</td>
+                              <td style={{ color: row.registered ? '#0066cc' : '#cc0000' }}>
+                                {row.receiverLabel || row.receiverEmail || '--'}
+                              </td>
+                              <td>{row.promocodeCode}</td>
+                              <td>{row.inviteDate || '--'}</td>
+                              <td>{row.registrationDate || '--'}</td>
+                              <td>{row.version || '--'}</td>
+                              <td>{row.status}</td>
+                              <td>{row.credits || '--'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                    <PromocodesPagination
+                      page={recipientsPage}
+                      totalPages={Math.max(1, Math.ceil(recipients.length / pageSize))}
+                      onPageChange={setRecipientsPage}
+                    />
+                  </>
+                );
+              })()}
+            </>
+          )}
         </div>
       )}
 
       {activeTab === 'registered' && (
         <div style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <PromocodePageSizeSelect
+              value={pageSize}
+              onChange={(size) => {
+                setPageSize(size);
+                setRegisteredPage(1);
+              }}
+            />
+          </div>
           <table className="print-table">
             <thead>
               <tr>
                 <th>Sender</th>
                 <th>Receiver</th>
+                <th>Registration date</th>
                 <th>Data Start</th>
                 <th>Data end</th>
-                <th>Version</th>
+                <th>Version chosen</th>
                 <th>Promocode</th>
                 <th>Date of Mail</th>
                 <th>Status</th>
@@ -743,18 +965,21 @@ export default function NotificationByPromocodeDashboardView() {
             </thead>
             <tbody>
               {data.registeredUsers.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 20 }}>No users have registered using your received promocodes yet.</td></tr>
+                <tr><td colSpan={10} style={{ padding: 20 }}>No users have registered using your promocodes yet.</td></tr>
               ) : (
-                data.registeredUsers.map((row, idx) => (
-                  <tr key={`${row.username}-${idx}`}>
+                paginateRows(data.registeredUsers, registeredPage, pageSize).map((row, idx) => (
+                  <tr key={`${row.username}-${row.promocodeCode}-${idx}`}>
                     <td>{row.senderUsername || 'N/A'}</td>
                     <td>{row.username || '--'}</td>
+                    <td>{row.registrationDate || '--'}</td>
                     <td>{row.subscriptionStartDate || '--'}</td>
                     <td>{row.subscriptionEndDate || '--'}</td>
                     <td>
-                      {row.subscriptionSettingId && data.subscriptionsData[row.subscriptionSettingId]
-                        ? data.subscriptionsData[row.subscriptionSettingId]
-                        : '--'}
+                      {row.versionChosen && row.versionChosen !== '--'
+                        ? row.versionChosen
+                        : row.subscriptionSettingId && data.subscriptionsData[row.subscriptionSettingId]
+                          ? data.subscriptionsData[row.subscriptionSettingId]
+                          : '--'}
                     </td>
                     <td>{row.promocodeCode || '--'}</td>
                     <td>{row.mailDate || '--'}</td>
@@ -765,6 +990,11 @@ export default function NotificationByPromocodeDashboardView() {
               )}
             </tbody>
           </table>
+          <PromocodesPagination
+            page={registeredPage}
+            totalPages={Math.max(1, Math.ceil(data.registeredUsers.length / pageSize))}
+            onPageChange={setRegisteredPage}
+          />
         </div>
       )}
 
@@ -774,6 +1004,15 @@ export default function NotificationByPromocodeDashboardView() {
             <div><span style={{ fontWeight: 'bold' }}>Total credits</span> <span style={{ fontWeight: 'bold', fontSize: 30, marginLeft: 10 }}>{data.totalCredits}</span></div>
             <div><span style={{ fontWeight: 'bold' }}>Used credits</span> <span style={{ fontWeight: 'bold', fontSize: 30, color: 'red', marginLeft: 10 }}>{data.usedCredits}</span></div>
             <div><span style={{ fontWeight: 'bold' }}>Available credits</span> <span style={{ fontWeight: 'bold', fontSize: 30, color: 'green', marginLeft: 10 }}>{data.availableCredits}</span></div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <PromocodePageSizeSelect
+              value={pageSize}
+              onChange={(size) => {
+                setPageSize(size);
+                setCreditsPage(1);
+              }}
+            />
           </div>
           <table className="print-table">
             <thead>
@@ -791,7 +1030,7 @@ export default function NotificationByPromocodeDashboardView() {
               {data.creditRecords.length === 0 ? (
                 <tr><td colSpan={7} style={{ padding: 20 }}>No credits earned yet.</td></tr>
               ) : (
-                data.creditRecords.map((row, idx) => (
+                paginateRows(data.creditRecords, creditsPage, pageSize).map((row, idx) => (
                   <tr key={idx}>
                     <td>{row.senderUsername}</td>
                     <td>
@@ -817,6 +1056,11 @@ export default function NotificationByPromocodeDashboardView() {
               )}
             </tbody>
           </table>
+          <PromocodesPagination
+            page={creditsPage}
+            totalPages={Math.max(1, Math.ceil(data.creditRecords.length / pageSize))}
+            onPageChange={setCreditsPage}
+          />
         </div>
       )}
 
@@ -846,6 +1090,18 @@ export default function NotificationByPromocodeDashboardView() {
               </span>
             </div>
           )}
+
+          <div style={{ fontWeight: 'bold', padding: 10 }}>Personal registration</div>
+          <div className="connection-list">
+            <div className="connection-columns">
+              <div>
+                <p>{data.connectionChart.currentUserUsername || 'User'}</p>
+              </div>
+              <div>
+                <p>{formatChartCredits(data.connectionChart.personalRegistrationCredits ?? 0)}</p>
+              </div>
+            </div>
+          </div>
 
           <div style={{ fontSize: 20, padding: 10 }}>
             Users that allow to <span style={{ color: '#70020b' }}>{data.connectionChart.currentUserUsername || 'User'}</span> to earn other credits
@@ -902,6 +1158,12 @@ export default function NotificationByPromocodeDashboardView() {
       )}
 
       <form onSubmit={onSearchSubmit} style={{ display: 'none' }} aria-hidden />
+
+      <PromocodeInviteEmailsModal
+        open={inviteEmailsOpen}
+        entries={inviteEmailEntries}
+        onClose={() => setInviteEmailsOpen(false)}
+      />
     </div>
   );
 }

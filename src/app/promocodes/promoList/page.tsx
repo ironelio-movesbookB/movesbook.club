@@ -12,6 +12,7 @@ import PromocodeListSubTabs from '@/components/promocodes/PromocodeListSubTabs';
 import PromocodeSendInviteModal from '@/components/promocodes/PromocodeSendInviteModal';
 import PromocodeSettingsTable from '@/components/promocodes/PromocodeSettingsTable';
 import PromocodesPagination from '@/components/promocodes/PromocodeAppliesTable';
+import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
 import { promocodesFetch, usePromocodesAdminAuth } from '@/components/promocodes/usePromocodesAdminAuth';
 import { usePromocodeDialogs } from '@/components/promocodes/usePromocodeDialogs';
 import type { PaginatedResult, PromocodeSettingRow } from '@/lib/promocodes/types';
@@ -22,6 +23,7 @@ export default function PromocodesPromoListPage() {
   const [data, setData] = useState<PaginatedResult<PromocodeSettingRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [orderBy, setOrderBy] = useState('');
@@ -42,7 +44,7 @@ export default function PromocodesPromoListPage() {
     const effectivePage = options?.page ?? page;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(effectivePage), pageSize: '5' });
+      const params = new URLSearchParams({ page: String(effectivePage), pageSize: String(pageSize) });
       if (appliedSearch.trim()) params.set('search', appliedSearch.trim());
       if (orderBy) params.set('orderBy', orderBy);
       if (usableBy) params.set('usableBy', usableBy);
@@ -56,7 +58,7 @@ export default function PromocodesPromoListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, appliedSearch, orderBy, usableBy, versionId, available, creatorSource]);
+  }, [page, pageSize, appliedSearch, orderBy, usableBy, versionId, available, creatorSource]);
 
   const refreshAfterPromocodeCreate = useCallback(
     (createdId?: number) => {
@@ -374,7 +376,16 @@ export default function PromocodesPromoListPage() {
         </div>
       )}
 
-      <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <PromocodePageSizeSelect
+          value={pageSize}
+          onChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+        <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </div>
 
       <PromocodeListSubTabs
         onRecipientsSelected={handleRecipientsSelected}
