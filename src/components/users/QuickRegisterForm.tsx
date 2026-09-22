@@ -9,6 +9,12 @@ import {
   QUICK_REGISTER_SUCCESS_MESSAGE,
   type RegistrationStatus,
 } from '@/lib/users/quickRegisterShared';
+import { filterSportsCatalogForUserType, sportOptionsForUserType } from '@/lib/users/quickRegisterSports';
+import { useLanguage } from '@/contexts/LanguageContext';
+import {
+  getQuickRegisterStrings,
+  normalizeQuickRegisterLang,
+} from '@/lib/users/quickRegisterI18n';
 
 type VersionOption = { id: string; name: string };
 type SelectOption = { id: string; name: string };
@@ -37,11 +43,14 @@ function usernameDefaultFromEmail(email: string): string {
 export default function QuickRegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { currentLanguage, setLanguage } = useLanguage();
+  const t = getQuickRegisterStrings(currentLanguage);
 
   const originEmail = searchParams?.get('user_email')?.split(',')[0]?.trim() ?? '';
   const initialPromocode = searchParams?.get('promocode')?.trim() ?? '';
   const inviteByMovesbook = searchParams?.get('invite_by') === 'movesbook';
   const inviterFromUrl = searchParams?.get('inviter')?.trim() ?? '';
+  const langFromUrl = searchParams?.get('lang')?.trim() ?? '';
 
   const [username, setUsername] = useState(() => usernameDefaultFromEmail(originEmail));
   const [email, setEmail] = useState(originEmail);
@@ -59,6 +68,7 @@ export default function QuickRegisterForm() {
   const [movesbookOfficialEmail, setMovesbookOfficialEmail] = useState('admin@movesbook.com');
 
   const [sports, setSports] = useState<SelectOption[]>([]);
+  const [allSports, setAllSports] = useState<SelectOption[]>([]);
   const [versions, setVersions] = useState<VersionOption[]>([]);
   const [promocodeVersionIds, setPromocodeVersionIds] = useState('');
   const [inviterReadonly, setInviterReadonly] = useState(inviteByMovesbook || Boolean(inviterFromUrl));
@@ -115,6 +125,11 @@ export default function QuickRegisterForm() {
       setReEmail('');
     }
   }, []);
+
+  useEffect(() => {
+    if (!langFromUrl) return;
+    setLanguage(normalizeQuickRegisterLang(langFromUrl));
+  }, [langFromUrl, setLanguage]);
 
   useEffect(() => {
     const timers = [0, 50, 150, 350, 700].map((ms) =>
@@ -350,6 +365,19 @@ export default function QuickRegisterForm() {
     [clearSubscriptionDetails]
   );
 
+  const applySportsForUserType = useCallback(
+    (type: string, catalog: SelectOption[]) => {
+      if (!type) {
+        setSports(catalog.length > 0 ? catalog : [...sportOptionsForUserType('5')]);
+        return;
+      }
+      const next = filterSportsCatalogForUserType(type, catalog);
+      setSports(next);
+      setSport((prev) => (next.some((s) => s.id === prev) ? prev : ''));
+    },
+    []
+  );
+
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
@@ -371,7 +399,11 @@ export default function QuickRegisterForm() {
         if (typeof data.inviterReadonly === 'boolean') setInviterReadonly(data.inviterReadonly);
         if (data.promocodeAllowedVersionIds) setPromocodeVersionIds(data.promocodeAllowedVersionIds);
         if (Array.isArray(data.sports) && data.sports.length > 0) {
-          setSports(data.sports);
+          setAllSports(data.sports);
+          applySportsForUserType(userType, data.sports);
+        } else {
+          setAllSports([]);
+          applySportsForUserType(userType, []);
         }
       })
       .catch(() => undefined);
@@ -439,7 +471,7 @@ export default function QuickRegisterForm() {
     if (u.length < 5) return;
 
     if (registrationType === 'renewal' && existingUsername && u.toLowerCase() === existingUsername.toLowerCase()) {
-      setUsernameStatus('Username matches your existing account.');
+      setUsernameStatus(t.usernameMatchesExisting);
       setUsernameStatusColor('#0d47a1');
       return;
     }
@@ -450,25 +482,26 @@ export default function QuickRegisterForm() {
       const res = await fetch(`/api/users/quick-register/check-username?${params.toString()}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setUsernameStatus('Could not verify username. Please try again.');
+        setUsernameStatus(t.usernameVerifyFailed);
         setUsernameStatusColor('#a61b1b');
         return;
       }
       if (data.available) {
-        setUsernameStatus('This username is available.');
+        setUsernameStatus(t.usernameAvailable);
         setUsernameStatusColor('#116611');
       } else {
-        setUsernameStatus(data.message || 'This username is already taken.');
+        setUsernameStatus(data.message || t.usernameTaken);
         setUsernameStatusColor('#a61b1b');
       }
     } catch {
-      setUsernameStatus('Could not verify username. Please try again.');
+      setUsernameStatus(t.usernameVerifyFailed);
       setUsernameStatusColor('#a61b1b');
     }
   };
 
   const handleUserTypeChange = (value: string) => {
     setUserType(value);
+    applySportsForUserType(value, allSports);
     void loadVersions(value, promocodeVersionIds);
   };
 
@@ -704,19 +737,19 @@ export default function QuickRegisterForm() {
 
   return (
     <div className="quickregistration" style={{ marginTop: 20 }}>
-      <div className="quickregi-title">Register yourself</div>
+      <div className="quickregi-title">{t.registerYourself}</div>
       <div className="quickregi-subtitle">
-        Have you already an account Movesbook?{' '}
-        <Link href="/" target="_blank">
-          Log in
+        {t.alreadyHaveAccount}{' '}
+        <Link href="/login" target="_blank">
+          {t.logIn}
         </Link>
       </div>
 
       {successMessage ? (
         <div className="qr-registration-success" role="status">
           <p>{successMessage}</p>
-          <Link href="/" className="btnRed qr-registration-success-link">
-            Go to Movesbook
+          <Link href="/login" className="btnRed qr-registration-success-link">
+            {t.goToMovesbook}
           </Link>
         </div>
       ) : null}
@@ -752,11 +785,11 @@ export default function QuickRegisterForm() {
             {error ? <div className="red">{error}</div> : null}
 
             <div className="div-row">
-              <span className="span-label-title">Type here your username</span>
+              <span className="span-label-title">{t.typeHereYourUsername}</span>
               <input
                 style={{ border: '2px solid #7f7f7f !important' }}
                 type="text"
-                placeholder="Username"
+                placeholder={t.usernamePlaceholder}
                 name="username"
                 id="textUsername"
                 value={username}
@@ -780,12 +813,12 @@ export default function QuickRegisterForm() {
             <div className="div-line" />
 
             <div className="div-row">
-              <span className="span-label-title">Your mail to register</span>
+              <span className="span-label-title">{t.yourMailToRegister}</span>
               <input
                 style={{ border: '2px solid #7f7f7f !important' }}
                 type="email"
                 className="input-highlight"
-                placeholder="mail address"
+                placeholder={t.mailAddressPlaceholder}
                 name="register_email"
                 id="textEmail"
                 value={email}
@@ -827,13 +860,13 @@ export default function QuickRegisterForm() {
             </div>
 
             <div className="div-row">
-              <span className="span-label-title">Retype your email *</span>
+              <span className="span-label-title">{t.retypeYourEmail}</span>
               <input
                 style={{ border: '2px solid #7f7f7f !important' }}
                 type="text"
                 inputMode="email"
                 className="input-highlight qr-email-confirm-input"
-                placeholder="Retype your email"
+                placeholder={t.retypeYourEmail}
                 name="register_email_confirm"
                 id="textReEmail"
                 value={reEmail}
@@ -858,12 +891,12 @@ export default function QuickRegisterForm() {
             <div className="div-line" />
 
             <div className="div-row">
-              <span className="span-label-title">Your password</span>
+              <span className="span-label-title">{t.yourPassword}</span>
               <input
                 style={{ border: '2px solid #7f7f7f !important' }}
                 type="password"
                 className="password-highlight"
-                placeholder="Password*"
+                placeholder={t.passwordPlaceholder}
                 name="password"
                 id="textPassword"
                 value={password}
@@ -876,7 +909,7 @@ export default function QuickRegisterForm() {
                 style={{ border: '2px solid #7f7f7f !important' }}
                 type="password"
                 className="password-highlight"
-                placeholder="Retype your password"
+                placeholder={t.retypeYourPassword}
                 name="confim_password"
                 id="textRePassword"
                 value={confirmPassword}
@@ -887,12 +920,12 @@ export default function QuickRegisterForm() {
             <div className="div-line" />
 
             <div className="div-row">
-              <span className="span-label-title">Type here your data</span>
+              <span className="span-label-title">{t.typeHereYourData}</span>
             </div>
 
             <div className="qr-data-section">
               <div className="qr-field-row">
-                <span className="qr-label">Country*</span>
+                <span className="qr-label">{t.country}</span>
                 <div className="qr-control">
                   <select
                     id="sltCountry"
@@ -906,7 +939,7 @@ export default function QuickRegisterForm() {
                       }
                     }}
                   >
-                    <option value="">Select country</option>
+                    <option value="">{t.selectCountry}</option>
                     {COUNTRY_SELECT_OPTIONS.map((c) => (
                       <option key={c.name} value={c.name}>
                         {c.name}
@@ -914,11 +947,11 @@ export default function QuickRegisterForm() {
                     ))}
                   </select>
                 </div>
-                <span className="qr-hint">Together with the country selected, pricing is calculated in your currency.</span>
+                <span className="qr-hint">{t.countryHint}</span>
               </div>
 
               <div className="qr-field-row qr-field-row-plan">
-                <span className="qr-label">User type*</span>
+                <span className="qr-label">{t.userType}</span>
                 <div className="qr-control">
                   <select
                     id="sltUsertype"
@@ -926,12 +959,12 @@ export default function QuickRegisterForm() {
                     value={userType}
                     onChange={(e) => handleUserTypeChange(e.target.value)}
                   >
-                    <option value="">Select user type</option>
-                    <option value="5">Single User</option>
-                    <option value="8">Club</option>
+                    <option value="">{t.selectUserType}</option>
+                    <option value="5">{t.singleUser}</option>
+                    <option value="8">{t.club}</option>
                   </select>
                 </div>
-                <span className="qr-hint">User type will affect the versions available.</span>
+                <span className="qr-hint">{t.userTypeHint}</span>
                 <div className="qr-control qr-control-version">
                   <select
                     id="version"
@@ -940,7 +973,7 @@ export default function QuickRegisterForm() {
                     onChange={(e) => handleVersionChange(e.target.value)}
                     disabled={loadingVersions || !userType}
                   >
-                    <option value="">{loadingVersions ? 'Loading...' : 'Select version'}</option>
+                    <option value="">{loadingVersions ? t.loading : t.selectVersion}</option>
                     {versions.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.name}
@@ -948,10 +981,13 @@ export default function QuickRegisterForm() {
                     ))}
                   </select>
                 </div>
-                <span className="qr-hint">The version chosen will affect the cost.</span>
-                <span className="qr-label-inline">
-                  {registrationType === 'renewal' ? 'Renewal cost' : 'First subscription cost'}
-                </span>
+                <span className="qr-hint">{t.versionHint}</span>
+                {!loadingVersions && userType && versions.length === 0 ? (
+                  <span className="qr-hint qr-hint-block">{t.noVersions}</span>
+                ) : null}
+              </div>
+
+              <div className="qr-field-row qr-pricing-one-row">
                 <input
                   type="text"
                   className="qr-input-numeric"
@@ -961,51 +997,50 @@ export default function QuickRegisterForm() {
                   style={compactInputWidth(useTripleSubscription ? tripleDurationPrice : price, 3, 8)}
                 />
                 {versionDurationDays ? (
-                  <span className="qr-hint">
-                    Duration: {useTripleSubscription ? tripleDurationDays : versionDurationDays} days
+                  <span className="qr-hint qr-hint-inline">
+                    {t.duration}: {useTripleSubscription ? tripleDurationDays : versionDurationDays} days
                   </span>
-                ) : null}
+                ) : (
+                  <span className="qr-hint qr-hint-inline" />
+                )}
                 {tripleDurationPrice ? (
-                  <label className="flex items-center gap-2 text-sm text-gray-700 mt-1">
+                  <label className="qr-triple-inline">
                     <input
                       type="checkbox"
                       checked={useTripleSubscription}
                       onChange={(e) => setUseTripleSubscription(e.target.checked)}
                     />
-                    Triple subscription — {tripleDurationPrice}
-                    {tripleDurationDiscount ? ` (${tripleDurationDiscount}% discount)` : ''}
-                    {tripleDurationDays ? ` · ${tripleDurationDays} days` : ''}
+                    <span>
+                      {t.tripleSubscription} — {tripleDurationPrice}
+                      {tripleDurationDiscount ? ` (${tripleDurationDiscount}% ${t.discountPct})` : ''}
+                      {tripleDurationDays ? ` · ${tripleDurationDays} days` : ''}
+                    </span>
                   </label>
-                ) : null}
-                {!loadingVersions && userType && versions.length === 0 ? (
-                  <span className="qr-hint qr-hint-block">No versions available for this user type.</span>
-                ) : null}
+                ) : (
+                  <span />
+                )}
+                <span className="qr-label-inline qr-cost-label">
+                  {registrationType === 'renewal' ? t.renewalCost : t.firstSubscriptionCost}
+                </span>
               </div>
 
               <div className="qr-field-row">
-                <span className="qr-label">Gender*</span>
+                <span className="qr-label">{t.gender}</span>
                 <div className="qr-control">
                   <select id="sltGender" name="gender" value={gender} onChange={(e) => setGender(e.target.value)}>
-                    <option value="">Select gender</option>
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
+                    <option value="">{t.selectGender}</option>
+                    <option value="M">{t.male}</option>
+                    <option value="F">{t.female}</option>
                   </select>
                 </div>
               </div>
 
               <div className="qr-field-row">
-                <span className="qr-label">Sport*</span>
+                <span className="qr-label">{t.sport}</span>
                 <div className="qr-control">
                   <select id="sltSport" name="sport" value={sport} onChange={(e) => setSport(e.target.value)}>
-                    <option value="">Select sport</option>
-                    {(sports.length > 0
-                      ? sports
-                      : [
-                          { id: '1', name: 'Swimming' },
-                          { id: '2', name: 'Cycling' },
-                          { id: '3', name: 'Running' },
-                        ]
-                    ).map((s) => (
+                    <option value="">{t.selectSport}</option>
+                    {(sports.length > 0 ? sports : sportOptionsForUserType(userType || '5')).map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>
@@ -1017,9 +1052,7 @@ export default function QuickRegisterForm() {
 
             <div className="qr-promo-section">
               <div className="qr-promo-intro-row">
-                <span className="qr-promo-intro-label">
-                  Have you a promocode ? If yes type it here to have a discount and some benefits for you
-                </span>
+                <span className="qr-promo-intro-label">{t.havePromocode}</span>
                 <input
                   type="text"
                   className="qr-row-input qr-promo-intro-input input-highlight-promocode"
@@ -1030,18 +1063,13 @@ export default function QuickRegisterForm() {
                   onBlur={() => void validatePromocode(promocode)}
                   style={compactInputWidth(promocode || 'promocode', 12, 24)}
                 />
-                <span className="qr-hint qr-promo-intro-aside">
-                  You earn and benefit when you register yourself and when also will do it someone who received your
-                  invite to register
-                </span>
+                <span className="qr-hint qr-promo-intro-aside">{t.promocodeEarnHint}</span>
               </div>
-              <div className="qr-promo-banner">
-                Discount, number of members assigned, and credits earned using your promocode
-              </div>
+              <div className="qr-promo-banner">{t.promocodeBanner}</div>
 
               <div className="qr-promo-discount-row">
                 <div className="qr-promo-discount-control">
-                  <span className="qr-promo-label">Discount with promocode</span>
+                  <span className="qr-promo-label">{t.discountWithPromocode}</span>
                   <input
                     type="text"
                     className="qr-input-numeric"
@@ -1062,11 +1090,9 @@ export default function QuickRegisterForm() {
               </div>
 
               <div className="qr-promo-credits">
-                <div className="qr-promo-credits-title">Credits</div>
+                <div className="qr-promo-credits-title">{t.credits}</div>
                 <div className="qr-promo-credit-row">
-                  <span className="qr-hint">
-                    For the club that receive the invitation and decides to register itself
-                  </span>
+                  <span className="qr-hint">{t.creditReceiverHint}</span>
                   <input
                     type="text"
                     className="qr-input-numeric credit"
@@ -1077,9 +1103,7 @@ export default function QuickRegisterForm() {
                   />
                 </div>
                 <div className="qr-promo-credit-row">
-                  <span className="qr-hint">
-                    For the sender club each time a club suggested will register itself
-                  </span>
+                  <span className="qr-hint">{t.creditSenderHint}</span>
                   <input
                     type="text"
                     className="qr-input-numeric credit2"
@@ -1090,9 +1114,7 @@ export default function QuickRegisterForm() {
                   />
                 </div>
                 <div className="qr-promo-credit-row">
-                  <span className="qr-hint">
-                    Number of members available or that will be added to the existing ones
-                  </span>
+                  <span className="qr-hint">{t.membersHint}</span>
                   <input
                     type="text"
                     className="qr-input-numeric"
@@ -1108,7 +1130,7 @@ export default function QuickRegisterForm() {
                 {inviteByMovesbook ? (
                   <>
                     <div className="qr-aligned-row">
-                      <span className="qr-row-label">Official invitation email (Movesbook)</span>
+                      <span className="qr-row-label">{t.officialInviteEmail}</span>
                       <input
                         type="text"
                         className="qr-row-input input-highlight"
@@ -1117,12 +1139,12 @@ export default function QuickRegisterForm() {
                         readOnly
                       />
                     </div>
-                    <p className="qr-note">(Invitation from Movesbook – official address)</p>
+                    <p className="qr-note">{t.officialInviteNote}</p>
                   </>
                 ) : (
                   <>
                     <div className="qr-aligned-row">
-                      <span className="qr-row-label">Username of who invited you *</span>
+                      <span className="qr-row-label">{t.usernameOfWhoInvitedYou}</span>
                       <input
                         type="text"
                         name="inviter_username"
@@ -1133,7 +1155,7 @@ export default function QuickRegisterForm() {
                         readOnly={inviterReadonly}
                         onChange={(e) => setInviterUsername(e.target.value)}
                       />
-                      <span className="qr-row-label">Retype username *</span>
+                      <span className="qr-row-label">{t.retypeUsername}</span>
                       <input
                         type="text"
                         name="confirm_inviter_username"
@@ -1146,7 +1168,7 @@ export default function QuickRegisterForm() {
                       />
                     </div>
                     {inviterReadonly ? (
-                      <p className="qr-note">(Filled from your invite link — cannot be edited)</p>
+                      <p className="qr-note">{t.inviteFilledNote}</p>
                     ) : null}
                   </>
                 )}
@@ -1155,7 +1177,7 @@ export default function QuickRegisterForm() {
 
               <div className="div-row" id="total-payment-row">
                 <div className="payment-row-item">
-                  <span className="qr-payment-label">Total payment</span>
+                  <span className="qr-payment-label">{t.totalPayment}</span>
                   <input
                     type="text"
                     className="payment-total-input qr-input-numeric"
@@ -1172,7 +1194,7 @@ export default function QuickRegisterForm() {
                       checked={payWithVirtualCard}
                       onChange={(e) => setPayWithVirtualCard(e.target.checked)}
                     />
-                    Pay with virtual credit card
+                    {t.payWithVirtualCard}
                   </label>
                   <Image src="/img/payment_logo/logo_visa.svg" alt="Visa" width={45} height={28} />
                   <Image src="/img/payment_logo/logo_mc.svg" alt="Mastercard" width={45} height={28} />
@@ -1184,14 +1206,14 @@ export default function QuickRegisterForm() {
                   <input
                     className="btnRed btn-register-lg"
                     type="button"
-                    value={loading ? 'Registering…' : 'Register'}
+                    value={loading ? t.registering : t.register}
                     disabled={loading}
                     onClick={() => void handleRegister()}
                   />
                   <input
                     className="button-black-promocode btn-register-lg"
                     type="button"
-                    value="Cancel"
+                    value={t.cancel}
                     onClick={() => router.push('/')}
                   />
                 </div>

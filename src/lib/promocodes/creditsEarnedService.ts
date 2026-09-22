@@ -7,6 +7,7 @@ import {
   getCountriesTable,
   getLegacyUsersTable,
   getPromocodeAppliesTable,
+  getSubscriptionSettingsTable,
 } from '@/lib/promocodes/legacyDb';
 import { fetchModernUserCountries, findModernUserCountry } from '@/lib/promocodes/modernUserCountry';
 
@@ -59,11 +60,20 @@ export async function listCreditsEarnedUsers(searchUsername = ''): Promise<Credi
          WHERE delete_status = 2 AND secondary_sender_id > 0`
       )
     : [];
+  const receiverRows =
+    applyColumns.has('receiver_id') && applyColumns.has('receiver_credit')
+      ? await prisma.$queryRawUnsafe<{ receiver_id: number | bigint }[]>(
+          `SELECT DISTINCT receiver_id FROM \`${appliesTable}\`
+           WHERE delete_status = 2 AND receiver_id > 0
+             AND CAST(COALESCE(receiver_credit, 0) AS DECIMAL(12,2)) > 0`
+        )
+      : [];
 
   const earningUserIds = Array.from(
     new Set([
       ...senderRows.map((r) => Number(r.sender_id)).filter((id) => id > 0),
       ...secondaryRows.map((r) => Number(r.secondary_sender_id)).filter((id) => id > 0),
+      ...receiverRows.map((r) => Number(r.receiver_id)).filter((id) => id > 0),
     ])
   );
 
@@ -105,33 +115,81 @@ export async function listCreditsEarnedUsers(searchUsername = ''): Promise<Credi
     const sumSender =
       applyColumns.has('sender_id') && applyColumns.has('sender_credit')
         ? await prisma.$queryRawUnsafe<{ total_sender: number | string | null }[]>(
-            `SELECT COALESCE(SUM(CAST(sender_credit AS DECIMAL(12,2))), 0) AS total_sender
-             FROM \`${appliesTable}\`
-             WHERE delete_status = 2 AND sender_id = ?`,
+            `SELECT COALESCE(SUM(t.credit), 0) AS total_sender FROM (
+               SELECT MAX(CAST(sender_credit AS DECIMAL(12,2))) AS credit
+               FROM \`${appliesTable}\`
+               WHERE delete_status = 2 AND sender_id = ? AND receiver_id > 0
+               GROUP BY receiver_id, promocode_id
+             ) t`,
             uid
           )
         : [{ total_sender: 0 }];
     const sumSecondary =
       applyColumns.has('secondary_sender_id') && applyColumns.has('secondary_sender_credit')
-        ? await prisma.$queryRawUnsafe<{ total_secondary: number | string | null }[]>(
-            `SELECT COALESCE(SUM(CAST(secondary_sender_credit AS DECIMAL(12,2))), 0) AS total_secondary
+        ? await prisma.$queryRawUnsafe<
+            {
+              receiver_id: number | bigint | null;
+              promocode_id: number | bigint | null;
+              secondary_sender_credit: unknown;
+              receiver_version: string | null;
+            }[]
+          >(
+            `SELECT receiver_id, promocode_id, secondary_sender_credit,
+                    ${applyColumns.has('receiver_version') ? 'receiver_version' : "'' AS receiver_version"}
              FROM \`${appliesTable}\`
-             WHERE delete_status = 2 AND secondary_sender_id = ?`,
+             WHERE delete_status = 2 AND secondary_sender_id = ? AND receiver_id > 0`,
             uid
           )
-        : [{ total_secondary: 0 }];
+        : [];
+    let secondaryEarned = 0;
+    {
+      const seenSec = new Set<string>();
+      for (const row of sumSecondary) {
+        const rid = Number(row.receiver_id ?? 0);
+        const pid = Number(row.promocode_id ?? 0);
+        const key = `${rid}:${pid}`;
+        if (!rid || seenSec.has(key)) continue;
+        seenSec.add(key);
+        let credit = Number(row.secondary_sender_credit ?? 0) || 0;
+        if (credit <= 0 && row.receiver_version) {
+          const subTable = await getSubscriptionSettingsTable();
+          if (subTable) {
+            try {
+              const creditRows = await prisma.$queryRawUnsafe<{ credit1: unknown }[]>(
+                `SELECT credit1 FROM \`${subTable}\`
+                 WHERE subscription_name = ? LIMIT 1`,
+                String(row.receiver_version).trim()
+              );
+              const n = Number(creditRows[0]?.credit1 ?? 0);
+              if (Number.isFinite(n) && n > 0) credit = n;
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        secondaryEarned += credit;
+      }
+    }
 
     const senderEarned = Number(sumSender[0]?.total_sender ?? 0);
-    const secondaryEarned = Number(sumSecondary[0]?.total_secondary ?? 0);
-    const totalEarned = senderEarned + secondaryEarned;
+    const sumReceiver =
+      applyColumns.has('receiver_id') && applyColumns.has('receiver_credit')
+        ? await prisma.$queryRawUnsafe<{ total_receiver: number | string | null }[]>(
+            `SELECT COALESCE(SUM(t.credit), 0) AS total_receiver FROM (
+               SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
+               FROM \`${appliesTable}\`
+               WHERE delete_status = 2 AND receiver_id = ?
+               GROUP BY promocode_id
+             ) t`,
+            uid
+          )
+        : [{ total_receiver: 0 }];
+    const receiverEarned = Number(sumReceiver[0]?.total_receiver ?? 0);
+    const totalEarned = senderEarned + secondaryEarned + receiverEarned;
 
-    // Legacy users.credits is incremented when someone registers with a promocode.
-    // Product purchase deduction is not implemented yet, so a zero balance here usually
-    // means the ledger was not synced — not that everything was spent.
-    const legacyBalance = userColumns.has('credits') ? Number(u.credits ?? 0) : 0;
-    const available = legacyBalance > 0 ? legacyBalance : totalEarned;
-    let used = totalEarned - available;
-    if (used < 0) used = 0;
+    // Spend/purchase feature is not implemented yet — used must stay 0.
+    const available = totalEarned;
+    const used = 0;
 
     const primaryApply =
       applyColumns.has('receiver_id') && applyColumns.has('sender_id')

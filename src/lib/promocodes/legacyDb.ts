@@ -196,6 +196,8 @@ const LEGACY_USER_SELECT_CANDIDATES = [
   'subscription_end_date',
   'subscription_setting_id',
   'firstname',
+  'credits',
+  'role_id',
 ];
 
 async function legacyUserSelectClause(tableName: string): Promise<string> {
@@ -291,6 +293,14 @@ export function mapLegacyUser(row: Record<string, unknown> | null | undefined): 
     firstname:
       rowVal(row, 'firstname', 'firstName', 'first_name') != null
         ? String(rowVal(row, 'firstname', 'firstName', 'first_name'))
+        : null,
+    credits:
+      rowVal(row, 'credits', 'Credits') != null
+        ? Number(rowVal(row, 'credits', 'Credits')) || 0
+        : null,
+    roleId:
+      rowVal(row, 'role_id', 'roleId') != null
+        ? Number(rowVal(row, 'role_id', 'roleId'))
         : null,
   };
 }

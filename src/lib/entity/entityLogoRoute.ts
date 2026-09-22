@@ -5,6 +5,14 @@ import {
   saveEntityLogoForOwner,
 } from '@/lib/entity/saveEntityLogoFile';
 import type { ManagedEntityLogoKind } from '@/lib/entity/entityLogo';
+import { toMediaApiPath } from '@/lib/uploadMediaUrl';
+
+/** Disk path stays `/uploads/...`; browsers must use `/api/media/uploads/...` on live. */
+function browserUploadUrl(path: string | null | undefined): string {
+  const raw = path?.trim() ?? '';
+  if (!raw) return '';
+  return toMediaApiPath(raw) || raw;
+}
 
 export async function handleEntityLogoPost(
   request: NextRequest,
@@ -39,14 +47,14 @@ export async function handleEntityLogoPost(
     if (asset === 'banner') {
       return NextResponse.json({
         success: true,
-        bannerUrl: result.bannerUrl ?? result.logoUrl,
-        logoUrl: result.logoUrl,
+        bannerUrl: browserUploadUrl(result.bannerUrl ?? result.logoUrl),
+        logoUrl: browserUploadUrl(result.logoUrl),
       });
     }
     return NextResponse.json({
       success: true,
-      logoUrl: result.logoUrl,
-      bannerUrl: result.bannerUrl,
+      logoUrl: browserUploadUrl(result.logoUrl),
+      bannerUrl: browserUploadUrl(result.bannerUrl),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Internal server error';

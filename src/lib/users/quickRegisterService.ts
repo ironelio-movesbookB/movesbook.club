@@ -967,7 +967,7 @@ async function completeAlreadyRegisteredPromocodeRetry(params: {
     const lastInviteId = Number(activeInvites[activeInvites.length - 1].id);
     const updates: Record<string, unknown> = {};
     if (applyColumns.has('invites_count')) updates.invites_count = activeInvites.length;
-    if (applyColumns.has('receiver_email')) updates.receiver_email = params.payload.username.trim();
+    // Keep receiver_email as the invite email (never rewrite to username).
 
     const updateKeys = Object.keys(updates);
     if (updateKeys.length > 0) {
@@ -1133,11 +1133,16 @@ export async function quickRegisterUser(
     const appliesTable = await getPromocodeAppliesTable();
     if (appliesTable) {
       const existingApply = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-        `SELECT id, sender_id FROM \`${appliesTable}\`
-         WHERE promocode_id = ? AND LOWER(receiver_email) = ?
-         ORDER BY id DESC LIMIT 1`,
+        `SELECT id, sender_id, delete_status FROM \`${appliesTable}\`
+         WHERE promocode_id = ?
+           AND (
+             LOWER(receiver_email) = ?
+             OR LOWER(receiver_email) = ?
+           )
+         ORDER BY (delete_status = 2) DESC, id DESC LIMIT 1`,
         promocode.id,
-        emailNorm
+        emailNorm,
+        payload.username.trim().toLowerCase()
       );
       const apply = existingApply[0];
       if (apply) {
@@ -1161,6 +1166,10 @@ export async function quickRegisterUser(
           fields.push('level');
           values.push('2');
         }
+        if (columns.has('invite_mode')) {
+          fields.push('invite_mode');
+          values.push('Link sent');
+        }
         if (columns.has('created')) {
           fields.push('created');
           values.push(new Date());
@@ -1169,6 +1178,29 @@ export async function quickRegisterUser(
           fields.push('modified');
           values.push(new Date());
         }
+
+        // Copy Other Info / Visit Also from the inviter's received apply for this promocode.
+        try {
+          const { resolveInviteOtherInfoAndAdvPage } = await import(
+            '@/lib/promocodes/promocodeInviteLinks'
+          );
+          const links = await resolveInviteOtherInfoAndAdvPage({
+            senderLegacyUserId: invUser.id,
+            senderEmail: invUser.email,
+            promocodeId: promocode.id,
+          });
+          if (columns.has('other_info') && links.otherInfo) {
+            fields.push('other_info');
+            values.push(links.otherInfo);
+          }
+          if (columns.has('adv_page') && links.advPage) {
+            fields.push('adv_page');
+            values.push(links.advPage);
+          }
+        } catch {
+          /* optional enrichment */
+        }
+
         await prisma.$executeRawUnsafe(
           `INSERT INTO \`${appliesTable}\` (${fields.map((f) => `\`${f}\``).join(', ')})
            VALUES (${fields.map(() => '?').join(', ')})`,
@@ -1190,13 +1222,25 @@ export async function quickRegisterUser(
   const appliesTable = await getPromocodeAppliesTable();
   const hashedPassword = hashPasswordCakePHP(payload.password);
   if (appliesTable) {
-    const usedRows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT id, receiver_id FROM \`${appliesTable}\`
-       WHERE promocode_id = ? AND LOWER(receiver_email) = ? AND receiver_id > 0
-       ORDER BY id DESC LIMIT 1`,
-      promocode.id,
-      originEmail
-    );
+    const usernameNorm = payload.username.trim().toLowerCase();
+    const usedParams: unknown[] = [promocode.id, originEmail, usernameNorm];
+    let usedSql = `SELECT id, receiver_id FROM \`${appliesTable}\`
+       WHERE delete_status = 2 AND receiver_id > 0 AND promocode_id = ?
+         AND (
+           LOWER(receiver_email) = ?
+           OR LOWER(receiver_email) = ?
+         )`;
+    if (existingUserId) {
+      usedSql = `SELECT id, receiver_id FROM \`${appliesTable}\`
+       WHERE delete_status = 2 AND promocode_id = ?
+         AND (
+           (receiver_id > 0 AND (LOWER(receiver_email) = ? OR LOWER(receiver_email) = ?))
+           OR receiver_id = ?
+         )`;
+      usedParams.push(existingUserId);
+    }
+    usedSql += ` ORDER BY id DESC LIMIT 1`;
+    const usedRows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(usedSql, ...usedParams);
     if (usedRows[0]) {
       const usedReceiverId = rowNumber(usedRows[0], 'receiver_id');
       if (existingUserId && usedReceiverId === existingUserId) {
@@ -1335,10 +1379,17 @@ export async function quickRegisterUser(
   if (appliesTable) {
     const receiverApplyRows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT id, sender_id, sender_email FROM \`${appliesTable}\`
-       WHERE LOWER(receiver_email) = ? AND promocode_id = ?
+       WHERE promocode_id = ? AND delete_status = 2
+         AND (
+           LOWER(receiver_email) = ?
+           OR LOWER(receiver_email) = ?
+           OR (receiver_id > 0 AND receiver_id = ?)
+         )
        ORDER BY id DESC LIMIT 1`,
+      promocode.id,
       originEmail,
-      promocode.id
+      payload.username.trim().toLowerCase(),
+      userId
     );
     const receiverApply = receiverApplyRows[0];
     if (receiverApply?.id) {
@@ -1359,6 +1410,8 @@ export async function quickRegisterUser(
         is_registered: 1,
         modified: registrationDate,
         new_receiver: existingUserId ? 'N' : 'Y',
+        cost_paid: payload.total_payment?.trim() || null,
+        total_payment: payload.total_payment?.trim() || null,
       };
 
       if (inviteByMovesbook) {
@@ -1538,7 +1591,8 @@ export async function quickRegisterUser(
           const lastInviteId = Number(allInvites[invitesTotal - 1].id);
           const consolidateUpdates: Record<string, unknown> = {};
           if (applyColumns.has('invites_count')) consolidateUpdates.invites_count = invitesTotal;
-          if (applyColumns.has('receiver_email')) consolidateUpdates.receiver_email = payload.username.trim();
+          // Keep receiver_email as the invite email so later uniqueness / used checks still match.
+          // Do NOT rewrite it to username (that caused duplicate apply rows).
 
           const consolidateSetParts = Object.keys(consolidateUpdates).map((k) => `\`${k}\` = ?`);
           if (consolidateSetParts.length > 0) {
@@ -1564,6 +1618,17 @@ export async function quickRegisterUser(
             );
           }
         }
+      }
+
+      // Soft-delete any other active applies for same promocode + registered receiver (stops double credits).
+      if (Number(receiverApply.id) > 0) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE \`${appliesTable}\` SET delete_status = 1
+           WHERE promocode_id = ? AND receiver_id = ? AND delete_status = 2 AND id <> ?`,
+          promocode.id,
+          userId,
+          Number(receiverApply.id)
+        ).catch(() => undefined);
       }
     }
   }

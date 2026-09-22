@@ -3,6 +3,7 @@ import {
   parseClubDescriptionMeta,
   type ClubDescriptionMeta,
 } from '@/lib/club/clubSidebarLabel';
+import { resolveEntityLogoUrl } from '@/lib/entity/entityLogo';
 import { DEFAULT_ENTITY_SPORT } from '@/lib/sport/entitySportOptions';
 import {
   emptyTeamAdminSport,
@@ -82,7 +83,7 @@ export function teamToFormPayload(team: {
   return {
     sport: sports[0] || DEFAULT_ENTITY_SPORT,
     sports,
-    logoUrl: trimOrEmpty(meta.logoUrl),
+    logoUrl: resolveEntityLogoUrl(meta.logoUrl) ?? '',
     username: trimOrEmpty(meta.username),
     officialName: trimOrEmpty(team.name),
     directAccess: trimOrEmpty(meta.directAccess),
@@ -132,6 +133,10 @@ export function mergeTeamDescriptionForSave(
       if (!next) return trimOrEmpty(prev.logoUrl) || undefined;
       if (next.startsWith('data:') || next.startsWith('blob:')) {
         return trimOrEmpty(prev.logoUrl) || undefined;
+      }
+      // Persist canonical `/uploads/...` even if the form held a media API URL.
+      if (next.startsWith('/api/media/uploads/')) {
+        return `/uploads/${next.slice('/api/media/uploads/'.length)}`;
       }
       return next;
     })(),

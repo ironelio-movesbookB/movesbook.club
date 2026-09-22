@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import PromocodesPagination, {
   PromocodeAppliesTable,
 } from '@/components/promocodes/PromocodeAppliesTable';
+import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
 import { promocodesFetch, usePromocodesAdminAuth } from '@/components/promocodes/usePromocodesAdminAuth';
 import { formatPromocodeDisplayDate } from '@/lib/promocodes/formatPromocodeDate';
 import type { PaginatedResult, PromocodeApplyRow, PromocodeSettingRow } from '@/lib/promocodes/types';
@@ -18,6 +19,7 @@ export default function PromocodeDetailPage() {
   const [data, setData] = useState<PaginatedResult<PromocodeApplyRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
   const [orderBy, setOrderBy] = useState('created_desc');
   const [fromDate, setFromDate] = useState('');
@@ -35,7 +37,7 @@ export default function PromocodeDetailPage() {
         (() => {
           const p = new URLSearchParams({
             page: String(page),
-            pageSize: '25',
+            pageSize: String(pageSize),
             promocodeId: String(id),
           });
           if (search.trim()) p.set('search', search.trim());
@@ -58,7 +60,7 @@ export default function PromocodeDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, page, search, orderBy, fromDate, toDate, senderUsername, secondaryUsername, recipientUsername]);
+  }, [id, page, pageSize, search, orderBy, fromDate, toDate, senderUsername, secondaryUsername, recipientUsername]);
 
   useEffect(() => {
     if (ready) void load();
@@ -132,7 +134,16 @@ export default function PromocodeDetailPage() {
         </button>
       </form>
 
-      <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <PromocodePageSizeSelect
+          value={pageSize}
+          onChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+        <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </div>
 
       {loading ? (
         <div className="py-12 text-center text-gray-500">Loading…</div>

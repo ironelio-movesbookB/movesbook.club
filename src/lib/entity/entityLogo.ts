@@ -1,6 +1,7 @@
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
 import { parseEntityDescriptionMeta } from '@/lib/entity/entityForm';
 import type { ManagedEntityKind } from '@/lib/entity/entityProfileLabels';
+import { toMediaApiPath } from '@/lib/uploadMediaUrl';
 
 export type ManagedEntityLogoKind = 'club' | 'team' | 'group' | 'coach';
 
@@ -13,6 +14,11 @@ export function managedEntityKindToLogoKind(
 /** Public path prefix for uploaded entity logos. */
 export const ENTITY_LOGO_UPLOAD_DIR = 'entity_logos';
 
+/**
+ * Browser-usable logo/banner URL. Runtime files under `/uploads/` are served via
+ * `/api/media/uploads/...` on production (nginx / next start do not pick up
+ * files written after deploy).
+ */
 export function resolveEntityLogoUrl(
   logoUrl: string | null | undefined,
 ): string | null {
@@ -26,8 +32,9 @@ export function resolveEntityLogoUrl(
   ) {
     return raw;
   }
-  if (raw.startsWith('/')) return raw;
-  return `/${raw.replace(/^\/+/, '')}`;
+  if (raw.startsWith('/api/media/')) return raw;
+  const path = raw.startsWith('/') ? raw : `/${raw.replace(/^\/+/, '')}`;
+  return toMediaApiPath(path) || path;
 }
 
 export function getLogoUrlFromEntityDescription(

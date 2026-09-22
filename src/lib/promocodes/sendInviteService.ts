@@ -313,11 +313,17 @@ export async function loadSendInvitePreview(
     languageId: params.languageId,
   });
 
+  const promocodeCheck = params.promocode.trim()
+    ? await validateEnabledPromocode(params.promocode.trim())
+    : null;
+  const promocodeId = promocodeCheck && promocodeCheck.ok ? promocodeCheck.id : null;
+
   const { otherInfo, advPage } = await resolveInviteOtherInfoAndAdvPage({
     otherInfo: params.otherInfo,
     advPage: params.advPage,
     senderLegacyUserId: params.senderLegacyUserId,
     senderEmail: params.senderEmail,
+    promocodeId,
   });
 
   const registerUrl = buildRegisterUrl(
@@ -539,6 +545,16 @@ export async function sendPromocodeInvite(params: {
 
   const languageName = await getLegacyLanguageCode(params.languageId);
 
+  const resolvedLinks = await resolveInviteOtherInfoAndAdvPage({
+    otherInfo: params.otherInfo,
+    advPage: params.advPage,
+    senderLegacyUserId: params.senderLegacyUserId,
+    senderEmail: params.senderEmail,
+    promocodeId: promocodeCheck.id,
+  });
+  const otherInfo = resolvedLinks.otherInfo;
+  const advPage = resolvedLinks.advPage;
+
   let finalMessage = params.emailContent.trim();
   if (!finalMessage) {
     const built = await buildPromocodeInviteEmailBody({
@@ -594,8 +610,8 @@ export async function sendPromocodeInvite(params: {
         senderName,
         message: finalMessage,
         promocode: params.promocode.trim(),
-        otherInfo: params.otherInfo,
-        advPage: params.advPage,
+        otherInfo,
+        advPage,
         registrationUrl,
         expiresAt: inviteExpiresAt,
       });
@@ -626,8 +642,8 @@ export async function sendPromocodeInvite(params: {
       add('receiver_email', email);
       add('sender_id', senderId);
       add('level', '1');
-      add('other_info', params.otherInfo);
-      add('adv_page', params.advPage);
+      add('other_info', otherInfo);
+      add('adv_page', advPage);
       add('invite_mode', params.inviteMode?.trim() || 'Mail');
       add('invite_intro', intro || null);
       add('invite_expires_at', inviteExpiresAt);
@@ -649,7 +665,7 @@ export async function sendPromocodeInvite(params: {
   }
 
   if (successCount > 0) {
-    await saveInviteOtherInfoAndAdvPageToUserSettings(senderId, params.otherInfo, params.advPage).catch(
+    await saveInviteOtherInfoAndAdvPageToUserSettings(senderId, otherInfo, advPage).catch(
       (err) => {
         console.warn('Failed to save promocode invite link settings:', err);
       }

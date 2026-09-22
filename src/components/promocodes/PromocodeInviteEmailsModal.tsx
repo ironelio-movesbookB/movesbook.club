@@ -84,7 +84,7 @@ export default function PromocodeInviteEmailsModal({
           className={`promo-invite-emails-body${scrollable ? ' promo-invite-emails-body--scroll' : ''}`}
           style={
             scrollable
-              ? { maxHeight: `min(60vh, ${Math.max(8, Math.min(maxVisibleHint, SCROLL_SOFT_MAX)) * 2.4}rem)` }
+              ? { maxHeight: `min(60vh, ${Math.max(8, Math.min(maxVisibleHint, SCROLL_SOFT_MAX)) * 2.2}rem)` }
               : undefined
           }
         >
@@ -109,13 +109,20 @@ export default function PromocodeInviteEmailsModal({
                   <div className="promo-invite-emails-identity">
                     {identity ? <span className={identityClass}>{identity}</span> : null}
                   </div>
-                  {entry.registered ? (
-                    <span className="promo-invite-emails-registration">
-                      registered
-                      {entry.registrationDate ? ` ${entry.registrationDate}` : ''}
-                      {entry.subscriptionName ? ` ${entry.subscriptionName}` : ''}
-                    </span>
-                  ) : null}
+                  <div className="promo-invite-emails-meta">
+                    {entry.inviteDate ? (
+                      <span className="promo-invite-emails-date">invite {entry.inviteDate}</span>
+                    ) : null}
+                    {entry.registered ? (
+                      <span className="promo-invite-emails-registration">
+                        registered
+                        {entry.registrationDate ? ` ${entry.registrationDate}` : ''}
+                        {entry.subscriptionName ? ` ${entry.subscriptionName}` : ''}
+                      </span>
+                    ) : (
+                      <span className="promo-invite-emails-pending">pending</span>
+                    )}
+                  </div>
                 </div>
               );
             })
