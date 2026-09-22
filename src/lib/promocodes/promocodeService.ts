@@ -127,11 +127,14 @@ function buildPromocodeInviteEntries(
       (looksLikeEmail(rawReceiver) ? rawReceiver : '') ||
       '';
 
+    const inviteDate = formatInviteRegistrationDate(row.created) || null;
+
     if (!registered) {
       entries.push({
         email: email || rawReceiver,
         username: null,
         registered: false,
+        inviteDate,
         registrationDate: null,
         subscriptionName: null,
       });
@@ -155,6 +158,7 @@ function buildPromocodeInviteEntries(
       email: email || rawReceiver,
       username,
       registered: true,
+      inviteDate,
       registrationDate: registrationDate || null,
       subscriptionName,
     });

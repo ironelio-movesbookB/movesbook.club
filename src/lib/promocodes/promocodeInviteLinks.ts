@@ -116,6 +116,8 @@ export async function resolveInviteOtherInfoAndAdvPage(params: {
   advPage?: string;
   senderLegacyUserId?: number | null;
   senderEmail?: string | null;
+  /** Prefer links from the invite received for this specific promocode. */
+  promocodeId?: number | null;
 }): Promise<{ otherInfo: string; advPage: string }> {
   let otherInfo = params.otherInfo?.trim() ?? '';
   let advPage = params.advPage?.trim() ?? '';
@@ -151,12 +153,20 @@ export async function resolveInviteOtherInfoAndAdvPage(params: {
       if (applyColumns.has('adv_page')) selectFields.push('adv_page');
 
       if (selectFields.length > 0) {
+        const promocodeId = Number(params.promocodeId) || 0;
+        const promoClause =
+          promocodeId > 0 && applyColumns.has('promocode_id')
+            ? ' AND promocode_id = ?'
+            : '';
+        const promoParams = promocodeId > 0 && applyColumns.has('promocode_id') ? [promocodeId] : [];
+
         const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
           `SELECT ${selectFields.map((f) => `\`${f}\``).join(', ')}
            FROM \`${appliesTable}\`
-           WHERE delete_status = 2 AND (${orParts.join(' OR ')})
+           WHERE delete_status = 2 AND (${orParts.join(' OR ')})${promoClause}
            ORDER BY id DESC LIMIT 1`,
-          ...values
+          ...values,
+          ...promoParams
         );
 
         const received = rows[0];

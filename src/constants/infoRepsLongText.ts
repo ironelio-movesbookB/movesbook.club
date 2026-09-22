@@ -109,7 +109,7 @@ export function getInfoRepsCloseLabel(language: string): string {
   return normalizeToolsLanguage(language) === 'it' ? 'Chiudi' : 'Close';
 }
 
-async function fetchTranslationValues(key: string): Promise<Record<string, string> | null> {
+export async function fetchTranslationValues(key: string): Promise<Record<string, string> | null> {
   try {
     const res = await fetch('/api/admin/translations');
     if (!res.ok) return null;

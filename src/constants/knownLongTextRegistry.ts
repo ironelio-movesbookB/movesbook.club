@@ -14,6 +14,7 @@ import {
 } from './identificationDevicesInfoLongText';
 import {
   SUGGEST_MOVESBOOK_INTRO_EN,
+  SUGGEST_MOVESBOOK_INTRO_IT,
   SUGGEST_MOVESBOOK_INTRO_KEY,
 } from './suggestMovesbookLongText';
 
@@ -50,7 +51,7 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     category: 'social',
     descriptionEn:
       'Suggest Movesbook — intro explaining advantages of inviting friends (login prompt + Suggest Movesbook page).',
-    values: { en: SUGGEST_MOVESBOOK_INTRO_EN },
+    values: { en: SUGGEST_MOVESBOOK_INTRO_EN, it: SUGGEST_MOVESBOOK_INTRO_IT },
   },
 ];
 

@@ -6,6 +6,7 @@ import PromocodesTabs from '@/components/promocodes/PromocodesTabs';
 import PromocodesPagination, {
   PromocodeAppliesTable,
 } from '@/components/promocodes/PromocodeAppliesTable';
+import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
 import { promocodesFetch, usePromocodesAdminAuth } from '@/components/promocodes/usePromocodesAdminAuth';
 import { usePromocodeDialogs } from '@/components/promocodes/usePromocodeDialogs';
 import PromocodeSendMessageModal from '@/components/promocodes/PromocodeSendMessageModal';
@@ -21,6 +22,7 @@ export default function PromocodesIndexPage() {
   const [data, setData] = useState<PaginatedResult<PromocodeApplyRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
   const [orderBy, setOrderBy] = useState('created_desc');
   const [registeredOnly, setRegisteredOnly] = useState(false);
@@ -40,7 +42,7 @@ export default function PromocodesIndexPage() {
     try {
       const params = new URLSearchParams({
         page: String(page),
-        pageSize: '25',
+        pageSize: String(pageSize),
         registeredOnly: registeredOnly ? '1' : '0',
       });
       if (search.trim()) params.set('search', search.trim());
@@ -58,7 +60,7 @@ export default function PromocodesIndexPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, orderBy, registeredOnly, fromDate, toDate, senderUsername, secondaryUsername, recipientUsername]);
+  }, [page, pageSize, search, orderBy, registeredOnly, fromDate, toDate, senderUsername, secondaryUsername, recipientUsername]);
 
   useEffect(() => {
     if (ready) void load();
@@ -223,7 +225,16 @@ export default function PromocodesIndexPage() {
         </div>
       )}
 
-      <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <PromocodePageSizeSelect
+          value={pageSize}
+          onChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+        <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </div>
 
       {loading ? (
         <div className="py-12 text-center text-gray-500">Loading…</div>
