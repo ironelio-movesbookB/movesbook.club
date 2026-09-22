@@ -27,6 +27,7 @@ export type ToolsTab =
   | 'commonDailyActions'
   | 'workMethods'
   | 'insertActions'
+  | 'sportDropdownParameters'
   | 'sportMachines'
   | 'pathologies';
 

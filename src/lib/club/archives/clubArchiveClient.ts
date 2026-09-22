@@ -47,12 +47,16 @@ export type ArchiveFetchParams = {
   memberId?: string;
   /** Club to load; required for correct Archive of Members when admin owns several clubs. */
   clubId?: string;
+  /** Team workspace id (Team Admin Archive of Users). */
+  teamId?: string;
   /** Scope to the record selected in the archive we came from ("Record selected"). */
   recordId?: string;
   /** Filter by sport. */
   sport?: string;
   /** Filter by group of training. */
   groupTrained?: string;
+  /** member | pending | not_member | archived | all (all = A+B+C, excludes archived) */
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived' | 'all';
 };
 
 export async function fetchClubArchive(
@@ -71,9 +75,13 @@ export async function fetchClubArchive(
   if (params?.expandDeadlines) qs.set('expandDeadlines', '1');
   if (params?.memberId) qs.set('memberId', params.memberId);
   if (params?.clubId) qs.set('clubId', params.clubId);
+  if (params?.teamId) qs.set('teamId', params.teamId);
   if (params?.recordId) qs.set('recordId', params.recordId);
   if (params?.sport) qs.set('sport', params.sport);
   if (params?.groupTrained) qs.set('groupTrained', params.groupTrained);
+  if (params?.membershipStatus) {
+    qs.set('membershipStatus', params.membershipStatus);
+  }
   const query = qs.toString();
   const url = `/api/club/archives/${type}${query ? `?${query}` : ''}`;
   return clubApiFetch<ArchiveListResult>(url);

@@ -21,7 +21,7 @@ export function getClubLegalDocuments(
 }
 
 export function legalDocTitle(kind: ClubLegalDocKind): string {
-  return kind === 'rules' ? 'Rules' : 'Private policy';
+  return kind === 'rules' ? 'Rules' : 'Privacy policy';
 }
 
 export function legalDocHtml(

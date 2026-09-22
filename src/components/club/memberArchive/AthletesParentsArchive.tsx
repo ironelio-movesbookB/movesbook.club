@@ -1,139 +1,156 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
-
-type ParentRow = {
-  key: string;
-  surname: string;
-  name: string;
-  birthDate: string;
-  fiscalCode: string;
-  mail: string;
-  phone: string;
-  country: string;
-  location: string;
-  province: string;
-  memberLabel: string;
-  slot: string;
-};
+import Image from 'next/image';
+import { useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { CalendarClock, Pencil, Trash2, User } from 'lucide-react';
+import ClubArchivePage from '@/components/club/archives/ClubArchivePage';
+import type { Column, Member } from '@/types/clubTable';
 
 type Props = {
-  clubId: string;
+  clubId?: string | null;
+  teamId?: string | null;
 };
 
-export default function AthletesParentsArchive({ clubId }: Props) {
-  const [rows, setRows] = useState<ParentRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!clubId) {
-        setLoading(false);
-        setError('Select a club first.');
-        return;
-      }
-      try {
-        setLoading(true);
-        setError('');
-        const data = await fetchClubArchive('parents', {
-          pageSize: 500,
-          clubId,
-        });
-        if (!cancelled) {
-          setRows((data.items as unknown as ParentRow[]) || []);
-        }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [clubId]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      [r.surname, r.name, r.mail, r.phone, r.fiscalCode, r.memberLabel, r.location]
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [rows, search]);
-
-  if (loading) {
-    return <p className="py-6 text-sm text-gray-500">Loading athletes&apos; parents…</p>;
+function formatDisplayDate(value: unknown) {
+  if (!value) return '-';
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      return `${dd}/${mm}/${d.getFullYear()}`;
+    }
   }
+  return raw;
+}
 
-  if (error) {
-    return <p className="py-6 text-sm text-red-600">{error}</p>;
-  }
+/**
+ * Archive browse of all parents/tutors linked on athlete member profiles.
+ * Same archive shell as athletes/members (filter + teal table).
+ */
+export default function AthletesParentsArchive({ clubId, teamId }: Props) {
+  const router = useRouter();
+  const isTeam = Boolean(teamId);
+
+  const openLinkedMember = useCallback(
+    (row: Member, mode: 'view' | 'edit') => {
+      const id = row.memberId || '';
+      if (!id) return;
+      const q = new URLSearchParams();
+      if (teamId) q.set('teamId', teamId);
+      else if (clubId) q.set('clubId', clubId);
+      q.set('mode', mode);
+      router.push(`/clubMembers/memberProfile/${encodeURIComponent(id)}?${q.toString()}`);
+    },
+    [clubId, router, teamId],
+  );
+
+  const columns: Column[] = useMemo(
+    () => [
+      {
+        key: 'image',
+        header: 'Image',
+        render: (value) =>
+          value ? (
+            <Image
+              src={String(value)}
+              alt=""
+              className="mx-auto h-10 w-10 rounded-full object-cover"
+              width={40}
+              height={40}
+              unoptimized
+            />
+          ) : (
+            <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400">
+              —
+            </span>
+          ),
+      },
+      { key: 'surname', header: 'Surname' },
+      { key: 'name', header: 'Name' },
+      { key: 'gender', header: 'Gender' },
+      { key: 'kinship', header: 'Degree of kinship' },
+      {
+        key: 'member',
+        header: 'Member',
+        render: (value, row) => String(value || row.memberLabel || '-'),
+      },
+      {
+        key: 'localCity',
+        header: 'Local City',
+        render: (value, row) => String(value || row.Localcity || '-'),
+      },
+      { key: 'phone', header: 'Phone' },
+      {
+        key: 'insertDate',
+        header: 'Insert Date',
+        render: (_value, row) =>
+          String(row.insertDateDisplay || formatDisplayDate(row.insertDate) || '-'),
+      },
+      {
+        key: 'options',
+        header: 'Options',
+        render: (_value, row) => (
+          <div className="flex items-center justify-center gap-2 text-gray-600">
+            <button
+              type="button"
+              title="Open linked member profile"
+              onClick={() => openLinkedMember(row, 'view')}
+              className="rounded p-1 hover:bg-blue-50 hover:text-blue-600"
+            >
+              <User className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="Edit linked member profile"
+              onClick={() => openLinkedMember(row, 'edit')}
+              className="rounded p-1 hover:bg-teal-50 hover:text-teal-700"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="Schedule (coming soon)"
+              disabled
+              className="rounded p-1 opacity-40"
+            >
+              <CalendarClock className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="Delete parent link (edit member profile)"
+              disabled
+              className="rounded p-1 opacity-40"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [openLinkedMember],
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Athletes&apos; parents</h2>
-          <p className="text-sm text-gray-600">
-            Parents/tutors filled on member profiles ({filtered.length} shown).
-          </p>
-        </div>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-gray-700">Search</span>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            placeholder="Name, mail, member…"
-          />
-        </label>
-      </div>
-
-      {filtered.length === 0 ? (
-        <p className="rounded border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
-          No parents/tutors found yet. Add them on underage member profiles (Parents tab).
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-600">
-              <tr>
-                <th className="px-3 py-2">Surname</th>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Birthdate</th>
-                <th className="px-3 py-2">Fiscal code</th>
-                <th className="px-3 py-2">Mail</th>
-                <th className="px-3 py-2">Phone</th>
-                <th className="px-3 py-2">Location</th>
-                <th className="px-3 py-2">Member</th>
-                <th className="px-3 py-2">Slot</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.key} className="border-t border-gray-100">
-                  <td className="px-3 py-2">{r.surname || '—'}</td>
-                  <td className="px-3 py-2">{r.name || '—'}</td>
-                  <td className="px-3 py-2">{r.birthDate || '—'}</td>
-                  <td className="px-3 py-2">{r.fiscalCode || '—'}</td>
-                  <td className="px-3 py-2">{r.mail || '—'}</td>
-                  <td className="px-3 py-2">{r.phone || '—'}</td>
-                  <td className="px-3 py-2">{r.location || '—'}</td>
-                  <td className="px-3 py-2">{r.memberLabel}</td>
-                  <td className="px-3 py-2">{r.slot}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <ClubArchivePage
+      title="Archive — Parents & Tutors"
+      archiveType="parents"
+      columns={columns}
+      selectable
+      clubId={isTeam ? null : clubId}
+      teamId={teamId}
+      emptyMessage={
+        isTeam
+          ? 'No parents/tutors found for this team yet. Parent slots will appear here once team member dossiers store them.'
+          : 'No parents/tutors found. Add them on underage member profiles (Parents tab).'
+      }
+      footerHint={
+        isTeam
+          ? 'Parents/tutors linked on athlete profiles for this team.'
+          : 'All parents/tutors linked on athlete member profiles for this club.'
+      }
+    />
   );
 }

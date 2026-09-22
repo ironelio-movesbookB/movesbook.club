@@ -111,6 +111,7 @@ model User {
   clubSharedOgpGroups          ClubSharedOgpGroup[]   @relation("ClubSharedOgpGroupBy")
   clubSharedNews               ClubSharedNews[]       @relation("ClubSharedNewsBy")
   clubStaffRoles               ClubStaff[]
+  teamStaffRoles               TeamStaff[]
   notificationsSubmitted       Notification[]         @relation("NotificationSubmittedBy")
   notificationVisits           NotificationVisit[]
 
@@ -901,7 +902,8 @@ model PlannedActionTemplate {
   nameByLanguage        String?  @db.Text
   descriptionByLanguage String?  @db.Text
   color                 String   @default("#6366f1")
-  icon                  String   @default("📌")
+  /// ASCII default only — MySQL rejects emoji in DEFAULT (e.g. 📌). App still uses 📌 on create.
+  icon                  String   @default("pin")
   displayOrder          Int      @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -1633,6 +1635,7 @@ model Team {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   members     TeamMember[]
+  staff       TeamStaff[]
   admin       User         @relation("TeamOwner", fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId], map: "teams_new_adminId_fkey")
@@ -1640,18 +1643,56 @@ model Team {
 }
 
 model TeamMember {
-  id           String   @id @default(cuid())
+  id           String             @id @default(cuid())
   teamId       String
   athleteId    String
   role         String?
   jerseyNumber Int?
-  joinedAt     DateTime @default(now())
-  athlete      User     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  joinedAt     DateTime           @default(now())
+  athlete      User               @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  team         Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  profile      TeamMemberProfile?
 
   @@unique([teamId, athleteId])
   @@index([athleteId], map: "team_members_new_athleteId_fkey")
   @@map("team_members_new")
+}
+
+/** Team-scoped member dossier (settings, parents, other details, visibility…). */
+model TeamMemberProfile {
+  id               String     @id @default(cuid())
+  teamMemberId     String     @unique
+  teamMember       TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  profileJson      String     @db.LongText
+  medicalImageUrl  String?
+  medicalPdfUrl    String?
+  signatureDataUrl String?    @db.LongText
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@map("team_member_profiles")
+}
+
+/// Team-level staff (Operator / Collaborator / Coadmin) managed by the team admin.
+model TeamStaff {
+  id         String   @id @default(cuid())
+  teamId     String
+  userId     String
+  /// coadmin | operator | collaborator
+  staffType  String
+  /// Employment area / role (e.g. Instructor, Personal trainer)
+  role       String
+  /// JSON string array of permission keys (management, payment, …)
+  userLevels String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_staff")
 }
 
 model Club {
@@ -3159,3 +3200,410 @@ model NotificationVisit {
   @@index([userId])
   @@map("app_notification_visits")
 }
+
+/// Legacy / raw-SQL club settings tables.
+/// Marked @@ignore so Prisma Client does not expose them, but `db push` will not drop them.
+
+model LegacyClubAccessSettings {
+  id BigInt @id @default(autoincrement())
+  clubUserId String? @db.VarChar(191) @map("club_user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  clubKey String @db.VarChar(191) @default("") @map("club_key")
+  useAdvancedSettings String @db.Char(1) @default("N") @map("use_advanced_settings")
+  noneBlockOrFreeAccess String @db.Char(1) @default("N") @map("none_block_or_free_access")
+  blockPermissionAll String? @db.VarChar(80) @map("block_permission_all")
+  exceptMembersAuthorized String @db.Char(1) @default("N") @map("except_members_authorized")
+  exceptMembersBlocked String @db.Char(1) @default("N") @map("except_members_blocked")
+  exceptMembersWithCardSuspended String @db.Char(1) @default("N") @map("except_members_with_card_suspended")
+  accessDeniedToMembersAuthorized String @db.Char(1) @default("N") @map("access_denied_to_members_authorized")
+  accessAllowedToMembersBlocked String @db.Char(1) @default("N") @map("access_allowed_to_members_blocked")
+  accessAllowedMembersCardSuspended String @db.Char(1) @default("N") @map("access_allowed_members_card_suspended")
+  debtorsStatus String? @db.VarChar(80) @map("debtors_status")
+  maxDebtValue String? @db.VarChar(50) @map("max_debt_value")
+  includeDebtsOnPurchases String @db.Char(1) @default("N") @map("include_debts_on_purchases")
+  includeDebtsOnServices String @db.Char(1) @default("N") @map("include_debts_on_services")
+  medCertificationExpiredStatus String? @db.VarChar(80) @map("med_certification_expired_status")
+  medNoToleranceValue String? @db.VarChar(50) @map("med_no_tolerance_value")
+  disableMembership String @db.Char(1) @default("N") @map("disable_membership")
+  membershipClubExpiredStatus String? @db.VarChar(80) @map("membership_club_expired_status")
+  memNoToleranceValue String? @db.VarChar(50) @map("mem_no_tolerance_value")
+  alertMember String @db.Char(1) @default("N") @map("alert_member")
+  accessNoSubscription String @db.Char(1) @default("N") @map("access_no_subscription")
+  deemedNotBlocked String @db.Char(1) @default("N") @map("deemed_not_blocked")
+  expSubscriptionsStatus String? @db.VarChar(80) @map("exp_subscriptions_status")
+  dayToleranceValue String? @db.VarChar(50) @map("day_tolerance_value")
+  noAccessesValue String? @db.VarChar(50) @map("no_accesses_value")
+  dateTimeDifferent String? @db.VarChar(80) @map("date_time_different")
+  dateToleranceNumberValue String? @db.VarChar(50) @map("date_tolerance_number_value")
+  numberWeeklyAccessesDisabled String @db.Char(1) @default("N") @map("number_weekly_accesses_disabled")
+  numberWeeklyAccessesYes String @db.Char(1) @default("N") @map("number_weekly_accesses_yes")
+  numberWeeklyAccessesYesAlert String @db.Char(1) @default("N") @map("number_weekly_accesses_yes_alert")
+  allowedAccessStatus String? @db.VarChar(80) @map("allowed_access_status")
+  accessPermittedFrom String? @db.VarChar(50) @map("access_permitted_from")
+  alertBeforeChange String @db.Char(1) @default("N") @map("alert_before_change")
+  askForConfirmation String @db.Char(1) @default("N") @map("ask_for_confirmation")
+  reEntriesStatusYes String? @db.VarChar(80) @map("re_entries_status_yes")
+  reEntryDays String? @db.VarChar(50) @map("re_entry_days")
+  reEntryMinMinutes String? @db.VarChar(50) @map("re_entry_min_minutes")
+  reEntryNotMorePreviousMin String? @db.VarChar(50) @map("re_entry_not_more_previous_min")
+  incrementEachAccessNumSettingSub String? @db.VarChar(80) @map("increment_each_access_num_setting_sub")
+  askBeforeIncrement String @db.Char(1) @default("N") @map("ask_before_increment")
+  alwaysAllow String? @db.VarChar(80) @map("always_allow")
+  dailyDetbValue String? @db.VarChar(50) @map("daily_detb_value")
+  totalDetbValue String? @db.VarChar(50) @map("total_detb_value")
+  enabledReadingTypes String? @db.VarChar(255) @map("enabled_reading_types")
+  qrcodeGenerationType String? @db.VarChar(80) @map("qrcode_generation_type")
+  onlyAccessControlTerminal String @db.Char(1) @default("N") @map("only_access_control_terminal")
+  accessControlFrom String? @db.VarChar(80) @map("access_control_from")
+  customDetailOfOutcome String @db.Char(1) @default("N") @map("custom_detail_of_outcome")
+  customOutcomeMessageFleshes String @db.Char(1) @default("N") @map("custom_outcome_message_fleshes")
+  customEnableAudioMessages String @db.Char(1) @default("N") @map("custom_enable_audio_messages")
+  customEnableAudioForType String? @db.VarChar(255) @map("custom_enable_audio_for_type")
+  customDetailOfOutcomeCountryLanguage String @db.Char(1) @default("N") @map("custom_detail_of_outcome_country_language")
+  customOutcomeMessageFleshesCountryLanguage String @db.Char(1) @default("N") @map("custom_outcome_message_fleshes_country_language")
+  customEnableAudioMessagesCountryLanguage String @db.Char(1) @default("N") @map("custom_enable_audio_messages_country_language")
+  customMainTerminalAudioSource String? @db.VarChar(80) @map("custom_main_terminal_audio_source")
+  customEnableAudioForTypeCountryLanguage String? @db.VarChar(255) @map("custom_enable_audio_for_type_country_language")
+  dataDisplayName String? @db.VarChar(20) @map("data_display_name")
+  displayDataPhoto String @db.Char(1) @default("N") @map("display_data_photo")
+  displayDataPaymentNotDone String @db.Char(1) @default("N") @map("display_data_payment_not_done")
+  setNumberBookings String @db.Char(1) @default("N") @map("set_number_bookings")
+  numBookingsDayUser String? @db.VarChar(20) @map("num_bookings_day_user")
+  authorizeBookingByondTimeSlot String? @db.VarChar(80) @map("authorize_booking_byond_time_slot")
+  userSelfBook String @db.Char(1) @default("N") @map("user_self_book")
+  membersWithExpiredSubscription String @db.Char(1) @default("N") @map("members_with_expired_subscription")
+  msgMainTerminal String @db.Char(1) @default("N") @map("msg_main_terminal")
+  msgUsrPhone String @db.Char(1) @default("N") @map("msg_usr_phone")
+  detailOfOutcome String @db.Char(1) @default("N") @map("detail_of_outcome")
+  outcomeMessageFleshes String @db.Char(1) @default("N") @map("outcome_message_fleshes")
+  enableAudioMessages String @db.Char(1) @default("N") @map("enable_audio_messages")
+  enableAudioForType String? @db.VarChar(255) @map("enable_audio_for_type")
+  detailOfOutcomeCountryLanguage String @db.Char(1) @default("N") @map("detail_of_outcome_country_language")
+  outcomeMessageFleshesCountryLanguage String @db.Char(1) @default("N") @map("outcome_message_fleshes_country_language")
+  enableAudioMessagesCountryLanguage String @db.Char(1) @default("N") @map("enable_audio_messages_country_language")
+  mainTerminalAudioSource String? @db.VarChar(80) @map("main_terminal_audio_source")
+  enableAudioForTypeCountryLanguage String? @db.VarChar(255) @map("enable_audio_for_type_country_language")
+  warnExhaustion String @db.Char(1) @default("N") @map("warn_exhaustion")
+  warnExhaustionNumber String? @db.VarChar(20) @map("warn_exhaustion_number")
+  warningMemberSendMailExhaustion String @db.Char(1) @default("N") @map("warning_member_send_mail_exhaustion")
+  warningMemberNotifyViaGoogleSpeechExhaustion String @db.Char(1) @default("N") @map("warning_member_notify_via_google_speech_exhaustion")
+  wharnExpire String @db.Char(1) @default("N") @map("wharn_expire")
+  warnExpireDays String? @db.VarChar(20) @map("warn_expire_days")
+  warningMemberSendMailExpire String @db.Char(1) @default("N") @map("warning_member_send_mail_expire")
+  warningMemberNotifyViaGoogleSpeechExpire String @db.Char(1) @default("N") @map("warning_member_notify_via_google_speech_expire")
+  whereSendGreetings String? @db.VarChar(255) @map("where_send_greetings")
+  daysToWishes String? @db.VarChar(20) @map("days_to_wishes")
+  notifyWithAudio String @db.Char(1) @default("N") @map("notify_with_audio")
+  greetingsAudioSource String? @db.VarChar(80) @map("greetings_audio_source")
+  msgForMembers String @db.Char(1) @default("N") @map("msg_for_members")
+  whereSendMsg String? @db.VarChar(255) @map("where_send_msg")
+  msgNotifyWithAudio String @db.Char(1) @default("N") @map("msg_notify_with_audio")
+  msgAudioSource String? @db.VarChar(80) @map("msg_audio_source")
+  ntfNotLeftArea String @db.Char(1) @default("N") @map("ntf_not_left_area")
+  ntfNotLeftAreaNumber String? @db.VarChar(20) @map("ntf_not_left_area_number")
+  minutesToEndSlot String? @db.VarChar(20) @map("minutes_to_end_slot")
+  possibleOvercrowdingNotifyWithAudio String @db.Char(1) @default("N") @map("possible_overcrowding_notify_with_audio")
+  possibleOvercrowdingTypePlay String? @db.VarChar(80) @map("possible_overcrowding_type_play")
+  possibleOvercrowdingAudioFile String? @db.VarChar(80) @map("possible_overcrowding_audio_file")
+  ntfMorePeople String @db.Char(1) @default("N") @map("ntf_more_people")
+  overcrowdingNotifyWithAudio String @db.Char(1) @default("N") @map("overcrowding_notify_with_audio")
+  overcrowdingTypePlay String? @db.VarChar(80) @map("overcrowding_type_play")
+  overcrowdingAudioFile String? @db.VarChar(80) @map("overcrowding_audio_file")
+  blockDayFixed String? @db.VarChar(20) @map("block_day_fixed")
+  allowWithoutBooking String? @db.VarChar(20) @map("allow_without_booking")
+  controlMaxPres String? @db.VarChar(20) @map("control_max_pres")
+  controlMaxPresPer String? @db.VarChar(80) @map("control_max_pres_per")
+  activateSpaceBtwAccess String? @db.VarChar(20) @map("activate_space_btw_access")
+  created DateTime?
+  modified DateTime?
+  @@index([clubKey], map: "idx_club_access_settings_club_key")
+  @@index([clubUserId, clubId], map: "idx_club_access_settings_user_club")
+  @@map("club_access_settings")
+  @@ignore
+}
+
+model LegacyClubEnableDisableFunctions {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  clubKey String @db.VarChar(191) @default("") @map("club_key")
+  account Boolean @default(false)
+  membership Boolean @default(false)
+  cards Boolean @default(false)
+  subscriptionCostAndDeadline Boolean @default(false) @map("subscription_cost_and_deadline")
+  created DateTime?
+  modified DateTime?
+  @@index([userId, clubId], map: "idx_club_enable_disable_user_club")
+  @@unique([userId, clubKey], map: "uniq_club_enable_disable_context")
+  @@map("club_enable_disable_functions")
+  @@ignore
+}
+
+model LegacyClubReaderOtherSettings {
+  id BigInt @id @default(autoincrement())
+  clubUserId String? @db.VarChar(191) @map("club_user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  clubName String? @db.VarChar(255) @map("club_name")
+  passport String? @db.VarChar(255)
+  city String? @db.VarChar(255)
+  zip String? @db.VarChar(20)
+  areaCode String? @db.VarChar(20) @map("area_code")
+  formPayDeadlineStatus String? @db.VarChar(20) @map("form_pay_deadline_status")
+  operatorPassStatus String? @db.VarChar(20) @map("operator_pass_status")
+  calTaxStatus String @db.Char(1) @default("N") @map("cal_tax_status")
+  tax String? @db.VarChar(50)
+  printTaxDetailStatus String @db.Char(1) @default("N") @map("print_tax_detail_status")
+  pathSoundName String? @db.VarChar(255) @map("path_sound_name")
+  pathSound String? @db.VarChar(255) @map("path_sound")
+  pathMessageAlert String? @db.VarChar(255) @map("path_message_alert")
+  durationDefault String? @db.VarChar(50) @map("duration_default")
+  dateFixedValue String? @db.VarChar(50) @map("date_fixed_value")
+  modeRenewal String? @db.VarChar(80) @map("mode_renewal")
+  costValue String? @db.VarChar(50) @map("cost_value")
+  calCostAuto String @db.Char(1) @default("N") @map("cal_cost_auto")
+  installmentDefault String? @db.VarChar(10) @map("installment_default")
+  disableMembership String @db.Char(1) @default("N") @map("disable_membership")
+  printInDocument String @db.Char(1) @default("Y") @map("print_in_document")
+  documentLogo String? @db.VarChar(255) @map("document_logo")
+  documentLogo1 String? @db.VarChar(255) @map("document_logo1")
+  documentLogo2 String? @db.VarChar(255) @map("document_logo2")
+  documentType String? @db.VarChar(80) @map("document_type")
+  numberCopies String? @db.VarChar(20) @map("number_copies")
+  rate String? @db.VarChar(50)
+  notEnterCustData String @db.Char(1) @default("N") @map("not_enter_cust_data")
+  badgeFedaration String @db.Char(1) @default("N") @map("badge_fedaration")
+  enableHeader String? @db.VarChar(50) @map("enable_header")
+  primaryHeading String? @db.VarChar(255) @map("primary_heading")
+  primaryAddress String? @db.VarChar(255) @map("primary_address")
+  primaryCity String? @db.VarChar(255) @map("primary_city")
+  primaryVat String? @db.VarChar(80) @map("primary_vat")
+  secondaryHeading String? @db.VarChar(255) @map("secondary_heading")
+  secondaryAddress String? @db.VarChar(255) @map("secondary_address")
+  secondaryCity String? @db.VarChar(255) @map("secondary_city")
+  secondaryVat String? @db.VarChar(80) @map("secondary_vat")
+  taxReceiptModule String? @db.VarChar(80) @map("tax_receipt_module")
+  invoiceModule String? @db.VarChar(80) @map("invoice_module")
+  simpleReceiptModule String? @db.VarChar(80) @map("simple_receipt_module")
+  taxReceipt String? @db.VarChar(50) @map("tax_receipt")
+  invoice String? @db.VarChar(50)
+  simpleReceipt String? @db.VarChar(50) @map("simple_receipt")
+  autoContractCounter String @db.Char(1) @default("N") @map("auto_contract_counter")
+  autoWithSubscription String @db.Char(1) @default("N") @map("auto_with_subscription")
+  contractStatus String? @db.VarChar(50) @map("contract_status")
+  contractTermText String? @db.LongText @map("contract_term_text")
+  previewPrint String @db.Char(1) @default("N") @map("preview_print")
+  changeHeader String @db.Char(1) @default("N") @map("change_header")
+  renewalDay String? @db.VarChar(20) @map("renewal_day")
+  renewalSession String? @db.VarChar(20) @map("renewal_session")
+  retrodationDay String? @db.VarChar(20) @map("retrodation_day")
+  closingTime String @db.Char(1) @default("N") @map("closing_time")
+  closingTimeStartStatus1 String @db.Char(1) @default("N") @map("closing_time_start_status1")
+  closingTimeStart1 String? @db.VarChar(50) @map("closing_time_start1")
+  closingTimeEnd1 String? @db.VarChar(50) @map("closing_time_end1")
+  closingTimeStartStatus2 String @db.Char(1) @default("N") @map("closing_time_start_status2")
+  closingTimeStart2 String? @db.VarChar(50) @map("closing_time_start2")
+  closingTimeEnd2 String? @db.VarChar(50) @map("closing_time_end2")
+  closingTimeStartStatus3 String @db.Char(1) @default("N") @map("closing_time_start_status3")
+  closingTimeStart3 String? @db.VarChar(50) @map("closing_time_start3")
+  closingTimeEnd3 String? @db.VarChar(50) @map("closing_time_end3")
+  recoverLostDay String @db.Char(1) @default("N") @map("recover_lost_day")
+  totalDaySub String? @db.VarChar(50) @map("total_day_sub")
+  allowMultipleSubscription String @db.Char(1) @default("N") @map("allow_multiple_subscription")
+  suspensionUpdateStatus String @db.Char(1) @default("N") @map("suspension_update_status")
+  magneticCard String? @db.VarChar(50) @map("magnetic_card")
+  chipCard String? @db.VarChar(50) @map("chip_card")
+  rfidCard String? @db.VarChar(50) @map("rfid_card")
+  rfidBracelet String? @db.VarChar(50) @map("rfid_bracelet")
+  genericSession String? @db.VarChar(50) @map("generic_session")
+  statusBar String @db.Char(1) @default("N") @map("status_bar")
+  quickToolbar String @db.Char(1) @default("N") @map("quick_toolbar")
+  printToolbar String @db.Char(1) @default("N") @map("print_toolbar")
+  enableAssistant String @db.Char(1) @default("N") @map("enable_assistant")
+  created DateTime?
+  modified DateTime?
+  @@index([clubUserId, clubId], map: "idx_club_reader_other_settings_user_club")
+  @@map("club_reader_other_settings")
+  @@ignore
+}
+
+model LegacyClubSettingAreas {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  area String @db.VarChar(191)
+  isEnableForAcl String @db.Char(1) @default("N") @map("is_enable_for_acl")
+  limitMembers String @db.Char(1) @default("N") @map("limit_members")
+  limitOfMembersAtSameTime String? @db.VarChar(50) @map("limit_of_members_at_same_time")
+  created DateTime?
+  modified DateTime?
+  @@index([area], map: "idx_club_setting_areas_area")
+  @@index([userId, clubId], map: "idx_club_setting_areas_user_club")
+  @@map("club_setting_areas")
+  @@ignore
+}
+
+model LegacyClubSettingContacts {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  contacts String @db.VarChar(250)
+  created DateTime?
+  modified DateTime?
+  @@index([contacts], map: "idx_club_setting_contacts_contacts")
+  @@index([userId, clubId], map: "idx_club_setting_contacts_user_club")
+  @@map("club_setting_contacts")
+  @@ignore
+}
+
+model LegacyClubSettingEmpOccupations {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  occupation String @db.VarChar(250)
+  created DateTime?
+  modified DateTime?
+  @@index([occupation], map: "idx_club_setting_emp_occupations_occupation")
+  @@index([userId, clubId], map: "idx_club_setting_emp_occupations_user_club")
+  @@map("club_setting_emp_occupations")
+  @@ignore
+}
+
+model LegacyClubSettingMembertypes {
+  id BigInt @id @default(autoincrement())
+  memberTypeName String? @db.VarChar(250) @map("member_type_name")
+  discountSubscription String? @db.VarChar(50) @map("discount_subscription")
+  discountServices String? @db.VarChar(50) @map("discount_services")
+  discountRest String? @db.VarChar(50) @map("discount_rest")
+  discountSuppl String? @db.VarChar(50) @map("discount_suppl")
+  discountClothing String? @db.VarChar(50) @map("discount_clothing")
+  discountOutfit String? @db.VarChar(50) @map("discount_outfit")
+  affiliateCost String? @db.VarChar(50) @map("affiliate_cost")
+  debtMax String? @db.VarChar(50) @map("debt_max")
+  discountStatus String @db.Char(1) @default("N") @map("discount_status")
+  header String @db.Char(1) @default("A")
+  membertypId BigInt? @map("membertyp_id")
+  userId String? @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  created DateTime?
+  modified DateTime?
+  @@index([membertypId], map: "idx_club_setting_membertypes_model")
+  @@index([memberTypeName], map: "idx_club_setting_membertypes_name")
+  @@index([userId, clubId], map: "idx_club_setting_membertypes_user_club")
+  @@map("club_setting_membertypes")
+  @@ignore
+}
+
+model LegacyClubSettingProfessions {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  profession String @db.VarChar(250)
+  created DateTime?
+  modified DateTime?
+  @@index([profession], map: "idx_club_setting_professions_profession")
+  @@index([userId, clubId], map: "idx_club_setting_professions_user_club")
+  @@map("club_setting_professions")
+  @@ignore
+}
+
+model LegacyClubSettingSectors {
+  id BigInt @id @default(autoincrement())
+  sectorName String @db.VarChar(191) @map("sector_name")
+  created DateTime?
+  modified DateTime?
+  @@index([sectorName], map: "idx_club_setting_sectors_name")
+  @@map("club_setting_sectors")
+  @@ignore
+}
+
+model LegacyClubSettingServices {
+  id BigInt @id @default(autoincrement())
+  userId String? @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  sectorId String? @db.VarChar(191) @map("sector_id")
+  serviceName String? @db.VarChar(255) @map("service_name")
+  clubCurrencyCost String? @db.VarChar(80) @map("club_currency_cost")
+  actualCost String? @db.VarChar(80) @map("actual_cost")
+  clubCurrencyCode String? @db.VarChar(20) @map("club_currency_code")
+  serviceImg String? @db.VarChar(255) @map("service_img")
+  created DateTime?
+  modified DateTime?
+  @@index([serviceName], map: "idx_club_setting_services_name")
+  @@index([sectorId], map: "idx_club_setting_services_sector")
+  @@index([userId, clubId], map: "idx_club_setting_services_user_club")
+  @@map("club_setting_services")
+  @@ignore
+}
+
+model LegacyClubSettingSpecialServices {
+  id BigInt @id @default(autoincrement())
+  userId String? @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  sectorId String? @db.VarChar(191) @map("sector_id")
+  serviceName String? @db.VarChar(255) @map("service_name")
+  clubCurrencyCost String? @db.VarChar(80) @map("club_currency_cost")
+  actualCost String? @db.VarChar(80) @map("actual_cost")
+  clubCurrencyCode String? @db.VarChar(20) @map("club_currency_code")
+  serviceImg String? @db.VarChar(255) @map("service_img")
+  serviceAvailable Boolean @default(true) @map("service_available")
+  showCost Boolean @default(true) @map("show_cost")
+  videoUrl String? @db.VarChar(500) @map("video_url")
+  orderPosition Int? @map("order_position")
+  created DateTime?
+  modified DateTime?
+  @@index([serviceName], map: "idx_club_setting_special_services_name")
+  @@index([orderPosition], map: "idx_club_setting_special_services_order")
+  @@index([sectorId], map: "idx_club_setting_special_services_sector")
+  @@index([userId, clubId], map: "idx_club_setting_special_services_user_club")
+  @@map("club_setting_special_services")
+  @@ignore
+}
+
+model LegacyClubsettingMembertypeModels {
+  id BigInt @id @default(autoincrement())
+  name String? @db.VarChar(100)
+  created DateTime?
+  modified DateTime?
+  @@index([name], map: "idx_member_type_models_name")
+  @@map("clubsetting_membertype_models")
+  @@ignore
+}
+
+model LegacyExpenses {
+  id BigInt @id @default(autoincrement())
+  userId String @db.VarChar(191) @map("user_id")
+  name String @db.VarChar(250)
+  parentId BigInt @map("parent_id")
+  created DateTime?
+  modified DateTime?
+  @@index([name], map: "idx_expenses_name")
+  @@index([userId, parentId], map: "idx_expenses_user_parent")
+  @@map("expenses")
+  @@ignore
+}
+
+model LegacyProductCategories {
+  id BigInt @id @default(autoincrement())
+  userId String? @db.VarChar(191) @map("user_id")
+  name String @db.VarChar(250)
+  created DateTime?
+  modified DateTime?
+  @@index([name], map: "idx_product_categories_name")
+  @@index([userId], map: "idx_product_categories_user")
+  @@map("product_categories")
+  @@ignore
+}
+
+model LegacyUnits {
+  id BigInt @id @default(autoincrement())
+  userId String? @db.VarChar(191) @map("user_id")
+  clubId String? @db.VarChar(191) @map("club_id")
+  name String @db.VarChar(250)
+  created DateTime?
+  modified DateTime?
+  @@index([name], map: "idx_units_name")
+  @@index([userId, clubId], map: "idx_units_user_club")
+  @@map("units")
+  @@ignore
+}
+

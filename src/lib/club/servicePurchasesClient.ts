@@ -5,16 +5,24 @@ export function getAuthHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 }
 
-/** Append sidebar-selected club so APIs resolve the same club as the UI. */
+/** Append sidebar-selected club or team so APIs resolve the same workspace as the UI. */
 export function withSelectedClubId(url: string): string {
   if (typeof window === 'undefined') return url;
-  if (url.includes('clubId=')) return url;
+  if (url.includes('clubId=') || url.includes('teamId=')) return url;
 
   const clubId = localStorage.getItem('selectedClub');
-  if (!clubId) return url;
+  if (clubId) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}clubId=${encodeURIComponent(clubId)}`;
+  }
 
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}clubId=${encodeURIComponent(clubId)}`;
+  const teamId = localStorage.getItem('selectedTeam');
+  if (teamId) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}teamId=${encodeURIComponent(teamId)}`;
+  }
+
+  return url;
 }
 
 export async function clubApiFetch<T>(url: string, init?: RequestInit): Promise<T> {

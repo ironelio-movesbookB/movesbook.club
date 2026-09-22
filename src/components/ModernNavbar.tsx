@@ -262,14 +262,11 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
     setIsMobileMenuOpen(false);
     const lang = user?.language || currentLanguage || 'en';
     const alert = await fetchPcuAlert('logout', lang);
-    const finishLogout = () => {
-      logout();
-      router.push('/');
-    };
+    // Do not navigate here — useAuth.logout() waits for logout notices, then redirects.
     if (alert) {
-      showAlert(alert, finishLogout);
+      showAlert(alert, () => logout());
     } else {
-      finishLogout();
+      logout();
     }
   };
 

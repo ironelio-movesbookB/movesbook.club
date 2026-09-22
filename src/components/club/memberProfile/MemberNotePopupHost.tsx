@@ -7,6 +7,7 @@ type PopupDoc = {
   id: string;
   title: string;
   body: string;
+  bodyIsHtml?: boolean;
   clubName: string;
   enableFrom: string;
   enableTo: string;
@@ -24,8 +25,14 @@ function getAuthHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function signalLogoutDone() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
+  }
+}
+
 /**
- * Shows coach-note documents as popups at login / logout when scheduled.
+ * Shows staff / coach documents as popups at login / logout when scheduled.
  */
 export default function MemberNotePopupHost() {
   const [docs, setDocs] = useState<PopupDoc[]>([]);
@@ -33,31 +40,41 @@ export default function MemberNotePopupHost() {
   const [moment, setMoment] = useState<Moment | null>(null);
   const [pendingLogout, setPendingLogout] = useState(false);
   const loadingRef = useRef(false);
+  const queuedLogoutRef = useRef(false);
+  const momentRef = useRef<Moment | null>(null);
+  const pendingLogoutRef = useRef(false);
+
+  momentRef.current = moment;
+  pendingLogoutRef.current = pendingLogout;
 
   const closeAll = useCallback(() => {
+    const wasLogout = momentRef.current === 'logout' || pendingLogoutRef.current;
     setDocs([]);
     setIndex(0);
-    const wasLogout = moment === 'logout' || pendingLogout;
     setMoment(null);
     setPendingLogout(false);
+    momentRef.current = null;
+    pendingLogoutRef.current = false;
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem(LOGIN_FLAG);
-      if (wasLogout) {
-        window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
-      }
     }
-  }, [moment, pendingLogout]);
+    if (wasLogout) {
+      signalLogoutDone();
+    }
+  }, []);
 
   const load = useCallback(async (m: Moment, forLogout = false) => {
-    if (loadingRef.current) return;
+    if (loadingRef.current) {
+      // Don't drop logout: run it when the in-flight request finishes.
+      if (forLogout) queuedLogoutRef.current = true;
+      return;
+    }
     loadingRef.current = true;
     try {
       const token =
         typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
-        if (forLogout && typeof window !== 'undefined') {
-          window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
-        }
+        if (forLogout) signalLogoutDone();
         return;
       }
 
@@ -68,29 +85,29 @@ export default function MemberNotePopupHost() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.warn('[MemberNotePopupHost] API error', res.status, json);
-        if (forLogout && typeof window !== 'undefined') {
-          window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
-        }
+        if (forLogout) signalLogoutDone();
         return;
       }
       const items = Array.isArray(json.items) ? (json.items as PopupDoc[]) : [];
       if (items.length === 0) {
-        if (forLogout && typeof window !== 'undefined') {
-          window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
-        }
+        if (forLogout) signalLogoutDone();
         return;
       }
       setMoment(m);
       setPendingLogout(forLogout);
+      momentRef.current = m;
+      pendingLogoutRef.current = forLogout;
       setDocs(items);
       setIndex(0);
     } catch (e) {
       console.warn('[MemberNotePopupHost] load failed', e);
-      if (forLogout && typeof window !== 'undefined') {
-        window.dispatchEvent(new Event(LOGOUT_DONE_EVENT));
-      }
+      if (forLogout) signalLogoutDone();
     } finally {
       loadingRef.current = false;
+      if (queuedLogoutRef.current) {
+        queuedLogoutRef.current = false;
+        void load('logout', true);
+      }
     }
   }, []);
 
@@ -152,7 +169,7 @@ export default function MemberNotePopupHost() {
             {moment === 'logout' ? 'Message at logout' : 'Notice at login'}
           </p>
           <h2 className="text-base font-semibold text-gray-900">
-            {current.title || 'Coach note'}
+            {current.title || 'Club message'}
           </h2>
           <p className="text-xs text-gray-600">{current.clubName}</p>
           {current.enableFrom || current.enableTo ? (
@@ -161,9 +178,16 @@ export default function MemberNotePopupHost() {
             </p>
           ) : null}
         </div>
-        <div className="max-h-[50vh] overflow-y-auto px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap">
-          {current.body}
-        </div>
+        {current.bodyIsHtml ? (
+          <div
+            className="prose prose-sm max-h-[50vh] max-w-none overflow-y-auto px-4 py-3 text-gray-800"
+            dangerouslySetInnerHTML={{ __html: current.body }}
+          />
+        ) : (
+          <div className="max-h-[50vh] overflow-y-auto px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap">
+            {current.body}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
           <span className="text-xs text-gray-500">
             {index + 1} / {docs.length}

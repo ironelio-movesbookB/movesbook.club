@@ -25,6 +25,11 @@ export type Member = {
   insertDate?: Date | string;
   /** Display-ready insert date (e.g. DD/MM/YYYY) when insertDate is kept as ISO for filters. */
   insertDateDisplay?: string;
+  /** Parents archive — degree of kinship. */
+  kinship?: string;
+  /** Parents archive — linked athlete/member display name. */
+  member?: string;
+  memberLabel?: string;
   expirationDate?: Date | string;
   membershipEndDate?: Date | string;
   /** ClubMember join-table id (for remove from club). */
@@ -87,6 +92,13 @@ export type Member = {
   service?: string;
   /** Another receipt shares this row's document type + number. */
   isDuplicate?: boolean;
+  /**
+   * Archive of Users A/B/C/D:
+   * member | pending | not_member | archived
+   */
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived';
+  /** Staff-only archive rows (no pending/not-member actions). */
+  isStaffOnly?: boolean;
   options?: React.ReactNode;
   edit?: React.ReactNode;
   delete?: React.ReactNode;

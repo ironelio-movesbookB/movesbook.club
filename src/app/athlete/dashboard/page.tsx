@@ -98,6 +98,7 @@ import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import AthleteMyPageRightSidebarExtras from '@/components/dashboard/AthleteMyPageRightSidebarExtras';
 import AthleteMyClubRightSidebar from '@/components/dashboard/AthleteMyClubRightSidebar';
 import MemberRegistrationInfoPanel from '@/components/member/MemberRegistrationInfoPanel';
+import MemberVisitorContactActivitiesPanel from '@/components/member/MemberVisitorContactActivitiesPanel';
 import { isClubAccountUserType, showSuggestMovesbookForTab } from '@/utils/dashboardRouting';
 import {
   getEntityDirectAccessLock,
@@ -145,6 +146,7 @@ function AthleteDashboardContent() {
     | 'music'
     | 'music-editor'
     | 'registration-info'
+    | 'contact-activities'
     | 'staff-feedbacks'
   >('overview');
   const [showAdBanner, setShowAdBanner] = useState(true);
@@ -563,7 +565,6 @@ function AthleteDashboardContent() {
 
   const handleMyTeamSelect = (teamId: string) => {
     storeSelectedEntity('Team', teamId);
-    window.location.href = `/my-team?teamId=${teamId}`;
   };
 
   const handleAthleteClubSelect = (clubId: string) => {
@@ -904,6 +905,8 @@ function AthleteDashboardContent() {
               <DarkSidebar
                 userType={user?.userType || ''}
                 entities={myClubs}
+                athleteTeams={myTeams}
+                onAthleteTeamSelect={handleMyTeamSelect}
                 selectedEntityId={selectedClubId ?? myClubs[0]?.id ?? null}
                 onEntitySelect={handleAthleteClubSelect}
                 activeTab={activeTab}
@@ -925,6 +928,10 @@ function AthleteDashboardContent() {
                 onRegistrationInfoClick={() => {
                   setActiveTab('my-page');
                   setActiveSection('registration-info');
+                }}
+                onContactActivitiesClick={() => {
+                  setActiveTab('my-page');
+                  setActiveSection('contact-activities');
                 }}
                 onMyFeedbacksStaffClick={() => {
                   setActiveTab('my-page');
@@ -1060,6 +1067,14 @@ function AthleteDashboardContent() {
                 {activeSection === 'registration-info' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <MemberRegistrationInfoPanel
+                      embedded
+                      onClose={() => setActiveSection('overview')}
+                    />
+                  </div>
+                )}
+                {activeSection === 'contact-activities' && (
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <MemberVisitorContactActivitiesPanel
                       embedded
                       onClose={() => setActiveSection('overview')}
                     />

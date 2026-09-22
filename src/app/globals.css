@@ -162,6 +162,11 @@ form select {
   margin-bottom: 10px;
 }
 
+/* Archive — Members filter row: keep Order/Sport/Group selects flush with Calendar */
+form.member-archive-filters select {
+  margin-bottom: 0 !important;
+}
+
 .club-typology-form input:not([type='checkbox']):not([type='radio']):not([type='color']):not([type='file']),
 .club-typology-form select,
 .club-typology-form textarea {

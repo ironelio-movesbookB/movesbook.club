@@ -302,6 +302,8 @@ export type ClubMemberScopedData = {
     /** Primary view: Club vs Team (derived from memberSettingKind for older UI). */
     sportMode: 'CLUB-GYM' | 'TEAM-FOOTBALL';
     football: {
+      membershipNumber: string;
+      expiringDate: string;
       annualMembershipFee: string;
       firstPayment: {
         amount: string;
@@ -319,6 +321,8 @@ export type ClubMemberScopedData = {
         status: string;
       };
       paymentMethod: string;
+      /** Single overall payment status (Paid / Pending / Not paid). */
+      paymentStatus: string;
       receiptIssued: boolean;
       imageRelease: boolean;
       travelAuthorization: boolean;
@@ -356,7 +360,10 @@ export type ClubMemberScopedData = {
 };
 
 export type MemberProfileBundle = {
+  /** Club id, or team id when `workspaceKind` is `team`. */
   clubId: string;
+  /** `team` when opened from Team Admin Archive of Users. */
+  workspaceKind?: 'club' | 'team';
   clubName: string;
   /** Sport from Club/Team profile (category) — default for Settings team-type dropdown. */
   entitySportDefault: string;
@@ -407,6 +414,9 @@ export type MemberProfileBundle = {
     body: string;
     createdAt: string;
     authorLabel: string;
+    /** Inherited from the Messages document schedule when the post was created. */
+    showAtLogin: boolean;
+    showAtLogout: boolean;
     replies: Array<{ id: string; body: string; createdAt: string; authorLabel: string }>;
   }>;
   coachNotes: Array<{
@@ -441,12 +451,38 @@ export const MAIN_SPORTS = [
   'Dance',
 ] as const;
 
+/** Club\Gym membership status (Other details → Athlete status). */
 export const ATHLETE_STATUS_OPTIONS = [
   'Member',
   'Not a member',
   'On probation',
   'Non-member Associate',
 ] as const;
+
+/** Athlete status when the member belongs to a TEAM instead of a Club\Gym. */
+export const TEAM_ATHLETE_STATUS_OPTIONS = [
+  'Active',
+  'Inactive',
+  'Injured',
+  'Suspended',
+] as const;
+
+/** TEAM-FOOTBALL Settings → Payment method (spec list). */
+export const TEAM_FOOTBALL_PAYMENT_METHOD_OPTIONS = [
+  'Cash',
+  'Bank transfer',
+  'POS',
+  'SEPA',
+] as const;
+
+/** Sections an admin can copy when duplicating another member's dossier. */
+export type DuplicateMemberSection =
+  | 'member-profile'
+  | 'parents'
+  | 'other-data'
+  | 'settings'
+  | 'alert-posted'
+  | 'coach-notes';
 
 export const INSURANCE_COMPANY_OPTIONS = [
   'ACSI SPORT',
@@ -546,3 +582,9 @@ export const THEME_OPTIONS = [
   { id: 'forest', label: 'Forest', color: '#15803d' },
   { id: 'slate', label: 'Slate', color: '#334155' },
 ] as const;
+
+export function getThemeColorById(themeId: string | null | undefined): string {
+  const id = String(themeId || '').trim();
+  const found = THEME_OPTIONS.find((t) => t.id === id);
+  return found?.color || THEME_OPTIONS[0].color;
+}

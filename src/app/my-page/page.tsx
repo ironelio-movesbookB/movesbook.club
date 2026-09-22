@@ -31,6 +31,7 @@ import {
   getEntityDirectAccessProfilePath,
 } from '@/lib/entity/entityDirectAccessSession';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import { getThemeColorById } from '@/lib/club/memberProfileTypes';
 
 export default function MyPage() {
   const [activeSection, setActiveSection] = useState<'workouts' | 'progress' | 'settings' | 'staff-feedbacks'>('workouts');
@@ -47,6 +48,7 @@ export default function MyPage() {
   const [activeTab, setActiveTab] = useState<'my-page' | 'my-entity'>('my-page');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [pageThemeColor, setPageThemeColor] = useState('#058592');
 
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -60,7 +62,8 @@ export default function MyPage() {
     groups,
     teams,
     coachingGroups,
-    myClubs
+    myClubs,
+    myTeams,
   } = useMyPageData(user);
 
   const {
@@ -69,7 +72,8 @@ export default function MyPage() {
     handleGroupSelect,
     handleTeamSelect,
     handleCoachingGroupSelect,
-    handleMyClubSelect
+    handleMyClubSelect,
+    handleMyTeamSelect,
   } = useMyPageHandlers();
 
   useEffect(() => {
@@ -78,6 +82,48 @@ export default function MyPage() {
       if (stored) setSelectedTeamId(stored);
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const applyFromStorage = () => {
+      try {
+        const stored = localStorage.getItem('movesbook_mypage_theme_color');
+        if (stored) setPageThemeColor(stored);
+      } catch {
+        /* ignore */
+      }
+    };
+    applyFromStorage();
+
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const res = await fetch('/api/user/member-profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json().catch(() => null);
+        const themeId = json?.owner?.otherReferences?.theme as string | undefined;
+        if (cancelled || !themeId) return;
+        const color = getThemeColorById(themeId);
+        setPageThemeColor(color);
+        try {
+          localStorage.setItem('movesbook_mypage_theme_color', color);
+          localStorage.setItem('movesbook_mypage_theme_id', themeId);
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        /* keep storage / default */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!isTeamAccountUserType(user?.userType || '')) return;
@@ -135,8 +181,10 @@ export default function MyPage() {
   }
 
   return (
-    <div className="bg-gray-50 flex flex-col" style={{ minHeight: '100vh' }}>
-      {/* Modern Navbar */}
+    <div
+      className="flex flex-col"
+      style={{ minHeight: '100vh', backgroundColor: pageThemeColor }}
+    >      {/* Modern Navbar */}
       <ModernNavbar />
 
       {/* Display Options Toolbar - Always visible but can be collapsed */}
@@ -177,6 +225,10 @@ export default function MyPage() {
                   isTeamAccountUserType(user?.userType || '') ? teams :
                   isGroupAccountUserType(user?.userType || '') ? groups :
                   user?.userType === 'COACH' ? coachingGroups : []
+                }
+                athleteTeams={user?.userType === 'ATHLETE' ? myTeams : []}
+                onAthleteTeamSelect={
+                  user?.userType === 'ATHLETE' ? handleMyTeamSelect : undefined
                 }
                 selectedEntityId={
                   isClubAccountUserType(user?.userType || '') ? selectedClub :

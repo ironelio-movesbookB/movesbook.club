@@ -10,7 +10,15 @@ import { getProcedureTypology } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
 import { fetchClubStaffOperators } from '@/lib/procedures/clubOperators';
-import { staffTypeLabel } from '@/lib/club/clubStaff.constants';
+import {
+  operativeLevelForStaffType,
+  staffTypeLabel,
+} from '@/lib/club/clubStaff.constants';
+import { listClubStaff } from '@/lib/club/clubStaffService';
+import {
+  normalizeMemberArchiveStatus,
+  type MemberArchiveStatus,
+} from '@/lib/club/memberArchiveStatus';
 import {
   type ArchiveQueryParams,
   applyFilters,
@@ -66,8 +74,21 @@ function mapArchivePersonRow(params: {
   operatorLabel: string;
   staffType?: string | null;
   staffRole?: string | null;
+  /** ClubMember.role / TeamMember.role — drives A/B/C archive colors. */
+  membershipRole?: string | null;
+  /** Staff-only rows are not pending/not-member athletes. */
+  isStaffOnly?: boolean;
 }): Record<string, unknown> {
-  const { person, joinedAt, membershipType, operatorLabel, staffType, staffRole } = params;
+  const {
+    person,
+    joinedAt,
+    membershipType,
+    operatorLabel,
+    staffType,
+    staffRole,
+    membershipRole,
+    isStaffOnly,
+  } = params;
   const firstName =
     text(person.firstName) ||
     text(person.name).split(/\s+/)[0] ||
@@ -79,6 +100,10 @@ function mapArchivePersonRow(params: {
       const parts = text(person.name).split(/\s+/).filter(Boolean);
       return parts.length > 1 ? parts.slice(1).join(' ') : '';
     })();
+
+  const membershipStatus: MemberArchiveStatus = isStaffOnly
+    ? 'member'
+    : normalizeMemberArchiveStatus(membershipRole);
 
   return {
     id: person.id,
@@ -100,6 +125,8 @@ function mapArchivePersonRow(params: {
     typology: operatorLabel,
     staffType: staffType ?? null,
     staffRole: staffRole ?? null,
+    membershipStatus,
+    isStaffOnly: Boolean(isStaffOnly),
   };
 }
 
@@ -214,9 +241,7 @@ export async function listClubMembersArchive(
 
   const memberItems: Record<string, unknown>[] = rows.map((row) => {
     const staff = staffByUserId.get(row.memberId);
-    const operatorLabel = staff
-      ? staffTypeLabel(staff.staffType)
-      : titleCaseRole(row.role);
+    const operatorLabel = staff ? staffTypeLabel(staff.staffType) : 'Member';
 
     let scopedSafe: {
       otherDetails?: { groupTrainedId?: string };
@@ -245,6 +270,7 @@ export async function listClubMembersArchive(
       operatorLabel,
       staffType: staff?.staffType ?? null,
       staffRole: staff?.role ?? null,
+      membershipRole: row.role,
     });
 
     return {
@@ -268,6 +294,7 @@ export async function listClubMembersArchive(
         operatorLabel: staffTypeLabel(row.staffType),
         staffType: row.staffType,
         staffRole: row.role,
+        isStaffOnly: true,
       }),
       sport: '-',
       groupTrained: '-',
@@ -287,6 +314,98 @@ export async function listClubMembersArchive(
   });
 
   return paginate(applyFilters(items, params), page, pageSize);
+}
+
+/** Team admin Archive of Users — athletes on the selected team. */
+export async function listTeamMembersArchive(
+  ctx: ClubAuthContext,
+  params: ArchiveQueryParams = {},
+): Promise<PaginatedArchive<Record<string, unknown>>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  const teamId = ctx.club.id;
+
+  const rows = await prisma.teamMember.findMany({
+    where: { teamId },
+    include: {
+      athlete: {
+        select: {
+          id: true,
+          firstName: true,
+          surname: true,
+          name: true,
+          username: true,
+          email: true,
+          image: true,
+          gender: true,
+          birthdate: true,
+          country: true,
+          createdAt: true,
+        },
+      },
+    },
+    orderBy: { joinedAt: 'desc' },
+  });
+
+  const memberIds = rows.map((r) => r.athleteId);
+  let extrasRows: Array<{ userId: string; ownerJson: string }> = [];
+  try {
+    extrasRows =
+      memberIds.length > 0
+        ? await prisma.userProfileExtras.findMany({
+            where: { userId: { in: memberIds } },
+            select: { userId: true, ownerJson: true },
+          })
+        : [];
+  } catch (error) {
+    console.warn('listTeamMembersArchive: user_profile_extras unavailable', error);
+    extrasRows = [];
+  }
+  const ownerSportByUser = new Map<string, string>();
+  for (const ex of extrasRows) {
+    try {
+      const owner = JSON.parse(ex.ownerJson || '{}') as {
+        personal?: { mainSport?: string };
+      };
+      const sport = text(owner.personal?.mainSport);
+      if (sport) ownerSportByUser.set(ex.userId, sport);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const items: Record<string, unknown>[] = rows.map((row, i) => {
+    const sport = ownerSportByUser.get(row.athleteId) || '-';
+    const base = mapArchivePersonRow({
+      person: row.athlete,
+      joinedAt: row.joinedAt,
+      membershipType: 'Standard',
+      operatorLabel: 'Member',
+      membershipRole: row.role,
+    });
+    return {
+      ...base,
+      number: i + 1,
+      email: text(row.athlete.email) || '',
+      teamMemberId: row.id,
+      sport,
+      groupTrained: '-',
+      groupTrainedId: '',
+      casual: 'No',
+    };
+  });
+
+  return paginate(applyFilters(items, params), page, pageSize);
+}
+
+export async function listTeamParentsArchive(
+  _ctx: ClubAuthContext,
+  params: ArchiveQueryParams = {},
+): Promise<PaginatedArchive<Record<string, unknown>>> {
+  // Team athlete dossiers do not store parent slots yet (no TeamMemberProfile).
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  return paginate([], page, pageSize);
 }
 
 export async function listClubParentsArchive(
@@ -331,20 +450,36 @@ export async function listClubParentsArchive(
       const name = text(p.name);
       const fiscalCode = text(p.fiscalCode);
       const mail = text(p.mainEmail);
-      if (!surname && !name && !fiscalCode && !mail) continue;
+      const kinship = text(p.kinship);
+      const phone = text(p.phone1) || text(p.phone2);
+      if (!surname && !name && !fiscalCode && !mail && !kinship && !phone) continue;
+
+      const localCity =
+        text(p.location) ||
+        text(p.residenceLocation) ||
+        text(p.country) ||
+        '-';
+
       items.push({
+        id: `${row.memberId}:${slot}`,
         key: `${row.memberId}:${slot}`,
+        memberId: row.memberId,
+        slot,
+        image: null,
         surname: surname || '-',
         name: name || '-',
+        gender: text(p.gender) || '-',
+        kinship: kinship || '-',
+        member: memberLabel,
+        memberLabel,
+        localCity,
+        Localcity: localCity,
+        phone: phone || '-',
         birthDate: text(p.birthDate) || '-',
         fiscalCode: fiscalCode || '-',
         mail: mail || '-',
-        phone: text(p.phone1) || '-',
-        country: text(p.country) || '-',
-        location: text(p.location) || text(p.residenceLocation) || '-',
-        province: text(p.province) || text(p.residenceProvince) || '-',
-        memberLabel,
-        slot,
+        insertDate: row.joinedAt.toISOString().slice(0, 10),
+        insertDateDisplay: formatArchiveDate(row.joinedAt),
       });
     }
   }
@@ -359,6 +494,59 @@ export async function listClubOperatorsArchive(
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
   const items: Record<string, unknown>[] = [];
+  const seenUserIds = new Set<string>();
+
+  const pushItem = (row: Record<string, unknown>, userKey: string) => {
+    if (!userKey || seenUserIds.has(userKey)) return;
+    seenUserIds.add(userKey);
+    items.push(row);
+  };
+
+  // Prefer club_staff (same source as /club/staff) for typology / employment / level.
+  try {
+    const staff = await listClubStaff(ctx);
+    const hasManagedStaff = staff.some((row) => !row.isClubAdmin);
+    if (hasManagedStaff) {
+      for (const row of staff) {
+        pushItem(
+          {
+            id: row.id,
+            name: row.name,
+            image: row.image,
+            operator: row.username,
+            username: row.username,
+            typology: row.staffTypeLabel,
+            staffType: row.staffType,
+            employmentArea: row.role || '-',
+            operativeLevel: row.operativeLevel || '-',
+            insertDate: '-',
+          },
+          row.userId,
+        );
+      }
+      return paginate(applyFilters(items, params), page, pageSize);
+    }
+    // Admin-only club_staff: keep admin row, then also load legacy operators below.
+    for (const row of staff) {
+      pushItem(
+        {
+          id: row.id,
+          name: row.name,
+          image: row.image,
+          operator: row.username,
+          username: row.username,
+          typology: row.staffTypeLabel,
+          staffType: row.staffType,
+          employmentArea: row.role || '-',
+          operativeLevel: row.operativeLevel || '-',
+          insertDate: '-',
+        },
+        row.userId,
+      );
+    }
+  } catch (error) {
+    console.warn('listClubOperatorsArchive: club_staff unavailable, using legacy operators', error);
+  }
 
   const staffOperators = await fetchClubStaffOperators(ctx.club.id);
   if (staffOperators.length > 0) {
@@ -369,33 +557,52 @@ export async function listClubOperatorsArchive(
     });
     const imageMap = new Map(users.map((u) => [u.id, u.image]));
     for (const row of staffOperators) {
-      items.push({
-        id: row.id,
-        name: row.name,
-        image: imageMap.get(row.id) ?? null,
-        insertDate: '-',
-        typology: row.occupation || 'Operator',
-        operator: row.username,
-      });
+      pushItem(
+        {
+          id: row.id,
+          name: row.name,
+          image: imageMap.get(row.id) ?? null,
+          operator: row.username,
+          username: row.username,
+          typology: 'Operator',
+          employmentArea: row.occupation || '-',
+          operativeLevel: operativeLevelForStaffType('operator'),
+          insertDate: '-',
+        },
+        row.id,
+      );
     }
-  } else {
+  } else if (items.length === 0) {
     const club = await prisma.club.findUnique({
       where: { id: ctx.club.id },
       select: {
         admin: {
-          select: { id: true, firstName: true, surname: true, name: true, username: true, image: true },
+          select: {
+            id: true,
+            firstName: true,
+            surname: true,
+            name: true,
+            username: true,
+            image: true,
+          },
         },
       },
     });
     if (club?.admin) {
-      items.push({
-        id: club.admin.id,
-        name: formatName(club.admin.firstName, club.admin.surname, club.admin.name),
-        image: club.admin.image,
-        insertDate: '-',
-        typology: 'Operator',
-        operator: club.admin.username,
-      });
+      pushItem(
+        {
+          id: club.admin.id,
+          name: formatName(club.admin.firstName, club.admin.surname, club.admin.name),
+          image: club.admin.image,
+          operator: club.admin.username,
+          username: club.admin.username,
+          typology: staffTypeLabel('club_admin'),
+          employmentArea: 'Director',
+          operativeLevel: operativeLevelForStaffType('club_admin'),
+          insertDate: '-',
+        },
+        club.admin.id,
+      );
     }
   }
 

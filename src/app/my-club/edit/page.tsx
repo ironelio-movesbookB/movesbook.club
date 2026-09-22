@@ -9,7 +9,9 @@ import ClubProfileEditor, {
   type ClubProfileSavePayload,
 } from '@/components/club/ClubProfileEditor';
 import { clubProfilePayloadForApi } from '@/lib/club/clubProfilePayload';
-import { applyEntityLogoOnSave } from '@/lib/entity/applyEntityLogoOnSave';
+import {
+  applyEntityImagesOnSave,
+} from '@/lib/entity/applyEntityLogoOnSave';
 import { useAuth } from '@/hooks/useAuth';
 import { isClubCreatedFromForm } from '@/lib/club/clubSidebarLabel';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
@@ -79,16 +81,24 @@ function EditClubProfileContent() {
 
     setSaving(true);
     try {
-      if (payload.logoFile || payload.removeLogo) {
-        await applyEntityLogoOnSave('club', clubId, payload);
-      }
+      const { logoUrl, bannerUrl } = await applyEntityImagesOnSave('club', clubId, payload);
       const res = await fetch(`/api/clubs/${clubId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(clubProfilePayloadForApi(payload)),
+        body: JSON.stringify(
+          clubProfilePayloadForApi({
+            ...payload,
+            logoUrl,
+            bannerUrl,
+            logoFile: undefined,
+            removeLogo: false,
+            bannerFile: undefined,
+            removeBanner: false,
+          }),
+        ),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

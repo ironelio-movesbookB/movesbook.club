@@ -3,12 +3,14 @@
 import { useEffect, useRef } from 'react';
 import { StatisticsPieBlock } from '@/components/admin/statistics/StatisticsCharts';
 import { useStatisticsGraphTheme } from '@/components/admin/statistics/StatisticsGraphTheme';
+import { useStatisticsMetric } from '@/components/admin/statistics/StatisticsMetricToggle';
 import type { StatsSlice } from '@/lib/admin/buildStatistics';
 
 type UserTypeDistributionDrilldownProps = {
   title: string;
   subtitle?: string;
   total: number;
+  totalIncome?: number;
   slices: StatsSlice[];
   onClear?: () => void;
 };
@@ -18,11 +20,14 @@ export default function UserTypeDistributionDrilldown({
   title,
   subtitle,
   total,
+  totalIncome = 0,
   slices,
   onClear,
 }: UserTypeDistributionDrilldownProps) {
   const sectionRef = useRef<HTMLDivElement>(null);
   const theme = useStatisticsGraphTheme();
+  const { isIncome, formatMetricValue, metricLabel } = useStatisticsMetric();
+  const metricTotal = isIncome ? totalIncome : total;
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -52,7 +57,7 @@ export default function UserTypeDistributionDrilldown({
             </p>
           ) : null}
           <p className="text-sm mt-1" style={{ color: theme.background.muted }}>
-            Total users: {total}
+            Total {metricLabel.toLowerCase()}: {formatMetricValue(metricTotal)}
           </p>
         </div>
         {onClear ? (
@@ -69,7 +74,7 @@ export default function UserTypeDistributionDrilldown({
       <div className="max-w-xl">
         <StatisticsPieBlock
           title={title}
-          subtitle={`Total users: ${total}`}
+          subtitle={`Total ${metricLabel.toLowerCase()}: ${formatMetricValue(metricTotal)}`}
           slices={slices}
           kindColors
           height={300}

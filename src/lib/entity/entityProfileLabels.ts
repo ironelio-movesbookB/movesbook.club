@@ -82,6 +82,32 @@ export function getEntityProfileLabels(kind: ManagedEntityKind): EntityProfileLa
   return LABELS[kind];
 }
 
+/** Archive of Users top-nav label for the entity profile section. */
+export function getArchiveEntityProfileSectionLabel(kind: ManagedEntityKind): string {
+  switch (kind) {
+    case 'team':
+      return 'Team Profile';
+    case 'coaching-group':
+      return 'Coach Profile';
+    case 'group':
+      return 'Group Profile';
+    case 'club':
+    default:
+      return 'Club Profile';
+  }
+}
+
+/** Resolve managed entity kind from the signed-in admin user type. */
+export function managedEntityKindFromUserType(
+  userType: string | null | undefined,
+): ManagedEntityKind {
+  const t = (userType || '').toUpperCase();
+  if (t === 'TEAM' || t === 'TEAM_MANAGER') return 'team';
+  if (t === 'COACH') return 'coaching-group';
+  if (t === 'GROUP' || t === 'GROUP_ADMIN') return 'group';
+  return 'club';
+}
+
 export function getAdminPasswordConfirmCopy(kind: ManagedEntityKind): {
   title: string;
   description: (adminUsername: string) => string;

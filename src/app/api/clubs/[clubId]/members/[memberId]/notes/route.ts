@@ -72,8 +72,9 @@ export async function POST(
     const noteKind = parent.kind === 'coach' ? 'coach' : 'staff';
 
     if (!access.isAdmin) {
+      const visibility = await getClubMemberVisibility(access.membership.id);
+
       if (noteKind === 'coach') {
-        const visibility = await getClubMemberVisibility(access.membership.id);
         if (!visibility.notesCoach) {
           return NextResponse.json({ error: 'Coach reflections are not visible to the member' }, { status: 403 });
         }
@@ -86,8 +87,13 @@ export async function POST(
         if (!parent.commentsEnabled) {
           return NextResponse.json({ error: 'Comments are disabled for this reflection' }, { status: 403 });
         }
+      } else if (noteKind === 'staff') {
+        // Member info → Messages → Comments: UI allows reply when messagesStaff is on.
+        if (!visibility.messagesStaff) {
+          return NextResponse.json({ error: 'Staff messages are not visible to the member' }, { status: 403 });
+        }
       } else {
-        return NextResponse.json({ error: 'Members may only reply to coach reflections here' }, { status: 403 });
+        return NextResponse.json({ error: 'Members may only reply to staff or coach notes' }, { status: 403 });
       }
     }
 

@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import ModernNavbar from '@/components/ModernNavbar';
 import TeamProfileEditor, {
-  type TeamProfileFormPayload,
+  type TeamProfileSavePayload,
 } from '@/components/team/TeamProfileEditor';
+import { applyEntityLogoOnSave } from '@/lib/entity/applyEntityLogoOnSave';
 import { useAuth } from '@/hooks/useAuth';
 import { isClubCreatedFromForm } from '@/lib/club/clubSidebarLabel';
 import { isTeamAccountUserType } from '@/utils/dashboardRouting';
@@ -63,27 +64,89 @@ function EditTeamProfileContent() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (!teamId) {
-      setLoading(false);
+    if (authLoading || !user) return;
+    if (!isTeamAccountUserType(user.userType)) return;
+    if (teamId) {
+      void loadTeam();
       return;
     }
-    void loadTeam();
-  }, [teamId, loadTeam]);
 
-  const handleSave = async (payload: TeamProfileFormPayload) => {
+    let cancelled = false;
+    const resolveTeam = async () => {
+      const saved =
+        typeof window !== 'undefined' ? localStorage.getItem('selectedTeam') : null;
+      if (saved) {
+        if (!cancelled) {
+          router.replace(`/my-team/edit?teamId=${encodeURIComponent(saved)}`);
+        }
+        return;
+      }
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        if (!token) {
+          if (!cancelled) {
+            setLoading(false);
+            setLoadError('Select a team first.');
+          }
+          return;
+        }
+        const res = await fetch('/api/teams/my-teams', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          if (!cancelled) {
+            setLoading(false);
+            setLoadError('Could not load your teams.');
+          }
+          return;
+        }
+        const data = (await res.json()) as { teams?: Array<{ id: string }> };
+        const first = data.teams?.[0]?.id ?? null;
+        if (first) {
+          localStorage.setItem('selectedTeam', first);
+          if (!cancelled) {
+            router.replace(`/my-team/edit?teamId=${encodeURIComponent(first)}`);
+          }
+          return;
+        }
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError('Create a team first from the Team dashboard.');
+        }
+      } catch {
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError('Could not load your teams.');
+        }
+      }
+    };
+    void resolveTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, loadTeam, authLoading, user, router]);
+
+  const handleSave = async (payload: TeamProfileSavePayload) => {
     if (!teamId) return;
     const token = localStorage.getItem('token');
     if (!token) throw new Error('Not signed in');
 
     setSaving(true);
     try {
+      let logoUrl = String(payload.logoUrl ?? '').trim();
+      if (payload.logoFile || payload.removeLogo) {
+        const uploaded = await applyEntityLogoOnSave('team', teamId, payload);
+        logoUrl = payload.removeLogo ? '' : uploaded || logoUrl;
+      }
+      const { logoFile: _logoFile, removeLogo: _removeLogo, ...body } = payload;
       const res = await fetch(`/api/teams/${teamId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...body, logoUrl }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

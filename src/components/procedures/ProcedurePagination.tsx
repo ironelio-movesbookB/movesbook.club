@@ -33,10 +33,9 @@ function visiblePages(page: number, pageCount: number): (number | '…')[] {
 }
 
 const navBtn =
-  'min-w-[2rem] rounded border px-2.5 py-1.5 text-[13px] font-medium transition-colors disabled:opacity-40';
-const navSolid = `${navBtn} border-gray-600 bg-gray-700 text-white hover:bg-gray-800`;
-const navOutline = `${navBtn} border-gray-400 bg-white text-gray-700 hover:bg-gray-50`;
-const navActive = `${navBtn} border-gray-700 bg-gray-700 text-white`;
+  'min-w-[2.25rem] rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40';
+const navOutline = `${navBtn} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`;
+const navActive = `${navBtn} border-gray-900 bg-gray-900 text-white`;
 
 /**
  * Legacy-style page selector: page-size dropdown · prev · numbered pages · next.
@@ -76,9 +75,9 @@ export default function ProcedurePagination({
         type="button"
         disabled={safePage <= 1}
         onClick={() => onPageChange(safePage - 1)}
-        className={navSolid}
+        className={navOutline}
       >
-        prev
+        Prev
       </button>
 
       {pages.map((p, idx) =>
@@ -96,16 +95,16 @@ export default function ProcedurePagination({
           >
             {p}
           </button>
-        )
+        ),
       )}
 
       <button
         type="button"
         disabled={safePage >= pageCount}
         onClick={() => onPageChange(safePage + 1)}
-        className={navSolid}
+        className={navOutline}
       >
-        next
+        Next
       </button>
     </div>
   );

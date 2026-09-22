@@ -50,6 +50,7 @@ import { SPORTS_LIST, getSportDisplayName } from '@/constants/moveframe.constant
 import PeriodizationTabPanel from '@/components/settings/PeriodizationTabPanel';
 import PeriodizationOverviewPanel from '@/components/settings/PeriodizationOverviewPanel';
 import PlannedActionTemplatesEditor from '@/components/settings/PlannedActionTemplatesEditor';
+import SportDropdownParametersSettings from '@/components/settings/SportDropdownParametersSettings';
 import SportMachinesSection from '@/components/settings/SportMachinesSection';
 import SuperAdminCompaniesSection from '@/components/settings/SuperAdminCompaniesSection';
 import ExerciseBankTab from '@/components/settings/ExerciseBankTab';
@@ -91,7 +92,14 @@ function getAllowedTabs(isAdmin: boolean, mode: 'tools' | 'technical'): ToolsTab
     ];
   }
   if (isAdmin) {
-    return ['periods', 'sections', 'bodyBuildingTechniques', 'commonDailyActions', 'insertActions'];
+    return [
+      'periods',
+      'sections',
+      'bodyBuildingTechniques',
+      'commonDailyActions',
+      'insertActions',
+      'sportDropdownParameters',
+    ];
   }
   // Personal Settings (all users): keep official user tabs only
   // and exclude technical/admin tabs (factories, muscles, sports-equipment).
@@ -1663,6 +1671,18 @@ export default function ToolsSettings({
             Action settings
           </button>
         )}
+        {allowedTabs.includes('sportDropdownParameters') && (
+          <button
+            onClick={() => setActiveTab('sportDropdownParameters')}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === 'sportDropdownParameters'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Dropdown parameters for sport
+          </button>
+        )}
         {allowedTabs.includes('devices') && (
           <button
             onClick={() => setActiveTab('devices')}
@@ -1681,7 +1701,7 @@ export default function ToolsSettings({
       )}
 
       {/* Language selector + load (hidden in Periodization — language follows profile) */}
-      {!periodizationOnly && (
+      {!periodizationOnly && activeTab !== 'sportDropdownParameters' && (
       <div className="grid grid-cols-1 gap-3">
 
         {activeTab === 'myLibrary' && (
@@ -2444,6 +2464,12 @@ export default function ToolsSettings({
       {activeTab === 'insertActions' && (
         <div className="space-y-4">
           <PlannedActionTemplatesEditor />
+        </div>
+      )}
+
+      {activeTab === 'sportDropdownParameters' && (
+        <div className="space-y-4">
+          <SportDropdownParametersSettings />
         </div>
       )}
 

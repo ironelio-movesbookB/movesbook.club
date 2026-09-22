@@ -8,8 +8,10 @@ import {
   listCashMovements,
   listClubAffiliationsArchive,
   listClubMembersArchive,
+  listTeamMembersArchive,
   listClubOperatorsArchive,
   listClubParentsArchive,
+  listTeamParentsArchive,
   listClubSubscriptionsArchive,
   listEventsArchive,
   listInsertCredits,
@@ -43,6 +45,19 @@ function parseArchiveParams(
     recordId: sp.get('recordId') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
+    membershipStatus: (() => {
+      const raw = sp.get('membershipStatus');
+      if (
+        raw === 'member' ||
+        raw === 'pending' ||
+        raw === 'not_member' ||
+        raw === 'archived' ||
+        raw === 'all'
+      ) {
+        return raw;
+      }
+      return undefined;
+    })(),
     includePaid: sp.get('includePaid') === '1' || sp.get('includePaid') === 'true',
     expandDeadlines: sp.get('expandDeadlines') === '1' || sp.get('expandDeadlines') === 'true',
   };
@@ -59,10 +74,16 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     let result;
     switch (params.type) {
       case 'members':
-        result = await listClubMembersArchive(auth.ctx, archiveParams);
+        result =
+          auth.ctx.workspaceKind === 'team'
+            ? await listTeamMembersArchive(auth.ctx, archiveParams)
+            : await listClubMembersArchive(auth.ctx, archiveParams);
         break;
       case 'parents':
-        result = await listClubParentsArchive(auth.ctx, archiveParams);
+        result =
+          auth.ctx.workspaceKind === 'team'
+            ? await listTeamParentsArchive(auth.ctx, archiveParams)
+            : await listClubParentsArchive(auth.ctx, archiveParams);
         break;
       case 'operators':
         result = await listClubOperatorsArchive(auth.ctx, archiveParams);

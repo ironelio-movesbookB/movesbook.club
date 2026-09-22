@@ -199,6 +199,7 @@ export async function PATCH(
         phone: String(payload.phone ?? ''),
         website: String(payload.website ?? ''),
         logoUrl: String(payload.logoUrl ?? ''),
+        bannerUrl: String(payload.bannerUrl ?? ''),
         directAccess: clubDirectAccess,
         officialName: clubName,
         directRegistrationCode: String(payload.directRegistrationCode ?? ''),

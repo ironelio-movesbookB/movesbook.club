@@ -38,11 +38,15 @@ function matchesScope(u: StatsUserLite, scope: DrilldownScope): boolean {
   return true;
 }
 
+function roundEuro(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** Version counts (+ pie slices) for a country / user-type scope. */
 export function aggregateVersionsForScope(
   users: StatsUserLite[],
   scope: DrilldownScope,
-): { total: number; bars: VersionBar[]; slices: StatsSlice[] } {
+): { total: number; totalIncome: number; bars: VersionBar[]; slices: StatsSlice[] } {
   const counts: Record<StatsVersionBucket, number> = {
     Trial: 0,
     Base: 0,
@@ -50,30 +54,43 @@ export function aggregateVersionsForScope(
     Professional: 0,
     Other: 0,
   };
+  const incomes: Record<StatsVersionBucket, number> = {
+    Trial: 0,
+    Base: 0,
+    Premium: 0,
+    Professional: 0,
+    Other: 0,
+  };
   let total = 0;
+  let totalIncome = 0;
   for (const u of users) {
     if (!matchesScope(u, scope)) continue;
     counts[u.version] += 1;
+    incomes[u.version] += u.income ?? 0;
     total += 1;
+    totalIncome += u.income ?? 0;
   }
+  totalIncome = roundEuro(totalIncome);
   const bars: VersionBar[] = STATS_VERSION_BUCKETS.map((version) => ({
     version,
     count: counts[version],
+    income: roundEuro(incomes[version]),
   }));
   const slices: StatsSlice[] = STATS_VERSION_BUCKETS.map((version) => ({
     key: version,
     label: version,
     count: counts[version],
+    income: roundEuro(incomes[version]),
     percent: total > 0 ? Math.round((counts[version] / total) * 1000) / 10 : 0,
   })).filter((s) => s.count > 0);
-  return { total, bars, slices };
+  return { total, totalIncome, bars, slices };
 }
 
 /** User-type distribution for a selected version (optional country). */
 export function aggregateKindsForVersion(
   users: StatsUserLite[],
   scope: DrilldownScope & { version: StatsVersionBucket },
-): { total: number; slices: StatsSlice[] } {
+): { total: number; totalIncome: number; slices: StatsSlice[] } {
   const byKind: Record<StatsUserKind, number> = {
     single: 0,
     coaches: 0,
@@ -81,17 +98,29 @@ export function aggregateKindsForVersion(
     clubs: 0,
     groups: 0,
   };
+  const byKindIncome: Record<StatsUserKind, number> = {
+    single: 0,
+    coaches: 0,
+    teams: 0,
+    clubs: 0,
+    groups: 0,
+  };
   let total = 0;
+  let totalIncome = 0;
   for (const u of users) {
     if (!matchesScope(u, scope)) continue;
     byKind[u.kind] += 1;
+    byKindIncome[u.kind] += u.income ?? 0;
     total += 1;
+    totalIncome += u.income ?? 0;
   }
+  totalIncome = roundEuro(totalIncome);
   const slices: StatsSlice[] = STATS_USER_KINDS.map((kind) => ({
     key: kind,
     label: STATS_KIND_LABELS[kind],
     count: byKind[kind],
+    income: roundEuro(byKindIncome[kind]),
     percent: total > 0 ? Math.round((byKind[kind] / total) * 1000) / 10 : 0,
   })).filter((s) => s.count > 0);
-  return { total, slices };
+  return { total, totalIncome, slices };
 }

@@ -103,6 +103,7 @@ export default function VersionsByCountryPage() {
           title={`Distribution — ${scopeLabel}`}
           subtitle={`${selectedVersion} · ${typeLabel}`}
           total={drilldown.total}
+          totalIncome={drilldown.totalIncome}
           slices={drilldown.slices}
           onClear={() => {
             setSelectedVersion(null);

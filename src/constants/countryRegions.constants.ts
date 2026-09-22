@@ -594,7 +594,11 @@ export function getRegionsForCountry(country: string): string[] {
   const trimmed = country.trim();
   if (!trimmed) return [];
 
-  const specific = REGIONS_BY_COUNTRY[trimmed];
+  const specific =
+    REGIONS_BY_COUNTRY[trimmed] ||
+    REGIONS_BY_COUNTRY[
+      Object.keys(REGIONS_BY_COUNTRY).find((k) => k.toLowerCase() === trimmed.toLowerCase()) || ''
+    ];
   if (specific?.length) {
     const set = new Set<string>([...specific, 'Other']);
     return Array.from(set);

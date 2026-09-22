@@ -17,23 +17,35 @@ import {
   type StatsVersionBucket,
 } from '@/lib/admin/statisticsKinds';
 
-export type StatsSlice = { key: string; label: string; count: number; percent: number };
+export type StatsSlice = {
+  key: string;
+  label: string;
+  count: number;
+  /** Estimated subscription income (€) for this slice. */
+  income: number;
+  percent: number;
+};
 
 export type KindDistribution = {
   total: number;
+  totalIncome: number;
   slices: StatsSlice[];
   byKind: Record<StatsUserKind, number>;
+  byKindIncome: Record<StatsUserKind, number>;
 };
 
 export type CountryKindRow = {
   country: string;
   total: number;
+  totalIncome: number;
   byKind: Record<StatsUserKind, number>;
+  byKindIncome: Record<StatsUserKind, number>;
 };
 
 export type VersionBar = {
   version: StatsVersionBucket;
   count: number;
+  income: number;
 };
 
 /** Compact rows for client-side drill-downs (version ↔ user type ↔ country). */
@@ -41,6 +53,7 @@ export type StatsUserLite = {
   country: string;
   kind: StatsUserKind;
   version: StatsVersionBucket;
+  income: number;
 };
 
 export type StatisticsPayload = {
@@ -63,12 +76,14 @@ export type StatisticsPayload = {
     kind: StatsTypeKindFilter;
     label: string;
     total: number;
+    totalIncome: number;
     countries: StatsSlice[];
   };
   allTypesByCountry: Array<{
     kind: StatsUserKind;
     label: string;
     total: number;
+    totalIncome: number;
     countries: StatsSlice[];
   }>;
   countriesBars: CountryKindRow[];
@@ -96,21 +111,42 @@ function emptyByKind(): Record<StatsUserKind, number> {
   return { single: 0, coaches: 0, teams: 0, clubs: 0, groups: 0 };
 }
 
-function toSlices(byKind: Record<StatsUserKind, number>, total: number): StatsSlice[] {
+function roundEuro(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function toSlices(
+  byKind: Record<StatsUserKind, number>,
+  byKindIncome: Record<StatsUserKind, number>,
+  total: number,
+): StatsSlice[] {
   return STATS_USER_KINDS.map((kind) => {
     const count = byKind[kind] ?? 0;
     return {
       key: kind,
       label: STATS_KIND_LABELS[kind],
       count,
+      income: roundEuro(byKindIncome[kind] ?? 0),
       percent: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
     };
   }).filter((s) => s.count > 0 || total === 0);
 }
 
-function buildKindDistribution(byKind: Record<StatsUserKind, number>): KindDistribution {
+function buildKindDistribution(
+  byKind: Record<StatsUserKind, number>,
+  byKindIncome: Record<StatsUserKind, number> = emptyByKind(),
+): KindDistribution {
   const total = STATS_USER_KINDS.reduce((sum, k) => sum + (byKind[k] ?? 0), 0);
-  return { total, slices: toSlices(byKind, total), byKind };
+  const totalIncome = roundEuro(
+    STATS_USER_KINDS.reduce((sum, k) => sum + (byKindIncome[k] ?? 0), 0),
+  );
+  return {
+    total,
+    totalIncome,
+    slices: toSlices(byKind, byKindIncome, total),
+    byKind,
+    byKindIncome,
+  };
 }
 
 function resolveCurrentVersion(
@@ -325,10 +361,21 @@ export async function buildStatisticsPayload(
 
   // World / filtered distribution
   const worldByKind = emptyByKind();
+  const worldByKindIncome = emptyByKind();
   let incomeEuro = 0;
 
-  const allKindsPerCountry = new Map<string, Record<StatsUserKind, number>>();
+  const allKindsPerCountry = new Map<
+    string,
+    { byKind: Record<StatsUserKind, number>; byKindIncome: Record<StatsUserKind, number> }
+  >();
   const versionRecount: Record<StatsVersionBucket, number> = {
+    Trial: 0,
+    Base: 0,
+    Premium: 0,
+    Professional: 0,
+    Other: 0,
+  };
+  const versionIncome: Record<StatsVersionBucket, number> = {
     Trial: 0,
     Base: 0,
     Premium: 0,
@@ -346,45 +393,63 @@ export async function buildStatisticsPayload(
     const country = u.country || 'Unknown';
     const versionName = resolveCurrentVersion(u.adminSettings, kind, u.resolvedVersion);
     const versionBucket = classifyVersionBucket(versionName);
-    usersLite.push({ country, kind, version: versionBucket });
+    const userIncome = priceFor(priceMap, kind, versionName);
+    usersLite.push({ country, kind, version: versionBucket, income: userIncome });
 
     // Always accumulate full country×kind matrix (for top-country pies)
     if (!countryFilter || (u.country ?? '').toLowerCase() === countryFilter.toLowerCase()) {
-      const row = allKindsPerCountry.get(country) ?? emptyByKind();
-      row[kind] += 1;
-      allKindsPerCountry.set(country, row);
+      const existing = allKindsPerCountry.get(country) ?? {
+        byKind: emptyByKind(),
+        byKindIncome: emptyByKind(),
+      };
+      existing.byKind[kind] += 1;
+      existing.byKindIncome[kind] += userIncome;
+      allKindsPerCountry.set(country, existing);
     }
 
     if (!matchesCountry(u)) continue;
     if (!matchesKindFilter(kind)) continue;
 
     worldByKind[kind] += 1;
+    worldByKindIncome[kind] += userIncome;
 
-    incomeEuro += priceFor(priceMap, kind, versionName);
+    incomeEuro += userIncome;
     versionRecount[versionBucket] += 1;
+    versionIncome[versionBucket] += userIncome;
   }
 
   const rankedCountries = [...allKindsPerCountry.entries()]
-    .map(([country, byKind]) => {
-      const total = STATS_USER_KINDS.reduce((s, k) => s + byKind[k], 0);
-      return { country, byKind, total };
+    .map(([country, row]) => {
+      const total = STATS_USER_KINDS.reduce((s, k) => s + row.byKind[k], 0);
+      const totalIncome = roundEuro(
+        STATS_USER_KINDS.reduce((s, k) => s + row.byKindIncome[k], 0),
+      );
+      return {
+        country,
+        byKind: row.byKind,
+        byKindIncome: row.byKindIncome,
+        total,
+        totalIncome,
+      };
     })
     .sort((a, b) => b.total - a.total || a.country.localeCompare(b.country));
 
   const topCountries = rankedCountries.slice(0, topCountriesN).map((row) => ({
     country: row.country,
     total: row.total,
-    distribution: buildKindDistribution(row.byKind),
+    distribution: buildKindDistribution(row.byKind, row.byKindIncome),
   }));
 
   const restCountryRows = rankedCountries.slice(topCountriesN);
   const restByKind = emptyByKind();
+  const restByKindIncome = emptyByKind();
   for (const row of restCountryRows) {
     for (const k of STATS_USER_KINDS) {
       restByKind[k] += row.byKind[k];
+      restByKindIncome[k] += row.byKindIncome[k];
     }
   }
-  const restDistribution = buildKindDistribution(restByKind);
+  const restDistribution = buildKindDistribution(restByKind, restByKindIncome);
   const restOfWorld =
     restDistribution.total > 0
       ? {
@@ -401,27 +466,39 @@ export async function buildStatisticsPayload(
     restLabel: string = 'Others',
   ) {
     const counts = new Map<string, number>();
+    const incomes = new Map<string, number>();
     let total = 0;
+    let totalIncome = 0;
     for (const u of rawUsers) {
       const k = kindFromUserType(u.userType);
       if (!k || !typeKindMatches(k, kindFilter)) continue;
       if (!hasActiveLastSubscription(u.adminSettings)) continue;
       if (countryFilter && (u.country ?? '').toLowerCase() !== countryFilter.toLowerCase()) continue;
       const c = u.country || 'Unknown';
+      const versionName = resolveCurrentVersion(u.adminSettings, k, u.resolvedVersion);
+      const userIncome = priceFor(priceMap, k, versionName);
       counts.set(c, (counts.get(c) ?? 0) + 1);
+      incomes.set(c, (incomes.get(c) ?? 0) + userIncome);
       total += 1;
+      totalIncome += userIncome;
     }
     const rankedAll = [...counts.entries()]
-      .map(([country, count]) => ({ country, count }))
+      .map(([country, count]) => ({
+        country,
+        count,
+        income: roundEuro(incomes.get(country) ?? 0),
+      }))
       .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
     const top = rankedAll.slice(0, n);
     const restCountries = rankedAll.slice(n);
     const othersCount = restCountries.reduce((s, r) => s + r.count, 0);
+    const othersIncome = roundEuro(restCountries.reduce((s, r) => s + r.income, 0));
 
     const countriesSlices: StatsSlice[] = top.map((r) => ({
       key: r.country,
       label: r.country,
       count: r.count,
+      income: r.income,
       percent: total > 0 ? Math.round((r.count / total) * 1000) / 10 : 0,
     }));
 
@@ -432,6 +509,7 @@ export async function buildStatisticsPayload(
         key: '__rest_of_world__',
         label: restLabel,
         count: othersCount,
+        income: othersIncome,
         percent: total > 0 ? Math.round((othersCount / total) * 1000) / 10 : 0,
       });
     } else if (total > 0 && rankedAll.length > 0) {
@@ -440,6 +518,7 @@ export async function buildStatisticsPayload(
         key: '__rest_of_world__',
         label: restLabel,
         count: 0,
+        income: 0,
         percent: 0,
       });
     }
@@ -448,6 +527,7 @@ export async function buildStatisticsPayload(
       kind: kindFilter,
       label: typeKindLabel(kindFilter),
       total,
+      totalIncome: roundEuro(totalIncome),
       countries: countriesSlices,
     };
   }
@@ -459,6 +539,7 @@ export async function buildStatisticsPayload(
       kind: k,
       label: block.label,
       total: block.total,
+      totalIncome: block.totalIncome,
       countries: block.countries,
     };
   });
@@ -466,11 +547,14 @@ export async function buildStatisticsPayload(
   // Vertical bars: countries with 5 kind bars
   let countriesBars: CountryKindRow[] = rankedCountries.map((row) => {
     const byKind = emptyByKind();
+    const byKindIncome = emptyByKind();
     for (const k of STATS_USER_KINDS) {
       byKind[k] = matchesKindFilter(k) ? row.byKind[k] : 0;
+      byKindIncome[k] = matchesKindFilter(k) ? row.byKindIncome[k] : 0;
     }
     const total = STATS_USER_KINDS.reduce((s, k) => s + byKind[k], 0);
-    return { country: row.country, total, byKind };
+    const totalIncome = roundEuro(STATS_USER_KINDS.reduce((s, k) => s + byKindIncome[k], 0));
+    return { country: row.country, total, totalIncome, byKind, byKindIncome };
   });
   if (userTypeFilter !== 'all') {
     countriesBars = countriesBars
@@ -495,7 +579,7 @@ export async function buildStatisticsPayload(
     countriesBars = countriesBars.slice(0, 40);
   }
 
-  const worldDistribution = buildKindDistribution(worldByKind);
+  const worldDistribution = buildKindDistribution(worldByKind, worldByKindIncome);
 
   return {
     totalUsers: worldDistribution.total,
@@ -510,6 +594,7 @@ export async function buildStatisticsPayload(
     versions: STATS_VERSION_BUCKETS.map((version) => ({
       version,
       count: versionRecount[version],
+      income: roundEuro(versionIncome[version]),
     })),
     usersLite,
     filters: {

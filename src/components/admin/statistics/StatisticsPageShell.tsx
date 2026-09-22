@@ -13,6 +13,10 @@ import {
   StatisticsGraphThemeProvider,
   useStatisticsGraphTheme,
 } from '@/components/admin/statistics/StatisticsGraphTheme';
+import {
+  StatisticsMetricProvider,
+  StatisticsMetricToggle,
+} from '@/components/admin/statistics/StatisticsMetricToggle';
 
 type StatisticsPageShellProps = {
   title: string;
@@ -111,11 +115,13 @@ function StatisticsPageShellInner({
         </div>
       </div>
 
-      {filters ? (
-        <div className="mb-3 flex flex-wrap items-end gap-3 border p-2.5" style={panelStyle}>
-          {filters}
-        </div>
-      ) : null}
+      <div
+        className="mb-3 flex flex-wrap items-end justify-between gap-3 border p-2.5"
+        style={panelStyle}
+      >
+        <div className="flex flex-wrap items-end gap-3">{filters}</div>
+        <StatisticsMetricToggle className="ml-auto" />
+      </div>
 
       {error ? (
         <div className="mb-3 border border-[#e0a0a0] bg-[#fde8e8] px-4 py-2.5 text-sm text-[#8a1f1f]">
@@ -137,7 +143,9 @@ function StatisticsPageShellInner({
 export default function StatisticsPageShell(props: StatisticsPageShellProps) {
   return (
     <StatisticsGraphThemeProvider>
-      <StatisticsPageShellInner {...props} />
+      <StatisticsMetricProvider>
+        <StatisticsPageShellInner {...props} />
+      </StatisticsMetricProvider>
     </StatisticsGraphThemeProvider>
   );
 }

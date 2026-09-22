@@ -7,18 +7,26 @@ import type { Column } from '@/types/clubTable';
 const columns: Column[] = [
   {
     key: 'image',
-    header: 'Image',
+    header: 'Photo',
     render: (value) =>
       value ? (
-        <Image src={String(value)} alt="" width={40} height={40} className="w-10 h-10 rounded-full mx-auto object-cover" unoptimized />
+        <Image
+          src={String(value)}
+          alt=""
+          width={40}
+          height={40}
+          className="mx-auto h-10 w-10 rounded-full object-cover"
+          unoptimized
+        />
       ) : (
         <span>-</span>
       ),
   },
-  { key: 'name', header: 'Operator' },
-  { key: 'typology', header: 'Typology' },
-  { key: 'operator', header: 'Username' },
-  { key: 'insertDate', header: 'Date' },
+  { key: 'name', header: 'Operator name' },
+  { key: 'operator', header: 'Nickname\\username' },
+  { key: 'typology', header: 'Staff type (Typology)' },
+  { key: 'employmentArea', header: 'Employment area' },
+  { key: 'operativeLevel', header: 'Operative level' },
 ];
 
 export default function ClubOperatorListPage() {
@@ -28,7 +36,7 @@ export default function ClubOperatorListPage() {
         title="Archive — Operators"
         archiveType="operators"
         columns={columns}
-        footerHint="Staff operators from club_operators with employment occupation (Instructor, Personal Trainer, …)."
+        footerHint="Staff operators from club staff / club_operators (Instructor, Personal Trainer, …)."
       />
     </div>
   );

@@ -63,6 +63,31 @@ export function isManagedEntityAdminUserType(userType: string): boolean {
   );
 }
 
+/**
+ * Archive of Users (`/clubMembers/*`) is shared by Club (ID8), Team (ID7), and Coach (ID6).
+ * Club staff keep access via the club workspace; team/coach/group use the same archive route.
+ */
+export function canAccessClubMembersArchive(userType: string): boolean {
+  return canAccessClubWorkspace(userType) || isManagedEntityAdminUserType(userType);
+}
+
+/**
+ * Team / Coach / Group may use ClubWorkspaceShell on shared archive + staff routes
+ * (otherwise sidebar Archive links under /clubs/* bounce them away).
+ */
+export function canAccessManagedArchiveShell(
+  userType: string,
+  pathname: string | null | undefined,
+): boolean {
+  if (!pathname || !isManagedEntityAdminUserType(userType)) return false;
+  if (canAccessClubWorkspace(userType)) return true;
+  return (
+    pathname.startsWith('/clubMembers') ||
+    pathname.startsWith('/clubs/') ||
+    pathname.startsWith('/club/staff')
+  );
+}
+
 /** Suggest Movesbook on MY PAGE — legacy role 5 (Athlete) only. */
 export function showSuggestMovesbookOnMyPage(userType: string): boolean {
   return userType === 'ATHLETE';

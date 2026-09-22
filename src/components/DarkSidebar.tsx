@@ -113,7 +113,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MyPageTopicsEntryRow from '@/components/club/MyPageTopicsEntryRow';
 import SelectClubForTopicsModal from '@/components/club/SelectClubForTopicsModal';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   isClubAccountUserType,
   isGroupAccountUserType,
@@ -270,18 +270,103 @@ function renderClubAdminInsertItemLeading(item: ClubAdminInsertItem): ReactNode 
 type ClubAdminArchiveItem =
   | { kind: 'icon'; Icon: LucideIcon; label: string; path: string }
   | { kind: 'affiliate'; label: string; path: string }
-  | { kind: 'overview'; label: string };
+  | { kind: 'overview'; label: string }
+  /** Non-clickable heading that owns the `child` rows below it. */
+  | { kind: 'group'; Icon: LucideIcon; label: string }
+  /** Indented row under the closest preceding `group` heading. */
+  | { kind: 'child'; label: string; path: string };
 
 const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
   [{ kind: 'icon', Icon: Server, label: '» Overview', path: '/clubs/archive_overview' }],
   [
-    { kind: 'icon', Icon: Users, label: 'Archive of Members', path: '/clubMembers/memberList'},
-    { kind: 'icon', Icon: UserCog, label: 'Operators', path: '/clubs/club_operatorlist' },
-    { kind: 'icon', Icon: User, label: 'Employees', path: '/clubs/archive_employees' },
+    { kind: 'group', Icon: Users, label: 'Archive of Users' },
+    {
+      kind: 'child',
+      label: 'All the users profiles',
+      path: '/clubMembers/memberList?section=athletes&nav=archive',
+    },
+    {
+      kind: 'child',
+      label: 'Athletes\\members',
+      path: '/clubMembers/memberList?section=athletes&nav=athletes',
+    },
+    {
+      kind: 'child',
+      label: 'Members in pending',
+      path: '/clubMembers/memberList?section=pending&nav=athletes',
+    },
+    {
+      kind: 'child',
+      label: 'Members archived',
+      path: '/clubMembers/memberList?section=archived&nav=archive',
+    },
+    {
+      kind: 'child',
+      label: 'Athletes not members',
+      path: '/clubMembers/memberList?section=not-members&nav=athletes',
+    },
+    {
+      kind: 'child',
+      label: "Athletes' parents & tutors",
+      path: '/clubMembers/memberList?section=parents&nav=archive',
+    },
+    {
+      kind: 'child',
+      label: 'Club\\Team Staff',
+      path: '/clubMembers/memberList?section=staff&nav=archive',
+    },
+    {
+      kind: 'child',
+      label: 'Club\\team profile',
+      path: '/clubMembers/memberList?section=club-profile&nav=archive',
+    },
+  ],
+  [
+    { kind: 'icon', Icon: Building2, label: 'Customers', path: '/clubs/archive_customers' },
+    { kind: 'icon', Icon: Briefcase, label: 'Suppliers', path: '/clubs/archive_suppliers' },
+  ],
+  [
+    { kind: 'group', Icon: ClipboardCheck, label: 'Checkings documents' },
+    {
+      kind: 'child',
+      label: 'Medical certifications of the members',
+      path: '/clubs/archive_deadlines?kind=medical-members',
+    },
+    {
+      kind: 'child',
+      label: 'Medical certifications of the staff',
+      path: '/clubs/archive_deadlines?kind=medical-staff',
+    },
+    {
+      kind: 'child',
+      label: 'ID card expirations',
+      path: '/clubs/archive_deadlines?kind=id-card',
+    },
+    {
+      kind: 'child',
+      label: 'Sports membership card expiration',
+      path: '/clubs/archive_deadlines?kind=sports-membership',
+    },
+  ],
+  [
+    { kind: 'group', Icon: Calendar, label: 'Recurrence check' },
+    { kind: 'child', label: 'Birthdays', path: '/clubs/archive_events?occasion=birthdays' },
+    { kind: 'child', label: 'Namedays', path: '/clubs/archive_events?occasion=name-days' },
+    { kind: 'child', label: 'Special events', path: '/clubs/archive_events?occasion=special' },
   ],
   [
     { kind: 'affiliate', label: 'Affiliations', path: '/clubMembers/membership' },
-    { kind: 'icon', Icon: Contact2, label: 'Subscriptions to the club', path: '/clubs/subscription' },
+    {
+      kind: 'icon',
+      Icon: Contact2,
+      label: 'Subscriptions to the club\\team',
+      path: '/clubs/subscription',
+    },
+  ],
+  [
+    { kind: 'icon', Icon: Users, label: 'Archive of Users', path: '/clubMembers/memberList?section=athletes&nav=archive' },
+    { kind: 'icon', Icon: UserCog, label: 'Operators', path: '/clubs/club_operatorlist' },
+    { kind: 'icon', Icon: User, label: 'Employees', path: '/clubs/archive_employees' },
     { kind: 'icon', Icon: CreditCard, label: 'Accesses', path: '/clubs/access_list' },
   ],
   [
@@ -344,6 +429,7 @@ function renderClubAdminArchiveLeading(item: ClubAdminArchiveItem): ReactNode {
       </span>
     );
   }
+  if (item.kind === 'child') return null;
   const Icon = item.Icon;
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
 }
@@ -361,6 +447,8 @@ interface DarkSidebarProps {
   onPostsClick?: () => void;
   /** Member info → Registration info (purchased version details in dashboard). */
   onRegistrationInfoClick?: () => void;
+  /** Member info → Contact info & activities (central preview of contacts + selected days/activities). */
+  onContactActivitiesClick?: () => void;
   /** Messages → My feedbacks for Staff — swap center section (keep left/right sidebars) */
   onMyFeedbacksStaffClick?: () => void;
   /** My Club → Music for the club → Add songs & playlists (same as navbar "Add Songs") */
@@ -399,6 +487,10 @@ interface DarkSidebarProps {
   onCreateClubClick?: () => void;
   /** Athlete My clubs → Become member (assignment flow TBD). */
   onBecomeMemberClick?: () => void;
+  /** Athlete memberships (Communities → My teams). */
+  athleteTeams?: Array<{ id: string; name: string; sport?: string | null }>;
+  /** Athlete selects a team under Communities → My teams. */
+  onAthleteTeamSelect?: (teamId: string) => void;
   /** Coach My Groups trained → Create a trained group. */
   onCreateGroupTrainedClick?: () => void;
   /** Team dashboard → Create a team. */
@@ -430,6 +522,7 @@ export default function DarkSidebar({
   onMyCoachingGroupClick,
   onPostsClick,
   onRegistrationInfoClick,
+  onContactActivitiesClick,
   onMyFeedbacksStaffClick,
   onClubAddSongsPlaylistsClick,
   onClubMusicPanelClick,
@@ -450,6 +543,8 @@ export default function DarkSidebar({
   onProfileImageSaved,
   onCreateClubClick,
   onBecomeMemberClick,
+  athleteTeams = [],
+  onAthleteTeamSelect,
   onCreateGroupTrainedClick,
   onCreateTeamClick,
   onCreateGroupClick,
@@ -460,6 +555,7 @@ export default function DarkSidebar({
 }: DarkSidebarProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useLanguage();
   const [allowVisiting, setAllowVisiting] = useState(true);
   const [showChangeProfilePhotoModal, setShowChangeProfilePhotoModal] = useState(false);
@@ -475,6 +571,8 @@ export default function DarkSidebar({
   const showSuggestMovesbook = showSuggestMovesbookForTab(userType, currentTab);
 
   const [communitiesOpen, setCommunitiesOpen] = useState(false);
+  const [communitiesMyTeamsOpen, setCommunitiesMyTeamsOpen] = useState(false);
+  const [selectedAthleteTeamId, setSelectedAthleteTeamId] = useState<string | null>(null);
   const [currentClubMembersOpen, setCurrentClubMembersOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [myDashboardOpen, setMyDashboardOpen] = useState(false);
@@ -916,6 +1014,47 @@ export default function DarkSidebar({
     }
   }, [clubManagementOpen]);
 
+  // Keep TEAM/CLUB Archives expanded while browsing archive routes (remount resets state).
+  useEffect(() => {
+    if (!pathname) return;
+    const onArchiveRoute =
+      pathname.startsWith('/clubMembers') ||
+      pathname.startsWith('/clubs/') ||
+      pathname.startsWith('/club/staff');
+    if (!onArchiveRoute) return;
+    if (
+      isTeamManagerUser ||
+      isCoachUser ||
+      isGroupAdminUser ||
+      isClubAccountUserType(userType)
+    ) {
+      setClubManagementOpen(true);
+      setClubArchivesOpen(true);
+    }
+  }, [pathname, userType, isTeamManagerUser, isCoachUser, isGroupAdminUser]);
+
+  // Team archive pages: keep My Team menu (TEAM'S MANAGEMENT) even if tab state lags.
+  useEffect(() => {
+    if (!isTeamManagerUser || !pathname) return;
+    const onArchiveRoute =
+      pathname.startsWith('/clubMembers') ||
+      pathname.startsWith('/clubs/') ||
+      pathname.startsWith('/club/staff');
+    if (!onArchiveRoute) return;
+    if (!selectedEntityId && formCreatedEntities.length === 0) return;
+    writeClubWorkspaceTab('my-entity');
+    if (currentTab !== 'my-entity') {
+      setCurrentTab('my-entity');
+    }
+  }, [
+    isTeamManagerUser,
+    pathname,
+    selectedEntityId,
+    formCreatedEntities.length,
+    currentTab,
+    setCurrentTab,
+  ]);
+
   useEffect(() => {
     if (!clubMarketingOpen) {
       setClubMarketingClubStaffOpen(false);
@@ -1278,6 +1417,29 @@ export default function DarkSidebar({
     [onEntitySelect, setCurrentTab, userType, isAthleteUser, onMyClubClick]
   );
 
+  const handleAthleteTeamSelect = useCallback(
+    (teamId: string) => {
+      setSelectedAthleteTeamId(teamId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedTeam', teamId);
+      }
+      onAthleteTeamSelect?.(teamId);
+    },
+    [onAthleteTeamSelect]
+  );
+
+  useEffect(() => {
+    if (!isAthleteUser || typeof window === 'undefined') return;
+    const saved = localStorage.getItem('selectedTeam');
+    if (saved && athleteTeams.some((t) => t.id === saved)) {
+      setSelectedAthleteTeamId(saved);
+    } else if (athleteTeams.length > 0) {
+      setSelectedAthleteTeamId((prev) =>
+        prev && athleteTeams.some((t) => t.id === prev) ? prev : athleteTeams[0].id
+      );
+    }
+  }, [isAthleteUser, athleteTeams]);
+
   /**
    * "My Topics" picker — after picking an entity, open topics DISPLAY
    * (never the settings editor). Real clubs → club website display;
@@ -1521,16 +1683,56 @@ export default function DarkSidebar({
               <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
             </button>
 
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">My teams</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
+            <div className="border-t border-gray-700">
+              <button
+                type="button"
+                onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
+                aria-expanded={communitiesMyTeamsOpen}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm">My teams</span>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 opacity-60 transition-transform ${
+                    communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
+                  }`}
+                />
+              </button>
+              {communitiesMyTeamsOpen && (
+                <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
+                  {athleteTeams.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {athleteTeams.map((team) => {
+                        const isSelected = selectedAthleteTeamId === team.id;
+                        return (
+                          <li key={team.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleAthleteTeamSelect(team.id)}
+                              className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
+                                isSelected ? 'bg-zinc-700/60' : ''
+                              }`}
+                            >
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
+                                aria-hidden
+                              />
+                              <span className="min-w-0 flex-1 truncate leading-snug">
+                                {team.name?.trim() || 'Team'}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
@@ -2007,6 +2209,11 @@ export default function DarkSidebar({
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (typeof window !== 'undefined') {
+                                    localStorage.setItem('selectedClub', team.id);
+                                    localStorage.setItem('selectedTeam', team.id);
+                                  }
+                                  writeClubWorkspaceTab('my-entity');
                                   onEntitySelect?.(team.id);
                                   setCurrentTab('my-entity');
                                 }}
@@ -2179,6 +2386,20 @@ export default function DarkSidebar({
                     >
                       <UserCircle className="h-4 w-4 shrink-0 opacity-90" />
                       <span>User Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onContactActivitiesClick) {
+                          onContactActivitiesClick();
+                        } else {
+                          router.push('/profile#member-info');
+                        }
+                      }}
+                      className="flex w-full items-center gap-2 border-t border-black/25 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90"
+                    >
+                      <Phone className="h-4 w-4 shrink-0 opacity-90" />
+                      <span>Contact info & activities</span>
                     </button>
                   </div>
                 )}
@@ -2755,16 +2976,56 @@ export default function DarkSidebar({
                     <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
                   </button>
 
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">My teams</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
+                  <div className="border-t border-gray-700">
+                    <button
+                      type="button"
+                      onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
+                      aria-expanded={communitiesMyTeamsOpen}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Plus className="w-4 h-4 text-gray-300" />
+                        <span className="text-sm">My teams</span>
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 opacity-60 transition-transform ${
+                          communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
+                        }`}
+                      />
+                    </button>
+                    {communitiesMyTeamsOpen && (
+                      <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
+                        {athleteTeams.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {athleteTeams.map((team) => {
+                              const isSelected = selectedAthleteTeamId === team.id;
+                              return (
+                                <li key={team.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAthleteTeamSelect(team.id)}
+                                    className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
+                                      isSelected ? 'bg-zinc-700/60' : ''
+                                    }`}
+                                  >
+                                    <span
+                                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
+                                      aria-hidden
+                                    />
+                                    <span className="min-w-0 flex-1 truncate leading-snug">
+                                      {team.name?.trim() || 'Team'}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"
@@ -3556,7 +3817,7 @@ export default function DarkSidebar({
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 <BookOpen className="h-4 w-4 shrink-0" />
-                                <span className="truncate text-[12px] font-semibold tracking-wide">
+                                <span className="truncate text-base font-semibold tracking-wide">
                                   User guides
                                 </span>
                               </div>
@@ -3609,7 +3870,7 @@ export default function DarkSidebar({
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 <Users2 className="h-4 w-4 shrink-0" />
-                                <span className="truncate text-[12px] font-semibold tracking-wide">
+                                <span className="truncate text-base font-semibold tracking-wide">
                                   Current Operators
                                 </span>
                               </div>
@@ -3823,7 +4084,7 @@ export default function DarkSidebar({
                                   <Shield className="h-3.5 w-3.5" />
                                   <CreditCard className="h-3.5 w-3.5" />
                                 </span>
-                                <span className="truncate text-[12px] font-semibold tracking-wide">
+                                <span className="truncate text-base font-semibold tracking-wide">
                                   Accounts and Device
                                 </span>
                               </div>
@@ -4232,7 +4493,7 @@ export default function DarkSidebar({
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <Stamp className="w-4 h-4 shrink-0" />
-                              <span className="text-[12px] font-semibold tracking-wide truncate">Administration</span>
+                              <span className="text-base font-semibold tracking-wide truncate">Administration</span>
                             </div>
                             <ChevronDown className="w-4 h-4 shrink-0 opacity-90" />
                           </button>
@@ -4251,7 +4512,7 @@ export default function DarkSidebar({
                               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <Monitor className="h-4 w-4 shrink-0 opacity-95" />
-                                  <span className="truncate text-[12px] font-medium text-white">
+                                  <span className="truncate text-sm font-medium text-white">
                                     Monitorings
                                   </span>
                                 </div>
@@ -4362,7 +4623,7 @@ export default function DarkSidebar({
                               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <PlusCircle className="h-4 w-4 shrink-0 opacity-95" strokeWidth={1.75} />
-                                  <span className="truncate text-[12px] font-medium text-white">
+                                  <span className="truncate text-sm font-medium text-white">
                                     Insert a new item
                                   </span>
                                 </div>
@@ -4391,7 +4652,7 @@ export default function DarkSidebar({
                                             router.push(item.path);
                                           }
                                         }}
-                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
                                           ii < group.length - 1
                                             ? 'border-b border-gray-600/50'
                                             : ''
@@ -4421,7 +4682,7 @@ export default function DarkSidebar({
                               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <FolderOpen className="h-4 w-4 shrink-0 opacity-95" />
-                                  <span className="truncate text-[12px] font-medium text-white">
+                                  <span className="truncate text-sm font-medium text-white">
                                     Archives
                                   </span>
                                 </div>
@@ -4441,30 +4702,54 @@ export default function DarkSidebar({
                                       gi > 0 ? 'border-t border-gray-600/70' : ''
                                     }
                                   >
-                                    {group.map((item, ii) => (
-                                      <button
-                                        key={item.label}
-                                        type="button"
-                                        onClick={() => {
-                                          if ('path' in item && item.path) {
-                                            if (isClubAccountUserType(userType)) {
-                                              writeClubWorkspaceTab('my-entity');
-                                              setCurrentTab('my-entity');
+                                    {group.map((item, ii) => {
+                                      const rowBorder =
+                                        ii < group.length - 1
+                                          ? 'border-b border-gray-600/50'
+                                          : '';
+
+                                      if (item.kind === 'group') {
+                                        const GroupIcon = item.Icon;
+                                        return (
+                                          <div
+                                            key={item.label}
+                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
+                                          >
+                                            <GroupIcon
+                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
+                                              strokeWidth={2}
+                                            />
+                                            <span className="min-w-0 leading-snug">
+                                              {item.label}
+                                            </span>
+                                          </div>
+                                        );
+                                      }
+
+                                      const isChild = item.kind === 'child';
+                                      return (
+                                        <button
+                                          key={item.label}
+                                          type="button"
+                                          onClick={() => {
+                                            if ('path' in item && item.path) {
+                                              if (isClubAccountUserType(userType)) {
+                                                writeClubWorkspaceTab('my-entity');
+                                                setCurrentTab('my-entity');
+                                              }
+                                              router.push(item.path);
                                             }
-                                            router.push(item.path);
-                                          }
-                                          // Handle click event
-                                        }}
-                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                          ii < group.length - 1
-                                            ? 'border-b border-gray-600/50'
-                                            : ''
-                                        }`}
-                                      >
-                                        {renderClubAdminArchiveLeading(item)}
-                                        <span className="min-w-0 leading-snug">{item.label}</span>
-                                      </button>
-                                    ))}
+                                            // Handle click event
+                                          }}
+                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                            isChild ? 'pl-9' : 'pl-3'
+                                          } ${rowBorder}`}
+                                        >
+                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
+                                          <span className="min-w-0 leading-snug">{item.label}</span>
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 ))}
                               </div>
@@ -4499,7 +4784,7 @@ export default function DarkSidebar({
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Icon className="h-4 w-4 shrink-0 opacity-95" />
                                     <span
-                                      className={`truncate text-[12px] font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
+                                      className={`truncate text-sm font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
                                     >
                                       {label}
                                     </span>
@@ -4529,7 +4814,7 @@ export default function DarkSidebar({
                                 <div className="flex min-w-0 items-center gap-2">
                                   <Settings className="h-4 w-4 shrink-0 opacity-95" />
                                   <span
-                                    className={`truncate text-[12px] font-medium ${
+                                    className={`truncate text-sm font-medium ${
                                       clubGeneralSettingsOpen ? 'text-yellow-300' : 'text-white'
                                     }`}
                                   >
@@ -4630,7 +4915,7 @@ export default function DarkSidebar({
                                           router.push(href);
                                         }
                                       }}
-                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
                                         subIdx < arr.length - 1 ? 'border-b border-gray-600/70' : ''
                                       }`}
                                     >
@@ -4657,7 +4942,7 @@ export default function DarkSidebar({
                               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <Lock className="h-4 w-4 shrink-0 opacity-95" />
-                                  <span className="truncate text-[12px] font-medium text-yellow-300">
+                                  <span className="truncate text-sm font-medium text-yellow-300">
                                     Security
                                   </span>
                                 </div>
@@ -4672,7 +4957,7 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
-                                  className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Lock className="h-3.5 w-3.5 shrink-0 opacity-95" />
@@ -4682,21 +4967,21 @@ export default function DarkSidebar({
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <RefreshCw className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Change my password</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Management of your database</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <Check className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Authorizes this computer</span>
@@ -4732,7 +5017,7 @@ export default function DarkSidebar({
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Icon className="h-4 w-4 shrink-0 opacity-95" />
                                     <span
-                                      className={`truncate text-[12px] font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
+                                      className={`truncate text-sm font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
                                     >
                                       {label}
                                     </span>
@@ -4757,7 +5042,7 @@ export default function DarkSidebar({
                               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <Monitor className="h-4 w-4 shrink-0 opacity-95" />
-                                  <span className="truncate text-[12px] font-medium text-white">
+                                  <span className="truncate text-sm font-medium text-white">
                                     Marketing
                                   </span>
                                 </div>
@@ -4772,7 +5057,7 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
                                   <span className="leading-snug">Club Presentation</span>
@@ -4892,7 +5177,7 @@ export default function DarkSidebar({
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Icon className="h-4 w-4 shrink-0 opacity-95" />
                                     <span
-                                      className={`truncate text-[12px] font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
+                                      className={`truncate text-sm font-medium ${yellow ? 'text-yellow-300' : 'text-white'}`}
                                     >
                                       {label}
                                     </span>
@@ -4952,16 +5237,125 @@ export default function DarkSidebar({
 
                 {isTeamManagerUser && (
                   <>
-                    <button className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700">
+                    <div className="w-full border-b border-teal-700">
+                      {!clubManagementOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setClubManagementOpen(true)}
+                          className="w-full bg-[#92278F] hover:bg-[#7b1f79] text-white transition-colors select-none"
+                        >
+                          <div className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-[13px] font-bold uppercase leading-tight tracking-wide">
+                                TEAM&apos;S MANAGEMENT
+                              </span>
+                              <Settings className="h-5 w-5 shrink-0 text-white opacity-95" aria-hidden />
+                            </div>
+                            <ChevronDown className="h-4 w-4 text-white opacity-95" strokeWidth={2.5} aria-hidden />
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-full bg-[#3a3a3a] text-white shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => setClubManagementOpen(false)}
+                            className="w-full bg-[#7a0d1c] hover:bg-[#681018] text-white border-b border-teal-700 transition-colors"
+                          >
+                            <div className="relative px-3 pt-3 pb-1">
+                              <span className="block text-center text-[13px] font-bold uppercase tracking-wide pr-8">
+                                TEAM&apos;S MANAGEMENT
+                              </span>
+                              <Settings className="absolute right-3 top-3 w-5 h-5 text-white opacity-95 pointer-events-none" aria-hidden />
+                            </div>
+                            <div className="flex justify-center pb-2">
+                              <ChevronDown className="w-4 h-4 rotate-180 opacity-95" strokeWidth={2.5} aria-hidden />
+                            </div>
+                          </button>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubArchivesOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <FolderOpen className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className="truncate text-sm font-semibold">Archives</span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubArchivesOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubArchivesOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
+                                  <div
+                                    key={gi}
+                                    className={gi > 0 ? 'border-t border-gray-600/70' : ''}
+                                  >
+                                    {group.map((item, ii) => {
+                                      const rowBorder =
+                                        ii < group.length - 1
+                                          ? 'border-b border-gray-600/50'
+                                          : '';
+                                      if (item.kind === 'group') {
+                                        const GroupIcon = item.Icon;
+                                        return (
+                                          <div
+                                            key={item.label}
+                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
+                                          >
+                                            <GroupIcon
+                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
+                                              strokeWidth={2}
+                                            />
+                                            <span className="min-w-0 leading-snug">{item.label}</span>
+                                          </div>
+                                        );
+                                      }
+                                      const isChild = item.kind === 'child';
+                                      return (
+                                        <button
+                                          key={item.label}
+                                          type="button"
+                                          onClick={() => {
+                                            if ('path' in item && item.path) {
+                                              router.push(item.path);
+                                            }
+                                          }}
+                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                            isChild ? 'pl-9' : 'pl-3'
+                                          } ${rowBorder}`}
+                                        >
+                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
+                                          <span className="min-w-0 leading-snug">{item.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/clubMembers/memberList')}
+                      className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700"
+                    >
                       <div className="flex items-center gap-3">
-                        <Trophy className="w-5 h-5" />
-                        <span>Team Management</span>
-                      </div>
-                    </button>
-                    <button className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700">
-                      <div className="flex items-center gap-3">
-                        <Users className="w-5 h-5" />
-                        <span>Athletes</span>
+                        <Users className="h-5 w-5" />
+                        <span>Archive of Users</span>
                       </div>
                     </button>
                   </>
@@ -4986,16 +5380,125 @@ export default function DarkSidebar({
 
                 {userType === 'COACH' && (
                   <>
-                    <button className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700">
+                    <div className="w-full border-b border-teal-700">
+                      {!clubManagementOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setClubManagementOpen(true)}
+                          className="w-full bg-[#92278F] hover:bg-[#7b1f79] text-white transition-colors select-none"
+                        >
+                          <div className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-[13px] font-bold uppercase leading-tight tracking-wide">
+                                COACH&apos;S MANAGEMENT
+                              </span>
+                              <Settings className="h-5 w-5 shrink-0 text-white opacity-95" aria-hidden />
+                            </div>
+                            <ChevronDown className="h-4 w-4 text-white opacity-95" strokeWidth={2.5} aria-hidden />
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-full bg-[#3a3a3a] text-white shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => setClubManagementOpen(false)}
+                            className="w-full bg-[#7a0d1c] hover:bg-[#681018] text-white border-b border-teal-700 transition-colors"
+                          >
+                            <div className="relative px-3 pt-3 pb-1">
+                              <span className="block text-center text-[13px] font-bold uppercase tracking-wide pr-8">
+                                COACH&apos;S MANAGEMENT
+                              </span>
+                              <Settings className="absolute right-3 top-3 w-5 h-5 text-white opacity-95 pointer-events-none" aria-hidden />
+                            </div>
+                            <div className="flex justify-center pb-2">
+                              <ChevronDown className="w-4 h-4 rotate-180 opacity-95" strokeWidth={2.5} aria-hidden />
+                            </div>
+                          </button>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubArchivesOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <FolderOpen className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className="truncate text-sm font-semibold">Archives</span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubArchivesOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubArchivesOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
+                                  <div
+                                    key={gi}
+                                    className={gi > 0 ? 'border-t border-gray-600/70' : ''}
+                                  >
+                                    {group.map((item, ii) => {
+                                      const rowBorder =
+                                        ii < group.length - 1
+                                          ? 'border-b border-gray-600/50'
+                                          : '';
+                                      if (item.kind === 'group') {
+                                        const GroupIcon = item.Icon;
+                                        return (
+                                          <div
+                                            key={item.label}
+                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
+                                          >
+                                            <GroupIcon
+                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
+                                              strokeWidth={2}
+                                            />
+                                            <span className="min-w-0 leading-snug">{item.label}</span>
+                                          </div>
+                                        );
+                                      }
+                                      const isChild = item.kind === 'child';
+                                      return (
+                                        <button
+                                          key={item.label}
+                                          type="button"
+                                          onClick={() => {
+                                            if ('path' in item && item.path) {
+                                              router.push(item.path);
+                                            }
+                                          }}
+                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                            isChild ? 'pl-9' : 'pl-3'
+                                          } ${rowBorder}`}
+                                        >
+                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
+                                          <span className="min-w-0 leading-snug">{item.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/clubMembers/memberList')}
+                      className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700"
+                    >
                       <div className="flex items-center gap-3">
-                        <Users className="w-5 h-5" />
-                        <span>Athlete Management</span>
-                      </div>
-                    </button>
-                    <button className="w-full bg-teal-800 hover:bg-teal-700 text-white py-3 px-4 flex items-center justify-between transition-colors border-b border-teal-700">
-                      <div className="flex items-center gap-3">
-                        <Users className="w-5 h-5" />
-                        <span>Athletes</span>
+                        <Users className="h-5 w-5" />
+                        <span>Archive of Users</span>
                       </div>
                     </button>
                   </>

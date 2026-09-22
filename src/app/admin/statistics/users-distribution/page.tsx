@@ -8,6 +8,7 @@ import StatisticsPageShell, {
 } from '@/components/admin/statistics/StatisticsPageShell';
 import { StatisticsPieBlock } from '@/components/admin/statistics/StatisticsCharts';
 import { useStatisticsGraphTheme } from '@/components/admin/statistics/StatisticsGraphTheme';
+import { useStatisticsMetric } from '@/components/admin/statistics/StatisticsMetricToggle';
 import VersionDistributionDrilldown from '@/components/admin/statistics/VersionDistributionDrilldown';
 import { useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
 import { aggregateVersionsForScope } from '@/lib/admin/statisticsDrilldown';
@@ -19,23 +20,35 @@ import type { StatsSlice } from '@/lib/admin/buildStatistics';
 
 function WorldDistributionSummary({
   total,
+  totalIncome,
   slices,
 }: {
   total: number;
+  totalIncome: number;
   slices: StatsSlice[];
 }) {
   const theme = useStatisticsGraphTheme();
+  const { isIncome, formatMetricValue, metricLabel, sliceValue } = useStatisticsMetric();
+  const metricTotal = isIncome ? totalIncome : total;
+  const incomeShareTotal = slices.reduce((s, x) => s + sliceValue(x), 0);
   return (
     <div className="mt-4 border p-4 text-base" style={theme.panelStyle}>
       <p className="mb-2 text-base font-semibold" style={{ color: theme.background.text }}>
-        Current users = {total}
+        Current {metricLabel.toLowerCase()} = {formatMetricValue(metricTotal)}
       </p>
       <ul className="space-y-1.5 text-lg" style={{ color: theme.background.text }}>
-        {slices.map((s) => (
-          <li key={s.key}>
-            {s.label} {s.count} ({s.percent}%)
-          </li>
-        ))}
+        {slices.map((s) => {
+          const value = sliceValue(s);
+          const percent =
+            incomeShareTotal > 0
+              ? Math.round((value / incomeShareTotal) * 1000) / 10
+              : 0;
+          return (
+            <li key={s.key}>
+              {s.label} {formatMetricValue(value)} ({percent}%)
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -103,7 +116,7 @@ export default function UsersDistributionPage() {
           title={filters.country ? `Distribution — ${filters.country}` : 'Distribution — World'}
           subtitle={
             data
-              ? `Total users: ${data.worldDistribution.total}`
+              ? `Total ${data.worldDistribution.total} users · ${data.worldDistribution.totalIncome} €`
               : undefined
           }
           slices={data?.worldDistribution.slices ?? []}
@@ -115,6 +128,7 @@ export default function UsersDistributionPage() {
       {data && data.worldDistribution.total > 0 ? (
         <WorldDistributionSummary
           total={data.worldDistribution.total}
+          totalIncome={data.worldDistribution.totalIncome}
           slices={data.worldDistribution.slices}
         />
       ) : null}
@@ -124,6 +138,7 @@ export default function UsersDistributionPage() {
           title={`${STATS_KIND_LABELS[selectedKind]} — versions`}
           subtitle={filters.country ? filters.country : 'World'}
           total={drilldown.total}
+          totalIncome={drilldown.totalIncome}
           bars={drilldown.bars}
           slices={drilldown.slices}
           userKind={selectedKind}

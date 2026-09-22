@@ -5,7 +5,10 @@ import type { CreateEntityFormPayload } from '@/components/entity/CreateEntityMo
 import type { ManagedEntityKind } from '@/lib/entity/entityProfileLabels';
 import { getFormCreatedEntitiesSortedByCreatedAt } from '@/lib/entity/entityForm';
 import { clubProfilePayloadForApi } from '@/lib/club/clubProfilePayload';
-import { applyEntityLogoOnSave } from '@/lib/entity/applyEntityLogoOnSave';
+import {
+  applyEntityBannerOnSave,
+  applyEntityLogoOnSave,
+} from '@/lib/entity/applyEntityLogoOnSave';
 
 type EntityRow = { id: string; description?: string | null };
 
@@ -55,6 +58,9 @@ export function useManagedEntityCreation(options: {
         const entity = data[responseEntityKey] as { id?: string } | undefined;
         if (entity?.id && (payload.logoFile || payload.removeLogo)) {
           await applyEntityLogoOnSave(entityKind, entity.id, payload);
+        }
+        if (entity?.id && (payload.bannerFile || payload.removeBanner)) {
+          await applyEntityBannerOnSave(entityKind, entity.id, payload);
         }
         await onReload();
         if (entity?.id) {

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { StatisticsPieBlock, StatisticsVersionsBars } from '@/components/admin/statistics/StatisticsCharts';
 import { useStatisticsGraphTheme } from '@/components/admin/statistics/StatisticsGraphTheme';
+import { useStatisticsMetric } from '@/components/admin/statistics/StatisticsMetricToggle';
 import type { StatsSlice, VersionBar } from '@/lib/admin/buildStatistics';
 import {
   STATS_USER_KINDS,
@@ -14,6 +15,7 @@ type VersionDistributionDrilldownProps = {
   title: string;
   subtitle?: string;
   total: number;
+  totalIncome?: number;
   bars: VersionBar[];
   slices: StatsSlice[];
   /**
@@ -36,6 +38,7 @@ export default function VersionDistributionDrilldown({
   title,
   subtitle,
   total,
+  totalIncome = 0,
   bars,
   slices,
   userKind,
@@ -45,13 +48,14 @@ export default function VersionDistributionDrilldown({
 }: VersionDistributionDrilldownProps) {
   const sectionRef = useRef<HTMLDivElement>(null);
   const theme = useStatisticsGraphTheme();
+  const { isIncome, formatMetricValue, metricLabel } = useStatisticsMetric();
   const accent =
     userKind && STATS_USER_KINDS.includes(userKind) ? theme.kindColor(userKind) : undefined;
+  const metricTotal = isIncome ? totalIncome : total;
 
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    // Wait a frame so layout is ready after selection mounts.
     const id = window.requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -77,7 +81,7 @@ export default function VersionDistributionDrilldown({
             </p>
           ) : null}
           <p className="text-sm mt-1" style={{ color: theme.background.muted }}>
-            Users in selection: {total}
+            {metricLabel} in selection: {formatMetricValue(metricTotal)}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -113,7 +117,7 @@ export default function VersionDistributionDrilldown({
             className="text-xs font-semibold mb-2 shrink-0"
             style={{ color: theme.background.text }}
           >
-            Bar — number of users
+            Bar — {isIncome ? 'income (€)' : 'number of users'}
           </p>
           <StatisticsVersionsBars
             rows={bars}
@@ -132,7 +136,7 @@ export default function VersionDistributionDrilldown({
           </p>
           <StatisticsPieBlock
             title="Versions share"
-            subtitle={`${total} users`}
+            subtitle={`${formatMetricValue(metricTotal)} ${isIncome ? 'income' : 'users'}`}
             slices={slices}
             versionColors={!accent}
             uniformColor={accent}
