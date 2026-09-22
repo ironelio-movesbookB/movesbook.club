@@ -4,12 +4,12 @@ import { join, extname } from 'path';
 import { getServerPublicDir } from '@/lib/serverPublicDir';
 import {
   ENTITY_LOGO_UPLOAD_DIR,
-  getBannerUrlFromEntityDescription,
-  getLogoUrlFromEntityDescription,
   mergeBannerUrlIntoDescription,
   mergeLogoUrlIntoDescription,
   type ManagedEntityLogoKind,
 } from '@/lib/entity/entityLogo';
+import { parseEntityDescriptionMeta } from '@/lib/entity/entityForm';
+import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
 import { prisma } from '@/lib/prisma';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -17,6 +17,28 @@ const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif
 
 type EntityRow = { id: string; description: string | null };
 type EntityImageAsset = 'logo' | 'banner';
+
+/** Canonical `/uploads/entity_logos/...` from description JSON (not browser media URL). */
+function storedLogoPath(description: string | null | undefined): string | null {
+  const raw = parseEntityDescriptionMeta(description).logoUrl?.trim();
+  return raw || null;
+}
+
+function storedBannerPath(description: string | null | undefined): string | null {
+  const raw = parseClubDescriptionMeta(description).bannerUrl?.trim();
+  return raw || null;
+}
+
+/** Accept stored `/uploads/...` or display `/api/media/uploads/...` for disk delete. */
+function toDiskUploadPath(publicPath: string | null | undefined): string | null {
+  let raw = publicPath?.trim() ?? '';
+  if (!raw) return null;
+  if (raw.startsWith('/api/media/uploads/')) {
+    raw = `/uploads/${raw.slice('/api/media/uploads/'.length)}`;
+  }
+  if (!raw.startsWith(`/uploads/${ENTITY_LOGO_UPLOAD_DIR}/`)) return null;
+  return raw;
+}
 
 async function loadClub(clubId: string, adminId: string): Promise<EntityRow | null> {
   const rows = await prisma.$queryRaw<EntityRow[]>`
@@ -117,10 +139,9 @@ function extensionForFile(file: File, extFromName: string | undefined): string {
 }
 
 async function deletePublicLogoFile(publicPath: string | null | undefined): Promise<void> {
-  const raw = publicPath?.trim();
-  if (!raw?.startsWith(`/uploads/${ENTITY_LOGO_UPLOAD_DIR}/`)) return;
-  const rel = raw.replace(/^\//, '');
-  const abs = join(getServerPublicDir(), rel);
+  const diskPath = toDiskUploadPath(publicPath);
+  if (!diskPath) return;
+  const abs = join(getServerPublicDir(), diskPath.replace(/^\//, ''));
   try {
     await unlink(abs);
   } catch {
@@ -163,17 +184,17 @@ export async function saveEntityLogoForOwner(
 
   const publicPath = `/uploads/${ENTITY_LOGO_UPLOAD_DIR}/${fileName}`;
   if (asset === 'banner') {
-    const oldBanner = getBannerUrlFromEntityDescription(entity.description);
+    const oldBanner = storedBannerPath(entity.description);
     await deletePublicLogoFile(oldBanner);
     const description = mergeBannerUrlIntoDescription(entity.description, publicPath);
     await persistDescription(kind, entityId, adminId, description);
     return {
-      logoUrl: getLogoUrlFromEntityDescription(description) ?? '',
+      logoUrl: storedLogoPath(description) ?? '',
       bannerUrl: publicPath,
     };
   }
 
-  const oldLogo = getLogoUrlFromEntityDescription(entity.description);
+  const oldLogo = storedLogoPath(entity.description);
   await deletePublicLogoFile(oldLogo);
 
   const description = mergeLogoUrlIntoDescription(entity.description, publicPath);
@@ -181,7 +202,7 @@ export async function saveEntityLogoForOwner(
 
   return {
     logoUrl: publicPath,
-    bannerUrl: getBannerUrlFromEntityDescription(description) ?? undefined,
+    bannerUrl: storedBannerPath(description) ?? undefined,
   };
 }
 
@@ -196,13 +217,13 @@ export async function removeEntityLogoForOwner(
     throw new Error('Entity not found or access denied');
   }
   if (asset === 'banner') {
-    const oldBanner = getBannerUrlFromEntityDescription(entity.description);
+    const oldBanner = storedBannerPath(entity.description);
     await deletePublicLogoFile(oldBanner);
     const description = mergeBannerUrlIntoDescription(entity.description, null);
     await persistDescription(kind, entityId, adminId, description);
     return;
   }
-  const oldLogo = getLogoUrlFromEntityDescription(entity.description);
+  const oldLogo = storedLogoPath(entity.description);
   await deletePublicLogoFile(oldLogo);
   const description = mergeLogoUrlIntoDescription(entity.description, null);
   await persistDescription(kind, entityId, adminId, description);
