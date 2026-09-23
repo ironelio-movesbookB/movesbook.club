@@ -722,6 +722,8 @@ model UserMessageThread {
   /// Workflow status for Suggestions, Problems, and bug/fix memos.
   /// Legacy assistance also used: S=Started, C=Completed, D=Decline
   status          String?               @db.VarChar(32)
+  /// Marked inappropriate by staff/admin (formerly "spam")
+  isInappropriate Boolean               @default(false)
   /// JSON array of up to 3 public image URLs attached to the first post
   imageUrls       String?               @db.Text
   likeCount       Int                   @default(0)
@@ -3177,6 +3179,8 @@ model Notification {
   audienceLanguagesJson String?            @db.Text
   /// Per-language HTML bodies {"en":"...","it":"..."}; English used as fallback
   contentsByLangJson   String?             @db.LongText
+  /// Per-language titles {"en":"...","it":"..."}; English / `title` used as fallback
+  titlesByLangJson     String?             @db.Text
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   submittedByUser      User?               @relation("NotificationSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)

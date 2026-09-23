@@ -194,19 +194,42 @@ export default function NotificationsInboxPanel({ source }: Props) {
                 className="w-full text-left p-3"
                 onClick={() => void openItem(item)}
               >
-                <div className="flex items-center gap-2">
-                  {item.prioritary ? <MapPin className="h-4 w-4 text-red-600" /> : null}
-                  <span className="font-semibold text-gray-900">{item.title}</span>
-                  {!item.visited ? (
-                    <span className="text-[10px] uppercase tracking-wide bg-teal-700 text-white px-1.5 py-0.5 rounded">
-                      new
-                    </span>
-                  ) : null}
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.prioritary ? <MapPin className="h-4 w-4 text-red-600 shrink-0" /> : null}
+                      <span className="font-semibold text-gray-900">{item.title}</span>
+                      {!item.visited ? (
+                        <span className="text-[10px] uppercase tracking-wide bg-teal-700 text-white px-1.5 py-0.5 rounded">
+                          new
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {item.createdAt.slice(0, 10)} · until {item.untilDate}
+                    </p>
+                  </div>
+                  <div className="min-w-[7.5rem] max-w-[11rem] shrink-0 text-right">
+                    <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
+                      {item.senderOfficialName || item.submittedByName || 'Staff'}
+                    </p>
+                    {item.submittedByUsername ? (
+                      <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
+                    ) : null}
+                  </div>
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
+                    {item.senderLogoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.senderLogoUrl}
+                        alt=""
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-[10px] text-gray-500">N/A</span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {item.submittedByName || item.submittedByUsername || 'Staff'} ·{' '}
-                  {item.createdAt.slice(0, 10)} · until {item.untilDate}
-                </p>
               </button>
               {expandedId === item.id ? (
                 <div className="border-t px-3 py-2 text-sm">
