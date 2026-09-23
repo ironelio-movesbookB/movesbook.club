@@ -441,7 +441,7 @@ export interface LanguageStrings {
         'staff_sort_dislike': 'I dislike',
         'staff_delete': 'Delete',
         'staff_delete_confirm': 'Delete this post? This cannot be undone.',
-        'staff_bulk_delete_range': 'Delete posts in date range',
+        'staff_bulk_delete_range': 'Multiple deletion',
         'staff_bulk_delete_confirm': 'Delete all posts in the selected date range? This cannot be undone.',
         'staff_marked_inappropriate': 'Marked inappropriate',
         'staff_current_page': 'Current page',

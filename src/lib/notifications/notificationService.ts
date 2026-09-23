@@ -618,7 +618,7 @@ export async function listOrgSentNotifications(params: {
   ]);
 
   return {
-    items: rows.map((r) => mapRow(r)),
+    items: await enrichOrgSenderDisplay(rows.map((r) => mapRow(r))),
     total,
     page,
     pageSize,

@@ -15,7 +15,6 @@ import {
   ImagePlus,
   ChevronLeft,
   ChevronRight,
-  Trash2,
 } from 'lucide-react';
 import type { ThreadListSort } from '@/lib/messages/userThreads';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -1332,8 +1331,8 @@ export default function StaffMessagesExperience({
                     ) : null}
                     {(mainTab === 'support' ? supportItems : reviewItems).map((item) => (
                       <li key={item.id}>
-                        <div className="w-full flex gap-2 p-2 rounded border border-slate-200 hover:bg-amber-50/50">
-                          <div className="flex flex-1 min-w-0 gap-2">
+                        <div className="rounded border border-slate-200 hover:bg-amber-50/50 overflow-hidden">
+                          <div className="w-full flex gap-2 p-2">
                             <button
                               type="button"
                               onClick={() => void openThread(item.id)}
@@ -1371,47 +1370,8 @@ export default function StaffMessagesExperience({
                                     </span>
                                   </div>
                                 ) : null}
-                                <div className="mt-1 text-[11px] font-medium flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                                  <span className="text-[#c43c54]">
-                                    {t('staff_reply')}:{' '}
-                                    <span
-                                      className={
-                                        item.awaitingStaffReply
-                                          ? 'text-red-600 font-semibold'
-                                          : 'text-slate-700'
-                                      }
-                                    >
-                                      {replyCountFromMessageCount(item.messageCount)}
-                                    </span>
-                                  </span>
-                                  <span className="text-slate-400">·</span>
-                                  {item.isInappropriate ? (
-                                    <span className="text-slate-500">{t('staff_marked_inappropriate')}</span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      disabled={markingId === item.id}
-                                      onClick={(e) => void markThreadInappropriate(item.id, e)}
-                                      className="text-[#c43c54] hover:underline disabled:opacity-50"
-                                    >
-                                      {t('staff_mark_spam')}
-                                    </button>
-                                  )}
-                                </div>
                               </div>
                             </button>
-                          </div>
-                          <div className="flex flex-col gap-1 shrink-0 items-end justify-start pt-0.5">
-                            <button
-                              type="button"
-                              title={t('staff_delete')}
-                              disabled={deletingId === item.id}
-                              onClick={(e) => void deleteThread(item.id, e)}
-                              className="p-1 rounded text-slate-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
                           {mainTab === 'support' && (
                             <div className="flex flex-col gap-1.5 shrink-0 items-end justify-start pt-0.5">
                               <button
@@ -1444,27 +1404,66 @@ export default function StaffMessagesExperience({
                               </button>
                             </div>
                           )}
-                        </div>
-                        {mainTab === 'support' && item.imageUrls && item.imageUrls.length > 0 ? (
-                          <div className="px-2 pb-2 -mt-1 flex gap-1.5 flex-wrap border border-t-0 border-slate-200 rounded-b bg-white">
-                            {item.imageUrls.slice(0, MAX_SUPPORT_IMAGES).map((src, imgIdx) => (
-                              <button
-                                key={src}
-                                type="button"
-                                title={t('staff_view_picture')}
-                                onClick={(e) => openPictureLightbox(item.imageUrls || [], imgIdx, e)}
-                                className="p-0 rounded border border-slate-200 overflow-hidden bg-slate-100 hover:ring-2 hover:ring-[#c43c54]/40 focus:outline-none focus:ring-2 focus:ring-[#c43c54]"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={src}
-                                  alt=""
-                                  className="h-16 w-16 object-cover pointer-events-none"
-                                />
-                              </button>
-                            ))}
                           </div>
-                        ) : null}
+                          {mainTab === 'support' && item.imageUrls && item.imageUrls.length > 0 ? (
+                            <div className="px-2 pb-1 flex gap-1.5 flex-wrap">
+                              {item.imageUrls.slice(0, MAX_SUPPORT_IMAGES).map((src, imgIdx) => (
+                                <button
+                                  key={src}
+                                  type="button"
+                                  title={t('staff_view_picture')}
+                                  onClick={(e) => openPictureLightbox(item.imageUrls || [], imgIdx, e)}
+                                  className="p-0 rounded border border-slate-200 overflow-hidden bg-slate-100 hover:ring-2 hover:ring-[#c43c54]/40 focus:outline-none focus:ring-2 focus:ring-[#c43c54]"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={src}
+                                    alt=""
+                                    className="h-16 w-16 object-cover pointer-events-none"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="px-2 pb-2 flex items-center justify-between gap-2 text-[11px] font-medium">
+                            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 min-w-0">
+                              <span className="text-[#c43c54]">
+                                {t('staff_reply')}:{' '}
+                                <span
+                                  className={
+                                    item.awaitingStaffReply
+                                      ? 'text-red-600 font-semibold'
+                                      : 'text-slate-700'
+                                  }
+                                >
+                                  {replyCountFromMessageCount(item.messageCount)}
+                                </span>
+                              </span>
+                              <span className="text-slate-400">·</span>
+                              {item.isInappropriate ? (
+                                <span className="text-slate-500">{t('staff_marked_inappropriate')}</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={markingId === item.id}
+                                  onClick={(e) => void markThreadInappropriate(item.id, e)}
+                                  className="text-[#c43c54] hover:underline disabled:opacity-50"
+                                >
+                                  {t('staff_mark_spam')}
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              title={t('staff_delete')}
+                              disabled={deletingId === item.id}
+                              onClick={(e) => void deleteThread(item.id, e)}
+                              className="shrink-0 text-red-700 hover:underline disabled:opacity-50"
+                            >
+                              {t('staff_delete')}
+                            </button>
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>

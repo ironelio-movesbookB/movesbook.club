@@ -329,14 +329,11 @@ export async function listSupportFeed(
     ...(filters.status
       ? (buildStatusWhere(filters.status) as Prisma.UserMessageThreadWhereInput)
       : {}),
-    ...(searchWhere.OR || pathWhere
-      ? {
-          AND: [
-            ...(searchWhere.OR ? [searchWhere] : []),
-            ...(pathWhere ? [pathWhere] : []),
-          ],
-        }
-      : {}),
+    AND: [
+      { NOT: { supportCategory: 'club_message' } },
+      ...(searchWhere.OR ? [searchWhere] : []),
+      ...(pathWhere ? [pathWhere] : []),
+    ],
   };
 
   const [total, threads] = await Promise.all([
@@ -847,7 +844,10 @@ export async function createThreadWithFirstMessage(params: {
       realPath: params.realPath || null,
       errorMessage: params.errorMessage || null,
       supportCategory: params.supportCategory || null,
-      isPublic: isSupport && params.supportCategory !== 'bug_fixed',
+      isPublic:
+        isSupport &&
+        params.supportCategory !== 'bug_fixed' &&
+        params.supportCategory !== 'club_message',
       messages: {
         create: {
           senderId: params.userId,
@@ -891,19 +891,26 @@ export async function getThreadForUser(
   threadId: string,
   viewerId: string,
   isStaff: boolean,
-  options?: { allowCommunityReview?: boolean },
+  options?: { allowCommunityReview?: boolean; allowClubMessage?: boolean },
 ) {
   const thread = await prisma.userMessageThread.findUnique({
     where: { id: threadId },
     include: {
       user: {
-        select: { firstName: true, surname: true, name: true, username: true, superAdminId: true },
+        select: {
+          firstName: true,
+          surname: true,
+          name: true,
+          username: true,
+          image: true,
+          superAdminId: true,
+        },
       },
       messages: {
         orderBy: { createdAt: 'asc' },
         include: {
           sender: {
-            select: { id: true, name: true, username: true, superAdminId: true },
+            select: { id: true, name: true, username: true, superAdminId: true, image: true },
           },
         },
       },
@@ -916,6 +923,7 @@ export async function getThreadForUser(
   const canRead =
     isOwner ||
     isStaff ||
+    options?.allowClubMessage ||
     (thread.kind === 'SUPPORT' && thread.isPublic) ||
     (thread.kind === 'REVIEW' && options?.allowCommunityReview) ||
     (thread.supportCategory === 'bug_fixed' && isStaff);

@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ImagePlus,
   RefreshCw,
-  Trash2,
   X,
 } from 'lucide-react';
 import type { SupportCategory, ThreadListSort } from '@/lib/messages/userThreads';
@@ -765,7 +764,17 @@ export default function AdminCustomerFeedbackPanel({
                           <div className="text-[11px] text-slate-500 mt-1.5">
                             {item.author || '—'} · {new Date(item.updatedAt).toLocaleString()}
                           </div>
-                          <div className="text-[11px] mt-1 flex flex-wrap items-center gap-x-1">
+                          {itemShowsWorkflowStatus(item) ? (
+                            <div className="mt-1.5">
+                              <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-red-600 border border-slate-200">
+                                {supportWorkflowStatusLabel(item.status)}
+                              </span>
+                            </div>
+                          ) : null}
+                        </button>
+                        </div>
+                        <div className="px-3 pb-2 flex items-center justify-between gap-2 text-[11px]">
+                          <div className="flex flex-wrap items-center gap-x-1 min-w-0">
                             <span className="text-[#058592] font-medium">
                               Reply:{' '}
                               <span
@@ -797,23 +806,15 @@ export default function AdminCustomerFeedbackPanel({
                               </button>
                             )}
                           </div>
-                          {itemShowsWorkflowStatus(item) ? (
-                            <div className="mt-1.5">
-                              <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-red-600 border border-slate-200">
-                                {supportWorkflowStatusLabel(item.status)}
-                              </span>
-                            </div>
-                          ) : null}
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete"
-                          disabled={deletingId === item.id}
-                          onClick={(e) => void deleteThread(item.id, e)}
-                          className="shrink-0 px-2 self-start mt-2 mr-1 text-slate-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <button
+                            type="button"
+                            title="Delete"
+                            disabled={deletingId === item.id}
+                            onClick={(e) => void deleteThread(item.id, e)}
+                            className="shrink-0 text-red-700 font-medium hover:underline disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
                         </div>
                         {(showPictures || aggregateInappropriate) &&
                         item.imageUrls &&
@@ -1064,7 +1065,7 @@ export default function AdminCustomerFeedbackPanel({
               onClick={() => void bulkDeleteByDateRange()}
               className="w-full mb-4 px-3 py-2 rounded bg-red-700 text-white text-xs font-semibold disabled:opacity-40"
             >
-              Delete submissions in date range
+              Multiple deletion
             </button>
             <div className="flex gap-2 justify-end">
               <button
