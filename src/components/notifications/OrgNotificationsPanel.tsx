@@ -250,7 +250,7 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
             onClick={() => setRangeOpen(true)}
             className="rounded border border-gray-400 bg-white px-3 py-1.5 text-sm"
           >
-            Delete from..to..
+            Multiple deletion
           </button>
           <button
             type="button"
@@ -273,24 +273,44 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
         <ul className="space-y-2">
           {items.map((item) => (
             <li key={item.id} className="rounded border border-gray-300 bg-white">
-              <div className="flex items-start gap-2 p-3">
-                <button type="button" className="text-red-700 mt-1" onClick={() => void remove(item)}>
+              <div className="flex items-center gap-2 p-3">
+                <button type="button" className="text-red-700 shrink-0" onClick={() => void remove(item)}>
                   <Trash2 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  className="flex-1 text-left"
+                  className="flex-1 text-left min-w-0"
                   onClick={() => setExpandedId((v) => (v === item.id ? null : item.id))}
                 >
                   <div className="flex items-center gap-2">
-                    {item.prioritary ? <MapPin className="h-4 w-4 text-red-600" /> : null}
-                    <span className="font-semibold">{item.title}</span>
+                    {item.prioritary ? <MapPin className="h-4 w-4 text-red-600 shrink-0" /> : null}
+                    <span className="font-semibold text-gray-900">{item.title}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
                     {item.createdAt.slice(0, 10)} · until {item.untilDate} · {item.clubIds.length || 'all'}{' '}
                     {labels.entity}
                   </p>
                 </button>
+                <div className="min-w-[7rem] max-w-[10rem] shrink-0 text-right">
+                  <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
+                    {item.senderOfficialName || item.submittedByName || 'Org'}
+                  </p>
+                  {item.submittedByUsername ? (
+                    <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
+                  ) : null}
+                </div>
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
+                  {item.senderLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.senderLogoUrl}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[9px] text-gray-500">N/A</span>
+                  )}
+                </div>
                 <button type="button" onClick={() => void toggleShow(item)}>
                   {item.isShow ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
                 </button>
@@ -411,7 +431,7 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
       {rangeOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded bg-white p-4 shadow-lg space-y-3">
-            <h3 className="font-semibold">Delete from..to..</h3>
+            <h3 className="font-semibold">Multiple deletion (from..to..)</h3>
             <div className="flex gap-2 items-center text-sm">
               <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} className="border rounded px-2 py-1" />
               <span>to</span>

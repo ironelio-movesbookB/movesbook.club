@@ -98,12 +98,25 @@ export function parseJsonStringRecord(raw: string | null | undefined): Record<st
   }
 }
 
+/** True when HTML has visible text (ignores empty tags like <p></p>). */
+export function hasMeaningfulNotificationHtml(html: string | null | undefined): boolean {
+  const text = String(html ?? '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > 0;
+}
+
 export function toJsonStringRecord(map: Record<string, string>): string {
   const cleaned: Record<string, string> = {};
   for (const [k, v] of Object.entries(map)) {
     const key = k.trim();
     if (!key) continue;
-    cleaned[key] = typeof v === 'string' ? v : '';
+    const value = typeof v === 'string' ? v : '';
+    // Always keep English (even blank) as the fallback language; drop other empty langs
+    if (key !== 'en' && !hasMeaningfulNotificationHtml(value)) continue;
+    cleaned[key] = value;
   }
   return JSON.stringify(cleaned);
 }
@@ -121,8 +134,10 @@ export function normalizeProfileLanguage(raw: string | null | undefined): string
 }
 
 /**
- * Resolve HTML body for a recipient language.
- * Prefer exact language; else English (even if blank); else first non-empty; else fallbackDescription.
+ * Resolve HTML body (or plain title) for a recipient language.
+ * Prefer exact language when it has real content; else English (typed or blank);
+ * else first non-empty; else fallbackDescription.
+ * Empty / tag-only values are treated as missing (client: Italian blank must not block English).
  */
 export function resolveNotificationHtmlForLanguage(
   contentsByLang: Record<string, string>,
@@ -130,13 +145,13 @@ export function resolveNotificationHtmlForLanguage(
   fallbackDescription = '',
 ): string {
   const lang = normalizeProfileLanguage(profileLang);
-  if (Object.prototype.hasOwnProperty.call(contentsByLang, lang)) {
-    return contentsByLang[lang] ?? '';
-  }
+  const exact = contentsByLang[lang];
+  if (hasMeaningfulNotificationHtml(exact)) return exact;
+
   if (Object.prototype.hasOwnProperty.call(contentsByLang, 'en')) {
     return contentsByLang.en ?? '';
   }
-  const first = Object.values(contentsByLang).find((v) => String(v ?? '').trim());
+  const first = Object.values(contentsByLang).find((v) => hasMeaningfulNotificationHtml(v));
   if (first) return first;
   return fallbackDescription;
 }

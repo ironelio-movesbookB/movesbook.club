@@ -196,17 +196,17 @@ const menuSections: MenuSection[] = [
         icon: Bell,
       },
       {
-        label: "Notifications from club staff",
+        label: "Notifications of the Club",
         href: "/users/notification/all/all/clubs",
         icon: MessageCircle,
       },
       {
-        label: "Posted by Club staff (send)",
-        href: "/users/clubnotification",
+        label: "Notifications for the Club Staff",
+        href: "/users/clubnotification?audience=staff",
         icon: Mail,
       },
       {
-        label: "My messages with staff",
+        label: "Post messages for the Club Staff",
         href: "/clubs/messages",
         icon: Mail,
       },
@@ -222,7 +222,7 @@ const menuSections: MenuSection[] = [
         icon: RefreshCcw,
       },
       {
-        label: "Feedback for Movesbook staff",
+        label: "Feedbacks for Movesbook Staff",
         href: "/assistance/user_bug_problem",
         icon: Mail,
       },
