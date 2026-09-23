@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/adminAuth';
 import {
   createOrUpdateStaffNotification,
   deleteNotification,
+  deleteNotificationsInDateRange,
   getNotificationById,
   listStaffNotifications,
   toggleNotificationVisibility,
@@ -45,10 +46,33 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    if (body?.action === 'delete_range') {
+      const fromDate = typeof body?.fromDate === 'string' ? body.fromDate : '';
+      const toDate = typeof body?.toDate === 'string' ? body.toDate : '';
+      if (!fromDate || !toDate) {
+        return NextResponse.json({ error: 'fromDate and toDate required' }, { status: 400 });
+      }
+      const deleted = await deleteNotificationsInDateRange({
+        source: 'movesbook_staff',
+        fromDate,
+        toDate,
+      });
+      return NextResponse.json({ ok: true, deleted });
+    }
+
     const contentsByLang =
       body?.contentsByLang && typeof body.contentsByLang === 'object' && !Array.isArray(body.contentsByLang)
         ? Object.fromEntries(
             Object.entries(body.contentsByLang as Record<string, unknown>).map(([k, v]) => [
+              k,
+              typeof v === 'string' ? v : '',
+            ]),
+          )
+        : undefined;
+    const titlesByLang =
+      body?.titlesByLang && typeof body.titlesByLang === 'object' && !Array.isArray(body.titlesByLang)
+        ? Object.fromEntries(
+            Object.entries(body.titlesByLang as Record<string, unknown>).map(([k, v]) => [
               k,
               typeof v === 'string' ? v : '',
             ]),
@@ -62,6 +86,7 @@ export async function POST(request: NextRequest) {
       title: typeof body?.title === 'string' ? body.title : '',
       description: typeof body?.description === 'string' ? body.description : '',
       contentsByLang,
+      titlesByLang,
       audienceLanguages,
       path: typeof body?.path === 'string' ? body.path : '',
       untilDate: typeof body?.untilDate === 'string' ? body.untilDate : new Date().toISOString().slice(0, 10),

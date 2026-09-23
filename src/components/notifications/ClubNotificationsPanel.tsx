@@ -20,9 +20,11 @@ type StatusFilter = 'all' | 'active' | 'expired';
 type Props = {
   /** When set = MY CLUB (one club). When omitted = MY PAGE (all owned clubs). */
   clubId?: string | null;
+  /** Prefill For Club Staff when opened from Quick menu */
+  initialAudienceKind?: 'members' | 'staff';
 };
 
-export default function ClubNotificationsPanel({ clubId }: Props) {
+export default function ClubNotificationsPanel({ clubId, initialAudienceKind = 'members' }: Props) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -42,7 +44,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
   const [path, setPath] = useState('');
   const [untilDate, setUntilDate] = useState(today());
   const [prioritary, setPrioritary] = useState(false);
-  const [audienceKind, setAudienceKind] = useState<'members' | 'staff'>('members');
+  const [audienceKind, setAudienceKind] = useState<'members' | 'staff'>(initialAudienceKind);
   const [selectedClubIds, setSelectedClubIds] = useState<string[]>([]);
   const [rangeFrom, setRangeFrom] = useState(today());
   const [rangeTo, setRangeTo] = useState(today());
@@ -110,7 +112,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     setPath('');
     setUntilDate(today());
     setPrioritary(false);
-    setAudienceKind('members');
+    setAudienceKind(initialAudienceKind);
     setSelectedClubIds(clubId ? [clubId] : []);
     setFormError('');
   }
@@ -119,6 +121,13 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     resetForm();
     setModalOpen(true);
   }
+
+  useEffect(() => {
+    if (initialAudienceKind === 'staff') {
+      openCreate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when landing with ?audience=staff
+  }, []);
 
   function openEdit(item: NotificationDto) {
     setEditId(item.id);
@@ -239,10 +248,11 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
     <div className="w-full p-4 md:p-6 text-gray-900">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Posted by Club staff</h1>
+          <h1 className="text-xl font-bold text-gray-900">Notifications for the Club Staff</h1>
           <p className="text-sm text-gray-600 mt-1">{scopeLabel}</p>
           <p className="text-xs text-gray-500 mt-1">
-            Single-user targeting is not available here — use Messages or Chat.
+            Broadcast notifies among club admin and staff (no reply). Use “Post messages for the Club Staff” for
+            conversations with replies.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -257,7 +267,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
             onClick={() => setRangeOpen(true)}
             className="rounded border border-gray-400 bg-white px-3 py-1.5 text-sm text-gray-900"
           >
-            Delete from..to..
+            Multiple deletion
           </button>
           <button
             type="button"
@@ -297,24 +307,44 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
         <ul className="space-y-2">
           {items.map((item) => (
             <li key={item.id} className="rounded border border-gray-300 bg-white">
-              <div className="flex items-start gap-2 p-3">
-                <button type="button" className="text-red-700 mt-1" onClick={() => void remove(item)}>
+              <div className="flex items-center gap-2 p-3">
+                <button type="button" className="text-red-700 shrink-0" onClick={() => void remove(item)}>
                   <Trash2 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  className="flex-1 text-left"
+                  className="flex-1 text-left min-w-0"
                   onClick={() => setExpandedId((v) => (v === item.id ? null : item.id))}
                 >
                   <div className="flex items-center gap-2">
-                    {item.prioritary ? <MapPin className="h-4 w-4 text-red-600" /> : null}
-                    <span className="font-semibold">{item.title}</span>
+                    {item.prioritary ? <MapPin className="h-4 w-4 text-red-600 shrink-0" /> : null}
+                    <span className="font-semibold text-gray-900">{item.title}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
                     {item.createdAt.slice(0, 10)} · until {item.untilDate} · {item.audienceKind} ·{' '}
                     {item.clubIds.length} club(s)
                   </p>
                 </button>
+                <div className="min-w-[7rem] max-w-[10rem] shrink-0 text-right">
+                  <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
+                    {item.senderOfficialName || item.submittedByName || 'Club'}
+                  </p>
+                  {item.submittedByUsername ? (
+                    <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
+                  ) : null}
+                </div>
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
+                  {item.senderLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.senderLogoUrl}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[9px] text-gray-500">N/A</span>
+                  )}
+                </div>
                 <button type="button" onClick={() => void toggleShow(item)} title="Toggle visibility">
                   {item.isShow ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
                 </button>
@@ -477,7 +507,7 @@ export default function ClubNotificationsPanel({ clubId }: Props) {
       {rangeOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded bg-white p-4 shadow-lg text-gray-900 space-y-3">
-            <h3 className="font-semibold">Delete from..to..</h3>
+            <h3 className="font-semibold">Multiple deletion (from..to..)</h3>
             <div className="flex gap-2 items-center text-sm">
               <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} className="border rounded px-2 py-1" />
               <span>to</span>
