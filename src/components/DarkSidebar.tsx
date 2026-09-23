@@ -2637,14 +2637,14 @@ export default function DarkSidebar({
                     <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
                     <span className="leading-snug">
                       {isClubAccountUserType(userType)
-                        ? 'Notifications from club staff'
+                        ? 'Notifications of the Club'
                         : userType === 'COACH'
                           ? 'Send / Coach notifies'
                           : isTeamAccountUserType(userType)
                             ? 'Send / Team notifies'
                             : isGroupAccountUserType(userType)
                               ? 'Send / Group notifies'
-                              : `Notifications from club staff (${notificationCounts.clubs})`}
+                              : `Notifications of the Club (${notificationCounts.clubs})`}
                     </span>
                   </button>
                 </div>
@@ -3300,14 +3300,14 @@ export default function DarkSidebar({
                         <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
                         <span className="leading-snug">
                           {isClubAccountUserType(userType)
-                            ? 'Notifications from club staff'
-                            : userType === 'COACH'
+                            ? 'Notifications of the Club'
+                              : userType === 'COACH'
                               ? 'Send / Coach notifies'
                               : isTeamAccountUserType(userType)
                                 ? 'Send / Team notifies'
                                 : isGroupAccountUserType(userType)
                                   ? 'Send / Group notifies'
-                                  : `Notifications from club staff (${notificationCounts.clubs})`}
+                                  : `Notifications of the Club (${notificationCounts.clubs})`}
                         </span>
                       </button>
                     </div>

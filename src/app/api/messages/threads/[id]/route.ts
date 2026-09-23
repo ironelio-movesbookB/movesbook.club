@@ -4,10 +4,18 @@ import { requireMessageAuth } from '@/lib/messages/messageAuth';
 import {
   addReplyToThread,
   canReplyToThread,
+  deleteMessageThread,
   getThreadForUser,
   updateSupportThreadStatus,
+  updateThreadInappropriate,
 } from '@/lib/messages/userThreads';
 import { isSupportWorkflowStatus } from '@/lib/messages/supportStatus';
+import {
+  canReplyToClubStaffMessage,
+  CLUB_MESSAGE_CATEGORY,
+  getClubStaffMessageThread,
+  deleteClubStaffMessage,
+} from '@/lib/messages/clubStaffMessages';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +29,9 @@ export async function GET(
   const { id } = await params;
 
   try {
+    const clubDetail = await getClubStaffMessageThread(id, auth.userId);
+    if (clubDetail) return NextResponse.json(clubDetail);
+
     const { searchParams } = new URL(request.url);
     const communityReview = searchParams.get('communityReview') === '1';
     const detail = await getThreadForUser(id, auth.userId, auth.isStaff, {
@@ -45,6 +56,16 @@ export async function PATCH(
 
   try {
     const body = await request.json().catch(() => ({}));
+
+    if (typeof body?.isInappropriate === 'boolean') {
+      const updated = await updateThreadInappropriate(id, body.isInappropriate);
+      if (!updated) {
+        return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+      }
+      const detail = await getThreadForUser(id, auth.userId, true);
+      return NextResponse.json(detail ?? { thread: updated });
+    }
+
     const status = body?.status;
     if (!isSupportWorkflowStatus(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
@@ -66,6 +87,30 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireMessageAuth(request);
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+
+  try {
+    const clubDeleted = await deleteClubStaffMessage(id, auth.userId);
+    if (clubDeleted) return NextResponse.json({ ok: true });
+
+    if (!auth.isStaff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const ok = await deleteMessageThread(id);
+    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /api/messages/threads/[id]', e);
+    return NextResponse.json({ error: 'Failed to delete thread' }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -83,16 +128,28 @@ export async function POST(
     const thread = await prisma.userMessageThread.findUnique({ where: { id } });
     if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    if (!canReplyToThread(thread, auth.userId, auth.isStaff)) {
+    const isClubMessage = thread.supportCategory === CLUB_MESSAGE_CATEGORY;
+    const clubReplyOk = isClubMessage
+      ? await canReplyToClubStaffMessage(thread, auth.userId)
+      : false;
+
+    if (!clubReplyOk && !canReplyToThread(thread, auth.userId, auth.isStaff)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const replyAsClubStaff = isClubMessage && clubReplyOk && thread.userId !== auth.userId;
+
     await addReplyToThread({
       threadId: id,
-      senderId: auth.isStaff ? null : auth.userId,
-      isStaff: auth.isStaff,
+      senderId: auth.userId,
+      isStaff: auth.isStaff || replyAsClubStaff,
       body: text,
     });
+
+    if (isClubMessage) {
+      const detail = await getClubStaffMessageThread(id, auth.userId);
+      return NextResponse.json(detail);
+    }
 
     const detail = await getThreadForUser(id, auth.userId, auth.isStaff, {
       allowCommunityReview: false,

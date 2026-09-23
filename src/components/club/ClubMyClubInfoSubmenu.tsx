@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronDown, UserCircle, Settings, Info } from 'lucide-react';
+import { Building2, ChevronDown, UserCircle, Settings, Info, MessageCircle } from 'lucide-react';
 
 type SubmenuItem = {
   key: string;
@@ -39,6 +39,13 @@ export default function ClubMyClubInfoSubmenu({ clubId }: { clubId?: string | nu
       needsClub: true,
       icon: Building2,
       href: clubId ? `/my-club?clubId=${encodeURIComponent(clubId)}` : undefined,
+    },
+    {
+      key: 'messages',
+      label: 'Messages received by the members',
+      needsClub: false,
+      icon: MessageCircle,
+      href: '/clubs/messages?view=received',
     },
     {
       key: 'settings',

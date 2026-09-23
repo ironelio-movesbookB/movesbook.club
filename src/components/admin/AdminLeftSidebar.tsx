@@ -571,6 +571,18 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                    <Star className="w-4 h-4 text-white" />
                    <span>Reviews</span>
                 </Link>
+
+                {adminUserId ? (
+                  <Link
+                    href="/admin/dashboard?panel=my-feedbacks"
+                    className="flex items-center gap-3 px-3 py-2.5 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white"
+                  >
+                    <Users2 className="w-4 h-4 shrink-0 opacity-95" />
+                    <span className="leading-snug">
+                      Feedbacks for Movesbook Staff ({myFeedbackCount})
+                    </span>
+                  </Link>
+                ) : null}
     
                 <Link href="/admin/relationships/questions" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                    <HelpCircle className="w-4 h-4 text-white" />
@@ -613,18 +625,6 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
             
             {openSections.messages && (
               <div className="bg-[#2b2b2b] mt-1 space-y-1">
-                {adminUserId ? (
-                  <Link
-                    href="/admin/dashboard?panel=my-feedbacks"
-                    className="flex items-center gap-3 px-3 py-2.5 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white"
-                  >
-                    <Users2 className="w-4 h-4 shrink-0 opacity-95" />
-                    <span className="leading-snug">
-                      Feedbacks for our Staff ({myFeedbackCount})
-                    </span>
-                  </Link>
-                ) : null}
-
                 <Link href="/admin/messages/general" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                    <Mail className="w-4 h-4 text-white" />
                    <span>Messages from users and club\teams</span>

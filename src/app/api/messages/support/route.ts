@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMessageAuth } from '@/lib/messages/messageAuth';
 import {
+  bulkDeleteSupportThreadsByDate,
   createThreadWithFirstMessage,
   countUserSupportThreads,
   listSupportFeed,
   listThreadsForUser,
   type SupportCategory,
+  type ThreadListSort,
 } from '@/lib/messages/userThreads';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +17,20 @@ const CATEGORIES: SupportCategory[] = ['feedback', 'question', 'suggestion', 'pr
 function parseCategory(raw: string | null): SupportCategory | '' {
   if (!raw) return '';
   return CATEGORIES.includes(raw as SupportCategory) ? (raw as SupportCategory) : '';
+}
+
+const SORT_VALUES: ThreadListSort[] = ['date_asc', 'date_desc', 'like', 'dislike'];
+
+function parseSort(raw: string | null): ThreadListSort | '' {
+  if (!raw) return '';
+  return SORT_VALUES.includes(raw as ThreadListSort) ? (raw as ThreadListSort) : '';
+}
+
+function parseInappropriateFlags(searchParams: URLSearchParams) {
+  const raw = searchParams.get('inappropriate');
+  if (raw === '1') return { inappropriateOnly: true, excludeInappropriate: false };
+  if (raw === '0') return { inappropriateOnly: false, excludeInappropriate: true };
+  return { inappropriateOnly: false, excludeInappropriate: false };
 }
 
 export async function GET(request: NextRequest) {
@@ -31,6 +47,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (feed) {
+      const inappropriate = parseInappropriateFlags(searchParams);
       const result = await listSupportFeed(auth.userId, {
         category: parseCategory(searchParams.get('category')),
         languageCode: searchParams.get('lang') || '',
@@ -44,6 +61,8 @@ export async function GET(request: NextRequest) {
         status: searchParams.get('status') || '',
         fromDate: searchParams.get('from') || '',
         toDate: searchParams.get('to') || '',
+        sort: parseSort(searchParams.get('sort')),
+        ...inappropriate,
         page: Number(searchParams.get('page') || '1'),
         pageSize: Number(searchParams.get('pageSize') || '5'),
       });
@@ -90,5 +109,31 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     console.error('POST /api/messages/support', e);
     return NextResponse.json({ error: 'Failed to create support thread' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireMessageAuth(request);
+  if (!auth?.isStaff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { searchParams } = new URL(request.url);
+  const from = searchParams.get('from') || '';
+  const to = searchParams.get('to') || '';
+  if (!from.trim() || !to.trim()) {
+    return NextResponse.json({ error: 'from and to dates required' }, { status: 400 });
+  }
+
+  try {
+    const deleted = await bulkDeleteSupportThreadsByDate({
+      fromDate: from,
+      toDate: to,
+      category: parseCategory(searchParams.get('category')),
+      bugsOnly: searchParams.get('bugs') === '1',
+      excludeBugs: searchParams.get('excludeBugs') === '1',
+    });
+    return NextResponse.json({ deleted });
+  } catch (e) {
+    console.error('DELETE /api/messages/support', e);
+    return NextResponse.json({ error: 'Failed to bulk delete' }, { status: 500 });
   }
 }
