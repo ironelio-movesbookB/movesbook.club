@@ -103,3 +103,4 @@ package-lock.json
 .gif
 .png
 branch_structure.json
+*.bak
