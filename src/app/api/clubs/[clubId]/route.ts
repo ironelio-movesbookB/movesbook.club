@@ -206,6 +206,7 @@ export async function PATCH(
         clubPassword: newPassword,
         referencesHtml: String(payload.referencesHtml ?? ''),
         referencesLevel: String(payload.referencesLevel ?? '1'),
+        sportProfile: payload.sportProfile,
       }, { clubPasswordHash });
 
       await prisma.$executeRaw`

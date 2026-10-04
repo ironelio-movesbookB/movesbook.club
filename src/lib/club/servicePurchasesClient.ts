@@ -56,7 +56,11 @@ export function formatEuro(value: number | undefined | null): string {
 
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '-';
-  const d = new Date(value);
+  // `new Date('yyyy-MM-dd')` is UTC midnight, which shows the previous day west of UTC.
+  const dateOnly = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  const d = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
 }
 

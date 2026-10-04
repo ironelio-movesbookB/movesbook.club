@@ -1,8 +1,22 @@
 import { UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { readNetworkSubscriptionHistory, isActiveMembershipPeriod, hasActiveLastSubscription, pickLatestSubscriptionByExpiry } from '@/lib/admin/networkSubscriptionHistory';
+import {
+  listStatsSubscriptionPeriods,
+  parseAmountPaid,
+  resolveStatsSubscription,
+  type StatsSubscription,
+} from '@/lib/admin/networkSubscriptionHistory';
+import {
+  COST_RECOVERY_LANGUAGES,
+  COST_RECOVERY_VERSIONS,
+  emptyTypeRecord,
+  type CostRecoveryReal,
+  type CostRecoveryType,
+  type CostRecoveryVersion,
+} from '@/lib/admin/costRecoveryTypes';
 import {
   ALL_STATS_USER_TYPES,
+  STATS_DETAIL_KINDS,
   STATS_KIND_LABELS,
   STATS_KIND_TYPES,
   STATS_USER_KINDS,
@@ -12,6 +26,7 @@ import {
   kindFromUserType,
   typeKindLabel,
   typeKindMatches,
+  type StatsDetailKind,
   type StatsTypeKindFilter,
   type StatsUserKind,
   type StatsVersionBucket,
@@ -21,7 +36,7 @@ export type StatsSlice = {
   key: string;
   label: string;
   count: number;
-  /** Estimated subscription income (€) for this slice. */
+  /** € recorded as paid for the current subscriptions in this slice (unrecorded = 0). */
   income: number;
   percent: number;
 };
@@ -48,12 +63,24 @@ export type VersionBar = {
   income: number;
 };
 
+/** Current users of one type split by first subscription (new) and renewal. */
+export type SubscriptionDetailRow = {
+  newCount: number;
+  renewCount: number;
+  newIncome: number;
+  renewIncome: number;
+};
+
 /** Compact rows for client-side drill-downs (version ↔ user type ↔ country). */
 export type StatsUserLite = {
   country: string;
   kind: StatsUserKind;
   version: StatsVersionBucket;
   income: number;
+  /** Account purchased by a club admin for his member (Club accounts in the details). */
+  clubAccount?: boolean;
+  /** The current subscription renews a previous one (otherwise it is a new subscription). */
+  renewal?: boolean;
 };
 
 export type StatisticsPayload = {
@@ -88,6 +115,11 @@ export type StatisticsPayload = {
   }>;
   countriesBars: CountryKindRow[];
   versions: VersionBar[];
+  /**
+   * Current users (country filter applied) per type of user, split into new subscriptions and
+   * renewals. Club accounts are counted here instead of the member's own type.
+   */
+  subscriptionDetails: Record<StatsDetailKind, SubscriptionDetailRow>;
   /** Unfiltered user matrix for interactive drill-downs. */
   usersLite: StatsUserLite[];
   filters: {
@@ -103,8 +135,11 @@ type RawUser = {
   email: string;
   userType: UserType;
   country: string | null;
-  adminSettings: string | null;
   resolvedVersion: string | null;
+  subscription: StatsSubscription;
+  adminSettings: string | null;
+  /** Language selected by the user (settings), lower-case code. */
+  language: string | null;
 };
 
 function emptyByKind(): Record<StatsUserKind, number> {
@@ -149,19 +184,13 @@ function buildKindDistribution(
   };
 }
 
-function resolveCurrentVersion(
-  adminSettings: string | null,
-  kind: StatsUserKind,
-  fallbackVersion?: string | null,
-): string {
-  const periods = readNetworkSubscriptionHistory(adminSettings);
-  // Only the last subscription (highest expiry) counts.
-  const last = pickLatestSubscriptionByExpiry(periods);
-  if (last && isActiveMembershipPeriod(last.dateEnd, last.status) && last.version?.trim()) {
-    return last.version.trim();
-  }
-  if (fallbackVersion?.trim()) return fallbackVersion.trim();
-  return defaultVersionForKind(kind);
+function resolveCurrentVersion(u: RawUser, kind: StatsUserKind): string {
+  return (
+    u.subscription.version ||
+    u.resolvedVersion?.trim() ||
+    u.subscription.historyVersion ||
+    defaultVersionForKind(kind)
+  );
 }
 
 /** Resolve versions from promocode applies + legacy subscription_setting_id for older registrations. */
@@ -224,66 +253,6 @@ async function loadExternalVersionByEmail(): Promise<Map<string, string>> {
   return map;
 }
 
-/** Map subscription_settings rows to rough € prices by version bucket + kind. */
-async function loadPriceTable(): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  try {
-    const rows = await prisma.subscriptionSetting.findMany({
-      where: { OR: [{ deleteStatus: null }, { deleteStatus: { not: 1 } }] },
-      select: { subscriptionName: true, shortName: true, price: true, roleId: true },
-    });
-    for (const row of rows) {
-      const price = row.price != null ? Number(row.price) : 0;
-      if (!Number.isFinite(price) || price <= 0) continue;
-      const name = `${row.subscriptionName ?? ''} ${row.shortName ?? ''}`.toLowerCase();
-      const bucket = classifyVersionBucket(name);
-      let kindHint = '';
-      if (name.includes('club') || row.roleId === 8) kindHint = 'clubs';
-      else if (name.includes('coach')) kindHint = 'coaches';
-      else if (name.includes('team')) kindHint = 'teams';
-      else if (name.includes('group')) kindHint = 'groups';
-      else if (name.includes('single') || name.includes('user') || row.roleId === 5) kindHint = 'single';
-      if (kindHint) map.set(`${kindHint}:${bucket}`, price);
-      map.set(`*:${bucket}`, map.get(`*:${bucket}`) ?? price);
-    }
-  } catch {
-    // table may be empty / missing columns
-  }
-
-  // Fallback defaults (€) when settings missing
-  const defaults: Array<[string, number]> = [
-    ['single:Trial', 0],
-    ['single:Base', 100],
-    ['single:Premium', 123],
-    ['single:Professional', 150],
-    ['coaches:Trial', 0],
-    ['coaches:Base', 120],
-    ['coaches:Premium', 180],
-    ['coaches:Professional', 220],
-    ['teams:Trial', 0],
-    ['teams:Base', 150],
-    ['teams:Premium', 200],
-    ['teams:Professional', 250],
-    ['clubs:Trial', 0],
-    ['clubs:Base', 10],
-    ['clubs:Premium', 10],
-    ['clubs:Professional', 20],
-    ['groups:Trial', 0],
-    ['groups:Base', 50],
-    ['groups:Premium', 80],
-    ['groups:Professional', 100],
-  ];
-  for (const [key, value] of defaults) {
-    if (!map.has(key)) map.set(key, value);
-  }
-  return map;
-}
-
-function priceFor(map: Map<string, number>, kind: StatsUserKind, version: string): number {
-  const bucket = classifyVersionBucket(version);
-  return map.get(`${kind}:${bucket}`) ?? map.get(`*:${bucket}`) ?? 0;
-}
-
 async function loadRawUsers(): Promise<RawUser[]> {
   const [users, externalVersions] = await Promise.all([
     prisma.user.findMany({
@@ -296,7 +265,7 @@ async function loadRawUsers(): Promise<RawUser[]> {
         email: true,
         userType: true,
         country: true,
-        settings: { select: { adminSettings: true } },
+        settings: { select: { adminSettings: true, language: true } },
       },
     }),
     loadExternalVersionByEmail(),
@@ -313,10 +282,71 @@ async function loadRawUsers(): Promise<RawUser[]> {
       email: u.email,
       userType: u.userType,
       country: u.country?.trim() || null,
-      adminSettings: u.settings?.adminSettings ?? null,
       resolvedVersion: fallback,
+      subscription: resolveStatsSubscription(u.settings?.adminSettings ?? null),
+      adminSettings: u.settings?.adminSettings ?? null,
+      language: u.settings?.language?.trim().toLowerCase() || null,
     };
   });
+}
+
+const COST_RECOVERY_TYPE_BY_KIND: Partial<Record<StatsUserKind, CostRecoveryType>> = {
+  single: 'athletes',
+  coaches: 'coaches',
+  teams: 'teams',
+  clubs: 'clubs',
+};
+
+const COST_RECOVERY_VERSION_BY_BUCKET: Partial<Record<StatsVersionBucket, CostRecoveryVersion>> = {
+  Base: 'base',
+  Premium: 'premium',
+  Professional: 'professional',
+};
+
+/**
+ * Cost recovery plan — Real: every subscription in the archive (history + live window) and the
+ * € paid for it, per version, per language selected by the user and per type of user.
+ * Accounts purchased by a club for a member go to Club accounts; Groups are not part of the plan.
+ */
+export async function buildCostRecoveryReal(): Promise<CostRecoveryReal> {
+  const real = Object.fromEntries(
+    COST_RECOVERY_VERSIONS.map((v) => [
+      v.id,
+      Object.fromEntries(
+        COST_RECOVERY_LANGUAGES.map((l) => [l.code, emptyTypeRecord(() => ({ n: 0, eur: 0 }))]),
+      ),
+    ]),
+  ) as CostRecoveryReal;
+  const languageCodes = new Set(COST_RECOVERY_LANGUAGES.map((l) => l.code));
+
+  for (const u of await loadRawUsers()) {
+    const kind = kindFromUserType(u.userType);
+    const kindType = kind ? COST_RECOVERY_TYPE_BY_KIND[kind] : undefined;
+    if (!kind || !kindType) continue;
+    const langPrefix = (u.language ?? '').slice(0, 2);
+    const language = languageCodes.has(langPrefix) ? langPrefix : 'en';
+    const accountVersion = u.resolvedVersion?.trim() || defaultVersionForKind(kind);
+
+    const periods = listStatsSubscriptionPeriods(u.adminSettings);
+    // Legacy accounts with no archived period still hold their registration subscription.
+    const subscriptions =
+      periods.length > 0
+        ? periods.map((p) => ({
+            version: p.version?.trim() || accountVersion,
+            eur: parseAmountPaid(p.amountPaid),
+            clubAccount: Boolean(p.purchasedByClubId?.trim()),
+          }))
+        : [{ version: accountVersion, eur: 0, clubAccount: false }];
+
+    for (const s of subscriptions) {
+      const version = COST_RECOVERY_VERSION_BY_BUCKET[classifyVersionBucket(s.version)];
+      if (!version) continue;
+      const cell = real[version][language]![s.clubAccount ? 'clubAccounts' : kindType];
+      cell.n += 1;
+      cell.eur = roundEuro(cell.eur + s.eur);
+    }
+  }
+  return real;
 }
 
 export type BuildStatisticsOptions = {
@@ -346,7 +376,7 @@ export async function buildStatisticsPayload(
         ? options.typeKind
         : 'single';
 
-  const [rawUsers, priceMap] = await Promise.all([loadRawUsers(), loadPriceTable()]);
+  const rawUsers = await loadRawUsers();
 
   const countrySet = new Set<string>();
   for (const u of rawUsers) {
@@ -383,18 +413,38 @@ export async function buildStatisticsPayload(
     Other: 0,
   };
   const usersLite: StatsUserLite[] = [];
+  const subscriptionDetails = Object.fromEntries(
+    STATS_DETAIL_KINDS.map((k) => [k, { newCount: 0, renewCount: 0, newIncome: 0, renewIncome: 0 }]),
+  ) as Record<StatsDetailKind, SubscriptionDetailRow>;
 
   for (const u of rawUsers) {
     const kind = kindFromUserType(u.userType);
     if (!kind) continue;
     // Current users / graphs: only users whose last subscription is not expired.
-    if (!hasActiveLastSubscription(u.adminSettings)) continue;
+    if (!u.subscription.active) continue;
+
+    if (matchesCountry(u)) {
+      const detail = subscriptionDetails[u.subscription.clubAccount ? 'clubAccounts' : kind];
+      if (u.subscription.renewal) {
+        detail.renewCount += 1;
+        detail.renewIncome += u.subscription.amountPaid;
+      } else {
+        detail.newCount += 1;
+        detail.newIncome += u.subscription.amountPaid;
+      }
+    }
 
     const country = u.country || 'Unknown';
-    const versionName = resolveCurrentVersion(u.adminSettings, kind, u.resolvedVersion);
-    const versionBucket = classifyVersionBucket(versionName);
-    const userIncome = priceFor(priceMap, kind, versionName);
-    usersLite.push({ country, kind, version: versionBucket, income: userIncome });
+    const versionBucket = classifyVersionBucket(resolveCurrentVersion(u, kind));
+    const userIncome = u.subscription.amountPaid;
+    usersLite.push({
+      country,
+      kind,
+      version: versionBucket,
+      income: userIncome,
+      ...(u.subscription.clubAccount ? { clubAccount: true } : {}),
+      ...(u.subscription.renewal ? { renewal: true } : {}),
+    });
 
     // Always accumulate full country×kind matrix (for top-country pies)
     if (!countryFilter || (u.country ?? '').toLowerCase() === countryFilter.toLowerCase()) {
@@ -472,11 +522,10 @@ export async function buildStatisticsPayload(
     for (const u of rawUsers) {
       const k = kindFromUserType(u.userType);
       if (!k || !typeKindMatches(k, kindFilter)) continue;
-      if (!hasActiveLastSubscription(u.adminSettings)) continue;
+      if (!u.subscription.active) continue;
       if (countryFilter && (u.country ?? '').toLowerCase() !== countryFilter.toLowerCase()) continue;
       const c = u.country || 'Unknown';
-      const versionName = resolveCurrentVersion(u.adminSettings, k, u.resolvedVersion);
-      const userIncome = priceFor(priceMap, k, versionName);
+      const userIncome = u.subscription.amountPaid;
       counts.set(c, (counts.get(c) ?? 0) + 1);
       incomes.set(c, (incomes.get(c) ?? 0) + userIncome);
       total += 1;
@@ -596,6 +645,12 @@ export async function buildStatisticsPayload(
       count: versionRecount[version],
       income: roundEuro(versionIncome[version]),
     })),
+    subscriptionDetails: Object.fromEntries(
+      STATS_DETAIL_KINDS.map((k) => {
+        const d = subscriptionDetails[k];
+        return [k, { ...d, newIncome: roundEuro(d.newIncome), renewIncome: roundEuro(d.renewIncome) }];
+      }),
+    ) as Record<StatsDetailKind, SubscriptionDetailRow>,
     usersLite,
     filters: {
       country: countryFilter,
@@ -624,15 +679,14 @@ export async function resolveStatsBarUserIds(options: {
   for (const u of rawUsers) {
     const kind = kindFromUserType(u.userType);
     if (!kind) continue;
-    if (!hasActiveLastSubscription(u.adminSettings)) continue;
+    if (!u.subscription.active) continue;
     if (!typeKindMatches(kind, kindFilter)) continue;
 
     const country = u.country || 'Unknown';
     if (countryFilter && country !== countryFilter) continue;
 
     if (versionFilter) {
-      const versionName = resolveCurrentVersion(u.adminSettings, kind, u.resolvedVersion);
-      if (classifyVersionBucket(versionName) !== versionFilter) continue;
+      if (classifyVersionBucket(resolveCurrentVersion(u, kind)) !== versionFilter) continue;
     }
 
     ids.push(u.id);

@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { isClubCreatedFromForm } from '@/lib/club/clubSidebarLabel';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type ClubRecord = {
   id: string;
@@ -172,7 +173,9 @@ export default function EditClubProfilePage() {
         </div>
       }
     >
-      <EditClubProfileContent />
+      <AutoTranslate>
+        <EditClubProfileContent />
+      </AutoTranslate>
     </Suspense>
   );
 }

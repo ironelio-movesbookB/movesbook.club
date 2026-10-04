@@ -11,6 +11,7 @@ import {
   emptyTeamFederal,
   emptyTeamLegalSite,
   emptyTeamMainData,
+  normalizeEntitySportProfile,
 } from '@/lib/team/teamProfileDefaults';
 import type {
   TeamAdminSportData,
@@ -63,6 +64,7 @@ export function parseTeamProfileSections(
     contacts,
     federal: mergeSection(emptyTeamFederal(), stored?.federal),
     adminSport: mergeSection(emptyTeamAdminSport(), stored?.adminSport),
+    sportProfile: normalizeEntitySportProfile(stored?.sportProfile),
   };
 }
 
@@ -100,6 +102,7 @@ function compactTeamProfileSections(payload: TeamProfileFormPayload): TeamProfil
     contacts: payload.contacts,
     federal: payload.federal,
     adminSport: payload.adminSport,
+    sportProfile: normalizeEntitySportProfile(payload.sportProfile),
   };
 }
 

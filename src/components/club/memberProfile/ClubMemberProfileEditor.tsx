@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSportT } from '@/components/sport/useSportT';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
   BookOpen,
@@ -11,6 +12,7 @@ import {
   Flower2,
   Footprints,
   Globe,
+  ImagePlus,
   MessageCircle,
   MoreHorizontal,
   Mountain,
@@ -22,6 +24,7 @@ import {
   Tv,
   UtensilsCrossed,
   Waves,
+  X as CloseIcon,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -61,12 +64,34 @@ import SignaturePad, {
 import NewsCategoryMultiSelect from '@/components/club/memberProfile/NewsCategoryMultiSelect';
 import MemberProfileSettingsTab from '@/components/club/memberProfile/MemberProfileSettingsTab';
 import CoachNotesPanel from '@/components/club/memberProfile/CoachNotesPanel';
+import ImageLightbox from '@/components/common/ImageLightbox';
+import { MAX_SUPPORT_IMAGES } from '@/lib/messages/supportImages';
+import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
+import { rewriteUploadUrlsInHtml } from '@/lib/uploadMediaUrl';
+import AuthImage, { fetchWithAuth, needsAuthFetch } from '@/components/club/memberProfile/AuthImage';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import { getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import { renewMembershipDates } from '@/lib/club/memberMembershipDates';
 import { COUNTRIES } from '@/lib/news/countries';
 import { resolveRegionsForCountryName } from '@/lib/countries/countrySettingsStorage';
 import { SUPPORTED_LANGUAGES } from '@/constants/tools.constants';
 import { getWorldTimezones } from '@/lib/timezones';
+import SportStatsBoard from '@/components/sport/SportStatsBoard';
+import { athleteSportProfile, athleteSportStatGroups } from '@/lib/sport/athleteSportProfiles';
+import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+
+function looksLikeHtml(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+/** Document editor HTML with no text and no picture (e.g. only empty paragraphs). */
+function staffHtmlIsEmpty(html: string): boolean {
+  if (/<img\b/i.test(html)) return false;
+  return !html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .trim();
+}
 
 const CKEditor = dynamic(() => import('@/components/news/CKEditor'), { ssr: false });
 const MovesbookEditor = dynamic(() => import('@/components/club/Editor'), { ssr: false });
@@ -82,7 +107,8 @@ export type ProfileTabId =
   | 'settings'
   | 'messages-staff'
   | 'notes-coach'
-  | 'presences';
+  | 'presences'
+  | 'stats';
 
 type Props = {
   data: MemberProfileBundle;
@@ -102,9 +128,20 @@ export default function ClubMemberProfileEditor({
   onReload,
   profileSource = 'club',
 }: Props) {
+  const radioGroupId = useId();
+  const st = useSportT();
   const [saving, setSaving] = useState(false);
+  const [resetConfirmKind, setResetConfirmKind] = useState<'staff' | 'coach' | null>(null);
   const [message, setMessage] = useState('');
+  const [pdfError, setPdfError] = useState('');
+  const [parentsMailConfirm, setParentsMailConfirm] = useState<string | null>(null);
+  const [parentsMailBusy, setParentsMailBusy] = useState(false);
+  const [parentsMailResult, setParentsMailResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [noteDraft, setNoteDraft] = useState({ title: '', body: '' });
+  const [staffNoteImages, setStaffNoteImages] = useState<string[]>([]);
+  const [uploadingStaffImages, setUploadingStaffImages] = useState(false);
+  const staffImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [staffPictureLightbox, setStaffPictureLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [payForSelectId, setPayForSelectId] = useState('');
   const [otherChildrenSelectId, setOtherChildrenSelectId] = useState<{
@@ -159,7 +196,7 @@ export default function ClubMemberProfileEditor({
 
   const worldTimezones = useMemo(() => getWorldTimezones(), []);
 
-  const saveClubSection = (signatureField?: 'parents' | 'otherDetails') => {
+  const saveClubSection = (signatureField?: 'parents' | 'otherDetails'): Promise<boolean> => {
     let clubToSave = clubRef.current;
     const sig = signaturePadRef.current?.getValue()?.trim() ?? '';
     if (signatureField) {
@@ -177,7 +214,75 @@ export default function ClubMemberProfileEditor({
       clubRef.current = clubToSave;
       onChange({ ...data, club: clubToSave });
     }
-    void saveSection('club', { club: clubToSave });
+    return saveSection('club', { club: clubToSave });
+  };
+
+  const canSendParentsMail = data.viewer.canEditClubScoped && !data.viewer.isSelf;
+
+  const requestParentsMail = () => {
+    setParentsMailResult(null);
+    const parents = clubRef.current.parents;
+    if (!parents.acceptanceRules || !parents.privacyPolicyRead) {
+      setParentsMailResult({
+        ok: false,
+        text: 'Tick "Acceptance of the rules" and "I have read Privacy policy" first.',
+      });
+      return;
+    }
+    const lines = (['parent1', 'parent2'] as const)
+      .map((key) => {
+        const p = parents[key];
+        const email = [p.mainEmail, p.alternativeMail]
+          .map((v) => (v ?? '').trim())
+          .find((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
+        if (!email) return null;
+        const name = [p.name, p.surname].map((v) => (v ?? '').trim()).filter(Boolean).join(' ');
+        return name ? `• ${name} <${email}>` : `• ${email}`;
+      })
+      .filter((line): line is string => Boolean(line));
+    if (lines.length === 0) {
+      setParentsMailResult({ ok: false, text: 'Enter a valid email for at least one parent first.' });
+      return;
+    }
+    const intro =
+      mode === 'view'
+        ? 'The confirmation of acceptance'
+        : 'The Parents data will be saved, then the confirmation of acceptance';
+    setParentsMailConfirm(
+      `${intro} with the Rules and the Privacy policy attached will be sent to:\n\n${[
+        ...new Set(lines),
+      ].join('\n')}`,
+    );
+  };
+
+  const sendParentsMail = async () => {
+    setParentsMailBusy(true);
+    setParentsMailResult(null);
+    try {
+      if (mode !== 'view') {
+        const saved = await saveClubSection('parents');
+        if (!saved) throw new Error('Could not save the Parents data.');
+      }
+      const res = await fetch(
+        withSelectedClubId(
+          `/api/clubs/${encodeURIComponent(data.clubId)}/members/${encodeURIComponent(data.memberId)}/parents/send-acceptance`,
+        ),
+        { method: 'POST', headers: getAuthHeaders() },
+      );
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sent?: string[];
+        failed?: string[];
+      };
+      if (!res.ok) throw new Error(json.error || 'Sending failed');
+      const failedNote = json.failed?.length ? ` Not delivered to: ${json.failed.join(', ')}.` : '';
+      setParentsMailResult({ ok: true, text: `Email sent to ${json.sent?.join(', ')}.${failedNote}` });
+    } catch (e) {
+      setParentsMailResult({ ok: false, text: e instanceof Error ? e.message : 'Sending failed' });
+    } finally {
+      setParentsMailBusy(false);
+      setParentsMailConfirm(null);
+    }
   };
 
   const patchOwner = (path: (o: MemberProfileBundle['owner']) => MemberProfileBundle['owner']) => {
@@ -232,6 +337,33 @@ export default function ClubMemberProfileEditor({
       return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** `/api/...` files need the Authorization header, which a plain link in a new tab doesn't send. */
+  const viewPdf = async (url: string) => {
+    setPdfError('');
+    if (!needsAuthFetch(url)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // Open synchronously so popup blockers treat it as user-initiated.
+    const win = window.open('', '_blank');
+    if (!win) {
+      setPdfError('Allow pop-ups for this site to view the PDF.');
+      return;
+    }
+    win.document.write('<p style="font-family:sans-serif">Loading PDF…</p>');
+    try {
+      const res = await fetchWithAuth(url);
+      if (!res.ok) throw new Error(res.status === 404 ? 'PDF not found' : 'Could not load the PDF');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      win.location.href = objectUrl;
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (e) {
+      win.close();
+      setPdfError(e instanceof Error ? e.message : 'Could not load the PDF');
     }
   };
 
@@ -377,11 +509,51 @@ export default function ClubMemberProfileEditor({
     }
   };
 
+  const handleStaffImagesSelected = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = MAX_SUPPORT_IMAGES - staffNoteImages.length;
+    if (remaining <= 0) return;
+    setUploadingStaffImages(true);
+    try {
+      for (const file of Array.from(files).slice(0, remaining)) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/messages/support/upload-image', {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.path) {
+          setMessage('Picture upload failed.');
+          break;
+        }
+        setStaffNoteImages((prev) => [...prev, String(json.path)].slice(0, MAX_SUPPORT_IMAGES));
+      }
+    } finally {
+      setUploadingStaffImages(false);
+      if (staffImageInputRef.current) staffImageInputRef.current.value = '';
+    }
+  };
+
   const postNote = async (kind: 'staff' | 'coach', parentId?: string) => {
-    const body = parentId ? replyDrafts[parentId] || '' : noteDraft.body;
+    const docHtml = String(clubRef.current.staffMessage?.html || '');
+    const postDocument =
+      kind === 'staff' && !parentId && !noteDraft.body.trim() && !staffHtmlIsEmpty(docHtml);
+    const body = parentId
+      ? replyDrafts[parentId] || ''
+      : postDocument
+        ? docHtml
+        : noteDraft.body;
     const title = parentId ? '' : noteDraft.title;
+    const imageUrls = kind === 'staff' && !parentId ? staffNoteImages : [];
     if (!body.trim()) {
-      setMessage('Enter a message.');
+      setMessage(
+        kind === 'staff' && !parentId
+          ? 'Write the document or a short staff note.'
+          : 'Enter a message.',
+      );
       return;
     }
 
@@ -430,6 +602,7 @@ export default function ClubMemberProfileEditor({
             title,
             body,
             parentId,
+            imageUrls,
             visibleToMember:
               kind === 'coach'
                 ? clubSnapshot.visibility.notesCoach
@@ -447,6 +620,7 @@ export default function ClubMemberProfileEditor({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Failed to post');
       setNoteDraft({ title: '', body: '' });
+      if (kind === 'staff' && !parentId) setStaffNoteImages([]);
       if (parentId) setReplyDrafts((d) => ({ ...d, [parentId]: '' }));
       setMessage('Posted.');
 
@@ -485,6 +659,7 @@ export default function ClubMemberProfileEditor({
               body: body.trim(),
               createdAt: new Date().toISOString(),
               authorLabel: sessionAuthor.label,
+              imageUrls,
               // Mirrors the schedule the API just inherited for this root post.
               showAtLogin: Boolean(clubSnapshot.staffMessage.showAtLogin),
               showAtLogout: Boolean(clubSnapshot.staffMessage.showAtLogout),
@@ -504,7 +679,6 @@ export default function ClubMemberProfileEditor({
   };
 
   const resetNotes = async (kind: 'staff' | 'coach') => {
-    if (!window.confirm(`Reset all ${kind} documents and replies?`)) return;
     setSaving(true);
     try {
       const res = await fetch(
@@ -556,7 +730,17 @@ export default function ClubMemberProfileEditor({
       <div>
         <SectionCard title="Private settings" tone="red">
           <CheckRow
-            label="Disallow the Club Admins to modify my data in the personal profile"
+            label={
+              o.privateSettings.disallowClubAdmins && !data.viewer.isSelf ? (
+                <span className="font-semibold text-red-600">
+                  {data.workspaceKind === 'team'
+                    ? 'Entry by Team Staff disabled'
+                    : 'Entry by Club Staff disabled'}
+                </span>
+              ) : (
+                'Disallow the Club Admins to modify my data in the personal profile'
+              )
+            }
             checked={o.privateSettings.disallowClubAdmins}
             disabled={mode === 'view' || !data.viewer.isSelf}
             onChange={(v) =>
@@ -883,29 +1067,42 @@ export default function ClubMemberProfileEditor({
                   }
                 />
               </Field>
-              <div className="mt-2 flex flex-wrap gap-4">
-                <CheckRow
-                  label="WhatsApp"
-                  disabled={readOnlyOwner}
-                  checked={o.address[waKey]}
-                  onChange={(v) =>
-                    patchOwner((p) => ({
-                      ...p,
-                      address: { ...p.address, [waKey]: v },
-                    }))
-                  }
-                />
-                <CheckRow
-                  label="Telegram"
-                  disabled={readOnlyOwner}
-                  checked={o.address[tgKey]}
-                  onChange={(v) =>
-                    patchOwner((p) => ({
-                      ...p,
-                      address: { ...p.address, [tgKey]: v },
-                    }))
-                  }
-                />
+              <div className="mt-2 flex flex-wrap gap-4" role="radiogroup" aria-label={`${label} messenger`}>
+                {(
+                  [
+                    ['none', 'None'],
+                    ['whatsapp', 'WhatsApp'],
+                    ['telegram', 'Telegram'],
+                  ] as const
+                ).map(([value, text]) => {
+                  const current = o.address[waKey]
+                    ? 'whatsapp'
+                    : o.address[tgKey]
+                      ? 'telegram'
+                      : 'none';
+                  return (
+                    <label key={value} className="flex items-center gap-2 text-sm text-gray-800">
+                      <input
+                        type="radio"
+                        name={`${radioGroupId}-messenger-${numKey}`}
+                        value={value}
+                        disabled={readOnlyOwner}
+                        checked={current === value}
+                        onChange={() =>
+                          patchOwner((p) => ({
+                            ...p,
+                            address: {
+                              ...p.address,
+                              [waKey]: value === 'whatsapp',
+                              [tgKey]: value === 'telegram',
+                            },
+                          }))
+                        }
+                      />
+                      {text}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -1315,8 +1512,7 @@ export default function ClubMemberProfileEditor({
                 </label>
               ) : null}
               {o.medical.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={o.medical.imageUrl} alt="" className="mt-2 max-h-40 rounded border" />
+                <AuthImage src={o.medical.imageUrl} alt="" className="mt-2 max-h-40 rounded border" />
               ) : null}
             </Field>
             <Field label="Medical PDF">
@@ -1346,14 +1542,16 @@ export default function ClubMemberProfileEditor({
                 </label>
               ) : null}
               {o.medical.pdfUrl ? (
-                <a
-                  href={o.medical.pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => void viewPdf(o.medical.pdfUrl)}
                   className="mt-2 block text-sm text-blue-700 underline"
                 >
                   View PDF
-                </a>
+                </button>
+              ) : null}
+              {pdfError ? (
+                <p className="mt-1 text-sm text-red-600">{pdfError}</p>
               ) : null}
             </Field>
           </Row2>
@@ -1384,8 +1582,7 @@ export default function ClubMemberProfileEditor({
               </label>
             ) : null}
             {o.medical.ecgUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={o.medical.ecgUrl} alt="ECG" className="mt-2 max-h-40 rounded border" />
+              <AuthImage src={o.medical.ecgUrl} alt="ECG" className="mt-2 max-h-40 rounded border" />
             ) : null}
           </Field>
         </SectionCard>
@@ -1749,12 +1946,24 @@ export default function ClubMemberProfileEditor({
       });
     };
 
+    // Viewers who cannot edit (e.g. club admin reading the member's own data) see
+    // only what the member ticked, not the full option list.
+    const visibleDays = readOnlyMemberTabs
+      ? days.filter((d) => a.preferredDays.includes(d))
+      : days;
+    const visibleActivityOptions = readOnlyMemberTabs
+      ? FREE_TIME_ACTIVITY_OPTIONS.filter((opt) => selectedActivities.includes(opt.label))
+      : FREE_TIME_ACTIVITY_OPTIONS;
+
     return (
       <div>
         <SectionCard title="My Activities" tone="blue">
           <Field label="Preferred days">
+            {readOnlyMemberTabs && visibleDays.length === 0 ? (
+              <p className="text-sm text-gray-500">None selected.</p>
+            ) : null}
             <div className="flex flex-wrap gap-3">
-              {days.map((d) => (
+              {visibleDays.map((d) => (
                 <CheckRow
                   key={d}
                   label={d}
@@ -1777,11 +1986,17 @@ export default function ClubMemberProfileEditor({
           </Field>
 
           <Field label="Activities in the free time">
-            <p className="mb-2 text-xs text-gray-500">
-              Tick the activities you enjoy in your free time. You can select more than one.
-            </p>
+            {readOnlyMemberTabs ? (
+              visibleActivityOptions.length === 0 ? (
+                <p className="text-sm text-gray-500">None selected.</p>
+              ) : null
+            ) : (
+              <p className="mb-2 text-xs text-gray-500">
+                Tick the activities you enjoy in your free time. You can select more than one.
+              </p>
+            )}
             <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {FREE_TIME_ACTIVITY_OPTIONS.map((opt) => {
+              {visibleActivityOptions.map((opt) => {
                 const Icon = FREE_TIME_ICON_MAP[opt.icon] || MoreHorizontal;
                 return (
                   <label
@@ -2016,20 +2231,19 @@ export default function ClubMemberProfileEditor({
   if (activeTab === 'other-details') {
     const od = club.otherDetails;
     const customQuestions = data.customQuestions || [];
-    const entityNoun = data.workspaceKind === 'team' ? 'Team' : 'Club';
-    const byAdmin = `managed by the ${entityNoun} admin`;
+    const isTeam = data.workspaceKind === 'team';
+    const byAdmin = isTeam ? 'managed by the Team admin' : 'managed by the Club admin';
     const byMember = 'managed by the member';
     return (
       <div>
         <div className="mb-4 border-b border-gray-200 pb-3">
           <p className="text-sm font-semibold text-gray-900">
-            Other {entityNoun} data · {data.clubName}
+            {isTeam ? 'Other Team data' : 'Other Club data'} · {data.clubName}
           </p>
           <p className="mt-1 text-xs text-gray-600">
-            Sections marked <span className="font-semibold">({byAdmin})</span> are edited by the{' '}
-            {entityNoun.toLowerCase()} admin. Sections marked{' '}
-            <span className="font-semibold">({byMember})</span> are filled by the athlete (rules /
-            privacy acceptance and signature).
+            {isTeam
+              ? 'Sections marked (managed by the Team admin) are edited by the team admin. Sections marked (managed by the member) are filled by the athlete (rules / privacy acceptance and signature).'
+              : 'Sections marked (managed by the Club admin) are edited by the club admin. Sections marked (managed by the member) are filled by the athlete (rules / privacy acceptance and signature).'}
           </p>
         </div>
 
@@ -2091,7 +2305,13 @@ export default function ClubMemberProfileEditor({
           </Field>
         </SectionCard>
 
-        <SectionCard title={`Last Membership to the ${entityNoun} (${byAdmin})`}>
+        <SectionCard
+          title={
+            isTeam
+              ? `Last Membership to the Team (${byAdmin})`
+              : `Last Membership to the Club (${byAdmin})`
+          }
+        >
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm text-blue-800">
             <span>Edit dates below</span>
             <div className="flex flex-wrap gap-2">
@@ -2504,9 +2724,9 @@ export default function ClubMemberProfileEditor({
         {!underage ? (
           <SectionCard title={`Signatures — overage member (${byMember})`}>
             <p className="mb-2 text-xs text-gray-600">
-              The athlete accepts club/team rules and privacy, and draws the signature. The{' '}
-              {entityNoun.toLowerCase()} admin can view these fields but only the member (or an
-              admin with signature permission) can change them.
+              {isTeam
+                ? 'The athlete accepts club/team rules and privacy, and draws the signature. The team admin can view these fields but only the member (or an admin with signature permission) can change them.'
+                : 'The athlete accepts club/team rules and privacy, and draws the signature. The club admin can view these fields but only the member (or an admin with signature permission) can change them.'}
             </p>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <CheckRow
@@ -3118,18 +3338,18 @@ export default function ClubMemberProfileEditor({
                 onChange={(e) => patchParent({ phone1: e.target.value })}
               />
             </Field>
-            <Field label="Alternative phone">
-              <TextInput
-                disabled={readOnlyClub}
-                value={p.phone2}
-                onChange={(e) => patchParent({ phone2: e.target.value })}
-              />
-            </Field>
             <Field label="Alternative mail">
               <TextInput
                 disabled={readOnlyClub}
                 value={p.alternativeMail}
                 onChange={(e) => patchParent({ alternativeMail: e.target.value })}
+              />
+            </Field>
+            <Field label="Alternative phone">
+              <TextInput
+                disabled={readOnlyClub}
+                value={p.phone2}
+                onChange={(e) => patchParent({ phone2: e.target.value })}
               />
             </Field>
           </Row2>
@@ -3357,7 +3577,36 @@ export default function ClubMemberProfileEditor({
               }
             />
           </Field>
+          {canSendParentsMail ? (
+            <div className="mt-2 flex flex-col items-end gap-1">
+              <button
+                type="button"
+                disabled={parentsMailBusy || saving}
+                onClick={requestParentsMail}
+                className="text-sm font-semibold text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
+              >
+                {parentsMailBusy ? 'Sending…' : 'Send by mail'}
+              </button>
+              {parentsMailResult ? (
+                <p
+                  className={`text-right text-xs ${parentsMailResult.ok ? 'text-green-700' : 'text-red-600'}`}
+                >
+                  {parentsMailResult.text}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </SectionCard>
+
+        <PromocodeConfirmModal
+          open={parentsMailConfirm !== null}
+          title="Send by mail"
+          message={parentsMailConfirm ?? ''}
+          confirmLabel="Send"
+          loading={parentsMailBusy}
+          onClose={() => setParentsMailConfirm(null)}
+          onConfirm={() => void sendParentsMail()}
+        />
 
         <SaveBar canSave={!readOnlyClub} onSave={() => saveClubSection('parents')} />
       </div>
@@ -3368,8 +3617,10 @@ export default function ClubMemberProfileEditor({
     return (
       <MemberProfileSettingsTab
         clubId={data.clubId}
+        memberUserId={data.memberId}
         entitySportDefault={data.entitySportDefault || 'Football'}
         workspaceKind={data.workspaceKind === 'team' ? 'team' : 'club'}
+        ownerAdministrative={data.owner?.administrative}
         club={club}
         setClub={setClub}
         readOnlyClub={readOnlyClub}
@@ -3402,14 +3653,33 @@ export default function ClubMemberProfileEditor({
               type="button"
               className="mt-2 text-sm text-red-700 underline"
               disabled={saving}
-              onClick={() => void resetNotes('staff')}
+              onClick={() => setResetConfirmKind('staff')}
             >
               Reset Document and replies
             </button>
           </SectionCard>
         ) : null}
 
-        <SectionCard title="Current message posted by the Club staff" tone="blue">
+        <PromocodeConfirmModal
+          open={resetConfirmKind !== null}
+          title="Reset documents"
+          message={`Reset all ${resetConfirmKind ?? 'staff'} documents and replies?`}
+          confirmLabel="Reset"
+          destructive
+          loading={saving}
+          onClose={() => setResetConfirmKind(null)}
+          onConfirm={async () => {
+            const kind = resetConfirmKind;
+            if (!kind) return;
+            await resetNotes(kind);
+            setResetConfirmKind(null);
+          }}
+        />
+
+        <SectionCard
+          title={`Current message posted by the ${data.workspaceKind === 'team' ? 'Team' : 'Club'} staff`}
+          tone="blue"
+        >
           <Row2>
             <Field label="Enable From">
               <TextInput
@@ -3493,14 +3763,59 @@ export default function ClubMemberProfileEditor({
                   value={noteDraft.body}
                   onChange={(e) => setNoteDraft((d) => ({ ...d, body: e.target.value }))}
                 />
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={uploadingStaffImages || staffNoteImages.length >= MAX_SUPPORT_IMAGES}
+                      onClick={() => staffImageInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded border border-gray-400 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      {uploadingStaffImages ? 'Uploading…' : 'Add pictures'}
+                    </button>
+                    <span className="text-[11px] text-gray-600">
+                      Up to 3 images (JPG, PNG, GIF, WebP) ({staffNoteImages.length}/{MAX_SUPPORT_IMAGES})
+                    </span>
+                    <input
+                      ref={staffImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => void handleStaffImagesSelected(e.target.files)}
+                    />
+                  </div>
+                  {staffNoteImages.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {staffNoteImages.map((src) => (
+                        <div key={src} className="relative h-20 w-20 overflow-hidden rounded border border-gray-300 bg-white">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt="" className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setStaffNoteImages((prev) => prev.filter((x) => x !== src))}
+                            className="absolute right-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white"
+                            aria-label="Remove picture"
+                          >
+                            <CloseIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={saving || uploadingStaffImages}
                   className="rounded bg-red-700 px-3 py-1.5 text-sm text-white"
                   onClick={() => void postNote('staff')}
                 >
                   Post staff message
                 </button>
+                <p className="text-[11px] text-gray-600">
+                  Leave the short note empty to post the Document editor content (text and pictures).
+                </p>
               </div>
             </div>
           ) : (
@@ -3525,7 +3840,41 @@ export default function ClubMemberProfileEditor({
               {data.staffNotes.map((n) => (
                 <li key={n.id} className="rounded border border-gray-200 p-3 text-sm">
                   <p className="font-semibold">{n.title || 'Staff message'}</p>
-                  <p className="whitespace-pre-wrap">{n.body}</p>
+                  {looksLikeHtml(n.body) ? (
+                    <div
+                      className="prose prose-sm max-w-none [&_img]:inline-block [&_img]:max-h-40 [&_img]:w-auto [&_img]:cursor-zoom-in [&_figure]:my-2"
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.tagName !== 'IMG') return;
+                        const inline = Array.from(e.currentTarget.querySelectorAll('img')).map(
+                          (img) => img.getAttribute('src') || '',
+                        );
+                        const picIdx = inline.indexOf(target.getAttribute('src') || '');
+                        if (picIdx >= 0) {
+                          setStaffPictureLightbox({ urls: [...inline, ...(n.imageUrls || [])], index: picIdx });
+                        }
+                      }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(rewriteUploadUrlsInHtml(n.body)) }}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap">{n.body}</p>
+                  )}
+                  {n.imageUrls?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {n.imageUrls.map((src, imgIdx) => (
+                        <button
+                          key={`${src}-${imgIdx}`}
+                          type="button"
+                          onClick={() => setStaffPictureLightbox({ urls: n.imageUrls, index: imgIdx })}
+                          className="overflow-hidden rounded border border-gray-200"
+                          aria-label={`Enlarge picture ${imgIdx + 1}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt="" className="h-16 w-16 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <p className="mt-1 text-xs text-gray-500">
                     {n.authorLabel} · {new Date(n.createdAt).toLocaleString()}
                     {n.showAtLogin || n.showAtLogout || club.staffMessage.showAtLogin || club.staffMessage.showAtLogout ? (
@@ -3584,6 +3933,14 @@ export default function ClubMemberProfileEditor({
             </ul>
           )}
         </SectionCard>
+        {staffPictureLightbox ? (
+          <ImageLightbox
+            urls={staffPictureLightbox.urls}
+            index={staffPictureLightbox.index}
+            onIndexChange={(index) => setStaffPictureLightbox((prev) => (prev ? { ...prev, index } : prev))}
+            onClose={() => setStaffPictureLightbox(null)}
+          />
+        ) : null}
 
         <SaveBar canSave={!readOnlyClub} onSave={() => void saveSection('club')} />
       </div>
@@ -3630,6 +3987,51 @@ export default function ClubMemberProfileEditor({
         <div className="mb-4 border-b border-gray-200 pb-3">
           <p className="text-sm font-semibold text-gray-900">Graphs of the presences</p>
         </div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'stats') {
+    const statsSport = normalizeEntitySport(
+      club.settings.memberSettingKind === 'team'
+        ? club.settings.teamSport || data.entitySportDefault
+        : data.entitySportDefault,
+    );
+    const profile = athleteSportProfile(statsSport);
+    const groups = athleteSportStatGroups(profile, club.settings.sportFields?.[statsSport] ?? {});
+    return (
+      <div>
+        {data.viewer.isClubAdmin ? (
+          <SectionCard title={st('Member visibility')} tone="purple">
+            <CheckRow
+              label={st('Allow member to read the Stats')}
+              checked={club.visibility.stats}
+              disabled={readOnlyClub}
+              onChange={(v) =>
+                setClub((c) => ({
+                  ...c,
+                  visibility: { ...c.visibility, stats: v },
+                }))
+              }
+            />
+          </SectionCard>
+        ) : null}
+
+        <SectionCard title={`${st('Stats')} — ${st(statsSport)}`}>
+          <SportStatsBoard
+            groups={groups}
+            values={club.sportStats?.[statsSport] ?? {}}
+            readOnly={readOnlyClub}
+            emptyText="No statistics for this sport."
+            onChange={(next) =>
+              setClub((c) => ({
+                ...c,
+                sportStats: { ...c.sportStats, [statsSport]: next },
+              }))
+            }
+          />
+        </SectionCard>
+        <SaveBar canSave={!readOnlyClub} onSave={() => void saveSection('club')} />
       </div>
     );
   }

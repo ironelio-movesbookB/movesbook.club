@@ -13,12 +13,13 @@ import {
 } from '@/components/procedures/ArchiveRowActions';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import EditPaymentModal from '@/components/club/archives/EditPaymentModal';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import type { ProcedureTab } from '@/components/procedures/types';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import type { ProcedureTypeCode } from '@/lib/procedures/types';
-import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
+import { clubApiFetch, formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
 import type { Column, Member } from '@/types/clubTable';
 
 const PAGE_SIZE = 25;
@@ -59,6 +60,9 @@ function ArchivePaymentsPageInner() {
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editTarget, setEditTarget] = useState<{ code: ProcedureTypeCode; row: Member } | null>(null);
+  const [onlyToBeVerified, setOnlyToBeVerified] = useState(false);
+  const [verifyTarget, setVerifyTarget] = useState<Member | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -92,6 +96,7 @@ function ArchivePaymentsPageInner() {
         pageSize,
         ...scope.filters,
         ...filters.applied,
+        toBeVerified: onlyToBeVerified,
       });
       setTotal(res.total);
       setData(
@@ -107,7 +112,7 @@ function ArchivePaymentsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, scope.filters, filters.applied, requestPassword, openEdit, performDelete]);
+  }, [page, pageSize, scope.filters, filters.applied, onlyToBeVerified, requestPassword, openEdit, performDelete]);
 
   useEffect(() => {
     load();
@@ -115,7 +120,25 @@ function ArchivePaymentsPageInner() {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied, scope.filters]);
+  }, [filters.applied, scope.filters, onlyToBeVerified]);
+
+  const confirmVerification = async () => {
+    if (!verifyTarget?.id) return;
+    setVerifying(true);
+    try {
+      await clubApiFetch('/api/club/payment-verification', {
+        method: 'POST',
+        body: JSON.stringify({ paymentId: verifyTarget.id }),
+      });
+      setVerifyTarget(null);
+      reload();
+    } catch (e) {
+      setVerifyTarget(null);
+      setError(e instanceof Error ? e.message : 'Confirmation failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   // Same as Deadlines: the selected row travels to sibling archives via recordId + memberId.
   const selectedRow = useMemo(
@@ -189,6 +212,28 @@ function ArchivePaymentsPageInner() {
           />
         }
       />
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-gray-800">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={onlyToBeVerified}
+            onClick={() => setOnlyToBeVerified((v) => !v)}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+              onlyToBeVerified ? 'bg-red-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                onlyToBeVerified ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+          Payments to be verified
+          <span className="text-xs font-normal text-gray-500">{onlyToBeVerified ? 'On' : 'Off'}</span>
+        </label>
+        <p className="text-xs text-gray-500">Grey rows are payments to be verified — click one to confirm it.</p>
+      </div>
       <ProcedureArchiveTable
         columns={columns}
         rows={data}
@@ -197,7 +242,12 @@ function ArchivePaymentsPageInner() {
         selectable
         selectOnlyOpenRest={false}
         selectedIds={selectedIds}
-        onRowClick={(row) => row.id && setSelectedId(row.id)}
+        getRowClassName={(row) => (row.toBeVerified ? 'text-gray-400' : 'text-black')}
+        onRowClick={(row) => {
+          if (!row.id) return;
+          setSelectedId(row.id);
+          if (row.toBeVerified) setVerifyTarget(row);
+        }}
         onToggleSelect={(row) => {
           if (!row.id) return;
           setSelectedIds((prev) => {
@@ -217,6 +267,22 @@ function ArchivePaymentsPageInner() {
       />
 
       {passwordModal}
+
+      <PromocodeConfirmModal
+        open={Boolean(verifyTarget)}
+        title="Payment to be verified"
+        message={
+          verifyTarget
+            ? `Confirm that the payment of ${formatEuro(Number(verifyTarget.paid ?? 0))} by ${String(
+                verifyTarget.name ?? '',
+              )} was really received?`
+            : ''
+        }
+        confirmLabel="Confirm payment"
+        loading={verifying}
+        onClose={() => setVerifyTarget(null)}
+        onConfirm={() => void confirmVerification()}
+      />
 
       {editTarget && (
         <EditPaymentModal

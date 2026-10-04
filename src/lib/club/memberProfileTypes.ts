@@ -145,6 +145,7 @@ export type ClubVisibilityFlags = {
   notesCoachComments: boolean;
   presences: boolean;
   payFor: boolean;
+  stats: boolean;
 };
 
 export type ParentData = {
@@ -259,6 +260,8 @@ export type ClubMemberScopedData = {
     memberSettingKind: 'club' | 'team';
     /** Type of team / sport (dropdown). Defaults from Team/Club profile sport. */
     teamSport: string;
+    /** Sport-specific TEAM field values, keyed by sport then field key. */
+    sportFields: Record<string, Record<string, string>>;
     /** Club setting member type id (PHP member_type_id). */
     memberTypeId: string;
     discounts: {
@@ -320,13 +323,21 @@ export type ClubMemberScopedData = {
         date: string;
         status: string;
       };
+      /** Payment type id from PAYMENT_TYPE_OPTIONS ('' = not set). */
       paymentMethod: string;
-      /** Single overall payment status (Paid / Pending / Not paid). */
+      /** Cheque / Payment slip / Bank transfer: payment stays grey in the archive until confirmed. */
+      paymentToBeVerified: boolean;
+      /** Single overall payment status (Paid / Pending / Not paid / Create deadlines). */
       paymentStatus: string;
+      /** Written by the server only: what was already filed in the Archive of the Deadlines. */
+      deadlines: MemberSettingsDeadlines;
       receiptIssued: boolean;
       imageRelease: boolean;
       travelAuthorization: boolean;
       athleteStatus: string;
+      /** Registered / On loan / On trial ('' = not set). */
+      registrationStatus: string;
+      registrationType: string;
       sportsPlayed: string[];
       teamNames: string;
       previousClub: string;
@@ -350,6 +361,8 @@ export type ClubMemberScopedData = {
       startDateWithTeam: string;
     };
   };
+  /** Stats tab values, keyed by sport then season. */
+  sportStats: Record<string, import('@/lib/sport/sportProfileTypes').SportSeasonStats>;
   staffMessage: {
     enableFrom: string;
     enableTo: string;
@@ -362,8 +375,11 @@ export type ClubMemberScopedData = {
 export type MemberProfileBundle = {
   /** Club id, or team id when `workspaceKind` is `team`. */
   clubId: string;
-  /** `team` when opened from Team Admin Archive of Users. */
-  workspaceKind?: 'club' | 'team';
+  /**
+   * `team` when opened from Team Admin Archive of Users; `coach` when a coach reads an
+   * athlete trained (shared labels only, read-only — `clubId` is then the coach's user id).
+   */
+  workspaceKind?: 'club' | 'team' | 'coach';
   clubName: string;
   /** Sport from Club/Team profile (category) — default for Settings team-type dropdown. */
   entitySportDefault: string;
@@ -414,6 +430,7 @@ export type MemberProfileBundle = {
     body: string;
     createdAt: string;
     authorLabel: string;
+    imageUrls: string[];
     /** Inherited from the Messages document schedule when the post was created. */
     showAtLogin: boolean;
     showAtLogout: boolean;
@@ -467,13 +484,56 @@ export const TEAM_ATHLETE_STATUS_OPTIONS = [
   'Suspended',
 ] as const;
 
-/** TEAM-FOOTBALL Settings → Payment method (spec list). */
-export const TEAM_FOOTBALL_PAYMENT_METHOD_OPTIONS = [
-  'Cash',
-  'Bank transfer',
-  'POS',
-  'SEPA',
+/** Athlete's status with the team towards the federation (TEAM fields, top). */
+export const TEAM_REGISTRATION_STATUS_OPTIONS = ['Registered', 'On loan', 'On trial'] as const;
+
+/** Used when Super Admin has no "Registration type" dropdown items for the sport. */
+export const DEFAULT_REGISTRATION_TYPE_OPTIONS = [
+  'First registration',
+  'Renewal',
+  'Transfer',
+  'Loan',
 ] as const;
+
+/** TEAM-FOOTBALL Settings → Payment method (spec list). */
+export type MemberSettingsInstallmentKey = 'firstPayment' | 'secondPayment' | 'thirdPayment';
+
+export const MEMBER_SETTINGS_INSTALLMENT_KEYS: readonly MemberSettingsInstallmentKey[] = [
+  'firstPayment',
+  'secondPayment',
+  'thirdPayment',
+];
+
+export type MemberSettingsDeadlines = {
+  /** Membership procedure record holding the deadlines ('' = none yet). */
+  recordId: string;
+  generated: MemberSettingsInstallmentKey[];
+  firstPaidRecorded: boolean;
+  generatedAt: string;
+};
+
+export function emptyMemberSettingsDeadlines(): MemberSettingsDeadlines {
+  return { recordId: '', generated: [], firstPaidRecorded: false, generatedAt: '' };
+}
+
+export function normalizeMemberSettingsDeadlines(raw: unknown): MemberSettingsDeadlines {
+  if (!raw || typeof raw !== 'object') return emptyMemberSettingsDeadlines();
+  const r = raw as Record<string, unknown>;
+  const recordId = typeof r.recordId === 'string' ? r.recordId.trim() : '';
+  if (!recordId) return emptyMemberSettingsDeadlines();
+  const generated = Array.isArray(r.generated)
+    ? MEMBER_SETTINGS_INSTALLMENT_KEYS.filter((k) => (r.generated as unknown[]).includes(k))
+    : [];
+  return {
+    recordId,
+    generated,
+    firstPaidRecorded: Boolean(r.firstPaidRecorded),
+    generatedAt: typeof r.generatedAt === 'string' ? r.generatedAt : '',
+  };
+}
+
+/** Payment status value that files the installments in the Archive of the Deadlines. */
+export const CREATE_DEADLINES_PAYMENT_STATUS = 'Create deadlines';
 
 /** Sections an admin can copy when duplicating another member's dossier. */
 export type DuplicateMemberSection =

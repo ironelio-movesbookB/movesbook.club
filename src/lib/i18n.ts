@@ -2164,6 +2164,12 @@ export interface LanguageStrings {
       return currentLang?.strings[key] || this.languages[0]?.strings[key] || key;
     }
     
+    /** Overlays strings from the Section languages (DB) on a built-in language. */
+    mergeStrings(code: string, strings: Record<string, string>) {
+      const lang = this.languages.find(l => l.code === code);
+      if (lang) Object.assign(lang.strings, strings);
+    }
+
     // Add new language
     addLanguage(language: Language) {
       this.languages.push(language);

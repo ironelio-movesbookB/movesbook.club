@@ -62,7 +62,7 @@ function PackSection({
           {pack.versionLabel}
         </div>
         <div className="space-y-0 p-4">
-          {pack.packSizes.map((size, i) => (
+          {pack.packSizes.map((size, i) => pack.packEnabled[i] === false ? null : (
             <div
               key={`${pack.versionKey}-${size}`}
               className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-300 py-3 last:border-b-0"

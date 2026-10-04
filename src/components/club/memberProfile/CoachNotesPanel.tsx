@@ -7,9 +7,12 @@ import {
   ChevronRight,
   ClipboardList,
   ImagePlus,
+  Trash2,
   X,
 } from 'lucide-react';
+import ImageLightbox from '@/components/common/ImageLightbox';
 import { CheckRow, SectionCard } from '@/components/club/memberProfile/FormBits';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import type { ClubMemberScopedData, MemberProfileBundle } from '@/lib/club/memberProfileTypes';
 import { getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import { MAX_SUPPORT_IMAGES } from '@/lib/messages/supportImages';
@@ -86,6 +89,10 @@ export default function CoachNotesPanel({
 
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replySendingId, setReplySendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    { type: 'delete'; noteId: string } | { type: 'reset' } | null
+  >(null);
   const [pictureLightbox, setPictureLightbox] = useState<{ urls: string[]; index: number } | null>(
     null,
   );
@@ -108,12 +115,9 @@ export default function CoachNotesPanel({
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const canReplyToNote = (item: (typeof notes)[number]) =>
-    isAdmin ||
-    (canMemberReply && item.commentsEnabled && item.visibleToMember);
+  const canReplyToNote = () => isAdmin || canMemberReply;
 
   const resetCoachNotes = async () => {
-    if (!window.confirm('Reset all coach reflections and member replies?')) return;
     setPosting(true);
     try {
       const res = await fetch(
@@ -130,6 +134,35 @@ export default function CoachNotesPanel({
       setMessage(e instanceof Error ? e.message : 'Reset failed');
     } finally {
       setPosting(false);
+    }
+  };
+
+  const deleteReflection = async (noteId: string) => {
+    setDeletingId(noteId);
+    try {
+      const res = await fetch(
+        withSelectedClubId(
+          `/api/clubs/${encodeURIComponent(data.clubId)}/members/${encodeURIComponent(data.memberId)}/notes?noteId=${encodeURIComponent(noteId)}`,
+        ),
+        { method: 'DELETE', headers: getAuthHeaders() },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Delete failed');
+
+      const remaining = data.coachNotes.filter((n) => n.id !== noteId);
+      onChange({ ...data, coachNotes: remaining });
+      setReplyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[noteId];
+        return next;
+      });
+      const remainingFiltered = filtered.filter((n) => n.id !== noteId).length;
+      setPage((p) => Math.min(p, Math.max(1, Math.ceil(remainingFiltered / pageSize))));
+      setMessage('Reflection deleted.');
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -179,6 +212,7 @@ export default function CoachNotesPanel({
     const enableTo = composerEnableTo;
     const showAtLogin = composerShowAtLogin;
     const showAtLogout = composerShowAtLogout;
+    const visibleToMember = Boolean(club.visibility.notesCoach);
     try {
       const res = await fetch(
         withSelectedClubId(
@@ -191,7 +225,7 @@ export default function CoachNotesPanel({
             kind: 'coach',
             title,
             body,
-            visibleToMember: club.visibility.notesCoach,
+            visibleToMember,
             commentsEnabled: club.visibility.notesCoachComments,
             imageUrls,
             enableFrom: enableFrom || null,
@@ -217,7 +251,7 @@ export default function CoachNotesPanel({
             createdAt: new Date().toISOString(),
             authorLabel: author.label,
             authorImage: author.image,
-            visibleToMember: club.visibility.notesCoach,
+            visibleToMember,
             commentsEnabled: club.visibility.notesCoachComments,
             imageUrls,
             enableFrom,
@@ -308,7 +342,9 @@ export default function CoachNotesPanel({
             <span className="font-medium">
               Club management → Administration → Archives → Archive of Members
             </span>
-            : open the member profile, then this tab.
+            : open the member profile, then this tab. When the first checkbox is on (and saved),
+            the member sees all reflections in their Coach notes tab; when off, none.
+            Login/Logout popup settings work separately.
           </p>
           <CheckRow
             label="Coach reflections visible to the member"
@@ -354,7 +390,7 @@ export default function CoachNotesPanel({
               type="button"
               className="text-sm text-red-700 underline"
               disabled={posting}
-              onClick={() => void resetCoachNotes()}
+              onClick={() => setConfirmAction({ type: 'reset' })}
             >
               Reset coach notes and replies
             </button>
@@ -410,7 +446,7 @@ export default function CoachNotesPanel({
             ) : (
               <ul className="space-y-3">
                 {pageItems.map((item) => {
-                  const showReplyBox = canReplyToNote(item);
+                  const showReplyBox = canReplyToNote();
                   const draft = replyDrafts[item.id] || '';
                   const sending = replySendingId === item.id;
                   return (
@@ -451,6 +487,19 @@ export default function CoachNotesPanel({
                             </div>
                           ) : null}
                         </div>
+                        {canPost ? (
+                          <button
+                            type="button"
+                            disabled={deletingId === item.id}
+                            onClick={() => setConfirmAction({ type: 'delete', noteId: item.id })}
+                            title="Delete reflection"
+                            aria-label="Delete reflection"
+                            className="shrink-0 self-start inline-flex items-center gap-1 rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingId === item.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        ) : null}
                       </div>
 
                       {item.imageUrls.length > 0 ? (
@@ -585,7 +634,9 @@ export default function CoachNotesPanel({
                 Popup display (login / logout)
               </p>
               <p className="mb-2 text-[11px] text-slate-600">
-                Document is shown in a popup at login and/or logout within this date range.
+                Shown as a login/logout popup within this date range. This does not change
+                “Coach reflections visible to the member” — the member&apos;s Coach notes tab
+                follows that checkbox (and Save visibility).
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-2">
                 <label className="block text-xs">
@@ -686,27 +737,34 @@ export default function CoachNotesPanel({
         ) : null}
       </div>
 
+      <PromocodeConfirmModal
+        open={confirmAction !== null}
+        title={confirmAction?.type === 'reset' ? 'Reset coach notes' : 'Delete reflection'}
+        message={
+          confirmAction?.type === 'reset'
+            ? 'Reset all coach reflections and member replies?'
+            : 'Delete this coach reflection and its replies?'
+        }
+        confirmLabel={confirmAction?.type === 'reset' ? 'Reset' : 'Delete'}
+        destructive
+        loading={posting || deletingId !== null}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={async () => {
+          const action = confirmAction;
+          if (!action) return;
+          if (action.type === 'reset') await resetCoachNotes();
+          else await deleteReflection(action.noteId);
+          setConfirmAction(null);
+        }}
+      />
+
       {pictureLightbox ? (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setPictureLightbox(null)}
-        >
-          <div className="relative max-w-3xl max-h-full" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={pictureLightbox.urls[pictureLightbox.index]}
-              alt=""
-              className="max-h-[85vh] max-w-full object-contain"
-            />
-            <button
-              type="button"
-              className="absolute top-2 right-2 rounded-full bg-black/60 p-1 text-white"
-              onClick={() => setPictureLightbox(null)}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+        <ImageLightbox
+          urls={pictureLightbox.urls}
+          index={pictureLightbox.index}
+          onIndexChange={(index) => setPictureLightbox((prev) => (prev ? { ...prev, index } : prev))}
+          onClose={() => setPictureLightbox(null)}
+        />
       ) : null}
     </div>
   );

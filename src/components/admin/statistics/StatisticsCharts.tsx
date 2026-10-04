@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   PieChart,
   Pie,
@@ -16,7 +16,9 @@ import {
   LabelList,
 } from 'recharts';
 import {
+  STATS_DETAIL_KIND_COLORS,
   STATS_USER_KINDS,
+  type StatsDetailKind,
   type StatsUserKind,
   type StatsVersionBucket,
 } from '@/lib/admin/statisticsKinds';
@@ -53,6 +55,11 @@ type PieBlockProps = {
    * or percent. Tooltip always includes both when available.
    */
   legendValueMode?: 'count' | 'percent';
+  /** Legend items that get an “exclude” checkbox (always listed, even at 0). */
+  excludableKeys?: string[];
+  /** Items left out of the pie, of the % and of the total. */
+  excludedKeys?: string[];
+  onToggleExclude?: (key: string) => void;
 };
 
 function PieTooltip({
@@ -140,6 +147,9 @@ export function StatisticsPieBlock({
   className,
   onSelect,
   legendValueMode = 'percent',
+  excludableKeys,
+  excludedKeys,
+  onToggleExclude,
 }: PieBlockProps) {
   const theme = useStatisticsGraphTheme();
   const { metric, formatMetricValue, sliceValue } = useStatisticsMetric();
@@ -147,18 +157,32 @@ export function StatisticsPieBlock({
     uniformColor ?? (uniformKind ? theme.kindColor(uniformKind) : undefined);
   const resolvedSwatch =
     titleSwatchColor ?? (titleSwatchKind ? theme.kindColor(titleSwatchKind) : undefined);
-  const metricSlices = useMemo(() => slicesForMetric(slices, metric), [slices, metric]);
+  const isExcluded = (key: string) => Boolean(excludedKeys?.includes(key));
+  const isExcludable = (key: string) => Boolean(excludableKeys?.includes(key));
+  const metricSlices = useMemo(() => {
+    const included = slicesForMetric(
+      slices.filter((s) => !excludedKeys?.includes(s.key)),
+      metric,
+    );
+    const excluded = slicesForMetric(
+      slices.filter((s) => excludedKeys?.includes(s.key)),
+      metric,
+    );
+    return [...included, ...excluded];
+  }, [slices, metric, excludedKeys]);
   const chartData = useMemo(
-    () => metricSlices.filter((s) => s.value > 0),
-    [metricSlices],
+    () => metricSlices.filter((s) => s.value > 0 && !excludedKeys?.includes(s.key)),
+    [metricSlices, excludedKeys],
   );
   const legendData = useMemo(() => {
-    const positive = metricSlices.filter((s) => s.value > 0);
+    const listed = metricSlices.filter(
+      (s) => s.value > 0 || Boolean(excludableKeys?.includes(s.key)),
+    );
     const rest = metricSlices.find(
       (s) => (s.key === '__rest_of_world__' || s.key === '__others__') && s.value === 0,
     );
-    return rest ? [...positive, rest] : positive;
-  }, [metricSlices]);
+    return rest ? [...listed, rest] : listed;
+  }, [metricSlices, excludableKeys]);
   const empty = chartData.length === 0;
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
@@ -171,7 +195,11 @@ export function StatisticsPieBlock({
     if (resolvedUniform) return resolvedUniform;
     if (kindColors) {
       const kind = entry.key as StatsUserKind;
-      return theme.palette.kinds[kind] ?? theme.seriesColor(index);
+      return (
+        theme.palette.kinds[kind] ??
+        STATS_DETAIL_KIND_COLORS[entry.key as StatsDetailKind] ??
+        theme.seriesColor(index)
+      );
     }
     if (versionColors) {
       const version = entry.key as StatsVersionBucket;
@@ -277,12 +305,13 @@ export function StatisticsPieBlock({
               const dimmed = activeKey != null && !isActive;
               const isRest =
                 entry.key === '__rest_of_world__' || entry.key === '__others__';
+              const excluded = isExcluded(entry.key);
               return (
-                <li key={entry.key}>
+                <li key={entry.key} className="flex min-w-0 items-center gap-1">
                   <button
                     type="button"
-                    className={`flex w-full min-w-0 items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
-                      dimmed ? 'opacity-45' : ''
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
+                      dimmed || excluded ? 'opacity-45' : ''
                     } ${isRest ? 'font-semibold' : ''}`}
                     style={{
                       color: theme.background.text,
@@ -316,27 +345,38 @@ export function StatisticsPieBlock({
                       aria-hidden
                     />
                     <span
-                      className="truncate text-base"
+                      className="flex min-w-0 flex-1 items-baseline gap-1 text-base"
                       style={{ color: theme.background.text }}
-                      title={`${entry.label}: ${formatMetricValue(sliceValue(entry))} (${entry.percent}%)`}
+                      title={
+                        excluded
+                          ? `${entry.label}: ${formatMetricValue(sliceValue(entry))} (excluded)`
+                          : `${entry.label}: ${formatMetricValue(sliceValue(entry))} (${entry.percent}%)`
+                      }
                     >
-                      {legendValueMode === 'count' ? (
-                        <>
-                          {entry.label}{' '}
-                          <span className="font-bold" style={{ color: theme.background.text }}>
-                            {formatMetricValue(entry.value)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          {entry.label} ({entry.percent}%){' '}
-                          <span className="font-bold" style={{ color: theme.background.text }}>
-                            {formatMetricValue(entry.value)}
-                          </span>
-                        </>
-                      )}
+                      {/* Only the label may be cut: the value must stay readable. */}
+                      <span className="truncate">
+                        {legendValueMode === 'count' || excluded
+                          ? entry.label
+                          : `${entry.label} (${entry.percent}%)`}
+                      </span>
+                      <span className="shrink-0 font-bold" style={{ color: theme.background.text }}>
+                        {formatMetricValue(entry.value)}
+                      </span>
                     </span>
                   </button>
+                  {isExcludable(entry.key) && onToggleExclude ? (
+                    <label
+                      className="flex shrink-0 cursor-pointer items-center gap-1 text-xs"
+                      style={{ color: theme.background.text }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={excluded}
+                        onChange={() => onToggleExclude(entry.key)}
+                      />
+                      exclude
+                    </label>
+                  ) : null}
                 </li>
               );
             })}
@@ -369,9 +409,29 @@ type VerticalCountryBarsProps = {
    * When set, bar clicks navigate to that list (legend still uses onKindSelect).
    */
   onOpenBarList?: (country: string, kind: StatsUserKind) => void;
+  /** Flag / icon shown before the row name. */
+  renderLabelIcon?: (label: string) => ReactNode;
+  /** Single click on the row name. */
+  onLabelClick?: (label: string) => void;
+  /** Double click on the row name (the single click is then not fired). */
+  onLabelDoubleClick?: (label: string) => void;
+  /** Row whose details are open. */
+  selectedLabel?: string | null;
+  /** Average (income : users) under each value of the side table. */
+  showAverage?: boolean;
 };
 
 type BarFocus = { country?: string; kind?: string };
+
+const AVERAGE_EURO = new Intl.NumberFormat('it-IT', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 2,
+});
+
+function formatAverageEuro(value: number): string {
+  return AVERAGE_EURO.format(value || 0);
+}
 
 const SIDE_TABLE_LABELS: Record<StatsUserKind, string> = {
   single: 'Athletes',
@@ -387,6 +447,11 @@ export function StatisticsVerticalCountryBars({
   onCountrySelect,
   onKindSelect,
   onOpenBarList,
+  renderLabelIcon,
+  onLabelClick,
+  onLabelDoubleClick,
+  selectedLabel,
+  showAverage = false,
 }: VerticalCountryBarsProps) {
   const theme = useStatisticsGraphTheme();
   const { metric, formatMetricValue, isIncome } = useStatisticsMetric();
@@ -412,6 +477,36 @@ export function StatisticsVerticalCountryBars({
   const [selected, setSelected] = useState<BarFocus | null>(null);
   const active = hovered ?? selected;
 
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+    },
+    [],
+  );
+  const handleLabelClick = (label: string) => {
+    if (!onLabelDoubleClick) {
+      onLabelClick?.(label);
+      return;
+    }
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null;
+      onLabelClick?.(label);
+    }, 250);
+  };
+  const handleLabelDoubleClick = (label: string) => {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    onLabelDoubleClick?.(label);
+  };
+  const labelInteractive = Boolean(onLabelClick || onLabelDoubleClick);
+
+  const averageLabel = (users: number, income: number) =>
+    users > 0 ? `ave ${formatAverageEuro(income / users)}` : 'ave —';
+
   const showTotals = !singleKindMode;
   const colCount = kinds.length + (showTotals ? 1 : 0);
   const headerH = 28;
@@ -424,10 +519,10 @@ export function StatisticsVerticalCountryBars({
     rowPadY * 2 +
     kinds.length * barTrackH +
     Math.max(0, kinds.length - 1) * barGap;
-  const labelColW = 120;
+  const labelColW = renderLabelIcon ? 150 : 120;
   const sideColWidth = Math.max(
     showTotals ? 280 : 200,
-    colCount * (showTotals ? 52 : 56) + 8,
+    colCount * (showAverage ? 72 : showTotals ? 52 : 56) + 8,
   );
 
   const maxValue = useMemo(() => {
@@ -541,11 +636,22 @@ export function StatisticsVerticalCountryBars({
                   onMouseLeave={() => setHovered(null)}
                 >
                   <div
-                    className="shrink-0 flex items-center truncate text-[11px] px-1.5"
+                    className={`shrink-0 flex items-center gap-1.5 min-w-0 text-[11px] px-1.5 ${
+                      labelInteractive ? 'cursor-pointer select-none hover:underline' : ''
+                    } ${selectedLabel === row.country ? 'font-bold' : ''}`}
                     style={{ width: labelColW, color: theme.background.text }}
-                    title={row.country}
+                    title={
+                      labelInteractive
+                        ? `${row.country} — click: details of new subscriptions and renewals · double-click: graphs`
+                        : row.country
+                    }
+                    onClick={labelInteractive ? () => handleLabelClick(row.country) : undefined}
+                    onDoubleClick={
+                      labelInteractive ? () => handleLabelDoubleClick(row.country) : undefined
+                    }
                   >
-                    {row.country}
+                    {renderLabelIcon?.(row.country)}
+                    <span className="truncate">{row.country}</span>
                   </div>
                   <div
                     className="relative flex-1 min-w-0 px-1 flex flex-col justify-center"
@@ -728,7 +834,16 @@ export function StatisticsVerticalCountryBars({
                         title={`${row.country} · ${labelFor(k)}: ${formatMetricValue(value)}`}
                         onClick={() => handleBarClick(row.country, k)}
                       >
-                        {formatMetricValue(value)}
+                        {showAverage ? (
+                          <span className="flex flex-col items-center leading-tight">
+                            <span>{formatMetricValue(value)}</span>
+                            <span className="text-[9px] font-normal" style={{ color: theme.background.muted }}>
+                              {averageLabel(row.byKind[k] ?? 0, row.byKindIncome?.[k] ?? 0)}
+                            </span>
+                          </span>
+                        ) : (
+                          formatMetricValue(value)
+                        )}
                       </button>
                     );
                   })}
@@ -738,7 +853,19 @@ export function StatisticsVerticalCountryBars({
                       style={{ color: '#dc2626', borderColor: theme.background.border }}
                       title={`${row.country} · Total: ${formatMetricValue(total)}`}
                     >
-                      {formatMetricValue(total)}
+                      {showAverage ? (
+                        <span className="flex flex-col items-center leading-tight">
+                          <span>{formatMetricValue(total)}</span>
+                          <span className="text-[9px] font-normal">
+                            {averageLabel(
+                              kinds.reduce((s, k) => s + (row.byKind[k] ?? 0), 0),
+                              kinds.reduce((s, k) => s + (row.byKindIncome?.[k] ?? 0), 0),
+                            )}
+                          </span>
+                        </span>
+                      ) : (
+                        formatMetricValue(total)
+                      )}
                     </div>
                   ) : null}
                 </div>

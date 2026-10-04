@@ -16,11 +16,17 @@ export type ArchiveQueryParams = {
   sport?: string;
   /** Filter athletes by group of training / team name. */
   groupTrained?: string;
+  /** Saved member group id (Archive → Groups); resolved to `memberIdsIn` by the route. */
+  memberGroupId?: string;
+  /** Keep only rows whose member (user) id is in this list. */
+  memberIdsIn?: string[];
   /**
    * Archive of Users membership bucket:
    * member | pending | not_member | archived | all (A+B+C, excludes archived).
    */
   membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived' | 'all';
+  /** Archive of Payments: only payments still to be verified. */
+  toBeVerified?: boolean;
 };
 
 export type PaginatedArchive<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -77,6 +83,10 @@ function applyFilters(
     result = result.filter(
       (row) => String(row.groupTrained ?? row.groupTrainedId ?? '').toLowerCase() === group,
     );
+  }
+  if (params.memberIdsIn) {
+    const allowed = new Set(params.memberIdsIn);
+    result = result.filter((row) => allowed.has(String(row.memberId ?? row.id ?? '')));
   }
   if (params.membershipStatus && params.membershipStatus !== 'all') {
     result = result.filter(

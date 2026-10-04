@@ -135,6 +135,7 @@ export default function AthletesParentsArchive({ clubId, teamId }: Props) {
 
   return (
     <ClubArchivePage
+      bordered
       title="Archive — Parents & Tutors"
       archiveType="parents"
       columns={columns}

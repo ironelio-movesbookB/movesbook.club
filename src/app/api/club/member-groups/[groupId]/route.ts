@@ -4,6 +4,8 @@ import {
   deleteClubMemberGroup,
   getClubMemberGroup,
   listClubMemberGroupMembers,
+  renameClubMemberGroup,
+  resolveMemberGroupFilter,
 } from '@/lib/club/memberLists';
 import type { ArchiveQueryParams } from '@/lib/club/archives/legacyArchiveQueries';
 
@@ -22,12 +24,13 @@ function parseArchiveParams(request: NextRequest): ArchiveQueryParams {
     orderBy: (sp.get('orderBy') as 'recent' | 'old') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
+    memberGroupId: sp.get('memberGroupId') ?? undefined,
   };
 }
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const group = await getClubMemberGroup(auth.ctx, params.groupId);
@@ -38,7 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const members = await listClubMemberGroupMembers(
       auth.ctx,
       params.groupId,
-      parseArchiveParams(request)
+      await resolveMemberGroupFilter(auth.ctx.club.id, parseArchiveParams(request))
     );
 
     return NextResponse.json({ group, ...members });
@@ -48,9 +51,30 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 }
 
+export async function PATCH(request: NextRequest, { params }: RouteContext) {
+  try {
+    const auth = await getClubAuthContext(request, { allowCoach: true });
+    if ('error' in auth) return auth.error;
+
+    const body = await request.json().catch(() => ({}));
+    const name = typeof body.name === 'string' ? body.name : '';
+    const group = await renameClubMemberGroup(auth.ctx, params.groupId, name);
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ group });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    const status = message.includes('required') ? 400 : 500;
+    if (status === 500) console.error('PATCH club member group:', error);
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const deleted = await deleteClubMemberGroup(auth.ctx, params.groupId);

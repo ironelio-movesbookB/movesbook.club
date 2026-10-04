@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import TablesTabs from '@/components/club-settings/TablesTabs';
 import { withSelectedClubId } from '@/lib/club/servicePurchasesClient';
+import { getUserInfo } from '@/utils/auth.utils';
+import { isTeamAccountUserType } from '@/utils/dashboardRouting';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type MemberTypeModel = {
   id: string;
@@ -53,13 +56,48 @@ const PAGE_SIZE_OPTIONS = [5, 10, 15, 20] as const;
 const NUMERIC_MIN = 0;
 const NUMERIC_MAX = 100;
 
-const NUMERIC_FIELDS: Array<{ key: NumericFieldKey; label: string; shortLabel: string; suffix?: string }> = [
-  { key: 'discountSubscription', label: 'Subscription discount', shortLabel: 'Subscript', suffix: '%' },
-  { key: 'discountServices', label: 'Services discount', shortLabel: 'Services', suffix: '%' },
-  { key: 'discountRest', label: 'Bar/Restaurant discount', shortLabel: 'Bar/Rest.', suffix: '%' },
-  { key: 'discountSupplement', label: 'Supplements discount', shortLabel: 'Suppl', suffix: '%' },
-  { key: 'discountClothing', label: 'Clothing discount', shortLabel: 'Clothing', suffix: '%' },
-  { key: 'discountOutfit', label: 'Outfit discount', shortLabel: 'Outfit', suffix: '%' },
+const NUMERIC_FIELDS: Array<{
+  key: NumericFieldKey;
+  label: string;
+  shortLabel: string;
+  suffix?: string;
+}> = [
+  {
+    key: 'discountSubscription',
+    label: 'Subscription discount',
+    shortLabel: 'Subscript',
+    suffix: '%',
+  },
+  {
+    key: 'discountServices',
+    label: 'Services discount',
+    shortLabel: 'Services',
+    suffix: '%',
+  },
+  {
+    key: 'discountRest',
+    label: 'Bar/Restaurant discount',
+    shortLabel: 'Bar/Rest.',
+    suffix: '%',
+  },
+  {
+    key: 'discountSupplement',
+    label: 'Supplements discount',
+    shortLabel: 'Suppl',
+    suffix: '%',
+  },
+  {
+    key: 'discountClothing',
+    label: 'Clothing discount',
+    shortLabel: 'Clothing',
+    suffix: '%',
+  },
+  {
+    key: 'discountOutfit',
+    label: 'Outfit discount',
+    shortLabel: 'Outfit',
+    suffix: '%',
+  },
   { key: 'affiliateCost', label: 'Affiliate cost', shortLabel: 'Cost' },
   { key: 'debtMax', label: 'Debt max', shortLabel: 'Max' }
 ];
@@ -161,7 +199,7 @@ function validateDraft(draft: MemberTypeDraft): FieldErrors {
   return errors;
 }
 
-export default function ClubTablesMemberTypePage() {
+function ClubTablesMemberTypePageContent() {
   const [items, setItems] = useState<MemberTypeItem[]>([]);
   const [models, setModels] = useState<MemberTypeModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,6 +216,11 @@ export default function ClubTablesMemberTypePage() {
   const [draft, setDraft] = useState<MemberTypeDraft | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [deleteTarget, setDeleteTarget] = useState<MemberTypeItem | null>(null);
+  const [isTeamAccount, setIsTeamAccount] = useState(false);
+
+  useEffect(() => {
+    setIsTeamAccount(isTeamAccountUserType(String(getUserInfo()?.userType || '')));
+  }, []);
 
   const loadItems = async (signal?: AbortSignal) => {
     setLoading(true);
@@ -232,12 +275,16 @@ export default function ClubTablesMemberTypePage() {
 
     return [...filtered].sort((a, b) => {
       if (sortKey === 'name') {
-        const result = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        const result = a.name.localeCompare(b.name, undefined, {
+          sensitivity: 'base',
+        });
         return sortDirection === 'asc' ? result : -result;
       }
 
       if (sortKey === 'model') {
-        const result = a.modelName.localeCompare(b.modelName, undefined, { sensitivity: 'base' });
+        const result = a.modelName.localeCompare(b.modelName, undefined, {
+          sensitivity: 'base',
+        });
         return sortDirection === 'asc' ? result : -result;
       }
 
@@ -380,7 +427,11 @@ export default function ClubTablesMemberTypePage() {
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h1 className="text-xl font-semibold text-gray-950">Tables</h1>
-              <p className="mt-1 text-sm text-gray-500">Club's management / General settings / Member type</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {isTeamAccount
+                  ? "Team's management / General settings / Member type"
+                  : "Club's management / General settings / Member type"}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <select
@@ -401,7 +452,12 @@ export default function ClubTablesMemberTypePage() {
                   className="h-9 w-60 rounded-md border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-gray-500"
                 />
               </div>
-              <ToolbarButton icon={Plus} label="Add member type" onClick={openAddModal} variant="dark" />
+              <ToolbarButton
+                icon={Plus}
+                label="Add member type"
+                onClick={openAddModal}
+                variant="dark"
+              />
             </div>
           </div>
 
@@ -414,23 +470,36 @@ export default function ClubTablesMemberTypePage() {
                 className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 outline-none focus:border-gray-500"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
               <span>per page</span>
               <span className="ml-1 text-gray-400">|</span>
               <span>
-                Showing <strong className="font-semibold text-gray-900">{visibleStart}-{visibleEnd}</strong> of{' '}
-                <strong className="font-semibold text-gray-900">{filteredItems.length}</strong>
+                Showing{' '}
+                <strong className="font-semibold text-gray-900">
+                  {visibleStart}-{visibleEnd}
+                </strong>{' '}
+                of <strong className="font-semibold text-gray-900">{filteredItems.length}</strong>
               </span>
             </div>
-            <SmartPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
+            <SmartPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
 
           {(error || success) && (
-            <div className={`mt-4 rounded-md border px-3 py-2 text-sm ${
-              error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            }`}>
+            <div
+              className={`mt-4 rounded-md border px-3 py-2 text-sm ${
+                error
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}
+            >
               {error || success}
             </div>
           )}
@@ -453,22 +522,44 @@ export default function ClubTablesMemberTypePage() {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-100 text-left text-xs uppercase tracking-wide text-gray-600">
                   <th className="w-52 px-4 py-3">
-                    <SortHeader label="Member type" active={sortKey === 'name'} direction={sortDirection} onClick={() => updateSort('name')} />
+                    <SortHeader
+                      label="Member type"
+                      active={sortKey === 'name'}
+                      direction={sortDirection}
+                      onClick={() => updateSort('name')}
+                    />
                   </th>
                   {NUMERIC_FIELDS.slice(0, 6).map((field) => (
-                    <th key={field.key} className="w-24 px-3 py-3 text-right">{field.shortLabel}</th>
+                    <th key={field.key} className="w-24 px-3 py-3 text-right">
+                      {field.shortLabel}
+                    </th>
                   ))}
                   <th className="w-28 px-3 py-3 text-right">
-                    <SortHeader label="Cost" active={sortKey === 'affiliateCost'} direction={sortDirection} onClick={() => updateSort('affiliateCost')} />
+                    <SortHeader
+                      label="Cost"
+                      active={sortKey === 'affiliateCost'}
+                      direction={sortDirection}
+                      onClick={() => updateSort('affiliateCost')}
+                    />
                   </th>
                   <th className="w-24 px-3 py-3 text-right">Debt max</th>
                   <th className="w-28 px-3 py-3">Discount</th>
                   <th className="w-24 px-3 py-3">Header</th>
                   <th className="w-36 px-3 py-3">
-                    <SortHeader label="Model" active={sortKey === 'model'} direction={sortDirection} onClick={() => updateSort('model')} />
+                    <SortHeader
+                      label="Model"
+                      active={sortKey === 'model'}
+                      direction={sortDirection}
+                      onClick={() => updateSort('model')}
+                    />
                   </th>
                   <th className="w-36 px-3 py-3">
-                    <SortHeader label="Modified" active={sortKey === 'modified'} direction={sortDirection} onClick={() => updateSort('modified')} />
+                    <SortHeader
+                      label="Modified"
+                      active={sortKey === 'modified'}
+                      direction={sortDirection}
+                      onClick={() => updateSort('modified')}
+                    />
                   </th>
                   <th className="w-28 px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -482,19 +573,33 @@ export default function ClubTablesMemberTypePage() {
                   </tr>
                 ) : (
                   pageItems.map((item) => (
-                    <tr key={item.id} className="border-b border-gray-100 bg-white transition hover:bg-gray-50">
+                    <tr
+                      key={item.id}
+                      className="border-b border-gray-100 bg-white transition hover:bg-gray-50"
+                    >
                       <td className="px-4 py-4">
                         <div className="font-semibold text-gray-950">{item.name}</div>
                       </td>
                       {NUMERIC_FIELDS.slice(0, 6).map((field) => (
-                        <td key={field.key} className="px-3 py-4 text-right font-medium text-gray-700">
+                        <td
+                          key={field.key}
+                          className="px-3 py-4 text-right font-medium text-gray-700"
+                        >
                           {formatNumber(item[field.key])}%
                         </td>
                       ))}
-                      <td className="px-3 py-4 text-right font-semibold text-gray-900">{formatNumber(item.affiliateCost)}</td>
-                      <td className="px-3 py-4 text-right font-medium text-gray-700">{formatNumber(item.debtMax)}</td>
+                      <td className="px-3 py-4 text-right font-semibold text-gray-900">
+                        {formatNumber(item.affiliateCost)}
+                      </td>
+                      <td className="px-3 py-4 text-right font-medium text-gray-700">
+                        {formatNumber(item.debtMax)}
+                      </td>
                       <td className="px-3 py-4">
-                        <StatusBadge active={item.discountEnabled} activeLabel="Y" inactiveLabel="N" />
+                        <StatusBadge
+                          active={item.discountEnabled}
+                          activeLabel="Y"
+                          inactiveLabel="N"
+                        />
                       </td>
                       <td className="px-3 py-4">
                         <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-gray-100 px-2 text-xs font-bold text-gray-700 ring-1 ring-gray-200">
@@ -502,11 +607,22 @@ export default function ClubTablesMemberTypePage() {
                         </span>
                       </td>
                       <td className="px-3 py-4 text-gray-700">{item.modelName}</td>
-                      <td className="px-3 py-4 text-gray-600">{formatDate(item.modified || item.created)}</td>
+                      <td className="px-3 py-4 text-gray-600">
+                        {formatDate(item.modified || item.created)}
+                      </td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
-                          <IconButton label="Edit member type" onClick={() => openEditModal(item)} icon={<Pencil className="h-4 w-4" />} />
-                          <IconButton label="Delete member type" onClick={() => setDeleteTarget(item)} icon={<Trash2 className="h-4 w-4" />} danger />
+                          <IconButton
+                            label="Edit member type"
+                            onClick={() => openEditModal(item)}
+                            icon={<Pencil className="h-4 w-4" />}
+                          />
+                          <IconButton
+                            label="Delete member type"
+                            onClick={() => setDeleteTarget(item)}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            danger
+                          />
                         </div>
                       </td>
                     </tr>
@@ -519,11 +635,25 @@ export default function ClubTablesMemberTypePage() {
       </section>
 
       {draft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" role="dialog" aria-modal="true">
-          <form onSubmit={saveDraft} className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-md bg-white shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+        >
+          <form
+            onSubmit={saveDraft}
+            className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-md bg-white shadow-xl"
+          >
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-gray-950">{draft.id ? 'Edit member type' : 'Add member type'}</h2>
-              <button type="button" onClick={closeModal} className="rounded p-1 text-gray-500 hover:bg-gray-100" aria-label="Close">
+              <h2 className="text-lg font-semibold text-gray-950">
+                {draft.id ? 'Edit member type' : 'Add member type'}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -536,32 +666,50 @@ export default function ClubTablesMemberTypePage() {
                   error={fieldErrors.name}
                   onChange={(value) => {
                     updateDraft({ name: value });
-                    setFieldErrors((current) => ({ ...current, name: undefined }));
+                    setFieldErrors((current) => ({
+                      ...current,
+                      name: undefined,
+                    }));
                   }}
                 />
 
                 <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">Model</span>
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Model
+                  </span>
                   <select
                     value={draft.modelId}
                     onChange={(event) => {
                       updateDraft({ modelId: event.target.value });
-                      setFieldErrors((current) => ({ ...current, modelId: undefined }));
+                      setFieldErrors((current) => ({
+                        ...current,
+                        modelId: undefined,
+                      }));
                     }}
                     className={`h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-900 outline-none transition ${
-                      fieldErrors.modelId ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                      fieldErrors.modelId
+                        ? 'border-red-400 focus:border-red-500'
+                        : 'border-gray-300 focus:border-gray-500'
                     }`}
                   >
                     <option value="">Select</option>
                     {models.map((model) => (
-                      <option key={model.id} value={model.id}>{model.name}</option>
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
                     ))}
                   </select>
-                  {fieldErrors.modelId && <span className="mt-1 block text-xs font-medium text-red-600">{fieldErrors.modelId}</span>}
+                  {fieldErrors.modelId && (
+                    <span className="mt-1 block text-xs font-medium text-red-600">
+                      {fieldErrors.modelId}
+                    </span>
+                  )}
                 </label>
 
                 <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-600">Header</span>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Header
+                  </span>
                   <div className="grid grid-cols-2 gap-2">
                     {(['A', 'B'] as const).map((value) => (
                       <button
@@ -592,7 +740,9 @@ export default function ClubTablesMemberTypePage() {
               </div>
 
               <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4">
-                <h3 className="text-sm font-semibold text-gray-950">Discounts, affiliate and debt</h3>
+                <h3 className="text-sm font-semibold text-gray-950">
+                  Discounts, affiliate and debt
+                </h3>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {NUMERIC_FIELDS.map((field) => (
                     <Field
@@ -606,7 +756,10 @@ export default function ClubTablesMemberTypePage() {
                       step="1"
                       onChange={(value) => {
                         updateDraft({ [field.key]: value });
-                        setFieldErrors((current) => ({ ...current, [field.key]: undefined }));
+                        setFieldErrors((current) => ({
+                          ...current,
+                          [field.key]: undefined,
+                        }));
                       }}
                     />
                   ))}
@@ -615,11 +768,23 @@ export default function ClubTablesMemberTypePage() {
             </div>
 
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
-              <button type="button" onClick={closeModal} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
                 Cancel
               </button>
-              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
                 Save
               </button>
             </div>
@@ -628,21 +793,42 @@ export default function ClubTablesMemberTypePage() {
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="w-full max-w-lg rounded-md bg-white shadow-xl">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-950">Delete member type</h2>
             </div>
             <div className="space-y-3 px-5 py-5 text-sm text-gray-700">
               <p className="font-medium text-gray-950">{deleteTarget.name}</p>
-              <p>This member type will be removed from the club member type table.</p>
+              <p>
+                {isTeamAccount
+                  ? 'This member type will be removed from the team member type table.'
+                  : 'This member type will be removed from the club member type table.'}
+              </p>
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
-              <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
                 Cancel
               </button>
-              <button type="button" onClick={confirmDelete} disabled={deleting} className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
                 Delete
               </button>
             </div>
@@ -862,5 +1048,13 @@ function PaginationIconButton({
     >
       {icon}
     </button>
+  );
+}
+
+export default function ClubTablesMemberTypePage() {
+  return (
+    <AutoTranslate>
+      <ClubTablesMemberTypePageContent />
+    </AutoTranslate>
   );
 }

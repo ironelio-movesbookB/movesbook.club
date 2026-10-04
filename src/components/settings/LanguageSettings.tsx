@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, Globe, Settings as SettingsIcon, FileText, ArrowUp, ArrowDown } from 'lucide-react';
 import { i18n } from '@/lib/i18n';
 import RichTextEditor from './RichTextEditor';
+import SportLabelsSyncCard from './SportLabelsSyncCard';
 import { useLanguageData } from '@/hooks/useLanguageData';
 import { useColumnResize } from '@/hooks/useColumnResize';
 import { useTranslationEditor } from '@/hooks/useTranslationEditor';
@@ -655,6 +656,8 @@ export default function LanguageSettings() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Language Management</h2>
       </div>
+
+      <SportLabelsSyncCard />
 
       {/* Main Tabs */}
       <div className="flex items-center gap-2 border-b border-gray-300">

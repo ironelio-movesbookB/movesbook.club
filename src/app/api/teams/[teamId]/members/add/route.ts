@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { verifyToken, verifyPassword } from '@/lib/auth';
 import {
   isAddableMemberArchiveStatus,
+  isAddableMemberUserType,
+  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
   roleValueForMemberArchiveStatus,
   type AddableMemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
@@ -94,6 +96,13 @@ export async function POST(
       return NextResponse.json(
         { error: 'Invalid password' },
         { status: 401 }
+      );
+    }
+
+    if (!isAddableMemberUserType(userToAdd.userType)) {
+      return NextResponse.json(
+        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
+        { status: 400 }
       );
     }
 

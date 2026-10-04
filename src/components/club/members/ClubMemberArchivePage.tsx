@@ -4,9 +4,14 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   ArrowRight,
   Calendar,
+  FileSpreadsheet,
   Filter,
+  MessageSquare,
+  Pencil,
+  Printer,
   RotateCcw,
   Search,
+  Share2,
   Star,
   Trash2,
   Users,
@@ -17,16 +22,20 @@ import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import { fetchClubArchive, type ArchiveFetchParams } from '@/lib/club/archives/clubArchiveClient';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import {
+  memberArchiveStatusBorderClass,
   memberArchiveStatusDotClass,
+  memberArchiveStatusDotStyle,
   memberArchiveStatusLabel,
   memberArchiveStatusTextClass,
   normalizeMemberArchiveStatus,
   type MemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
 import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
+import ShareModal from '@/components/ShareModal';
 import type { Column, Member } from '@/types/clubTable';
 
-type ViewMode = 'all' | 'groups' | 'favourites' | 'group-members';
+export type MemberArchiveViewMode = 'all' | 'groups' | 'favourites' | 'group-members';
+type ViewMode = MemberArchiveViewMode;
 
 type MemberGroupSummary = {
   id: string;
@@ -49,10 +58,15 @@ type Props = {
   membershipStatusFilter?: MemberArchiveStatus | 'all';
   /** Called after a successful status change so parent can refresh. */
   onMembershipStatusChanged?: () => void;
+  /** Lets row actions (e.g. delete) behave per view — Favourites delete only unfavourites. */
+  onViewModeChange?: (mode: MemberArchiveViewMode) => void;
+  /** Coach workspace: athletes trained have no membership status, so the dots are display-only. */
+  statusChangesEnabled?: boolean;
 };
 
 function memberTypeBadge(value: unknown) {
-  const label = String(value ?? 'Standard').trim() || 'Standard';
+  const label = String(value ?? '').trim();
+  if (!label || label === '-') return <span className="text-gray-400">-</span>;
   const lower = label.toLowerCase();
   const className =
     lower.includes('premium') || lower.includes('gold')
@@ -88,6 +102,75 @@ const filterActionClass =
 const filterDateInputClass =
   'h-full min-h-0 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm leading-none text-gray-900 outline-none [color-scheme:light] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-datetime-edit]:p-0 [&::-webkit-datetime-edit]:m-0';
 
+const MEMBER_ACTION_LIMIT = 2000;
+
+function currentUserEmail(): string {
+  try {
+    const raw = localStorage.getItem('user');
+    const email = raw ? (JSON.parse(raw) as { email?: unknown }).email : '';
+    return typeof email === 'string' ? email : '';
+  } catch {
+    return '';
+  }
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+const PRINT_COLUMNS: Array<{ header: string; value: (row: Member) => unknown }> = [
+  { header: 'Surname', value: (r) => r.surname },
+  { header: 'Name', value: (r) => r.name },
+  { header: 'Gender', value: (r) => r.gender },
+  { header: 'Date of Birth', value: (r) => r.dateOfBirth },
+  { header: 'Type of User', value: (r) => r.operator },
+  { header: 'Member Type', value: (r) => r.memberType },
+  { header: 'Local City', value: (r) => r.localCity },
+  { header: 'Phone', value: (r) => r.phone },
+  { header: 'Insert Date', value: (r) => r.insertDateDisplay ?? r.insertDate },
+  {
+    header: 'Status',
+    value: (r) => memberArchiveStatusLabel(normalizeMemberArchiveStatus(r.membershipStatus)),
+  },
+];
+
+function writePrintableMembers(win: Window, heading: string, rows: Member[]) {
+  const head = PRINT_COLUMNS.map((c) => `<th>${escapeHtml(c.header)}</th>`).join('');
+  const body = rows
+    .map(
+      (row, i) =>
+        `<tr><td>${i + 1}</td>${PRINT_COLUMNS.map((c) => {
+          const v = String(c.value(row) ?? '').trim();
+          return `<td>${escapeHtml(v || '-')}</td>`;
+        }).join('')}</tr>`,
+    )
+    .join('');
+  const printedOn = new Date().toLocaleString();
+  win.document.open();
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(heading)}</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { font-size: 12px; color: #555; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; }
+  th { background: #f0f0f0; }
+  tr { page-break-inside: avoid; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>${escapeHtml(heading)}</h1>
+<p>${rows.length} member(s) · printed ${escapeHtml(printedOn)}</p>
+<table><thead><tr><th>#</th>${head}</tr></thead><tbody>${body}</tbody></table>
+<script>window.onload = function () { window.focus(); window.print(); };</script>
+</body></html>`);
+  win.document.close();
+}
+
 export default function ClubMemberArchivePage({
   columns,
   pageSize = 25,
@@ -96,8 +179,14 @@ export default function ClubMemberArchivePage({
   addMemberAction,
   membershipStatusFilter = 'all',
   onMembershipStatusChanged,
+  onViewModeChange,
+  statusChangesEnabled = true,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
+
+  useEffect(() => {
+    onViewModeChange?.(viewMode);
+  }, [viewMode, onViewModeChange]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedGroupName, setSelectedGroupName] = useState('');
   const [groups, setGroups] = useState<MemberGroupSummary[]>([]);
@@ -119,7 +208,19 @@ export default function ClubMemberArchivePage({
   const [viewSelectedOnly, setViewSelectedOnly] = useState(false);
   const [showGroupNameModal, setShowGroupNameModal] = useState(false);
   const [groupNameInput, setGroupNameInput] = useState('');
+  const [renameGroup, setRenameGroup] = useState<MemberGroupSummary | null>(null);
+  const [renameInput, setRenameInput] = useState('');
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<MemberGroupSummary | null>(null);
   const [saving, setSaving] = useState(false);
+  const [actionBusy, setActionBusy] = useState<'print' | 'message' | 'data' | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [messageDialog, setMessageDialog] = useState<{ rows: Member[] } | null>(null);
+  const [messageText, setMessageText] = useState('');
+  const [messageInApp, setMessageInApp] = useState(true);
+  const [messageByEmail, setMessageByEmail] = useState(false);
+  const [dataDialog, setDataDialog] = useState<{ rows: Member[] } | null>(null);
+  const [dataEmail, setDataEmail] = useState('');
+  const [dataNote, setDataNote] = useState('');
   const [statusConfirm, setStatusConfirm] = useState<{
     member: Member;
     next: MemberArchiveStatus;
@@ -140,22 +241,20 @@ export default function ClubMemberArchivePage({
     }
   }, []);
 
-  const loadMembers = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
+  const fetchMemberRows = useCallback(
+    async (pageArg: number, pageSizeArg: number): Promise<{ items: Member[]; total: number }> => {
       let res: { items: Member[]; total: number };
 
       if (viewMode === 'favourites') {
         const url = withSelectedClubId(
-          `/api/club/member-favourites?page=${page}&pageSize=${pageSize}` +
+          `/api/club/member-favourites?page=${pageArg}&pageSize=${pageSizeArg}` +
             (appliedFilters.search ? `&search=${encodeURIComponent(appliedFilters.search)}` : '') +
             (appliedFilters.fromDate ? `&fromDate=${appliedFilters.fromDate}` : '') +
             (appliedFilters.toDate ? `&toDate=${appliedFilters.toDate}` : '') +
             (appliedFilters.orderBy ? `&orderBy=${appliedFilters.orderBy}` : '') +
             (appliedFilters.sport ? `&sport=${encodeURIComponent(appliedFilters.sport)}` : '') +
-            (appliedFilters.groupTrained
-              ? `&groupTrained=${encodeURIComponent(appliedFilters.groupTrained)}`
+            (appliedFilters.memberGroupId
+              ? `&memberGroupId=${encodeURIComponent(appliedFilters.memberGroupId)}`
               : '')
         );
         const fetchRes = await fetch(url, { headers: getAuthHeaders() });
@@ -166,14 +265,14 @@ export default function ClubMemberArchivePage({
         res = { items: payload.items as Member[], total: payload.total as number };
       } else if (viewMode === 'group-members' && selectedGroupId) {
         const url = withSelectedClubId(
-          `/api/club/member-groups/${encodeURIComponent(selectedGroupId)}?page=${page}&pageSize=${pageSize}` +
+          `/api/club/member-groups/${encodeURIComponent(selectedGroupId)}?page=${pageArg}&pageSize=${pageSizeArg}` +
             (appliedFilters.search ? `&search=${encodeURIComponent(appliedFilters.search)}` : '') +
             (appliedFilters.fromDate ? `&fromDate=${appliedFilters.fromDate}` : '') +
             (appliedFilters.toDate ? `&toDate=${appliedFilters.toDate}` : '') +
             (appliedFilters.orderBy ? `&orderBy=${appliedFilters.orderBy}` : '') +
             (appliedFilters.sport ? `&sport=${encodeURIComponent(appliedFilters.sport)}` : '') +
-            (appliedFilters.groupTrained
-              ? `&groupTrained=${encodeURIComponent(appliedFilters.groupTrained)}`
+            (appliedFilters.memberGroupId
+              ? `&memberGroupId=${encodeURIComponent(appliedFilters.memberGroupId)}`
               : '')
         );
         const fetchRes = await fetch(url, { headers: getAuthHeaders() });
@@ -185,14 +284,23 @@ export default function ClubMemberArchivePage({
         res = { items: payload.items as Member[], total: payload.total as number };
       } else {
         const archiveRes = await fetchClubArchive('members', {
-          page,
-          pageSize,
+          page: pageArg,
+          pageSize: pageSizeArg,
           ...appliedFilters,
           membershipStatus: membershipStatusFilter,
         });
         res = { items: archiveRes.items as Member[], total: archiveRes.total };
       }
+      return res;
+    },
+    [appliedFilters, membershipStatusFilter, selectedGroupId, viewMode],
+  );
 
+  const loadMembers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetchMemberRows(page, pageSize);
       setTotal(res.total);
       setData(res.items);
     } catch (e) {
@@ -203,15 +311,7 @@ export default function ClubMemberArchivePage({
       setLoading(false);
     }
     void refreshKey; // parent bump forces reload
-  }, [
-    appliedFilters,
-    membershipStatusFilter,
-    page,
-    pageSize,
-    selectedGroupId,
-    viewMode,
-    refreshKey,
-  ]);
+  }, [fetchMemberRows, page, pageSize, refreshKey]);
 
   useEffect(() => {
     if (viewMode === 'groups') {
@@ -220,6 +320,21 @@ export default function ClubMemberArchivePage({
       loadMembers();
     }
   }, [viewMode, loadGroups, loadMembers]);
+
+  // Group of training dropdown lists saved groups; load quietly so filters work before opening Groups.
+  useEffect(() => {
+    let cancelled = false;
+    clubApiFetch<{ groups: MemberGroupSummary[] }>('/api/club/member-groups')
+      .then((res) => {
+        if (!cancelled) setGroups(res.groups);
+      })
+      .catch(() => {
+        /* dropdown just stays at "All" */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -259,7 +374,7 @@ export default function ClubMemberArchivePage({
 
   const handleStatusDotClick = useCallback(
     (row: Member) => {
-      if (row.isStaffOnly || saving) return;
+      if (row.isStaffOnly || saving || !statusChangesEnabled) return;
       const status = normalizeMemberArchiveStatus(row.membershipStatus);
 
       if (status === 'member') {
@@ -301,7 +416,7 @@ export default function ClubMemberArchivePage({
       if (choice === '1') void changeMembershipStatus(row, 'member');
       else if (choice === '2') void changeMembershipStatus(row, 'pending');
     },
-    [changeMembershipStatus, saving],
+    [changeMembershipStatus, saving, statusChangesEnabled],
   );
 
   const tableColumns = useMemo(() => {
@@ -313,7 +428,7 @@ export default function ClubMemberArchivePage({
         ...col,
         render: (value: unknown, row: Member) => {
           const status = normalizeMemberArchiveStatus(row.membershipStatus);
-          const clickable = !row.isStaffOnly;
+          const clickable = !row.isStaffOnly && statusChangesEnabled;
           const imageNode = originalRender ? (
             originalRender(value, row)
           ) : value ? (
@@ -328,25 +443,35 @@ export default function ClubMemberArchivePage({
               —
             </span>
           );
-          const title =
+          const isCoach = Boolean(row.isCoach);
+          const statusTitle =
             status === 'member'
               ? 'Move to Members Archived'
               : status === 'archived'
                 ? 'Restore as Athlete\\Member'
                 : memberArchiveStatusLabel(status);
+          const title = !statusChangesEnabled
+            ? `${memberArchiveStatusLabel(status)} — status is managed by the athlete's club or team`
+            : isCoach
+              ? `Coach — ${statusTitle}`
+              : statusTitle;
           return (
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
                 title={title}
-                disabled={!clickable || saving}
+                disabled={row.isStaffOnly || saving}
+                aria-disabled={!clickable}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleStatusDotClick(row);
                 }}
-                className={`h-3.5 w-3.5 shrink-0 rounded-full border border-black/10 ${memberArchiveStatusDotClass(
-                  status,
-                )} ${clickable ? 'cursor-pointer' : 'cursor-default opacity-90'}`}
+                style={memberArchiveStatusDotStyle(isCoach)}
+                className={`h-3.5 w-3.5 shrink-0 rounded-full border ${
+                  isCoach ? memberArchiveStatusBorderClass(status) : 'border-black/10'
+                } ${memberArchiveStatusDotClass(status)} ${
+                  clickable ? 'cursor-pointer' : 'cursor-default opacity-90'
+                }`}
                 aria-label={title}
               />
               {imageNode}
@@ -355,7 +480,7 @@ export default function ClubMemberArchivePage({
         },
       };
     });
-  }, [columns, handleStatusDotClick, saving]);
+  }, [columns, handleStatusDotClick, saving, statusChangesEnabled]);
 
   const displayedRows = useMemo(() => {
     if (!viewSelectedOnly) return data;
@@ -371,7 +496,7 @@ export default function ClubMemberArchivePage({
       toDate: toDate || undefined,
       orderBy,
       sport: sportFilter !== 'all' ? sportFilter : undefined,
-      groupTrained: groupFilter !== 'all' ? groupFilter : undefined,
+      memberGroupId: groupFilter !== 'all' ? groupFilter : undefined,
     });
   }
 
@@ -421,8 +546,48 @@ export default function ClubMemberArchivePage({
     setAppliedFilters({});
   }
 
+  function openRenameGroup(group: MemberGroupSummary) {
+    setRenameGroup(group);
+    setRenameInput(group.name);
+  }
+
+  async function confirmRenameGroup() {
+    if (!renameGroup) return;
+    const name = renameInput.trim();
+    if (!name) {
+      setError('Enter a group name.');
+      return;
+    }
+    if (name === renameGroup.name) {
+      setRenameGroup(null);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const url = withSelectedClubId(`/api/club/member-groups/${encodeURIComponent(renameGroup.id)}`);
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof payload.error === 'string' ? payload.error : 'Failed to rename group');
+      }
+      const renamedId = renameGroup.id;
+      setGroups((prev) => prev.map((g) => (g.id === renamedId ? { ...g, name } : g)));
+      if (selectedGroupId === renamedId) setSelectedGroupName(name);
+      setRenameGroup(null);
+      setActionMessage(`Group renamed to "${name}".`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to rename group');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDeleteGroup(groupId: string) {
-    if (!window.confirm('Delete this group? Members are not removed from the club.')) return;
     setError('');
     try {
       const url = withSelectedClubId(`/api/club/member-groups/${encodeURIComponent(groupId)}`);
@@ -432,6 +597,10 @@ export default function ClubMemberArchivePage({
         throw new Error(typeof payload.error === 'string' ? payload.error : 'Failed to delete group');
       }
       setActionMessage('Group deleted.');
+      if (groupFilter === groupId) {
+        setGroupFilter('all');
+        setAppliedFilters((prev) => ({ ...prev, memberGroupId: undefined }));
+      }
       await loadGroups();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete group');
@@ -467,6 +636,7 @@ export default function ClubMemberArchivePage({
       setGroupNameInput('');
       setActionMessage(`Group "${name}" saved.`);
       setSelectedIds(new Set());
+      void loadGroups();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save group');
     } finally {
@@ -498,6 +668,158 @@ export default function ClubMemberArchivePage({
     }
   }
 
+  /** Ticked members if any, otherwise every row of the current filtered list (all pages). */
+  async function resolveTargetRows(): Promise<Member[]> {
+    const res = await fetchMemberRows(1, MEMBER_ACTION_LIMIT);
+    if (res.total > res.items.length) {
+      throw new Error(
+        `This list has ${res.total} members; the limit is ${MEMBER_ACTION_LIMIT}. Narrow it with the filters.`,
+      );
+    }
+    const rows = selectedIds.size > 0
+      ? res.items.filter((row) => row.id && selectedIds.has(row.id))
+      : res.items;
+    if (rows.length === 0) throw new Error('No members to use for this action.');
+    return rows;
+  }
+
+  function targetLabel(count: number) {
+    const who = count === 1 ? '1 member' : `${count} members`;
+    return selectedIds.size > 0 ? `${who} (selected)` : `${who} (current list)`;
+  }
+
+  function targetIds(rows: Member[]) {
+    return rows.map((row) => String(row.memberId || row.id || '')).filter(Boolean);
+  }
+
+  const actionMembershipStatus = viewMode === 'all' ? membershipStatusFilter : 'all';
+
+  async function startMemberAction(kind: 'print' | 'message' | 'data' | 'share') {
+    setError('');
+    setActionMessage('');
+    if (kind === 'share') {
+      setShareOpen(true);
+      return;
+    }
+    if (kind === 'print') {
+      // Open synchronously so popup blockers treat it as user-initiated.
+      const win = window.open('', '_blank');
+      if (!win) {
+        setError('Allow pop-ups for this site to print the list.');
+        return;
+      }
+      win.document.write('<p style="font-family:sans-serif">Preparing list…</p>');
+      setActionBusy('print');
+      try {
+        const rows = await resolveTargetRows();
+        writePrintableMembers(win, title, rows);
+      } catch (e) {
+        win.close();
+        setError(e instanceof Error ? e.message : 'Failed to prepare the list');
+      } finally {
+        setActionBusy(null);
+      }
+      return;
+    }
+    setActionBusy(kind);
+    try {
+      const rows = await resolveTargetRows();
+      if (kind === 'message') {
+        setMessageText('');
+        setMessageInApp(true);
+        setMessageByEmail(false);
+        setMessageDialog({ rows });
+      } else {
+        setDataEmail(currentUserEmail());
+        setDataNote('');
+        setDataDialog({ rows });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load members');
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function confirmSendMessage() {
+    if (!messageDialog) return;
+    const content = messageText.trim();
+    if (!content) {
+      setError('Write a message.');
+      return;
+    }
+    if (!messageInApp && !messageByEmail) {
+      setError('Choose Club Channel and/or email.');
+      return;
+    }
+    setActionBusy('message');
+    setError('');
+    try {
+      const res = await clubApiFetch<{
+        recipients: number;
+        channelUsed: boolean;
+        inApp: number;
+        emailed: number;
+        emailFailed: number;
+        noEmail: number;
+      }>('/api/club/members/send-message', {
+        method: 'POST',
+        body: JSON.stringify({
+          memberIds: targetIds(messageDialog.rows),
+          membershipStatus: actionMembershipStatus,
+          content,
+          inApp: messageInApp,
+          byEmail: messageByEmail,
+        }),
+      });
+      const parts: string[] = [];
+      if (res.channelUsed) {
+        parts.push(`sent in Club Channel to ${res.inApp}`);
+        const notMembers = res.recipients - res.inApp;
+        if (notMembers > 0) parts.push(`${notMembers} staff-only not in Club Channel`);
+      }
+      if (messageByEmail) {
+        parts.push(`emailed to ${res.emailed}`);
+        if (res.noEmail) parts.push(`${res.noEmail} without email`);
+        if (res.emailFailed) parts.push(`${res.emailFailed} email(s) failed`);
+      }
+      setActionMessage(`Message ${parts.join(', ')}.`);
+      setMessageDialog(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send the message');
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function confirmSendData() {
+    if (!dataDialog) return;
+    const email = dataEmail.trim();
+    if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    setActionBusy('data');
+    setError('');
+    try {
+      const res = await clubApiFetch<{ sent: number; email: string }>('/api/club/members/send-data', {
+        method: 'POST',
+        body: JSON.stringify({
+          memberIds: targetIds(dataDialog.rows),
+          membershipStatus: actionMembershipStatus,
+          email,
+          note: dataNote.trim(),
+        }),
+      });
+      setActionMessage(`Data of ${res.sent} member(s) sent to ${res.email} (Excel + CSV).`);
+      setDataDialog(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send the data');
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   const title =
     viewMode === 'groups'
       ? 'Archive — Users — Groups'
@@ -509,6 +831,10 @@ export default function ClubMemberArchivePage({
 
   const showMemberFilters = viewMode === 'all' || viewMode === 'favourites' || viewMode === 'group-members';
   const showBulkActions = viewMode === 'all';
+  const actionHint =
+    selectedIds.size > 0
+      ? `Uses the ${selectedIds.size} selected member(s)`
+      : 'Uses all members of the current (filtered) list';
 
   return (
     <>
@@ -620,17 +946,11 @@ export default function ClubMemberArchivePage({
                   onChange={(e) => setGroupFilter(e.target.value)}
                 >
                   <option value="all">All</option>
-                  {Array.from(
-                    new Set(
-                      data
-                        .map((row) => String(row.groupTrained ?? '').trim())
-                        .filter((v) => v && v !== '-'),
-                    ),
-                  )
-                    .sort((a, b) => a.localeCompare(b))
+                  {[...groups]
+                    .sort((a, b) => a.name.localeCompare(b.name))
                     .map((group) => (
-                      <option key={group} value={group}>
-                        {group}
+                      <option key={group.id} value={group.id}>
+                        {group.name}
                       </option>
                     ))}
                 </select>
@@ -722,6 +1042,46 @@ export default function ClubMemberArchivePage({
                     </button>
                   </>
                 ) : null}
+                <span className="mx-1 hidden w-px self-stretch bg-gray-200 sm:block" aria-hidden />
+                <button
+                  type="button"
+                  disabled={actionBusy !== null || total === 0}
+                  onClick={() => void startMemberAction('print')}
+                  className={filterActionClass}
+                  title={actionHint}
+                >
+                  <Printer size={16} />
+                  {actionBusy === 'print' ? 'Preparing…' : 'Print'}
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy !== null || total === 0}
+                  onClick={() => void startMemberAction('message')}
+                  className={filterActionClass}
+                  title={actionHint}
+                >
+                  <MessageSquare size={16} />
+                  Send Msg
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy !== null || total === 0}
+                  onClick={() => void startMemberAction('data')}
+                  className={filterActionClass}
+                  title={actionHint}
+                >
+                  <FileSpreadsheet size={16} />
+                  Send Data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startMemberAction('share')}
+                  className={filterActionClass}
+                  title="Share the link of this list"
+                >
+                  <Share2 size={16} />
+                  Share
+                </button>
               </div>
             </div>
           </form>
@@ -742,39 +1102,56 @@ export default function ClubMemberArchivePage({
               <p>No groups yet. Select members and use &quot;Save as a group&quot;.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="min-w-full text-sm">
+            <div className="overflow-x-auto rounded-lg border border-gray-300">
+              <table className="min-w-full border-collapse text-sm">
                 <thead className="bg-teal-800 text-white">
                   <tr>
-                    <th className="px-3 py-2 text-left">Group name</th>
-                    <th className="px-3 py-2 text-left">Members</th>
-                    <th className="px-3 py-2 text-left">Created</th>
-                    <th className="px-3 py-2 text-left">Actions</th>
+                    <th className="w-[30%] border border-gray-300 px-3 py-2 text-left">Group name</th>
+                    <th className="w-[24%] border border-gray-300 px-3 py-2 text-left">Members</th>
+                    <th className="w-[26%] border border-gray-300 px-3 py-2 text-left">Created</th>
+                    <th className="w-[20%] whitespace-nowrap border border-gray-300 px-3 py-2 text-left">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((group) => (
-                    <tr key={group.id} className="border-t bg-white hover:bg-teal-50">
-                      <td className="px-3 py-2">
+                    <tr key={group.id} className="bg-white hover:bg-teal-50">
+                      <td className="border border-gray-300 px-3 py-2">
                         <button
                           type="button"
                           onClick={() => openGroupMembers(group)}
-                          className="font-medium text-teal-800 hover:underline"
+                          className="break-words text-left font-medium text-teal-800 hover:underline"
                         >
                           {group.name}
                         </button>
                       </td>
-                      <td className="px-3 py-2 text-gray-700">{group.memberCount}</td>
-                      <td className="px-3 py-2 text-gray-700">{formatGroupDate(group.createdAt)}</td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGroup(group.id)}
-                          className="text-red-500 hover:text-red-700"
-                          title="Delete group"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                      <td className="border border-gray-300 px-3 py-2 text-gray-700">{group.memberCount}</td>
+                      <td className="border border-gray-300 px-3 py-2 text-gray-700">
+                        {formatGroupDate(group.createdAt)}
+                      </td>
+                      <td className="whitespace-nowrap border border-gray-300 px-3 py-2">
+                        <div className="flex items-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => openRenameGroup(group)}
+                            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-800"
+                            title="Rename group"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Rename
+                          </button>
+                          <span className="h-5 w-px bg-gray-300" aria-hidden />
+                          <button
+                            type="button"
+                            onClick={() => setDeleteGroupTarget(group)}
+                            className="inline-flex items-center rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700"
+                            title="Delete group"
+                            aria-label="Delete group"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -786,6 +1163,7 @@ export default function ClubMemberArchivePage({
           <div className="p-4 text-gray-500">Loading...</div>
         ) : (
           <ProcedureArchiveTable
+            bordered
             columns={tableColumns}
             rows={displayedRows}
             emptyMessage={
@@ -807,12 +1185,136 @@ export default function ClubMemberArchivePage({
         )}
       </ProcedureArchiveShell>
 
+      {messageDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Send message</h2>
+            <p className="mt-1 text-sm text-gray-600">To: {targetLabel(messageDialog.rows.length)}</p>
+            <label className="mt-4 block">
+              <span className="text-sm text-gray-700">Message</span>
+              <textarea
+                autoFocus
+                rows={6}
+                maxLength={5000}
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Write your message..."
+              />
+            </label>
+            <div className="mt-3 space-y-2 text-sm text-gray-800">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={messageInApp}
+                  onChange={(e) => setMessageInApp(e.target.checked)}
+                />
+                Send in the Club Channel (only these members will see it)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={messageByEmail}
+                  onChange={(e) => setMessageByEmail(e.target.checked)}
+                />
+                Also send by email
+              </label>
+            </div>
+            {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMessageDialog(null);
+                  setError('');
+                }}
+                className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-800 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy === 'message' || !messageText.trim()}
+                onClick={() => void confirmSendMessage()}
+                className="rounded bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800 disabled:opacity-50"
+              >
+                {actionBusy === 'message' ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {dataDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Send data</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              {targetLabel(dataDialog.rows.length)} will be sent as an Excel (.xlsx) and CSV attachment.
+            </p>
+            <label className="mt-4 block">
+              <span className="text-sm text-gray-700">Send to email</span>
+              <input
+                type="email"
+                autoFocus
+                value={dataEmail}
+                onChange={(e) => setDataEmail(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                placeholder="name@example.com"
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className="text-sm text-gray-700">Note (optional)</span>
+              <textarea
+                rows={3}
+                maxLength={2000}
+                value={dataNote}
+                onChange={(e) => setDataNote(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDataDialog(null);
+                  setError('');
+                }}
+                className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-800 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy === 'data' || !dataEmail.trim()}
+                onClick={() => void confirmSendData()}
+                className="rounded bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800 disabled:opacity-50"
+              >
+                {actionBusy === 'data' ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <ShareModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Share this list"
+        description="The link opens this Archive of Users. Only people logged in with access to this club can see the members."
+        hidePost
+        showEmail
+      />
+
       {showGroupNameModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
             <h2 className="text-lg font-semibold text-gray-900">Save as a group</h2>
             <p className="mt-1 text-sm text-gray-600">
-              {selectedIds.size} member{selectedIds.size === 1 ? '' : 's'} selected
+              {selectedIds.size === 1 ? '1 member selected' : `${selectedIds.size} members selected`}
             </p>
             <label className="mt-4 block">
               <span className="text-sm text-gray-700">Group name</span>
@@ -854,6 +1356,72 @@ export default function ClubMemberArchivePage({
           </div>
         </div>
       ) : null}
+
+      {renameGroup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Rename group</h2>
+            <label className="mt-4 block">
+              <span className="text-sm text-gray-700">Group name</span>
+              <input
+                type="text"
+                autoFocus
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void confirmRenameGroup();
+                  }
+                }}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                placeholder="Enter group name..."
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setRenameGroup(null)}
+                className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-800 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !renameInput.trim()}
+                onClick={() => void confirmRenameGroup()}
+                className="rounded bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <PromocodeConfirmModal
+        open={Boolean(deleteGroupTarget)}
+        title="Delete group"
+        message={`Delete group "${deleteGroupTarget?.name ?? ''}"? Members are not removed from the club.`}
+        confirmLabel="Delete"
+        destructive
+        loading={saving}
+        onClose={() => {
+          if (saving) return;
+          setDeleteGroupTarget(null);
+        }}
+        onConfirm={async () => {
+          if (!deleteGroupTarget) return;
+          setSaving(true);
+          try {
+            await handleDeleteGroup(deleteGroupTarget.id);
+          } finally {
+            setSaving(false);
+            setDeleteGroupTarget(null);
+          }
+        }}
+      />
 
       <PromocodeConfirmModal
         open={Boolean(statusConfirm)}

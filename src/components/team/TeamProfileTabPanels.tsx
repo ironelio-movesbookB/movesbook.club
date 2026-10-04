@@ -14,7 +14,7 @@ import {
   TextSelect,
 } from '@/components/club/memberProfile/FormBits';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+import { isBasketSport, normalizeEntitySport } from '@/lib/sport/entitySportOptions';
 import {
   emptySportDropdownCatalog,
   normalizeSportDropdownCatalog,
@@ -22,6 +22,9 @@ import {
   TEAM_PROFILE_PARAM_KEY_BY_FIELD,
   type SportDropdownCatalog,
 } from '@/lib/sport/sportDropdownParameters';
+import { teamSportProfile, teamSportProfileFields } from '@/lib/sport/teamSportProfiles';
+import { SportFieldGrid } from '@/components/sport/EntitySportStatisticsPanel';
+import { useSportT } from '@/components/sport/useSportT';
 
 type PanelProps = {
   form: TeamProfileFormPayload;
@@ -134,6 +137,14 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
 
   const catalog = useSportDropdownCatalog();
   const sport = form.sport || form.sports?.[0] || 'Football';
+  const isBasket = [form.sport, ...(form.sports ?? [])].some((s) => isBasketSport(s));
+  const hasCapacity = normalizeEntitySport(sport) !== 'Table Tennis';
+  const st = useSportT();
+
+  useEffect(() => {
+    if (!isBasket || readOnly || form.legalSite.hoopHeight) return;
+    setForm((f) => ({ ...f, legalSite: { ...f.legalSite, hoopHeight: STANDARD_HOOP_HEIGHT } }));
+  }, [isBasket, readOnly, form.legalSite.hoopHeight, setForm]);
 
   const regionOptions = form.legalSite.country.trim()
     ? getRegionsForCountry(form.legalSite.country)
@@ -327,7 +338,7 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             onChange={(e) => patchLegal({ geo: e.target.value })}
           />
         </Field>
-        <Field label="Main playing field">
+        <Field label={st(teamSportProfile(sport).venue)}>
           <TextInput
             value={form.legalSite.mainPlayingField}
             disabled={readOnly}
@@ -350,22 +361,28 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
           disabled={readOnly}
           onChange={(v) => patchLegal({ fieldType: v })}
         />
-        <CheckRow
-          label={'Approval check yes\\no'}
-          checked={form.legalSite.approvalCheck}
-          disabled={readOnly}
-          onChange={(v) => patchLegal({ approvalCheck: v })}
-        />
-        <Field label="Capacity">
-          <TextInput
-            inputMode="numeric"
-            value={form.legalSite.capacity}
-            disabled={readOnly}
-            onChange={(e) =>
-              patchLegal({ capacity: e.target.value.replace(/[^\d]/g, '') })
-            }
-          />
-        </Field>
+        {isBasket ? null : (
+          <>
+            <CheckRow
+              label={'Approval check yes\\no'}
+              checked={form.legalSite.approvalCheck}
+              disabled={readOnly}
+              onChange={(v) => patchLegal({ approvalCheck: v })}
+            />
+            {hasCapacity ? (
+              <Field label="Capacity">
+                <TextInput
+                  inputMode="numeric"
+                  value={form.legalSite.capacity}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    patchLegal({ capacity: e.target.value.replace(/[^\d]/g, '') })
+                  }
+                />
+              </Field>
+            ) : null}
+          </>
+        )}
         <Field label="Sports scoreboards">
           <TextInput
             value={form.legalSite.sportsScoreboards}
@@ -373,15 +390,157 @@ export function TeamProfileMainTab({ form, setForm, readOnly }: PanelProps) {
             onChange={(e) => patchLegal({ sportsScoreboards: e.target.value })}
           />
         </Field>
-        <Field label={'Baskets & Nets'}>
-          <TextInput
-            value={form.legalSite.basketsAndNets}
-            disabled={readOnly}
-            onChange={(e) => patchLegal({ basketsAndNets: e.target.value })}
-          />
-        </Field>
+        {isBasket && !form.legalSite.basketsAndNets ? null : (
+          <Field label={'Baskets & Nets'}>
+            <TextInput
+              value={form.legalSite.basketsAndNets}
+              disabled={readOnly}
+              onChange={(e) => patchLegal({ basketsAndNets: e.target.value })}
+            />
+          </Field>
+        )}
       </SectionCard>
+
+      {isBasket ? (
+        <SectionCard title="Basket — federation and court" tone="red">
+          <Row2>
+            <Field
+              label="Federation affiliation"
+              hint={
+                form.mainData.federationName
+                  ? `Federation: ${form.mainData.federationName}`
+                  : 'Federation name is under Main data.'
+              }
+            >
+              <TextInput
+                value={form.legalSite.federationAffiliation}
+                disabled={readOnly}
+                placeholder="Affiliation number / code"
+                onChange={(e) => patchLegal({ federationAffiliation: e.target.value })}
+              />
+            </Field>
+            <div />
+          </Row2>
+          <CheckRow
+            label="Certification/Homologation"
+            checked={form.legalSite.approvalCheck}
+            disabled={readOnly}
+            onChange={(v) => patchLegal({ approvalCheck: v })}
+          />
+          {form.legalSite.approvalCheck ? (
+            <Row2>
+              <Field label="Homologation number">
+                <TextInput
+                  value={form.legalSite.homologationNumber}
+                  disabled={readOnly}
+                  onChange={(e) => patchLegal({ homologationNumber: e.target.value })}
+                />
+              </Field>
+              <Field label="Homologation expiry">
+                <TextInput
+                  type="date"
+                  value={form.legalSite.homologationExpiry}
+                  disabled={readOnly}
+                  onChange={(e) => patchLegal({ homologationExpiry: e.target.value })}
+                />
+              </Field>
+            </Row2>
+          ) : null}
+          <Row3>
+            <Field label="Court">
+              <OptionSelect
+                options={BASKET_COURT_TYPES}
+                value={form.legalSite.courtType}
+                disabled={readOnly}
+                onChange={(v) => patchLegal({ courtType: v })}
+              />
+            </Field>
+            <Field label="Court surface">
+              <OptionSelect
+                options={BASKET_COURT_SURFACES}
+                value={form.legalSite.courtSurface}
+                disabled={readOnly}
+                onChange={(v) => patchLegal({ courtSurface: v })}
+              />
+            </Field>
+            <Field label="Capacity of the court">
+              <TextInput
+                inputMode="numeric"
+                value={form.legalSite.capacity}
+                disabled={readOnly}
+                onChange={(e) =>
+                  patchLegal({ capacity: e.target.value.replace(/[^\d]/g, '') })
+                }
+              />
+            </Field>
+          </Row3>
+          <Row2>
+            <Field label="Backboards">
+              <OptionSelect
+                options={BASKET_BACKBOARD_TYPES}
+                value={form.legalSite.backboards}
+                disabled={readOnly}
+                onChange={(v) => patchLegal({ backboards: v })}
+              />
+            </Field>
+            <Field
+              label="Hoop/net height (m)"
+              hint={`Standard ${STANDARD_HOOP_HEIGHT} m — lower it for youth categories.`}
+            >
+              <TextInput
+                inputMode="decimal"
+                value={form.legalSite.hoopHeight}
+                disabled={readOnly}
+                placeholder={STANDARD_HOOP_HEIGHT}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(',', '.').replace(/[^\d.]/g, '');
+                  const [whole = '', frac] = cleaned.split('.');
+                  patchLegal({
+                    hoopHeight:
+                      frac === undefined ? whole.slice(0, 1) : `${whole.slice(0, 1)}.${frac.slice(0, 2)}`,
+                  });
+                }}
+              />
+            </Field>
+          </Row2>
+        </SectionCard>
+      ) : null}
     </div>
+  );
+}
+
+const STANDARD_HOOP_HEIGHT = '3.05';
+const BASKET_COURT_TYPES = ['Indoor', 'Outdoor'];
+const BASKET_COURT_SURFACES = ['Parquet (wood)', 'Synthetic', 'Rubber', 'Concrete', 'Asphalt', 'Other'];
+const BASKET_BACKBOARD_TYPES = [
+  'Fixed',
+  'Mobile (portable)',
+  'Wall-mounted',
+  'Ceiling-suspended',
+  'Other',
+];
+
+function OptionSelect({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <TextSelect value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <option value="">—</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+      {value && !options.includes(value) ? <option value={value}>{value}</option> : null}
+    </TextSelect>
   );
 }
 
@@ -711,7 +870,7 @@ export function TeamAdminSportTab({ form, setForm, readOnly }: PanelProps) {
       </SectionCard>
 
       <SectionCard title="Sport data" tone="blue">
-        <Field label="Allenatore prima squadra">
+        <Field label="Coach (first team)">
           <TextInput
             value={form.adminSport.headCoach}
             disabled={readOnly}
@@ -770,5 +929,33 @@ export function TeamAdminSportTab({ form, setForm, readOnly }: PanelProps) {
         </Field>
       </SectionCard>
     </div>
+  );
+}
+
+/** Football-base team fields adapted to the team's sport (Squad, Formation, Honors…). */
+export function TeamSportProfilePanel({ form, setForm, readOnly }: PanelProps) {
+  const sport = normalizeEntitySport(form.sport || form.sports?.[0]);
+  const values = form.sportProfile.fields[sport] ?? {};
+  const st = useSportT();
+  return (
+    <SectionCard title={`${st('Sport profile')} — ${st(sport)}`} tone="blue">
+      <SportFieldGrid
+        defs={teamSportProfileFields(sport)}
+        values={values}
+        readOnly={readOnly}
+        onChange={(key, value) =>
+          setForm((f) => ({
+            ...f,
+            sportProfile: {
+              ...f.sportProfile,
+              fields: {
+                ...f.sportProfile.fields,
+                [sport]: { ...(f.sportProfile.fields[sport] ?? {}), [key]: value },
+              },
+            },
+          }))
+        }
+      />
+    </SectionCard>
   );
 }

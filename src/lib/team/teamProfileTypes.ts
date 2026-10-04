@@ -30,6 +30,16 @@ export type TeamLegalSite = {
   basketsAndNets: string;
   /** Geographic coordinate of the team site (latitude, longitude). */
   geo?: string;
+  /** Basket: federation affiliation number / code. */
+  federationAffiliation: string;
+  /** Basket: Certification/Homologation details (the yes/no is `approvalCheck`). */
+  homologationNumber: string;
+  homologationExpiry: string;
+  courtType: string;
+  courtSurface: string;
+  backboards: string;
+  /** Basket: hoop/net height in metres. */
+  hoopHeight: string;
 };
 
 export type TeamContacts = {
@@ -82,12 +92,19 @@ export type TeamAdminSportData = {
   technicalSupplier: string;
 };
 
+/** Per-sport team profile values (Sport profile card + Statistics tab), keyed by sport. */
+export type EntitySportProfileData = {
+  fields: Record<string, Record<string, string>>;
+  stats: Record<string, import('@/lib/sport/sportProfileTypes').SportSeasonStats>;
+};
+
 export type TeamProfileSections = {
   mainData: TeamMainData;
   legalSite: TeamLegalSite;
   contacts: TeamContacts;
   federal: TeamFederalMembership;
   adminSport: TeamAdminSportData;
+  sportProfile: EntitySportProfileData;
 };
 
 export type TeamProfileFormPayload = {
@@ -115,7 +132,8 @@ export type TeamProfileTabId =
   | 'federal'
   | 'subteams'
   | 'admin-sport'
-  | 'passwords';
+  | 'passwords'
+  | 'statistics';
 
 export const TEAM_PROFILE_TABS: { id: TeamProfileTabId; label: string }[] = [
   { id: 'team-profile', label: 'Team Profile' },
@@ -124,4 +142,5 @@ export const TEAM_PROFILE_TABS: { id: TeamProfileTabId; label: string }[] = [
   { id: 'subteams', label: 'Subteams and Categories' },
   { id: 'admin-sport', label: 'Administrative & Sport data' },
   { id: 'passwords', label: 'Passwords' },
+  { id: 'statistics', label: 'Statistics' },
 ];

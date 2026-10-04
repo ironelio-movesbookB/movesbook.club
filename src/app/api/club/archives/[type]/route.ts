@@ -9,6 +9,7 @@ import {
   listClubAffiliationsArchive,
   listClubMembersArchive,
   listTeamMembersArchive,
+  listCoachAthletesArchive,
   listClubOperatorsArchive,
   listClubParentsArchive,
   listTeamParentsArchive,
@@ -25,6 +26,7 @@ import {
   listUnifiedReceipts,
   type ArchiveQueryParams,
 } from '@/lib/club/archives/clubArchiveService';
+import { resolveMemberGroupFilter } from '@/lib/club/memberLists';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,7 @@ function parseArchiveParams(
     recordId: sp.get('recordId') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
+    memberGroupId: sp.get('memberGroupId') ?? undefined,
     membershipStatus: (() => {
       const raw = sp.get('membershipStatus');
       if (
@@ -58,6 +61,7 @@ function parseArchiveParams(
       }
       return undefined;
     })(),
+    toBeVerified: sp.get('toBeVerified') === '1',
     includePaid: sp.get('includePaid') === '1' || sp.get('includePaid') === 'true',
     expandDeadlines: sp.get('expandDeadlines') === '1' || sp.get('expandDeadlines') === 'true',
   };
@@ -65,7 +69,9 @@ function parseArchiveParams(
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, {
+      allowCoach: params.type === 'members' || params.type === 'parents',
+    });
     if ('error' in auth) return auth.error;
 
     const archiveParams = parseArchiveParams(request);
@@ -75,13 +81,24 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     switch (params.type) {
       case 'members':
         result =
-          auth.ctx.workspaceKind === 'team'
-            ? await listTeamMembersArchive(auth.ctx, archiveParams)
-            : await listClubMembersArchive(auth.ctx, archiveParams);
+          auth.ctx.workspaceKind === 'coach'
+            ? await listCoachAthletesArchive(
+                auth.ctx,
+                await resolveMemberGroupFilter(auth.ctx.club.id, archiveParams),
+              )
+            : auth.ctx.workspaceKind === 'team'
+            ? await listTeamMembersArchive(
+                auth.ctx,
+                await resolveMemberGroupFilter(auth.ctx.club.id, archiveParams),
+              )
+            : await listClubMembersArchive(
+                auth.ctx,
+                await resolveMemberGroupFilter(auth.ctx.club.id, archiveParams),
+              );
         break;
       case 'parents':
         result =
-          auth.ctx.workspaceKind === 'team'
+          auth.ctx.workspaceKind === 'team' || auth.ctx.workspaceKind === 'coach'
             ? await listTeamParentsArchive(auth.ctx, archiveParams)
             : await listClubParentsArchive(auth.ctx, archiveParams);
         break;

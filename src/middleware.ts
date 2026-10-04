@@ -55,6 +55,8 @@ const publicApiRoutes = [
   '/api/public/',
   /** Used by admin editors (Settings, subscriptions, recipes) — token is often in localStorage only */
   '/api/translate',
+  /** Site texts per language (section languages) — read by every visitor, logged in or not */
+  '/api/translations',
   /** Global sport dropdown catalog — GET is public; PUT still requires Super Admin in the route */
   '/api/admin/sport-dropdown-parameters',
 ];
@@ -73,6 +75,11 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/users/deadline';
     return NextResponse.rewrite(url);
+  }
+
+  // Member medical files are private; they are served only via /api/media with an access check.
+  if (pathname.toLowerCase().startsWith('/uploads/member-medical/')) {
+    return new NextResponse('Not found', { status: 404 });
   }
 
   if (request.method === 'POST' && NOOP_POST_PATHS.has(pathname)) {
@@ -120,5 +127,6 @@ export const config = {
      * - public folder
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/uploads/member-medical/:path*',
   ],
 };

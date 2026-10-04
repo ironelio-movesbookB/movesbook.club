@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { deleteMemberNotes } from '@/lib/club/memberProfileService';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ export async function DELETE(
     }
 
     await prisma.teamMember.delete({ where: { id: existing.id } });
+    await deleteMemberNotes({ clubMemberId: existing.id, store: 'team', all: true });
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error('DELETE /api/teams/[teamId]/members/[memberId]:', e);

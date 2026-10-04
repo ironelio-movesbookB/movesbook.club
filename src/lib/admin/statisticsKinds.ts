@@ -51,12 +51,44 @@ export const STATS_KIND_TYPES: Record<StatsUserKind, UserType[]> = {
   groups: [UserType.GROUP, UserType.GROUP_ADMIN],
 };
 
+/** Official colors of the types of users. */
 export const STATS_KIND_COLORS: Record<StatsUserKind, string> = {
-  single: '#2563eb', // Athletes — blue
-  coaches: '#a16207', // Coaches — dark yellow
-  teams: '#ea580c', // Teams — orange
-  clubs: '#dc2626', // Clubs — red
-  groups: '#166534', // Groups — dark green
+  single: '#00875a', // Single users (Athletes) — green
+  coaches: '#ffee33', // Coaches — yellow
+  teams: '#1e88e5', // Teams — blue
+  clubs: '#ff2a00', // Clubs — red
+  groups: '#8b3dff', // Groups — purple
+};
+
+/**
+ * Types of users in the subscription details: the five kinds plus Club accounts
+ * (accounts purchased by a club admin for his members).
+ */
+export type StatsDetailKind = StatsUserKind | 'clubAccounts';
+
+/** Legend order of the details (as in the distribution pie). */
+export const STATS_DETAIL_KINDS: StatsDetailKind[] = [
+  'single',
+  'teams',
+  'coaches',
+  'clubs',
+  'clubAccounts',
+  'groups',
+];
+
+/** Types of users that can be left out of the % and of the Total. */
+export const STATS_EXCLUDABLE_KINDS: StatsDetailKind[] = ['clubAccounts', 'groups'];
+
+export const STATS_DETAIL_KIND_LABELS: Record<StatsDetailKind, string> = {
+  ...STATS_KIND_LABELS,
+  clubAccounts: 'Club accounts',
+};
+
+export const STATS_CLUB_ACCOUNTS_COLOR = '#000000';
+
+export const STATS_DETAIL_KIND_COLORS: Record<StatsDetailKind, string> = {
+  ...STATS_KIND_COLORS,
+  clubAccounts: STATS_CLUB_ACCOUNTS_COLOR,
 };
 
 export const ALL_STATS_USER_TYPES: UserType[] = STATS_USER_KINDS.flatMap(

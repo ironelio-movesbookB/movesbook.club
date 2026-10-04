@@ -41,9 +41,12 @@ async function getOwnedTeam(userId: string, requestedTeamId: string | null) {
 /**
  * Auth for club procedure/archive APIs.
  * Club admins resolve via `clubId`; Team admins resolve via `teamId` (Archive of Users).
+ * Coaches resolve to their own workspace only where the route passes `allowCoach`
+ * (athletes trained / groups trained); other club APIs stay closed to them.
  */
 export async function getClubAuthContext(
-  request: NextRequest
+  request: NextRequest,
+  options: { allowCoach?: boolean } = {},
 ): Promise<{ ctx: ClubAuthContext } | { error: NextResponse }> {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
   if (!token) {
@@ -74,6 +77,18 @@ export async function getClubAuthContext(
         workspaceKind: 'team',
       },
     };
+  }
+
+  if (userType === 'COACH' && options.allowCoach) {
+    const coach = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, firstName: true, surname: true },
+    });
+    if (!coach) {
+      return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    }
+    const name = [coach.firstName, coach.surname].filter(Boolean).join(' ') || coach.username;
+    return { ctx: { userId, club: { id: coach.id, name }, workspaceKind: 'coach' } };
   }
 
   if (!isClubUserType(userType)) {

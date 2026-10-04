@@ -30,6 +30,7 @@ export type ClubDescriptionMeta = {
   legalDocuments?: {
     rulesHtml?: string;
     privacyPolicyHtml?: string;
+    updatedAt?: string;
   };
   /** Up to 5 payment method ids shown by default on payment forms. */
   defaultPaymentMethods?: string[];
@@ -50,6 +51,8 @@ export type ClubDescriptionMeta = {
   clubContacts?: import('@/lib/team/teamProfileTypes').TeamContacts;
   /** Sports multicheck (primary also mirrored to category). */
   sports?: string[];
+  /** Club profile → Statistics tab values (per sport). */
+  clubSportProfile?: import('@/lib/team/teamProfileTypes').EntitySportProfileData;
   /** Customized profile questions for members of this club. */
   customQuestions?: Array<{
     id: string;

@@ -12,6 +12,7 @@ import {
   IDENTIFICATION_DEVICES_INFO_DEFAULT_EN,
   IDENTIFICATION_DEVICES_INFO_TRANSLATION_KEY,
 } from './identificationDevicesInfoLongText';
+import { PAYMENT_INFO_DEFAULT_EN, PAYMENT_INFO_TRANSLATION_KEY } from './paymentInfoLongText';
 import {
   SUGGEST_MOVESBOOK_INTRO_EN,
   SUGGEST_MOVESBOOK_INTRO_IT,
@@ -45,6 +46,12 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     category: 'management',
     descriptionEn: 'Club access settings — identification devices help panel.',
     values: { en: IDENTIFICATION_DEVICES_INFO_DEFAULT_EN },
+  },
+  {
+    key: PAYMENT_INFO_TRANSLATION_KEY,
+    category: 'management',
+    descriptionEn: 'Member profile Settings — “Type of payments — method default” Info popup.',
+    values: { en: PAYMENT_INFO_DEFAULT_EN },
   },
   {
     key: SUGGEST_MOVESBOOK_INTRO_KEY,

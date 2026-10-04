@@ -663,6 +663,15 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
 
       if (response.ok && data.user) {
         // Regular user login successful
+        const preferredLanguage = String(data.user.language || '').trim();
+        if (
+          preferredLanguage &&
+          preferredLanguage !== 'en' &&
+          preferredLanguage !== currentLanguage &&
+          availableLanguages.some((l) => l.code === preferredLanguage)
+        ) {
+          setLanguage(preferredLanguage);
+        }
         const redirectTo =
           typeof data.redirectTo === 'string' && data.redirectTo.trim()
             ? data.redirectTo.trim()

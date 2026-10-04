@@ -11,22 +11,19 @@ export async function GET(request: NextRequest) {
     const auth = await getClubAuthContext(request);
     if ('error' in auth) return auth.error;
 
-    const club = await prisma.club.findUnique({
-      where: { id: auth.ctx.club.id },
-      select: {
-        id: true,
-        description: true,
-        createdAt: true,
-      },
-    });
+    const isTeam = auth.ctx.workspaceKind === 'team';
+    const select = { id: true, description: true, createdAt: true } as const;
+    const club = isTeam
+      ? await prisma.team.findUnique({ where: { id: auth.ctx.club.id }, select })
+      : await prisma.club.findUnique({ where: { id: auth.ctx.club.id }, select });
 
     if (!club) {
-      return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+      return NextResponse.json({ error: isTeam ? 'Team not found' : 'Club not found' }, { status: 404 });
     }
 
-    const membersAdded = await prisma.clubMember.count({
-      where: { clubId: auth.ctx.club.id },
-    });
+    const membersAdded = isTeam
+      ? await prisma.teamMember.count({ where: { teamId: auth.ctx.club.id } })
+      : await prisma.clubMember.count({ where: { clubId: auth.ctx.club.id } });
     const registrationInfo = await getMemberRegistrationInfoForUser(auth.ctx.userId);
 
     const capacity = computeClubMemberCapacityFromClub({

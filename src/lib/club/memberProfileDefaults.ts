@@ -6,10 +6,19 @@ import type {
   ParentData,
 } from '@/lib/club/memberProfileTypes';
 import {
+  CREATE_DEADLINES_PAYMENT_STATUS,
+  emptyMemberSettingsDeadlines,
+  normalizeMemberSettingsDeadlines,
   TEAM_ATHLETE_STATUS_OPTIONS,
-  TEAM_FOOTBALL_PAYMENT_METHOD_OPTIONS,
+  TEAM_REGISTRATION_STATUS_OPTIONS,
 } from '@/lib/club/memberProfileTypes';
-import { PAYMENT_STATUS_OPTIONS } from '@/lib/procedures/payModes';
+import {
+  normalizePaymentTypeValue,
+  PAYMENT_STATUS_OPTIONS,
+  paymentMethodIn,
+  TO_BE_VERIFIED_METHODS,
+} from '@/lib/procedures/payModes';
+import { normalizeSeasonStats, normalizeStringRecord } from '@/lib/sport/sportProfileTypes';
 
 function emptyParent(): ParentData {
   return {
@@ -365,6 +374,7 @@ export function emptyClubScoped(): ClubMemberScopedData {
       notesCoachComments: false,
       presences: false,
       payFor: false,
+      stats: false,
     },
     payForMemberIds: [],
     otherDetails: {
@@ -424,6 +434,7 @@ export function emptyClubScoped(): ClubMemberScopedData {
       teamFootballEnabled: false,
       memberSettingKind: 'club',
       teamSport: 'Football',
+      sportFields: {},
       sportMode: 'CLUB-GYM',
       memberTypeId: '',
       discounts: {
@@ -468,11 +479,15 @@ export function emptyClubScoped(): ClubMemberScopedData {
         secondPayment: { amount: '', date: '', status: '' },
         thirdPayment: { amount: '', date: '', status: '' },
         paymentMethod: '',
+        paymentToBeVerified: false,
         paymentStatus: '',
+        deadlines: emptyMemberSettingsDeadlines(),
         receiptIssued: false,
         imageRelease: false,
         travelAuthorization: false,
         athleteStatus: 'Active',
+        registrationStatus: '',
+        registrationType: '',
         sportsPlayed: [],
         teamNames: '',
         previousClub: '',
@@ -496,6 +511,7 @@ export function emptyClubScoped(): ClubMemberScopedData {
         startDateWithTeam: '',
       },
     },
+    sportStats: {},
     staffMessage: {
       enableFrom: '',
       enableTo: '',
@@ -636,6 +652,11 @@ export function mergeClubScoped(partial?: Partial<ClubMemberScopedData> | null):
           base.settings.teamSport ||
           'Football',
       ),
+      sportFields: Object.fromEntries(
+        Object.entries(
+          (partial.settings?.sportFields as Record<string, unknown> | undefined) ?? {},
+        ).map(([sport, values]) => [sport, normalizeStringRecord(values)]),
+      ),
       sportMode:
         (partial.settings?.memberSettingKind ??
           (partial.settings?.teamFootballEnabled && !partial.settings?.clubGymEnabled
@@ -702,6 +723,11 @@ export function mergeClubScoped(partial?: Partial<ClubMemberScopedData> | null):
         ).includes(String(merged.athleteStatus))
           ? String(merged.athleteStatus)
           : 'Active';
+        const registrationStatus = (
+          TEAM_REGISTRATION_STATUS_OPTIONS as readonly string[]
+        ).includes(String(merged.registrationStatus))
+          ? String(merged.registrationStatus)
+          : '';
 
         const firstPayment = migrateInstallment('firstPayment', 'firstPaymentDate');
         const secondPayment = migrateInstallment('secondPayment', 'secondPaymentDate');
@@ -715,32 +741,26 @@ export function mergeClubScoped(partial?: Partial<ClubMemberScopedData> | null):
             thirdPayment.status ||
             '',
         );
-        const paymentStatus = (PAYMENT_STATUS_OPTIONS as readonly string[]).includes(
-          rawPaymentStatus,
-        )
-          ? rawPaymentStatus
-          : '';
+        const paymentStatus =
+          (PAYMENT_STATUS_OPTIONS as readonly string[]).includes(rawPaymentStatus) ||
+          rawPaymentStatus === CREATE_DEADLINES_PAYMENT_STATUS
+            ? rawPaymentStatus
+            : '';
 
-        const rawMethod = String(merged.paymentMethod || '').trim();
-        const methodAliases: Record<string, string> = {
-          cash: 'Cash',
-          bank_transfer: 'Bank transfer',
-          'bank transfer': 'Bank transfer',
-          pos: 'POS',
-          sepa: 'SEPA',
-          'sepa **': 'SEPA',
-        };
-        const aliased =
-          methodAliases[rawMethod.toLowerCase()] ||
-          ((TEAM_FOOTBALL_PAYMENT_METHOD_OPTIONS as readonly string[]).includes(rawMethod)
-            ? rawMethod
-            : '');
+        const paymentMethod = normalizePaymentTypeValue(String(merged.paymentMethod || '').trim());
+        const paymentToBeVerified =
+          Boolean(merged.paymentToBeVerified) &&
+          paymentMethodIn(TO_BE_VERIFIED_METHODS, paymentMethod);
 
         return {
           ...merged,
           athleteStatus,
-          paymentMethod: aliased,
+          registrationStatus,
+          registrationType: String(merged.registrationType ?? '').trim(),
+          paymentMethod,
+          paymentToBeVerified,
           paymentStatus,
+          deadlines: normalizeMemberSettingsDeadlines(merged.deadlines),
           firstPayment,
           secondPayment,
           thirdPayment,
@@ -750,6 +770,11 @@ export function mergeClubScoped(partial?: Partial<ClubMemberScopedData> | null):
         };
       })(),
     },
+    sportStats: Object.fromEntries(
+      Object.entries((partial.sportStats as Record<string, unknown> | undefined) ?? {}).map(
+        ([sport, seasons]) => [sport, normalizeSeasonStats(seasons)],
+      ),
+    ),
     staffMessage: {
       ...base.staffMessage,
       ...(partial.staffMessage || {}),

@@ -6,6 +6,7 @@ type IonosEmailPayload = {
   html: string;
   text?: string;
   replyTo?: string;
+  attachments?: Array<{ filename: string; content: string | Buffer; contentType?: string }>;
 };
 
 const DEFAULT_HOST = 'smtp.ionos.it';
@@ -82,6 +83,11 @@ export async function sendIonosEmail(payload: IonosEmailPayload): Promise<void> 
     html: payload.html,
     text: payload.text,
     replyTo: payload.replyTo ? extractEmailAddress(payload.replyTo) : undefined,
+    attachments: payload.attachments?.map((a) => ({
+      filename: sanitizeHeader(a.filename),
+      content: a.content,
+      contentType: a.contentType,
+    })),
   });
 
   if (!info.messageId) {

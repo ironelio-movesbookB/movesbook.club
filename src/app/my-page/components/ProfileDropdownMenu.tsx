@@ -166,12 +166,12 @@ const menuSections: MenuSection[] = [
     items: [
       {
         label: "Alerts and notices at login",
-        href: "#",
+        href: "/users/member-notices/login",
         icon: Bell,
       },
       {
         label: "Message at logout",
-        href: "#",
+        href: "/users/member-notices/logout",
         icon: LogOut,
       },
       {

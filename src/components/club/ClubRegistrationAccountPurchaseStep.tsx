@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { getClubAccountPackDisplayRows } from '@/lib/admin/clubAccountPackPricing';
+import { useEffect, useState } from 'react';
+import { getClubAccountPackDisplayRows, packToDisplayRow } from '@/lib/admin/clubAccountPackPricing';
+import { fetchClubPurchaseAccountsSettings } from '@/lib/admin/clubPurchaseAccountsMock';
 import ClubAccountPackPricingSections from '@/components/club/ClubAccountPackPricingSections';
 
 export type ClubRegistrationAccountSelection = Record<string, number | null>;
@@ -15,7 +16,16 @@ export default function ClubRegistrationAccountPurchaseStep({
   selectedPacks,
   onSelectPack,
 }: ClubRegistrationAccountPurchaseStepProps) {
-  const packs = useMemo(() => getClubAccountPackDisplayRows(), []);
+  const [packs, setPacks] = useState(getClubAccountPackDisplayRows);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchClubPurchaseAccountsSettings().then((settings) => {
+      if (!cancelled) setPacks(settings.accountPacks.map(packToDisplayRow));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="border-t border-gray-400 bg-white px-4 py-4">

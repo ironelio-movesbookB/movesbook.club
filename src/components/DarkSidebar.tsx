@@ -107,6 +107,8 @@ import {
   Receipt,
   Info,
   MessagesSquare,
+  Salad,
+  Scale,
   Youtube
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -432,6 +434,49 @@ function renderClubAdminArchiveLeading(item: ClubAdminArchiveItem): ReactNode {
   if (item.kind === 'child') return null;
   const Icon = item.Icon;
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
+}
+
+/** Blue "Section …" row of the official Club My Club menu (header only until its contents are defined). */
+function ClubOfficialSectionRow({
+  icon: Icon,
+  label,
+  gear = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  gear?: boolean;
+}) {
+  return (
+    <div className="w-full border border-white/80 border-b-teal-700 bg-[#1e4c9a] text-white">
+      <div className="flex items-center gap-2.5 py-3 px-3">
+        <Icon className="h-5 w-5 shrink-0" />
+        <span className="text-sm font-bold tracking-wide">{label}</span>
+        {gear ? <Settings className="h-4 w-4 shrink-0 text-fuchsia-300" aria-hidden /> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Official Club My Club menu nests these rows inside "My Club Dashboard"; other layouts render them flat. */
+function ClubDashboardGroup({
+  enabled,
+  children,
+  ...dashboard
+}: {
+  enabled: boolean;
+  children: ReactNode;
+  clubId?: string;
+  youtubeChannelUrl?: string | null;
+  canManageClub: boolean;
+  onYoutubeChannelUrlSaved?: (clubId: string, url: string | null) => void;
+  onClubBootstrapped?: (club: { id: string; name?: string; youtubeChannelUrl?: string | null }) => void;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <ClubMembersDashboardSection {...dashboard} title="My Club Dashboard">
+      {children}
+    </ClubMembersDashboardSection>
+  );
 }
 
 interface DarkSidebarProps {
@@ -1304,6 +1349,8 @@ export default function DarkSidebar({
       (isClubAccountUserType(userType) &&
         formCreatedClubs.length > 0 &&
         clubHasSelectedEntity));
+  /** Official MY CLUB menu (club accounts): Dashboard group, blue Sections, then Friends / Communities / Events. */
+  const officialClubMyClub = showClubMyEntityTop && isClubAccountUserType(userType);
 
   const handleMyPage = () => {
     router.push('/privacy');
@@ -1493,7 +1540,10 @@ export default function DarkSidebar({
     return t('sidebar_my_club');
   };
 
-  const renderFriendsAndCommunitiesMenus = ({ showEvents = false }: { showEvents?: boolean } = {}) => (
+  const renderFriendsAndCommunitiesMenus = ({
+    showEvents = false,
+    titleCase = false,
+  }: { showEvents?: boolean; titleCase?: boolean } = {}) => (
     <>
       <div className="border-b border-teal-700">
         <div className="flex w-full items-stretch bg-teal-800 text-white">
@@ -1504,7 +1554,9 @@ export default function DarkSidebar({
             className="flex flex-1 items-center gap-3 min-w-0 py-3 pl-4 pr-2 text-left hover:bg-teal-700 transition-colors"
           >
             <Users className="w-5 h-5 shrink-0" />
-            <span className="font-semibold tracking-wide truncate">{t('sidebar_friends_title')}</span>
+            <span className="font-semibold tracking-wide truncate">
+              {titleCase ? 'Friends' : t('sidebar_friends_title')}
+            </span>
           </button>
           {friendsOpen && (
             <button
@@ -1784,7 +1836,7 @@ export default function DarkSidebar({
         <div className="border-b border-teal-700">
           <div className="bg-[#374151] text-white px-3 py-2 text-xs font-bold tracking-wide flex items-center gap-2 border-t border-black/20">
             <CalendarDays className="w-4 h-4" />
-            <span>EVENTS</span>
+            <span>{titleCase ? 'Events' : 'EVENTS'}</span>
           </div>
           <div className="bg-[#2f3640] border-t border-black/20 px-3 py-3">
             <div className="w-full bg-teal-600 text-white text-xs font-bold py-1.5 px-2 flex items-center justify-between">
@@ -3136,6 +3188,30 @@ export default function DarkSidebar({
                   </>
                 )}
 
+                <ClubDashboardGroup
+                  enabled={officialClubMyClub}
+                  clubId={displaySelectedClub?.id as string | undefined}
+                  youtubeChannelUrl={
+                    (displaySelectedClub as { youtubeChannelUrl?: string | null })
+                      ?.youtubeChannelUrl ?? null
+                  }
+                  canManageClub={clubWebsiteManage}
+                  onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
+                  onClubBootstrapped={handleClubBootstrapped}
+                >
+                {officialClubMyClub ? (
+                  <button
+                    type="button"
+                    className="w-full bg-teal-800 hover:bg-teal-700 text-white py-2.5 px-3 flex items-center justify-between transition-colors border-b border-teal-700"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Eye className="w-5 h-5 shrink-0" />
+                      <span className="font-semibold tracking-wide truncate">Club page for visitors</span>
+                    </div>
+                    <ChevronDown className="w-4 h-4 opacity-90" />
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   className="w-full bg-teal-800 hover:bg-teal-700 text-white py-2.5 px-3 flex items-center justify-between transition-colors border-b border-teal-700"
@@ -3147,25 +3223,29 @@ export default function DarkSidebar({
                   <ChevronDown className="w-4 h-4 opacity-90" />
                 </button>
 
-                {/* Favourite Page */}
-                <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
-                  <div className="flex items-center justify-between py-2.5 px-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Heart className="w-5 h-5 shrink-0 opacity-90" />
-                      <span className="font-semibold tracking-wide truncate">Favourite Page</span>
+                {officialClubMyClub ? null : (
+                  <>
+                    {/* Favourite Page */}
+                    <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
+                      <div className="flex items-center justify-between py-2.5 px-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Heart className="w-5 h-5 shrink-0 opacity-90" />
+                          <span className="font-semibold tracking-wide truncate">Favourite Page</span>
+                        </div>
+                        <ChevronDown className="w-4 h-4 opacity-90" />
+                      </div>
                     </div>
-                    <ChevronDown className="w-4 h-4 opacity-90" />
-                  </div>
-                </div>
-                <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
-                  <div className="flex items-center justify-between py-2.5 px-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Heart className="w-5 h-5 shrink-0 opacity-90" />
-                      <span className="font-semibold tracking-wide truncate">My List</span>
+                    <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
+                      <div className="flex items-center justify-between py-2.5 px-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Heart className="w-5 h-5 shrink-0 opacity-90" />
+                          <span className="font-semibold tracking-wide truncate">My List</span>
+                        </div>
+                        <ChevronDown className="w-4 h-4 opacity-90" />
+                      </div>
                     </div>
-                    <ChevronDown className="w-4 h-4 opacity-90" />
-                  </div>
-                </div>
+                  </>
+                )}
 
                 {/* Music / notifications / messages / bookings */}
                 <div className="w-full border-b border-teal-700">
@@ -3747,21 +3827,45 @@ export default function DarkSidebar({
                   )}
                 </div>
 
-                {/* TRAINING section header */}
-                <div className="w-full bg-[#7a0d1c] text-white border-b border-teal-700">
-                  <div className="flex items-center justify-between py-2 px-3">
-                    <div className="flex items-center gap-2.5">
-                      <BookOpen className="w-5 h-5" />
-                      <span className="font-bold tracking-wide text-sm">TRAINING</span>
+                </ClubDashboardGroup>
+
+                {officialClubMyClub ? (
+                  <>
+                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
+                    <ClubOfficialSectionRow icon={Timer} label="Section Training" />
+                    <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
+                    <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
+                  </>
+                ) : (
+                  /* TRAINING section header */
+                  <div className="w-full bg-[#7a0d1c] text-white border-b border-teal-700">
+                    <div className="flex items-center justify-between py-2 px-3">
+                      <div className="flex items-center gap-2.5">
+                        <BookOpen className="w-5 h-5" />
+                        <span className="font-bold tracking-wide text-sm">TRAINING</span>
+                      </div>
+                      <ChevronDown className="w-4 h-4 opacity-90" />
                     </div>
-                    <ChevronDown className="w-4 h-4 opacity-90" />
-                  </div>                
-                </div>
+                  </div>
+                )}
 
                 {/* CLUB'S MANAGEMENT: CLUB + My Club — collapsed purple strip; expanded = red header + full submenu panel */}
                 {userType === 'CLUB' ? (
                   <div className="w-full border-b border-teal-700">
-                    {!clubManagementOpen ? (
+                    {!clubManagementOpen && officialClubMyClub ? (
+                      <button
+                        type="button"
+                        onClick={() => setClubManagementOpen(true)}
+                        className="w-full border border-white/80 border-b-teal-700 bg-[#1e4c9a] text-white transition-colors select-none hover:bg-[#2557a8]"
+                      >
+                        <div className="flex items-center gap-2.5 py-3 px-3">
+                          <ClipboardList className="h-5 w-5 shrink-0" aria-hidden />
+                          <span className="text-sm font-bold tracking-wide">Section Club management</span>
+                          <Settings className="h-4 w-4 shrink-0 text-fuchsia-300" aria-hidden />
+                          <ChevronDown className="ml-auto h-4 w-4 opacity-90" aria-hidden />
+                        </div>
+                      </button>
+                    ) : !clubManagementOpen ? (
                       <button
                         type="button"
                         onClick={() => setClubManagementOpen(true)}
@@ -3782,11 +3886,19 @@ export default function DarkSidebar({
                         <button
                           type="button"
                           onClick={() => setClubManagementOpen(false)}
-                          className="w-full bg-[#7a0d1c] hover:bg-[#681018] text-white border-b border-teal-700 transition-colors"
+                          className={`w-full text-white border-b border-teal-700 transition-colors ${
+                            officialClubMyClub
+                              ? 'bg-[#1e4c9a] hover:bg-[#2557a8]'
+                              : 'bg-[#7a0d1c] hover:bg-[#681018]'
+                          }`}
                         >
                           <div className="relative px-3 pt-3 pb-1">
-                            <span className="block text-center text-[13px] font-bold uppercase tracking-wide pr-8">
-                              CLUB&apos;S MANAGEMENT
+                            <span
+                              className={`block text-center text-[13px] font-bold tracking-wide pr-8 ${
+                                officialClubMyClub ? '' : 'uppercase'
+                              }`}
+                            >
+                              {officialClubMyClub ? 'Section Club management' : <>CLUB&apos;S MANAGEMENT</>}
                             </span>
                             <Settings className="absolute right-3 top-3 w-5 h-5 text-white opacity-95 pointer-events-none" aria-hidden />
                           </div>
@@ -4531,7 +4643,7 @@ export default function DarkSidebar({
                                 >
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Star className="h-4 w-4 shrink-0 text-white" strokeWidth={1.75} />
-                                    <span className="text-[12px] font-medium text-yellow-300">Dashboard</span>
+                                    <span className="text-[13px] font-medium text-yellow-300">Dashboard</span>
                                   </div>
                                   <div className="flex shrink-0 items-center gap-1.5">
                                     <Settings className="h-3.5 w-3.5 text-white opacity-90" />
@@ -4544,7 +4656,7 @@ export default function DarkSidebar({
                                 >
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Camera className="h-4 w-4 shrink-0 text-white opacity-95" />
-                                    <span className="text-[12px] font-medium text-yellow-300">
+                                    <span className="text-[13px] font-medium text-yellow-300">
                                       General overview
                                     </span>
                                   </div>
@@ -4558,7 +4670,7 @@ export default function DarkSidebar({
                                   >
                                     <div className="flex min-w-0 items-center gap-2">
                                       <MousePointerClick className="h-4 w-4 shrink-0 text-white opacity-95" />
-                                      <span className="text-[12px] font-medium text-yellow-300">
+                                      <span className="text-[13px] font-medium text-yellow-300">
                                         Subscriptions
                                       </span>
                                     </div>
@@ -4572,7 +4684,7 @@ export default function DarkSidebar({
                                     <div className="border-t border-gray-600/60 bg-[#1e272a]">
                                       <button
                                         type="button"
-                                        className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-6 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#2a3438]"
+                                        className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-6 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#2a3438]"
                                       >
                                         <Calendar className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                         <span className="leading-snug">
@@ -4581,7 +4693,7 @@ export default function DarkSidebar({
                                       </button>
                                       <button
                                         type="button"
-                                        className="flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#2a3438]"
+                                        className="flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#2a3438]"
                                       >
                                         <CalendarRange className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                         <span className="leading-snug">
@@ -4601,7 +4713,7 @@ export default function DarkSidebar({
                                       7
                                     </span>
                                   </div>
-                                  <span className="text-[12px] font-medium text-yellow-300">
+                                  <span className="text-[13px] font-medium text-yellow-300">
                                     Checking expirations
                                   </span>
                                 </button>
@@ -4652,7 +4764,7 @@ export default function DarkSidebar({
                                             router.push(item.path);
                                           }
                                         }}
-                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
                                           ii < group.length - 1
                                             ? 'border-b border-gray-600/50'
                                             : ''
@@ -4713,7 +4825,7 @@ export default function DarkSidebar({
                                         return (
                                           <div
                                             key={item.label}
-                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
+                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[13px] font-semibold text-white ${rowBorder}`}
                                           >
                                             <GroupIcon
                                               className="h-3.5 w-3.5 shrink-0 opacity-95"
@@ -4741,8 +4853,8 @@ export default function DarkSidebar({
                                             }
                                             // Handle click event
                                           }}
-                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-9' : 'pl-3'
+                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                            isChild ? 'pl-12' : 'pl-3'
                                           } ${rowBorder}`}
                                         >
                                           {isChild ? null : renderClubAdminArchiveLeading(item)}
@@ -4887,6 +4999,11 @@ export default function DarkSidebar({
                                       label: 'Enable-disable functions',
                                       path: '/club/settings/enable_disable_functions',
                                     },
+                                    {
+                                      Icon: FileText,
+                                      label: 'Documents',
+                                      path: '/club/settings/documents',
+                                    },
                                   ] as const
                                 ).map((item, subIdx, arr) => {
                                   const { Icon: SubIcon, label: subLabel } = item;
@@ -4915,7 +5032,7 @@ export default function DarkSidebar({
                                           router.push(href);
                                         }
                                       }}
-                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
                                         subIdx < arr.length - 1 ? 'border-b border-gray-600/70' : ''
                                       }`}
                                     >
@@ -4957,7 +5074,7 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
-                                  className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <div className="flex min-w-0 items-center gap-2">
                                     <Lock className="h-3.5 w-3.5 shrink-0 opacity-95" />
@@ -4967,21 +5084,21 @@ export default function DarkSidebar({
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <RefreshCw className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Change my password</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Management of your database</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <Check className="h-3.5 w-3.5 shrink-0 opacity-95" />
                                   <span className="leading-snug">Authorizes this computer</span>
@@ -5057,7 +5174,7 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
                                   <span className="leading-snug">Club Presentation</span>
@@ -5070,7 +5187,7 @@ export default function DarkSidebar({
                                   >
                                     <div className="flex min-w-0 items-center gap-2">
                                       <span className="h-3 w-3 shrink-0 rounded-full bg-pink-400" />
-                                      <span className="text-[12px] font-semibold text-white">
+                                      <span className="text-[13px] font-semibold text-white">
                                         Club Staff
                                       </span>
                                     </div>
@@ -5096,7 +5213,7 @@ export default function DarkSidebar({
                                         <button
                                           key={subLabel}
                                           type="button"
-                                          className={`flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#2e2e2e] ${
+                                          className={`flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#2e2e2e] ${
                                             si < arr.length - 1
                                               ? 'border-b border-gray-600/50'
                                               : ''
@@ -5117,7 +5234,7 @@ export default function DarkSidebar({
                                   >
                                     <div className="flex min-w-0 items-center gap-2">
                                       <span className="h-3 w-3 shrink-0 rounded-full bg-amber-300" />
-                                      <span className="text-[12px] font-semibold text-white">
+                                      <span className="text-[13px] font-semibold text-white">
                                         Courses
                                       </span>
                                     </div>
@@ -5140,7 +5257,7 @@ export default function DarkSidebar({
                                         <button
                                           key={subLabel}
                                           type="button"
-                                          className={`flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[11px] font-medium text-white transition-colors hover:bg-[#2e2e2e] ${
+                                          className={`flex w-full items-center gap-2 py-2 pl-6 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#2e2e2e] ${
                                             si < arr.length - 1
                                               ? 'border-b border-gray-600/50'
                                               : ''
@@ -5191,6 +5308,8 @@ export default function DarkSidebar({
                       </div>
                     )}
                   </div>
+                ) : officialClubMyClub ? (
+                  <ClubOfficialSectionRow icon={ClipboardList} label="Section Club management" gear />
                 ) : (
                   <div className="w-full bg-[#0f3f3a] border-b border-teal-700 py-2">
                     <div className="w-full bg-fuchsia-800 text-white border border-fuchsia-600/40">
@@ -5223,7 +5342,10 @@ export default function DarkSidebar({
                   </div>
                 )}
 
-                {renderFriendsAndCommunitiesMenus({ showEvents: true })}
+                {renderFriendsAndCommunitiesMenus({
+                  showEvents: true,
+                  titleCase: officialClubMyClub,
+                })}
               </div>
             ) : (
               <>
@@ -5332,7 +5454,7 @@ export default function DarkSidebar({
                                             }
                                           }}
                                           className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-9' : 'pl-3'
+                                            isChild ? 'pl-12' : 'pl-3'
                                           } ${rowBorder}`}
                                         >
                                           {isChild ? null : renderClubAdminArchiveLeading(item)}
@@ -5342,6 +5464,56 @@ export default function DarkSidebar({
                                     })}
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubGeneralSettingsOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Settings className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span
+                                    className={`truncate text-sm font-semibold ${
+                                      clubGeneralSettingsOpen ? 'text-yellow-300' : 'text-white'
+                                    }`}
+                                  >
+                                    General settings
+                                  </span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubGeneralSettingsOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubGeneralSettingsOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/club/settings/documents')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <FileText className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                  <span className="leading-snug">Documents</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/club/settings/tables/member_type')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                  <span className="leading-snug">Member type</span>
+                                </button>
                               </div>
                             )}
                           </div>
@@ -5475,7 +5647,7 @@ export default function DarkSidebar({
                                             }
                                           }}
                                           className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-9' : 'pl-3'
+                                            isChild ? 'pl-12' : 'pl-3'
                                           } ${rowBorder}`}
                                         >
                                           {isChild ? null : renderClubAdminArchiveLeading(item)}

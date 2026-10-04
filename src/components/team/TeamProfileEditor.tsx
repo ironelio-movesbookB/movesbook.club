@@ -18,9 +18,13 @@ import {
   TeamFederalTab,
   TeamPasswordsTab,
   TeamProfileMainTab,
+  TeamSportProfilePanel,
   TeamSubteamsTab,
 } from '@/components/team/TeamProfileTabPanels';
+import EntitySportStatisticsPanel from '@/components/sport/EntitySportStatisticsPanel';
 import { Field, TextSelect } from '@/components/club/memberProfile/FormBits';
+import { useSportT } from '@/components/sport/useSportT';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 export type { TeamProfileFormPayload, TeamProfileSavePayload };
 
@@ -39,7 +43,7 @@ type TeamProfileEditorProps = {
   onCancel?: () => void;
 };
 
-export default function TeamProfileEditor({
+function TeamProfileEditorView({
   mode,
   entityKind = 'team',
   adminUsername = 'username',
@@ -49,6 +53,7 @@ export default function TeamProfileEditor({
   onCancel,
 }: TeamProfileEditorProps) {
   const labels = getEntityProfileLabels(entityKind === 'club' ? 'club' : 'team');
+  const st = useSportT();
   const [activeTab, setActiveTab] = useState<TeamProfileTabId>('team-profile');
   const [form, setForm] = useState<TeamProfileFormPayload>(emptyTeamProfileForm);
   const [repeatPassword, setRepeatPassword] = useState('');
@@ -172,8 +177,8 @@ export default function TeamProfileEditor({
     mode === 'create'
       ? labels.createTitle(adminUsername)
       : entityKind === 'club'
-        ? 'Edit club / team profile'
-        : 'Edit team profile';
+        ? st('Edit club / team profile')
+        : st('Edit team profile');
 
   return (
     <div className="space-y-4">
@@ -194,7 +199,7 @@ export default function TeamProfileEditor({
                   : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
               }`}
             >
-              {tab.label}
+              {st(tab.label)}
             </button>
           ))}
         </div>
@@ -202,7 +207,7 @@ export default function TeamProfileEditor({
         <div className="space-y-4 p-4">
           {activeTab === 'team-profile' ? (
             <div className="space-y-4">
-              <Field label="Sport of the team">
+              <Field label={st('Sport of the team')}>
                 <TextSelect
                   value={form.sport}
                   onChange={(e) => {
@@ -217,15 +222,16 @@ export default function TeamProfileEditor({
                 >
                   {ENTITY_SPORT_OPTIONS.map((sport) => (
                     <option key={sport} value={sport}>
-                      {sport}
+                      {st(sport)}
                     </option>
                   ))}
-                  {form.sport && !(ENTITY_SPORT_OPTIONS as readonly string[]).includes(form.sport) ? (
+                  {form.sport &&
+                  !(ENTITY_SPORT_OPTIONS as readonly string[]).includes(form.sport) ? (
                     <option value={form.sport}>{form.sport}</option>
                   ) : null}
                 </TextSelect>
               </Field>
-              <Field label="Other sports">
+              <Field label={st('Other sports')}>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 rounded border border-gray-300 bg-white px-3 py-2">
                   {ENTITY_SPORT_OPTIONS.map((sport) => {
                     const checked = (form.sports?.length ? form.sports : [form.sport]).includes(
@@ -250,7 +256,7 @@ export default function TeamProfileEditor({
                             })
                           }
                         />
-                        {sport}
+                        {st(sport)}
                       </label>
                     );
                   })}
@@ -259,9 +265,7 @@ export default function TeamProfileEditor({
 
               <div className="flex flex-col gap-6 sm:flex-row">
                 <div className="flex shrink-0 flex-col items-start gap-2">
-                  <div className="text-sm font-medium text-gray-800">
-                    Escutcheon / Logo
-                  </div>
+                  <div className="text-sm font-medium text-gray-800">Escutcheon / Logo</div>
                   <label className="relative flex h-28 w-36 cursor-pointer items-center justify-center overflow-hidden border border-gray-400 bg-white">
                     <input
                       type="file"
@@ -288,7 +292,16 @@ export default function TeamProfileEditor({
                   <TeamProfileMainTab form={form} setForm={setForm} />
                 </div>
               </div>
+              <TeamSportProfilePanel form={form} setForm={setForm} />
             </div>
+          ) : null}
+
+          {activeTab === 'statistics' ? (
+            <EntitySportStatisticsPanel
+              sport={form.sport}
+              data={form.sportProfile}
+              onChange={(sportProfile) => setForm((f) => ({ ...f, sportProfile }))}
+            />
           ) : null}
 
           {activeTab === 'passwords' ? (
@@ -301,17 +314,11 @@ export default function TeamProfileEditor({
             />
           ) : null}
 
-          {activeTab === 'contacts' ? (
-            <TeamContactsTab form={form} setForm={setForm} />
-          ) : null}
+          {activeTab === 'contacts' ? <TeamContactsTab form={form} setForm={setForm} /> : null}
 
-          {activeTab === 'federal' ? (
-            <TeamFederalTab form={form} setForm={setForm} />
-          ) : null}
+          {activeTab === 'federal' ? <TeamFederalTab form={form} setForm={setForm} /> : null}
 
-          {activeTab === 'subteams' ? (
-            <TeamSubteamsTab form={form} setForm={setForm} />
-          ) : null}
+          {activeTab === 'subteams' ? <TeamSubteamsTab form={form} setForm={setForm} /> : null}
 
           {activeTab === 'admin-sport' ? (
             <TeamAdminSportTab form={form} setForm={setForm} />
@@ -342,5 +349,13 @@ export default function TeamProfileEditor({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TeamProfileEditor(props: TeamProfileEditorProps) {
+  return (
+    <AutoTranslate>
+      <TeamProfileEditorView {...props} />
+    </AutoTranslate>
   );
 }

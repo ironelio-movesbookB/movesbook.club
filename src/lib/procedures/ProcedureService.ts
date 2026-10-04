@@ -5,9 +5,19 @@ import { getProcedureDefinition, getProcedureTypology } from './registry';
 import { paginated, parsePagination } from './pagination';
 import { verifyOperatorPassword } from './operatorAuth';
 import { applyCardCreditPayment } from './insertCreditService';
-import { ensureDefaultInstallment, applyPaymentToInstallments } from './installmentService';
+import {
+  ensureDefaultInstallment,
+  applyPaymentToInstallments,
+  reversePaymentOnInstallments,
+} from './installmentService';
 import { PROCEDURE_TYPE_CODES } from './types';
 import { updateTaxDocumentCounter } from '@/lib/club/otherSettingsReader';
+import {
+  forgetMemberSettingsDeadlines,
+  forgetMemberSettingsFirstPaid,
+  MEMBER_SETTINGS_INSTALLMENT_LABELS,
+  MEMBER_SETTINGS_RECORD_SOURCE,
+} from '@/lib/club/memberSettingsDeadlineLinks';
 import type {
   AddProcedurePaymentInput,
   ClubAuthContext,
@@ -515,6 +525,23 @@ export class ProcedureService {
       data: { status: ProcedureRecordStatus.DELETED },
     });
     if (result.count === 0) throw new Error('Record not found');
+
+    const deleted = await prisma.procedureRecord.findUnique({
+      where: { id: recordId },
+      select: { memberId: true, metadata: true },
+    });
+    const source = (deleted?.metadata as Record<string, unknown> | null)?.source;
+    if (deleted && source === MEMBER_SETTINGS_RECORD_SOURCE) {
+      try {
+        await forgetMemberSettingsDeadlines({
+          clubId: ctx.club.id,
+          memberUserId: deleted.memberId,
+          recordId,
+        });
+      } catch (error) {
+        console.error('softDeleteRecord: member Settings link not reset', error);
+      }
+    }
   }
 
   async updateRecord(
@@ -597,13 +624,55 @@ export class ProcedureService {
 
     const payment = await prisma.procedurePayment.findFirst({
       where: { id: paymentId },
-      include: { procedureRecord: { select: { procedureTypeId: true, clubId: true } } },
+      include: {
+        procedureRecord: {
+          select: {
+            procedureTypeId: true,
+            clubId: true,
+            memberId: true,
+            totalAmount: true,
+            paidAmount: true,
+            balanceAmount: true,
+            metadata: true,
+          },
+        },
+      },
     });
     if (!payment || payment.procedureRecord.clubId !== ctx.club.id || payment.procedureRecord.procedureTypeId !== procedureType.id) {
       throw new Error('Payment not found');
     }
 
-    await prisma.procedurePayment.delete({ where: { id: paymentId } });
+    // The payment's amount owes again: back into the record's rest and the deadlines it settled.
+    const record = payment.procedureRecord;
+    const amount = roundMoney(decimalToNumber(payment.amount));
+    const total = decimalToNumber(record.totalAmount);
+    await prisma.$transaction(async (tx) => {
+      await tx.procedurePayment.delete({ where: { id: paymentId } });
+      await tx.procedureRecord.update({
+        where: { id: payment.procedureRecordId },
+        data: {
+          paidAmount: roundMoney(Math.max(0, decimalToNumber(record.paidAmount) - amount)),
+          balanceAmount: roundMoney(Math.min(total, decimalToNumber(record.balanceAmount) + amount)),
+        },
+      });
+      await reversePaymentOnInstallments(payment.procedureRecordId, amount, tx);
+    });
+
+    const source = (record.metadata as Record<string, unknown> | null)?.source;
+    if (
+      source === MEMBER_SETTINGS_RECORD_SOURCE &&
+      payment.notes === MEMBER_SETTINGS_INSTALLMENT_LABELS.firstPayment
+    ) {
+      try {
+        await forgetMemberSettingsFirstPaid({
+          clubId: ctx.club.id,
+          memberUserId: record.memberId,
+          recordId: payment.procedureRecordId,
+        });
+      } catch (error) {
+        console.error('deletePayment: member Settings Paid tick not reset', error);
+      }
+    }
 
     return { success: true };
   }

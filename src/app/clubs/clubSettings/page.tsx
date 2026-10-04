@@ -1,13 +1,14 @@
 'use client';
 
-import { Suspense, useMemo } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import type { ClubPurchaseAccountsSettings } from '@/types/clubPurchaseAccounts';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ClubPurchaseNewAccountsPanel from '@/components/admin/subscriptions/ClubPurchaseNewAccountsPanel';
 import ClubSubscriptionEditTabs, {
   type ClubSubscriptionEditTab,
 } from '@/components/admin/subscriptions/ClubSubscriptionEditTabs';
 import SubscriptionSystemDashboardHeader from '@/components/admin/subscriptions/SubscriptionSystemDashboardHeader';
-import { getClubPurchaseAccountsSettings } from '@/lib/admin/clubPurchaseAccountsMock';
+import { fetchClubPurchaseAccountsSettings } from '@/lib/admin/clubPurchaseAccountsMock';
 import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
 
 function ClubSettingsPurchaseContent() {
@@ -15,7 +16,10 @@ function ClubSettingsPurchaseContent() {
   const searchParams = useSearchParams();
   const subscriptionId = Number(searchParams?.get('subscriptionId') ?? '16');
   const row = getSubscriptionById(subscriptionId);
-  const purchaseSettings = useMemo(() => getClubPurchaseAccountsSettings(), []);
+  const [purchaseSettings, setPurchaseSettings] = useState<ClubPurchaseAccountsSettings | null>(null);
+  useEffect(() => {
+    void fetchClubPurchaseAccountsSettings().then(setPurchaseSettings);
+  }, []);
 
   const handleTabChange = (tab: ClubSubscriptionEditTab) => {
     if (tab === 'setting_subscriptions') {
@@ -57,7 +61,11 @@ function ClubSettingsPurchaseContent() {
       />
 
       <div className="flex-1 overflow-y-auto p-4 lg:p-6 max-w-5xl">
-        <ClubPurchaseNewAccountsPanel initialSettings={purchaseSettings} />
+        {purchaseSettings ? (
+          <ClubPurchaseNewAccountsPanel initialSettings={purchaseSettings} />
+        ) : (
+          <div className="p-6 text-gray-600">Loading…</div>
+        )}
       </div>
     </div>
   );

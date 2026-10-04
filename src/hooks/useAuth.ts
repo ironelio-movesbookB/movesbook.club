@@ -14,6 +14,7 @@ import {
   MEMBER_NOTE_LOGIN_FLAG,
   MEMBER_NOTE_LOGOUT_DONE_EVENT,
   MEMBER_NOTE_LOGOUT_EVENT,
+  MEMBER_NOTE_LOGOUT_SHOWING_EVENT,
 } from '@/components/club/memberProfile/MemberNotePopupHost';
 
 export interface AuthUser {
@@ -69,11 +70,15 @@ export function useAuth() {
       settled = true;
       window.clearTimeout(fallbackTimer);
       window.removeEventListener(MEMBER_NOTE_LOGOUT_DONE_EVENT, onDone);
+      window.removeEventListener(MEMBER_NOTE_LOGOUT_SHOWING_EVENT, onShowing);
       finishLogout();
     };
 
     const onDone = () => settle();
+    // The member is reading logout messages: wait for "Continue logout" instead of timing out.
+    const onShowing = () => window.clearTimeout(fallbackTimer);
     window.addEventListener(MEMBER_NOTE_LOGOUT_DONE_EVENT, onDone);
+    window.addEventListener(MEMBER_NOTE_LOGOUT_SHOWING_EVENT, onShowing);
     window.dispatchEvent(new Event(MEMBER_NOTE_LOGOUT_EVENT));
 
     // Fallback if host does not respond (e.g. no docs / fetch hang).

@@ -55,8 +55,12 @@ export type ArchiveFetchParams = {
   sport?: string;
   /** Filter by group of training. */
   groupTrained?: string;
+  /** Saved member group id (Archive → Groups). */
+  memberGroupId?: string;
   /** member | pending | not_member | archived | all (all = A+B+C, excludes archived) */
   membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived' | 'all';
+  /** Archive of Payments: only payments still to be verified. */
+  toBeVerified?: boolean;
 };
 
 export async function fetchClubArchive(
@@ -79,9 +83,11 @@ export async function fetchClubArchive(
   if (params?.recordId) qs.set('recordId', params.recordId);
   if (params?.sport) qs.set('sport', params.sport);
   if (params?.groupTrained) qs.set('groupTrained', params.groupTrained);
+  if (params?.memberGroupId) qs.set('memberGroupId', params.memberGroupId);
   if (params?.membershipStatus) {
     qs.set('membershipStatus', params.membershipStatus);
   }
+  if (params?.toBeVerified) qs.set('toBeVerified', '1');
   const query = qs.toString();
   const url = `/api/club/archives/${type}${query ? `?${query}` : ''}`;
   return clubApiFetch<ArchiveListResult>(url);
@@ -159,6 +165,18 @@ export async function deleteInstallment(
 ): Promise<void> {
   await clubApiFetch(
     `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+/** Archive of the Deadlines: delete one deadline (refused when it is already paid). */
+export async function deleteArchiveDeadline(
+  procedureType: string,
+  recordId: string,
+  installmentId: string
+): Promise<{ deleted: 'deadline' | 'record' }> {
+  return clubApiFetch<{ deleted: 'deadline' | 'record' }>(
+    `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}&mode=archive`,
     { method: 'DELETE' }
   );
 }

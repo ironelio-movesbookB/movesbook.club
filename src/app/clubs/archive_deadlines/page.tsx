@@ -18,7 +18,7 @@ import {
 import EditRecordModal from '@/components/club/archives/EditRecordModal';
 import type { ProcedureTab } from '@/components/procedures/types';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
-import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
+import { deleteArchiveDeadline, fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
 import { createProcedureClient, type ProcedureRecordView } from '@/lib/club/procedureClient';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import type { ProcedureTypeCode } from '@/lib/procedures/types';
@@ -104,6 +104,18 @@ function checkedRecords(rows: Member[]): { id: string; procedureType: string }[]
   return Array.from(byId.values());
 }
 
+/** A "Display every deadlines" row deletes only that deadline; a record row deletes the record. */
+async function deleteRow(row: Member): Promise<void> {
+  const code = row.procedureType as ProcedureTypeCode | undefined;
+  const recordId = recordIdOf(row);
+  if (!code || !recordId) return;
+  if (row.deadlineNo && row.id) {
+    await deleteArchiveDeadline(code, recordId, row.id);
+  } else {
+    await createProcedureClient(code).deleteRecord(recordId);
+  }
+}
+
 function paymentHref(
   procedureType: string | undefined,
   recordId: string | undefined,
@@ -174,11 +186,8 @@ function ArchiveDeadlinesPageInner() {
 
   const performDelete = useCallback(
     async (row: Member) => {
-      const code = row.procedureType as ProcedureTypeCode | undefined;
-      const recordId = recordIdOf(row);
-      if (!code || !recordId) return;
       try {
-        await createProcedureClient(code).deleteRecord(recordId);
+        await deleteRow(row);
         reload();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Delete failed');
@@ -290,23 +299,29 @@ function ArchiveDeadlinesPageInner() {
   }
 
   async function deleteSelected() {
-    const records = checkedRecords(checkedRows);
-    if (records.length === 0) return;
-    setSelectionError('');
-    const failed: string[] = [];
-    for (const record of records) {
-      try {
-        await createProcedureClient(record.procedureType as ProcedureTypeCode).deleteRecord(
-          record.id
+    const perDeadline = checkedRows.some((row) => row.deadlineNo);
+    const targets: Member[] = perDeadline
+      ? checkedRows
+      : checkedRecords(checkedRows).map(
+          (record) => ({ id: record.id, procedureType: record.procedureType }) as Member
         );
-      } catch {
-        failed.push(record.id);
+    if (targets.length === 0) return;
+    setSelectionError('');
+    const failures: string[] = [];
+    for (const row of targets) {
+      try {
+        await deleteRow(row);
+      } catch (e) {
+        failures.push(e instanceof Error ? e.message : 'Delete failed');
       }
     }
     clearSelection();
     reload();
-    if (failed.length > 0) {
-      setSelectionError(`${failed.length} of ${records.length} deadlines could not be deleted.`);
+    if (failures.length > 0) {
+      const reasons = Array.from(new Set(failures)).join(' ');
+      setSelectionError(
+        `${failures.length} of ${targets.length} deadlines could not be deleted. ${reasons}`
+      );
     }
   }
 
@@ -388,8 +403,8 @@ function ArchiveDeadlinesPageInner() {
       error={error || selectionError}
       footerHint={
         displayEveryDeadline
-          ? 'One row per deadline: records split into instalments show each expire date, amount and rest, as in the payment form. Double-click a deadline to open its record. Edit and Delete act on the whole record and ask for your password.'
-          : 'All typologies. Double-click a row with Rest > 0 to pay, or check several (same member, Rest > 0 — typology can differ) and use Pay more deadlines. Check "Display every deadlines" to list each deadline of a record separately. Edit and Delete ask for your password.'
+          ? 'One row per deadline: records split into instalments show each expire date, amount and rest, as in the payment form. Double-click a deadline to open its record. Delete removes only that deadline (its amount leaves the record total; a paid deadline cannot be deleted). Edit acts on the whole record. Both ask for your password.'
+          : 'All typologies. Double-click a row with Rest > 0 to pay, or check several (same member, Rest > 0 — typology can differ) and use Pay more deadlines. Check "Display every deadlines" to list each deadline of a record separately (there, Delete removes a single deadline). Here Edit and Delete act on the whole record and ask for your password.'
       }
     >
       <ArchiveListToolbar

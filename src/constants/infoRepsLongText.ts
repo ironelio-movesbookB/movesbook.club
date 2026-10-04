@@ -1,4 +1,5 @@
 import { normalizeToolsLanguage, resolveProfileLanguageCodeForToolsLoad } from '@/utils/toolsProfileLanguage';
+import { getAuthHeaders } from '@/utils/auth.utils';
 
 /** Short footer shown after the full article (also stored in DB when only a stub exists). */
 export const INFO_REPS_SUMMARY_EN =
@@ -111,7 +112,7 @@ export function getInfoRepsCloseLabel(language: string): string {
 
 export async function fetchTranslationValues(key: string): Promise<Record<string, string> | null> {
   try {
-    const res = await fetch('/api/admin/translations');
+    const res = await fetch('/api/admin/translations', { headers: { ...getAuthHeaders() } });
     if (!res.ok) return null;
     const data = (await res.json()) as { success?: boolean; translations?: TranslationRow[] };
     if (!data.success || !Array.isArray(data.translations)) return null;

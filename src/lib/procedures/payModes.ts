@@ -9,8 +9,8 @@ export const PAYMENT_TYPE_OPTIONS = [
   { value: 'sepa', label: 'SEPA **', legacyCode: '9' },
   { value: 'cbill', label: 'CBILL **', legacyCode: '10' },
   { value: 'mav', label: 'MAV payment slip **', legacyCode: '11' },
-  { value: 'f24', label: 'F24 form **', legacyCode: '12' },
   { value: 'cheque', label: 'Cheque', legacyCode: '2' },
+  { value: 'payment_slip', label: 'Payment slip', legacyCode: '18' },
   { value: 'paypal', label: 'PayPal', legacyCode: '13' },
   { value: 'satispay', label: 'Satispay', legacyCode: '14' },
   { value: 'multisafepay', label: 'MultisafePay', legacyCode: '15' },
@@ -19,6 +19,47 @@ export const PAYMENT_TYPE_OPTIONS = [
 ] as const;
 
 export type PaymentTypeValue = (typeof PAYMENT_TYPE_OPTIONS)[number]['value'];
+
+/** No longer offered on forms; kept so older payments still show their label. */
+const RETIRED_PAYMENT_TYPES = [{ value: 'f24', label: 'F24 form **', legacyCode: '12' }] as const;
+
+/** Methods that can receive the "Send payment module" message. */
+export const SEND_PAYMENT_MODULE_METHODS: readonly PaymentTypeValue[] = [
+  'credit_card',
+  'debit_card',
+  'paypal',
+  'satispay',
+  'multisafepay',
+  'apple_pay',
+  'google_pay',
+  'bank_transfer',
+  'sepa',
+  'cbill',
+  'mav',
+];
+
+/** Payments with these methods can be stored as "To be verified" until confirmed. */
+export const TO_BE_VERIFIED_METHODS: readonly PaymentTypeValue[] = [
+  'cheque',
+  'payment_slip',
+  'bank_transfer',
+];
+
+/** Only these methods allow marking the first deadline as Paid on the member Settings. */
+export const PAID_AT_FIRST_DEADLINE_METHODS: readonly PaymentTypeValue[] = [
+  'cash',
+  'cheque',
+  'payment_slip',
+  'bank_transfer',
+];
+
+export function paymentMethodIn(
+  list: readonly PaymentTypeValue[],
+  value: string | null | undefined,
+): boolean {
+  const normalized = normalizePaymentTypeValue(value);
+  return normalized !== '' && list.includes(normalized);
+}
 
 /** Max methods tagged as defaults on payment forms. */
 export const MAX_DEFAULT_PAYMENT_METHODS = 5;
@@ -48,12 +89,17 @@ const LEGACY_ALIASES: Record<string, PaymentTypeValue> = {
   'Bank transfer': 'bank_transfer',
   Cash: 'cash',
   SEPA: 'sepa',
+  'SEPA **': 'sepa',
   POS: 'credit_card',
+  'Payment slip': 'payment_slip',
+  Cheque: 'cheque',
 };
 
 export function payModeLabel(value: string | null | undefined): string {
   if (!value) return '-';
-  const found = PAYMENT_TYPE_OPTIONS.find((o) => o.value === value);
+  const found =
+    PAYMENT_TYPE_OPTIONS.find((o) => o.value === value) ??
+    RETIRED_PAYMENT_TYPES.find((o) => o.value === value);
   if (found) return found.label;
   const aliased = LEGACY_ALIASES[value];
   if (aliased) {
@@ -69,12 +115,19 @@ export function normalizePaymentTypeValue(
   if (PAYMENT_TYPE_OPTIONS.some((o) => o.value === value)) {
     return value as PaymentTypeValue;
   }
-  return LEGACY_ALIASES[value] ?? '';
+  if (LEGACY_ALIASES[value]) return LEGACY_ALIASES[value];
+  const lower = value.trim().toLowerCase();
+  const byLabel = PAYMENT_TYPE_OPTIONS.find((o) => o.label.toLowerCase() === lower);
+  return byLabel?.value ?? '';
 }
 
-export function legacyPayModeToValue(code: string | number | null | undefined): PaymentTypeValue {
+export function legacyPayModeToValue(
+  code: string | number | null | undefined,
+): PaymentTypeValue | (typeof RETIRED_PAYMENT_TYPES)[number]['value'] {
   const key = String(code ?? '');
-  const found = PAYMENT_TYPE_OPTIONS.find((o) => o.legacyCode === key);
+  const found =
+    PAYMENT_TYPE_OPTIONS.find((o) => o.legacyCode === key) ??
+    RETIRED_PAYMENT_TYPES.find((o) => o.legacyCode === key);
   if (found) return found.value;
   // Legacy voucher / unknown → cash
   return 'cash';

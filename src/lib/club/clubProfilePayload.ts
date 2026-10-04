@@ -6,6 +6,8 @@ import { defaultClubSubscriptionEndDate } from '@/lib/admin/clubSubscriptionStat
 import { resolveEntityLogoUrl } from '@/lib/entity/entityLogo';
 
 import { DEFAULT_ENTITY_SPORT, normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+import { normalizeEntitySportProfile } from '@/lib/team/teamProfileDefaults';
+import type { EntitySportProfileData } from '@/lib/team/teamProfileTypes';
 
 export type ClubProfileFormPayload = {
   username: string;
@@ -37,6 +39,8 @@ export type ClubProfileFormPayload = {
   /** Club-specific references (separate from the club admin account). */
   referencesHtml: string;
   referencesLevel: string;
+  /** Statistics tab (season statistics of the main sport); omitted = keep stored. */
+  sportProfile?: EntitySportProfileData;
 };
 
 export type ClubProfileSavePayload = ClubProfileFormPayload & {
@@ -108,6 +112,7 @@ export function clubToFormPayload(club: {
     clubPassword: '',
     referencesHtml: meta.referencesHtml?.trim() ?? '',
     referencesLevel: meta.referencesLevel?.trim() || '1',
+    sportProfile: normalizeEntitySportProfile(meta.clubSportProfile),
   };
 }
 
@@ -189,6 +194,9 @@ export function mergeClubDescriptionForSave(
     legalDocuments: prev.legalDocuments,
     defaultPaymentMethods: prev.defaultPaymentMethods,
     customQuestions: prev.customQuestions,
+    clubSportProfile: payload.sportProfile
+      ? normalizeEntitySportProfile(payload.sportProfile)
+      : prev.clubSportProfile,
     // Club account form — do not keep team-tab payload on club saves.
     teamProfile: undefined,
   };

@@ -58,6 +58,9 @@ interface UserProfileData {
   clubMemberships: Array<{
     club: { id: string; name: string; description: string };
   }>;
+  teamMemberships?: Array<{
+    team: { id: string; name: string };
+  }>;
   coaches: Array<{
     coach: { id: string; name: string; email: string };
   }>;
@@ -440,7 +443,7 @@ export default function UserProfile({
           t={t}
         />
       )}
-      <div className={`flex-1 w-full max-w-6xl mx-auto ${embedded ? 'p-4' : 'p-4 md:p-8'}`}>
+      <div className={`flex-1 w-full min-w-0 max-w-6xl mx-auto ${embedded ? 'p-4' : 'p-4 md:p-8'}`}>
         {!embedded && (
           <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
             <Link href={dashboardHref} className="text-blue-600 hover:text-blue-800 font-medium">
@@ -512,14 +515,20 @@ export default function UserProfile({
         {!embedded && !isClubAdmin && (
         <section
           id={infoSectionId}
-          className="scroll-mt-24 mb-6 bg-white rounded-lg shadow-lg p-4 md:p-6"
+          className="scroll-mt-24 mb-6 min-w-0 overflow-visible bg-white rounded-lg shadow-lg p-4 md:p-6"
         >
           <MemberSelfProfilePanel
             userId={profile.id}
-            clubs={(profile.clubMemberships || []).map((m) => ({
-              id: m.club.id,
-              name: m.club.name,
-            }))}
+            clubs={[
+              ...(profile.clubMemberships || []).map((m) => ({
+                id: m.club.id,
+                name: m.club.name,
+              })),
+              ...(profile.teamMemberships || []).map((m) => ({
+                id: m.team.id,
+                name: m.team.name,
+              })),
+            ]}
           />
         </section>
         )}

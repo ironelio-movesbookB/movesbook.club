@@ -6,6 +6,7 @@ import {
   recalcPackTotals,
   saveClubPurchaseAccountsSettings,
 } from '@/lib/admin/clubPurchaseAccountsMock';
+import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
 import { packToDisplayRow } from '@/lib/admin/clubAccountPackPricing';
 import ClubAccountPackPricingSections from '@/components/club/ClubAccountPackPricingSections';
 import SubscriptionLanguageTabs from './SubscriptionLanguageTabs';
@@ -69,6 +70,7 @@ export default function ClubPurchaseNewAccountsPanel({
   const [settings, setSettings] = useState(initialSettings);
   const [activeLang, setActiveLang] = useState('en');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const update = (patch: Partial<ClubPurchaseAccountsSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -89,25 +91,35 @@ export default function ClubPurchaseNewAccountsPanel({
     }));
   };
 
-  const handleSaveTerms = async () => {
+  const persist = async (next: ClubPurchaseAccountsSettings) => {
     setSaving(true);
-    saveClubPurchaseAccountsSettings(settings);
-    await new Promise((r) => setTimeout(r, 200));
-    setSaving(false);
+    setSaveError('');
+    try {
+      setSettings(await saveClubPurchaseAccountsSettings(next, getAdminBearerToken()));
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleSaveTerms = () => persist(settings);
 
   const handlePackUpdate = (index: number) => {
     const pack = settings.accountPacks[index];
     if (!pack) return;
-    const next = recalcPackTotals(pack);
     const accountPacks = [...settings.accountPacks];
-    accountPacks[index] = next;
-    const updated = saveClubPurchaseAccountsSettings({ ...settings, accountPacks });
-    setSettings(updated);
+    accountPacks[index] = recalcPackTotals(pack);
+    void persist({ ...settings, accountPacks });
   };
 
   return (
     <div className="space-y-4">
+      {saveError ? (
+        <div className="border border-[#e0a0a0] bg-[#fde8e8] px-4 py-2 text-sm text-[#8a1f1f]">
+          {saveError}
+        </div>
+      ) : null}
       <div className="border border-gray-300">
         <div className="bg-[#f0ad4e] px-4 py-2 text-sm font-bold text-gray-900">
           Setting block for payment of the subscription without credit card or cash
@@ -197,7 +209,7 @@ export default function ClubPurchaseNewAccountsPanel({
             packs={settings.accountPacks.map(packToDisplayRow)}
             mode="admin-edit"
             onPackChange={(index, row) => updatePack(index, displayRowToPack(row))}
-            onPackUpdate={handlePackUpdate}
+            onPackUpdate={saving ? undefined : handlePackUpdate}
           />
         </div>
       </div>

@@ -42,6 +42,7 @@ export function mergeClubLegalDocumentsForSave(
     legalDocuments: {
       rulesHtml: docs.rulesHtml,
       privacyPolicyHtml: docs.privacyPolicyHtml,
+      updatedAt: new Date().toISOString(),
     },
   };
   return JSON.stringify(meta);

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import StatisticsPageShell from '@/components/admin/statistics/StatisticsPageShell';
 import { StatisticsPieBlock } from '@/components/admin/statistics/StatisticsCharts';
 import VersionDistributionDrilldown from '@/components/admin/statistics/VersionDistributionDrilldown';
-import { useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
+import { formatEuro, useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
 import { aggregateVersionsForScope } from '@/lib/admin/statisticsDrilldown';
 import type { StatsUserKind } from '@/lib/admin/statisticsKinds';
 
@@ -90,7 +90,7 @@ export default function AllTypesByCountryPage() {
               <StatisticsPieBlock
                 key={block.kind}
                 title={block.label}
-                subtitle={`${block.total} users — top 15 countries${
+                subtitle={`${block.total} users · ${formatEuro(block.totalIncome)} — top 15 countries${
                   hasRest ? ' + Rest of the world' : ''
                 }`}
                 slices={block.countries}

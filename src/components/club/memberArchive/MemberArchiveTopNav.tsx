@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Settings } from 'lucide-react';
 
 export type MemberArchiveSection =
   | 'athletes'
@@ -16,9 +17,9 @@ export type MemberArchiveSection =
 export type MemberArchiveNavRole = 'club-or-team' | 'coach';
 
 /**
- * One-row header variants:
- * - `archive` — Archive of Users: Members + other tabs, **without** In pending / Not members
- * - `athletes` — Athletes\\Members: Members + In pending + Not members + other tabs
+ * Which list the Members tab shows (the tab row itself is the same):
+ * - `archive` — All the users profiles (members, pending and not members)
+ * - `athletes` — Athletes\\Members only
  */
 export type MemberArchiveNavMode = 'archive' | 'athletes';
 
@@ -35,67 +36,55 @@ type Props = {
 
 type NavItem = { id: MemberArchiveSection; label: string };
 
-function clubOrTeamSections(
-  navMode: MemberArchiveNavMode,
-  profileSectionLabel: string,
-): NavItem[] {
-  const members: NavItem = { id: 'athletes', label: 'Members' };
-  const pending: NavItem = { id: 'pending', label: 'In pending' };
-  const notMembers: NavItem = { id: 'not-members', label: 'Not members' };
-  const others: NavItem[] = [
+function clubOrTeamSections(profileSectionLabel: string): NavItem[] {
+  return [
+    { id: 'athletes', label: 'Members' },
     { id: 'archived', label: 'Members Archived' },
+    { id: 'pending', label: 'Members in pending' },
+    { id: 'not-members', label: 'Not members' },
     { id: 'parents', label: 'Parents & Tutors' },
     { id: 'staff', label: 'Staff' },
     { id: 'club-profile', label: profileSectionLabel || 'Team\\Club profile' },
-    { id: 'settings', label: 'Settings' },
   ];
-
-  if (navMode === 'athletes') {
-    return [members, pending, notMembers, ...others];
-  }
-  // Archive of Users — no In pending / Not members
-  return [members, ...others];
 }
 
 function coachSections(profileSectionLabel: string): NavItem[] {
   return [
     { id: 'athletes', label: 'Members' },
-    { id: 'pending', label: 'In pending' },
     { id: 'archived', label: 'Members Archived' },
+    { id: 'pending', label: 'Members in pending' },
     { id: 'parents', label: 'Parents & Tutors' },
     { id: 'club-profile', label: profileSectionLabel || 'Coach profile' },
-    { id: 'settings', label: 'Settings' },
   ];
 }
 
-/** Sections visible for a given role + nav mode (used by the page for URL guards). */
+/**
+ * Sections reachable for a role (used by the page for URL guards). Settings is opened from the
+ * "Settings" link beside the Archive of Users title, not from the tab row.
+ */
 export function memberArchiveNavSections(
   navRole: MemberArchiveNavRole,
-  navMode: MemberArchiveNavMode,
+  _navMode: MemberArchiveNavMode,
   profileSectionLabel = 'Club Profile',
 ): MemberArchiveSection[] {
   const items =
     navRole === 'coach'
       ? coachSections(profileSectionLabel)
-      : clubOrTeamSections(navMode, profileSectionLabel);
-  return items.map((i) => i.id);
+      : clubOrTeamSections(profileSectionLabel);
+  return [...items.map((i) => i.id), 'settings'];
 }
 
-/**
- * Top section switcher on Archive of Users (Club / Team / Coach).
- * Single row only. Club/Team use `navMode` to include/exclude pending & not-members.
- */
+/** Top section switcher on Archive of Users (Club / Team / Coach). Single row only. */
 export default function MemberArchiveTopNav({
   active,
   onChange,
   profileSectionLabel = 'Club Profile',
   navRole = 'club-or-team',
-  navMode = 'archive',
 }: Props) {
   const sections = useMemo(() => {
     if (navRole === 'coach') return coachSections(profileSectionLabel);
-    return clubOrTeamSections(navMode, profileSectionLabel);
-  }, [navRole, navMode, profileSectionLabel]);
+    return clubOrTeamSections(profileSectionLabel);
+  }, [navRole, profileSectionLabel]);
 
   const count = sections.length;
   const colClass =
@@ -131,5 +120,33 @@ export default function MemberArchiveTopNav({
         );
       })}
     </nav>
+  );
+}
+
+/** "Archive of Users ⚙ Settings" title row under the tabs. */
+export function MemberArchiveTitle({
+  settingsActive,
+  onSettingsClick,
+}: {
+  settingsActive: boolean;
+  onSettingsClick: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <h1 className="text-2xl font-bold text-gray-900">Archive of Users</h1>
+      <button
+        type="button"
+        onClick={onSettingsClick}
+        aria-current={settingsActive ? 'page' : undefined}
+        className={`inline-flex items-center gap-1.5 text-sm font-semibold hover:underline ${
+          settingsActive ? 'text-red-900 underline' : 'text-red-700'
+        }`}
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600">
+          <Settings className="h-4 w-4" />
+        </span>
+        Settings
+      </button>
+    </div>
   );
 }

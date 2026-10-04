@@ -30,6 +30,7 @@ type Props = {
   refreshKey?: number;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
+  bordered?: boolean;
 };
 
 export default function ClubArchivePage({
@@ -48,6 +49,7 @@ export default function ClubArchivePage({
   refreshKey = 0,
   onEditItem,
   onDeleteItem,
+  bordered = false,
 }: Props) {
   const filters = useArchiveListFilters();
   const [data, setData] = useState<Member[]>([]);
@@ -186,6 +188,7 @@ export default function ClubArchivePage({
         onDeleteSelected={onDeleteItem ? handleDeleteSelected : undefined}
       />
       <ProcedureArchiveTable
+        bordered={bordered}
         columns={columns}
         rows={data}
         loading={loading}

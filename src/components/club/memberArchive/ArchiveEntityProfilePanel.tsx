@@ -15,6 +15,7 @@ import {
 } from '@/lib/entity/applyEntityLogoOnSave';
 import { getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import { useAuth } from '@/hooks/useAuth';
+import { isClubCreatedFromForm } from '@/lib/club/clubSidebarLabel';
 import {
   managedEntityKindFromUserType,
   type ManagedEntityKind,
@@ -31,6 +32,29 @@ type EntityRecord = {
 type Props = {
   /** Selected club id from club workspace (club admins). */
   clubId: string | null;
+};
+
+/** Coach and Group admins edit their own coaching group / group, not a club. */
+const OWN_ENTITY_API: Partial<
+  Record<
+    ManagedEntityKind,
+    { storageKey: string; listPath: string; listKey: string; basePath: string; responseKey: string }
+  >
+> = {
+  'coaching-group': {
+    storageKey: 'selectedCoachingGroup',
+    listPath: '/api/coaching-groups/my-coaching-groups',
+    listKey: 'coachingGroups',
+    basePath: '/api/coaching-groups',
+    responseKey: 'coachingGroup',
+  },
+  group: {
+    storageKey: 'selectedGroup',
+    listPath: '/api/groups/my-groups',
+    listKey: 'groups',
+    basePath: '/api/groups',
+    responseKey: 'group',
+  },
 };
 
 function readSelectedTeamId(): string | null {
@@ -60,6 +84,7 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
 
   const useTeamEditor = kindFromUser === 'team';
   const editorKind: ManagedEntityKind = kindFromUser;
+  const ownEntityApi = OWN_ENTITY_API[kindFromUser];
 
   const resolveEntityId = useCallback(async (): Promise<string | null> => {
     if (kindFromUser === 'team') {
@@ -78,12 +103,29 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
       return first;
     }
 
+    if (ownEntityApi) {
+      const res = await fetch(ownEntityApi.listPath, { headers: getAuthHeaders(), cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Record<
+        string,
+        Array<{ id: string; description?: string | null }> | undefined
+      >;
+      const list = data[ownEntityApi.listKey] || [];
+      // Groups made before the profile form have no profile fields to edit.
+      const withProfile = list.filter((e) => isClubCreatedFromForm(e)).map((e) => e.id);
+      const ids = withProfile.length ? withProfile : list.map((e) => e.id);
+      const saved = localStorage.getItem(ownEntityApi.storageKey);
+      const id = saved && ids.includes(saved) ? saved : ids[0] ?? null;
+      if (id) localStorage.setItem(ownEntityApi.storageKey, id);
+      return id;
+    }
+
     if (clubId) return clubId;
     if (typeof window !== 'undefined') {
       return localStorage.getItem('selectedClub');
     }
     return null;
-  }, [clubId, kindFromUser]);
+  }, [clubId, kindFromUser, ownEntityApi]);
 
   const load = useCallback(
     async (opts?: { quiet?: boolean }) => {
@@ -101,7 +143,11 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
           setError(
             kindFromUser === 'team'
               ? 'Select a team under My Team first.'
-              : 'Select a club under My clubs first.',
+              : kindFromUser === 'coaching-group'
+                ? 'Create your coaching group first (My Coaching Group).'
+                : kindFromUser === 'group'
+                  ? 'Create your group first (My Group).'
+                  : 'Select a club under My clubs first.',
           );
           return;
         }
@@ -125,7 +171,9 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
         }
 
         const res = await fetch(
-          withSelectedClubId(`/api/clubs/${encodeURIComponent(id)}/members`),
+          ownEntityApi
+            ? `${ownEntityApi.basePath}/${encodeURIComponent(id)}/members`
+            : withSelectedClubId(`/api/clubs/${encodeURIComponent(id)}/members`),
           { headers: getAuthHeaders(), cache: 'no-store' },
         );
         const json = await res.json().catch(() => ({}));
@@ -134,8 +182,8 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
             typeof json.error === 'string' ? json.error : 'Failed to load club profile',
           );
         }
-        const loaded = json.club as EntityRecord | undefined;
-        if (!loaded) throw new Error('Club not found');
+        const loaded = json[ownEntityApi?.responseKey ?? 'club'] as EntityRecord | undefined;
+        if (!loaded) throw new Error(ownEntityApi ? 'Profile not found' : 'Club not found');
         setEntity(loaded);
       } catch (e: unknown) {
         if (!quiet) {
@@ -147,7 +195,7 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
         if (!quiet) setLoading(false);
       }
     },
-    [kindFromUser, resolveEntityId],
+    [kindFromUser, ownEntityApi, resolveEntityId],
   );
 
   useEffect(() => {
@@ -176,10 +224,12 @@ export default function ArchiveEntityProfilePanel({ clubId }: Props) {
       );
 
       const res = await fetch(
-        withSelectedClubId(`/api/clubs/${encodeURIComponent(entityId)}`),
+        ownEntityApi
+          ? `${ownEntityApi.basePath}/${encodeURIComponent(entityId)}`
+          : withSelectedClubId(`/api/clubs/${encodeURIComponent(entityId)}`),
         {
           method: 'PATCH',
-          headers: getAuthHeaders(),
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify(
             clubProfilePayloadForApi({
               ...payload,

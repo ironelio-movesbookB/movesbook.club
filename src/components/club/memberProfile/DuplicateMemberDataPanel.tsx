@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { SectionCard, Field, TextSelect, CheckRow } from '@/components/club/memberProfile/FormBits';
 import type { DuplicateMemberSection } from '@/lib/club/memberProfileTypes';
 import { getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
+import { useSportT } from '@/components/sport/useSportT';
 
 type MemberOption = { id: string; label: string };
 
@@ -24,30 +25,20 @@ export default function DuplicateMemberDataPanel({
   disabled = false,
   onDuplicated,
 }: Props) {
+  const st = useSportT();
   const otherDataLabel = 'Other data';
 
   const sectionOptions = useMemo(
     () =>
-      (
-        [
-          { id: 'member-profile' as const, label: 'Member profile' },
-          { id: 'parents' as const, label: 'Parents' },
-          { id: 'other-data' as const, label: otherDataLabel },
-          { id: 'settings' as const, label: 'Settings' },
-          {
-            id: 'alert-posted' as const,
-            label: 'Alert posted',
-            clubOnly: true,
-          },
-          {
-            id: 'coach-notes' as const,
-            label: 'Coach notes',
-            hint: 'not replies and comments',
-            clubOnly: true,
-          },
-        ] as const
-      ).filter((s) => !('clubOnly' in s && s.clubOnly) || !isTeamWorkspace),
-    [isTeamWorkspace, otherDataLabel],
+      [
+        { id: 'member-profile' as const, label: 'Member profile' },
+        { id: 'parents' as const, label: 'Parents' },
+        { id: 'other-data' as const, label: otherDataLabel },
+        { id: 'settings' as const, label: 'Settings' },
+        { id: 'alert-posted' as const, label: 'Alert posted' },
+        { id: 'coach-notes' as const, label: 'Coach notes', hint: 'not replies and comments' },
+      ] as const,
+    [otherDataLabel],
   );
 
   const [sourceMemberId, setSourceMemberId] = useState('');
@@ -89,7 +80,7 @@ export default function DuplicateMemberDataPanel({
 
   const handleNo = () => {
     resetForm();
-    setMessage('Duplication cancelled.');
+    setMessage(st('Duplication cancelled.'));
   };
 
   const handleYes = async () => {
@@ -111,22 +102,22 @@ export default function DuplicateMemberDataPanel({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(typeof json.error === 'string' ? json.error : 'Duplication failed');
+        throw new Error(typeof json.error === 'string' ? json.error : st('Duplication failed'));
       }
       const copied = Array.isArray(json.copied) ? json.copied.length : selectedCount;
-      setMessage(`Copied ${copied} section(s) from the selected user.`);
+      setMessage(`${st('Sections copied from the selected user:')} ${copied}`);
       resetForm();
       onDuplicated?.();
     } catch (e: unknown) {
-      setMessage(e instanceof Error ? e.message : 'Duplication failed');
+      setMessage(e instanceof Error ? e.message : st('Duplication failed'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <SectionCard title="Duplicate existing user data">
-      <Field label="Do you want to duplicate the data of an existing user?">
+    <SectionCard title={st('Duplicate existing user data')} collapsible defaultOpen={false}>
+      <Field label={st('Do you want to duplicate the data of an existing user?')}>
         <TextSelect
           disabled={disabled || busy}
           value={sourceMemberId}
@@ -135,7 +126,7 @@ export default function DuplicateMemberDataPanel({
             setMessage('');
           }}
         >
-          <option value="">— Select user —</option>
+          <option value="">{st('— Select user —')}</option>
           {options.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
@@ -146,26 +137,26 @@ export default function DuplicateMemberDataPanel({
 
       <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
         <p className="text-sm font-semibold text-gray-800">
-          If you chose to duplicate the data of another user you can check among these sections
+          {st('If you chose to duplicate the data of another user you can check among these sections')}
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {sectionOptions.map((s) => (
             <div key={s.id}>
               <CheckRow
-                label={s.label}
+                label={st(s.label)}
                 disabled={disabled || busy || !sourceMemberId}
                 checked={sections[s.id]}
                 onChange={(v) => toggleSection(s.id, v)}
               />
               {'hint' in s && s.hint ? (
-                <p className="ml-6 text-[11px] text-gray-500">({s.hint})</p>
+                <p className="ml-6 text-[11px] text-gray-500">({st(s.hint)})</p>
               ) : null}
             </div>
           ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-sm font-semibold text-gray-800">Confirm</span>
+          <span className="text-sm font-semibold text-gray-800">{st('Confirm')}</span>
           <button
             type="button"
             disabled={!canConfirm}

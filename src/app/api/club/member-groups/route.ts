@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const groups = await listClubMemberGroups(auth.ctx);
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const body = await request.json().catch(() => ({}));
