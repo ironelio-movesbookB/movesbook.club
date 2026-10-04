@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
+import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveProfileAccessDates } from '@/lib/admin/profileAccessDates';
 import type { PcuAccessSettings } from '@/lib/admin/userPcuAccessSettings';
 import {
@@ -162,14 +162,39 @@ export default function AdminClubsUserProfilePanel({
     () => profileData.pcuAccess?.suspend ?? initialPcuAccess?.suspend ?? false,
   );
   const [pcuAccessSaving, setPcuAccessSaving] = useState(false);
+  /** € paid for the window shown in Start/End (statistics Income uses it). */
+  const [periodAmountPaid, setPeriodAmountPaid] = useState('');
+  const periodAmountSavedRef = useRef('');
 
   useEffect(() => {
     setAccessStart(resolvedAccessDates.accessStart);
     setAccessEnd(resolvedAccessDates.accessEnd);
   }, [resolvedAccessDates.accessStart, resolvedAccessDates.accessEnd]);
 
+  useEffect(() => {
+    const token = getAdminBearerToken();
+    if (!token || !accessStart) return;
+    let cancelled = false;
+    const qs = new URLSearchParams({ dateStart: accessStart, dateEnd: accessEnd });
+    void fetch(
+      `/api/admin/registered-users/${encodeURIComponent(profileData.id)}/pcu-access?${qs}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const value = String(data.amountPaid ?? '');
+        periodAmountSavedRef.current = value;
+        setPeriodAmountPaid(value);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profileData.id, accessStart, accessEnd]);
+
   const savePcuAccess = useCallback(
-    async (patch: Partial<PcuAccessSettings>) => {
+    async (patch: Partial<PcuAccessSettings> & { amountPaid?: string }) => {
       const token = getAdminBearerToken();
       if (!token) {
         window.alert('Admin session not found.');
@@ -190,7 +215,12 @@ export default function AdminClubsUserProfilePanel({
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || 'Failed to save access settings');
+        if (typeof data.amountPaid === 'string') {
+          periodAmountSavedRef.current = data.amountPaid;
+          setPeriodAmountPaid(data.amountPaid);
+        }
       } catch (e: unknown) {
+        if (patch.amountPaid !== undefined) setPeriodAmountPaid(periodAmountSavedRef.current);
         window.alert(e instanceof Error ? e.message : 'Failed to save access settings');
       } finally {
         setPcuAccessSaving(false);
@@ -310,6 +340,30 @@ export default function AdminClubsUserProfilePanel({
                   <span className="text-green-600 font-semibold">(already renewed)</span>
                 ) : null}
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <span>Amount paid (€)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={periodAmountPaid}
+                  disabled={pcuAccessSaving || !accessStart}
+                  placeholder="0.00"
+                  title="Money received for this Start–End period (used by Statistics → Income)"
+                  onChange={(e) => setPeriodAmountPaid(e.target.value)}
+                  onBlur={() => {
+                    if (periodAmountPaid.trim() === periodAmountSavedRef.current.trim()) return;
+                    void savePcuAccess({
+                      accessStartIso: accessStart,
+                      accessEndIso: accessEnd,
+                      amountPaid: periodAmountPaid.trim(),
+                    });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                  className="w-24 rounded border border-gray-300 px-2 py-1 text-right"
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"

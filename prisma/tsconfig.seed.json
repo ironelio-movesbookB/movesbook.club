@@ -17,6 +17,7 @@
       "seed.ts",
       "seed-outcomes.ts",
       "seed-procedure-types.ts",
+      "seed-payment-info.ts",
       "../scripts/migrate-outcomes-from-legacy.ts",
       "../src/lib/news/contentParser.ts",
       "../src/constants/**/*.ts",

@@ -14,6 +14,8 @@ export type PromocodeStatisticsResult = {
     countryId: number;
     countryCode: string;
     countryName: string;
+    /** No country recorded (country id 0, no code) — the "ID 0" row; invites always land here. */
+    isUnknown: boolean;
     months: Record<number, { invitesSent: number; registrations: number }>;
   }>;
   totals: {
@@ -23,14 +25,39 @@ export type PromocodeStatisticsResult = {
   };
 };
 
-function countryNameFromCode(code: string, countryId: number): string {
+function countryByCode(code: string) {
   const cc = (code || '').trim().toUpperCase();
-  if (cc) {
-    const match = COUNTRIES_WITH_CODES.find((c) => c.id.toUpperCase() === cc);
-    if (match?.name) return match.name;
+  return cc ? COUNTRIES_WITH_CODES.find((c) => c.id.toUpperCase() === cc) : undefined;
+}
+
+function countryByName(name: string) {
+  const n = (name || '').trim().toLowerCase();
+  return n ? COUNTRIES_WITH_CODES.find((c) => c.name.toLowerCase() === n) : undefined;
+}
+
+/** Legacy `countries` rows (name + code when the column exists), for stats rows saved with an id only. */
+async function loadCountriesById(
+  ids: number[]
+): Promise<Map<number, { name: string; code: string }>> {
+  const map = new Map<number, { name: string; code: string }>();
+  if (ids.length === 0) return map;
+  try {
+    const { getCountriesTable } = await import('./legacyDb');
+    const table = await getCountriesTable();
+    if (!table) return map;
+    const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+      `SELECT * FROM \`${table}\` WHERE id IN (${ids.map(() => '?').join(', ')})`,
+      ...ids
+    );
+    for (const row of rows) {
+      const name = String(row.name ?? '').trim();
+      const code = String(row.code ?? '').trim().toUpperCase();
+      if (name || code) map.set(Number(row.id), { name, code });
+    }
+  } catch {
+    /* legacy countries table optional */
   }
-  if (countryId <= 0) return 'Unknown / not set';
-  return `Country #${countryId}`;
+  return map;
 }
 
 function ymdParts(date?: Date | string | null): { year: number; month: number } {
@@ -139,16 +166,12 @@ export async function getStatistics(year: number): Promise<PromocodeStatisticsRe
     year
   );
 
+  const legacyById = await loadCountriesById(
+    [...new Set(rows.map((r) => Number(r.country_id ?? 0)).filter((id) => id > 0))]
+  );
+
   const monthTotals = new Map<number, { invitesSent: number; registrations: number }>();
-  const countryMap = new Map<
-    string,
-    {
-      countryId: number;
-      countryCode: string;
-      countryName: string;
-      months: Record<number, { invitesSent: number; registrations: number }>;
-    }
-  >();
+  const countryMap = new Map<string, PromocodeStatisticsResult['countryMatrix'][number]>();
 
   let totalInvites = 0;
   let totalRegs = 0;
@@ -168,13 +191,24 @@ export async function getStatistics(year: number): Promise<PromocodeStatisticsRe
     mt.registrations += regs;
     monthTotals.set(month, mt);
 
-    const key = `${countryId}:${countryCode}`;
+    // One row per real country, whether it was saved by code, by legacy id, or both.
+    const legacy = countryId > 0 ? legacyById.get(countryId) : undefined;
+    const legacyName = legacy?.name ?? '';
+    const known =
+      countryByCode(countryCode) ?? countryByName(legacyName) ?? countryByCode(legacy?.code ?? '');
+    const code = known?.id ?? countryCode.trim().toUpperCase();
+    const isUnknown = !code && countryId <= 0;
+    const key = isUnknown ? 'unknown' : code ? `code:${code}` : `id:${countryId}`;
     const entry = countryMap.get(key) ?? {
       countryId,
-      countryCode,
-      countryName: countryNameFromCode(countryCode, countryId),
+      countryCode: code,
+      countryName: isUnknown
+        ? 'ID 0'
+        : known?.name || legacyName || code || `Country #${countryId}`,
+      isUnknown,
       months: {},
     };
+    if (entry.countryId <= 0 && countryId > 0) entry.countryId = countryId;
     const cm = entry.months[month] ?? { invitesSent: 0, registrations: 0 };
     cm.invitesSent += invites;
     cm.registrations += regs;
@@ -195,7 +229,12 @@ export async function getStatistics(year: number): Promise<PromocodeStatisticsRe
   return {
     year,
     months,
-    countryMatrix: Array.from(countryMap.values()),
+    countryMatrix: Array.from(countryMap.values()).sort((a, b) => {
+      if (a.isUnknown !== b.isUnknown) return a.isUnknown ? -1 : 1;
+      const regs = (r: typeof a) =>
+        Object.values(r.months).reduce((s, m) => s + m.registrations, 0);
+      return regs(b) - regs(a) || a.countryName.localeCompare(b.countryName);
+    }),
     totals: {
       invitesSent: totalInvites,
       registrations: totalRegs,

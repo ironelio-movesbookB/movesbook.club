@@ -6,8 +6,10 @@ import {
   deleteMemberNotes,
   getClubMemberVisibility,
   getMemberNoteById,
+  type MemberNoteStore,
 } from '@/lib/club/memberProfileService';
 import { normalizeSupportImageUrls } from '@/lib/messages/supportImages';
+import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,21 +20,40 @@ function getUserId(request: NextRequest): string | null {
   return decoded?.userId ?? null;
 }
 
+/** The [clubId] segment may also carry a team id (team member profiles). */
 async function assertAccess(clubId: string, memberId: string, viewerUserId: string) {
   const club = await prisma.club.findUnique({
     where: { id: clubId },
     select: { adminId: true },
   });
-  if (!club) return { error: 'Club not found', status: 404 as const };
-  const membership = await prisma.clubMember.findUnique({
-    where: { clubId_memberId: { clubId, memberId } },
-    select: { id: true },
-  });
+  let adminId: string;
+  let membership: { id: string } | null;
+  let store: MemberNoteStore;
+  if (club) {
+    adminId = club.adminId;
+    store = 'club';
+    membership = await prisma.clubMember.findUnique({
+      where: { clubId_memberId: { clubId, memberId } },
+      select: { id: true },
+    });
+  } else {
+    const team = await prisma.team.findUnique({
+      where: { id: clubId },
+      select: { adminId: true },
+    });
+    if (!team) return { error: 'Club not found', status: 404 as const };
+    adminId = team.adminId;
+    store = 'team';
+    membership = await prisma.teamMember.findUnique({
+      where: { teamId_athleteId: { teamId: clubId, athleteId: memberId } },
+      select: { id: true },
+    });
+  }
   if (!membership) return { error: 'Member not found', status: 404 as const };
-  const isAdmin = club.adminId === viewerUserId;
+  const isAdmin = adminId === viewerUserId;
   const isSelf = memberId === viewerUserId;
   if (!isAdmin && !isSelf) return { error: 'Access denied', status: 403 as const };
-  return { membership, isAdmin, isSelf };
+  return { membership, isAdmin, isSelf, store };
 }
 
 export async function POST(
@@ -61,7 +82,7 @@ export async function POST(
   }
 
   if (parentId) {
-    const parent = await getMemberNoteById(access.membership.id, parentId);
+    const parent = await getMemberNoteById(access.membership.id, parentId, access.store);
     if (!parent) {
       return NextResponse.json({ error: 'Parent note not found' }, { status: 404 });
     }
@@ -72,7 +93,7 @@ export async function POST(
     const noteKind = parent.kind === 'coach' ? 'coach' : 'staff';
 
     if (!access.isAdmin) {
-      const visibility = await getClubMemberVisibility(access.membership.id);
+      const visibility = await getClubMemberVisibility(access.membership.id, access.store);
 
       if (noteKind === 'coach') {
         if (!visibility.notesCoach) {
@@ -80,12 +101,6 @@ export async function POST(
         }
         if (!visibility.notesCoachComments) {
           return NextResponse.json({ error: 'Comments are not enabled for the member' }, { status: 403 });
-        }
-        if (!parent.visibleToMember) {
-          return NextResponse.json({ error: 'This reflection is not visible to the member' }, { status: 403 });
-        }
-        if (!parent.commentsEnabled) {
-          return NextResponse.json({ error: 'Comments are disabled for this reflection' }, { status: 403 });
         }
       } else if (noteKind === 'staff') {
         // Member info → Messages → Comments: UI allows reply when messagesStaff is on.
@@ -99,6 +114,7 @@ export async function POST(
 
     const note = await createMemberNote({
       clubMemberId: access.membership.id,
+    store: access.store,
       kind: noteKind,
       title: '',
       body: noteBody,
@@ -110,7 +126,7 @@ export async function POST(
   }
 
   if (!access.isAdmin) {
-    return NextResponse.json({ error: 'Only club admin can post root notes' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the club/team admin can post root notes' }, { status: 403 });
   }
   if (kind !== 'staff' && kind !== 'coach') {
     return NextResponse.json({ error: 'kind must be staff or coach' }, { status: 400 });
@@ -119,15 +135,18 @@ export async function POST(
 function parseDateOnly(value: unknown): Date | null {
   const raw = String(value ?? '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  const d = new Date(`${raw}T12:00:00`);
+  // Store as UTC midnight so API dateYmd() reads a stable calendar day in any TZ.
+  const d = new Date(`${raw}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
   const note = await createMemberNote({
     clubMemberId: access.membership.id,
+    store: access.store,
     kind,
     title,
-    body: noteBody,
+    // Staff posts may carry the Messages document (rich HTML with pictures).
+    body: kind === 'staff' && /<[a-z][\s\S]*>/i.test(noteBody) ? sanitizeRichHtml(noteBody) : noteBody,
     authorId: viewerUserId,
     visibleToMember: Boolean(body.visibleToMember),
     commentsEnabled: Boolean(body.commentsEnabled),
@@ -155,7 +174,7 @@ export async function DELETE(
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   if (!access.isAdmin) {
-    return NextResponse.json({ error: 'Only club admin can delete notes' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the club/team admin can delete notes' }, { status: 403 });
   }
 
   const url = new URL(request.url);
@@ -164,6 +183,7 @@ export async function DELETE(
 
   await deleteMemberNotes({
     clubMemberId: access.membership.id,
+    store: access.store,
     noteId,
     resetKind,
   });

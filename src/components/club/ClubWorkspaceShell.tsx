@@ -16,10 +16,12 @@ import {
   canAccessClubMembersArchive,
   canAccessClubWorkspace,
   canAccessManagedArchiveShell,
+  isGroupAccountUserType,
   isManagedEntityAdminUserType,
   isTeamAccountUserType,
   showSuggestMovesbookForTab,
 } from '@/utils/dashboardRouting';
+import { getManagedEntityProfilePath } from '@/lib/dashboard/managedEntityDashboardLabels';
 import {
   getClubMyPageDisplayName,
   getFormCreatedClubsSortedByCreatedAt,
@@ -136,6 +138,28 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   });
 
   const isTeamWorkspaceUser = Boolean(user && isTeamAccountUserType(user.userType));
+  /** Coach / Group admins: their own coaching group / group is the workspace entity (never stored as selectedClub). */
+  const ownEntityWorkspace = useMemo(() => {
+    if (user?.userType === 'COACH') {
+      return {
+        listPath: '/api/coaching-groups/my-coaching-groups',
+        listKey: 'coachingGroups',
+        storageKey: 'selectedCoachingGroup',
+        profileKind: 'coach' as const,
+        dashboardPath: '/coach/dashboard',
+      };
+    }
+    if (user && isGroupAccountUserType(user.userType)) {
+      return {
+        listPath: '/api/groups/my-groups',
+        listKey: 'groups',
+        storageKey: 'selectedGroup',
+        profileKind: 'group' as const,
+        dashboardPath: '/group/dashboard',
+      };
+    }
+    return null;
+  }, [user]);
 
   const formClubs = useMemo(() => {
     // Teams are not "form-created clubs"; show all owned teams in the shell sidebar.
@@ -194,6 +218,31 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (ownEntityWorkspace) {
+        const response = await fetch(ownEntityWorkspace.listPath, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const list = (data[ownEntityWorkspace.listKey] || []) as {
+            id: string;
+            description?: string | null;
+            createdAt?: string | null;
+          }[];
+          setClubs(list);
+          const formIds = getFormCreatedClubsSortedByCreatedAt(list).map((e) => e.id);
+          const savedId = localStorage.getItem(ownEntityWorkspace.storageKey);
+          setSelectedClubId((prev) => {
+            if (prev && formIds.includes(prev)) return prev;
+            if (savedId && formIds.includes(savedId)) return savedId;
+            const first = formIds[0] ?? null;
+            if (first) localStorage.setItem(ownEntityWorkspace.storageKey, first);
+            return first;
+          });
+        }
+        return;
+      }
+
       const response = await fetch('/api/clubs/my-clubs', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -208,7 +257,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     } finally {
       setClubsLoaded(true);
     }
-  }, [user]);
+  }, [user, ownEntityWorkspace]);
 
   const loadSubscriptionSettingId = useCallback(async () => {
     try {
@@ -490,7 +539,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const handleClubSelect = useCallback(
     async (clubId: string) => {
       const openWorkspace = () => {
-        localStorage.setItem('selectedClub', clubId);
+        if (ownEntityWorkspace) {
+          localStorage.setItem(ownEntityWorkspace.storageKey, clubId);
+        } else {
+          localStorage.setItem('selectedClub', clubId);
+        }
         if (isTeamWorkspaceUser) {
           localStorage.setItem('selectedTeam', clubId);
         }
@@ -501,7 +554,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         showMyClubTab();
       };
 
-      if (!isTeamWorkspaceUser && !isEntityWorkspaceSession('club')) {
+      if (!isTeamWorkspaceUser && !ownEntityWorkspace && !isEntityWorkspaceSession('club')) {
         const alert = await fetchPcuAlert('login', user?.language || 'en', clubId);
         if (alert) {
           showAlert(alert, openWorkspace);
@@ -511,7 +564,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
       openWorkspace();
     },
-    [showAlert, showMyClubTab, user?.language, isTeamWorkspaceUser],
+    [showAlert, showMyClubTab, user?.language, isTeamWorkspaceUser, ownEntityWorkspace],
   );
 
   const handleMyPageTabClick = useCallback(() => {
@@ -526,10 +579,33 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       router.push('/team/dashboard');
       return;
     }
+    if (ownEntityWorkspace) {
+      router.push(ownEntityWorkspace.dashboardPath);
+      return;
+    }
     if (pathname !== '/club/dashboard') {
       router.push('/club/dashboard');
     }
-  }, [hideMyClubTab, pathname, router, isTeamWorkspaceUser]);
+  }, [hideMyClubTab, pathname, router, isTeamWorkspaceUser, ownEntityWorkspace]);
+
+  /** Trained Group / Group tab: stay on archive routes, otherwise open the entity overview. */
+  const handleOwnEntityTabClick = useCallback(() => {
+    if (!ownEntityWorkspace) return;
+    const entityId = selectedClubId;
+    if (!entityId) return;
+    writeClubWorkspaceTab('my-entity');
+    setActiveTab('my-entity');
+    setMyPageNewsPanel(null);
+    showMyClubTab();
+    if (
+      pathname?.startsWith('/clubMembers') ||
+      pathname?.startsWith('/clubs/') ||
+      pathname?.startsWith('/club/staff')
+    ) {
+      return;
+    }
+    router.push(getManagedEntityProfilePath(ownEntityWorkspace.profileKind, entityId));
+  }, [ownEntityWorkspace, selectedClubId, pathname, router, showMyClubTab]);
 
   const handleMyClubTabClick = useCallback(() => {
     const entityId = selectedClubId ?? formClubs[0]?.id ?? null;
@@ -718,7 +794,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             clubName={getClubMyPageDisplayName(bannerClub)}
             clubId={bannerClub.id}
             onClubProfileClick={() => {
-              router.push(`/my-club?clubId=${encodeURIComponent(bannerClub.id)}`);
+              router.push(
+                ownEntityWorkspace
+                  ? getManagedEntityProfilePath(ownEntityWorkspace.profileKind, bannerClub.id)
+                  : `/my-club?clubId=${encodeURIComponent(bannerClub.id)}`,
+              );
             }}
             coverImageUrl={getHeroBannerDisplayUrl(bannerProfile)}
             coverBannerAlignment={
@@ -743,7 +823,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   myClubTabVisible ||
                   clubDirectAccessLocked ||
                   archiveOnlyMembersAccess ||
-                  (isTeamWorkspaceUser && Boolean(selectedClubId))
+                  ((isTeamWorkspaceUser || Boolean(ownEntityWorkspace)) && Boolean(selectedClubId))
                 }
                 hideMyPageTab={clubDirectAccessLocked || archiveOnlyMembersAccess}
                 onEntitySelect={handleClubSelect}
@@ -752,6 +832,12 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 onMyPageClick={handleMyPageTabClick}
                 onMyClubClick={handleMyClubTabClick}
                 onMyTeamClick={isTeamWorkspaceUser ? handleMyTeamClick : undefined}
+                onMyCoachingGroupClick={
+                  ownEntityWorkspace?.profileKind === 'coach' ? handleOwnEntityTabClick : undefined
+                }
+                onMyGroupClick={
+                  ownEntityWorkspace?.profileKind === 'group' ? handleOwnEntityTabClick : undefined
+                }
                 onClubAddSongsPlaylistsClick={() => router.push('/add-songs')}
                 onClubMusicPanelClick={() => router.push('/music-panel')}
                 onIdentificationDevicesClick={() => goToDashboardPanel('identification-devices')}

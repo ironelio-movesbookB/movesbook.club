@@ -17,8 +17,8 @@ type TabId = 'rules' | 'privacy-policy';
 
 function DocumentsEditorContent() {
   const searchParams = useSearchParams();
-  const clubIdFromQuery = searchParams.get('clubId') || '';
-  const tabFromQuery = searchParams.get('tab');
+  const clubIdFromQuery = searchParams?.get('clubId') || '';
+  const tabFromQuery = searchParams?.get('tab') ?? null;
   const { selectedClubId } = useClubWorkspace();
   const [clubId, setClubId] = useState(clubIdFromQuery || selectedClubId || '');
 
@@ -26,6 +26,7 @@ function DocumentsEditorContent() {
     tabFromQuery === 'privacy-policy' ? 'privacy-policy' : 'rules',
   );
   const [clubName, setClubName] = useState('');
+  const [workspaceKind, setWorkspaceKind] = useState<'club' | 'team'>('club');
   const [canEdit, setCanEdit] = useState(false);
   const [docs, setDocs] = useState<ClubLegalDocuments>({
     rulesHtml: '',
@@ -66,12 +67,14 @@ function DocumentsEditorContent() {
         const data = (await res.json()) as {
           error?: string;
           clubName?: string;
+          workspaceKind?: 'club' | 'team';
           canEdit?: boolean;
           documents?: ClubLegalDocuments;
         };
         if (!res.ok) throw new Error(data.error || 'Failed to load documents');
         if (cancelled) return;
         setClubName(data.clubName || '');
+        setWorkspaceKind(data.workspaceKind === 'team' ? 'team' : 'club');
         setCanEdit(Boolean(data.canEdit));
         setDocs(data.documents || { rulesHtml: '', privacyPolicyHtml: '' });
       } catch (e) {
@@ -109,18 +112,21 @@ function DocumentsEditorContent() {
   };
 
   const currentHtml = tab === 'rules' ? docs.rulesHtml : docs.privacyPolicyHtml;
+  const entityWord = workspaceKind === 'team' ? 'team' : 'club';
 
   return (
     <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 lg:px-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Documents Editor</h1>
         <p className="text-sm text-gray-600">
-          Write the club <strong>Rules</strong> and <strong>Privacy policy</strong> shown from My
-          Club overview and the Parents / Signatures tabs.
+          Write the {entityWord} <strong>Rules</strong> and <strong>Privacy policy</strong> shown
+          from My {workspaceKind === 'team' ? 'Team' : 'Club'} overview and the Parents / Signatures
+          tabs.
           {clubName ? (
             <>
               {' '}
-              Club: <span className="font-medium text-gray-800">{clubName}</span>
+              {workspaceKind === 'team' ? 'Team' : 'Club'}:{' '}
+              <span className="font-medium text-gray-800">{clubName}</span>
             </>
           ) : null}
         </p>
@@ -165,7 +171,7 @@ function DocumentsEditorContent() {
         <>
           {!canEdit ? (
             <p className="mb-3 text-sm text-amber-700">
-              Only the club admin can edit these documents. You can still open the preview.
+              Only the {entityWord} admin can edit these documents. You can still open the preview.
             </p>
           ) : null}
           <div className="min-h-[70vh] rounded border border-gray-300 bg-white p-2 sm:p-3 md:p-4">

@@ -5,6 +5,7 @@ import {
   Bell,
   ChevronDown,
   MessageCircle,
+  Megaphone,
   MessageSquare,
   PenSquare,
 } from 'lucide-react';
@@ -26,28 +27,45 @@ const SOCIAL_ITEMS: SocialSubmenuItem[] = [
  */
 export default function ClubSocialSubmenu({
   onChatClick,
+  variant = 'default',
 }: {
   onChatClick?: () => void;
+  /** `section`: blue "Section Social" row of the official Club My Club menu. */
+  variant?: 'default' | 'section';
 }) {
   const [open, setOpen] = useState(false);
+  const isSection = variant === 'section';
+  const hover = isSection ? 'hover:bg-[#2557a8]' : 'hover:bg-[#8f1022]';
 
   return (
     <div className="border-b border-teal-700">
-      <div className="flex w-full items-stretch bg-[#7a0d1c] text-white">
+      <div
+        className={`flex w-full items-stretch text-white ${
+          isSection ? 'border border-white/80 bg-[#1e4c9a]' : 'bg-[#7a0d1c]'
+        }`}
+      >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-3 pr-2 text-left transition-colors hover:bg-[#8f1022]"
+          className={`flex min-w-0 flex-1 items-center gap-2.5 text-left transition-colors ${hover} ${
+            isSection ? 'py-3 pl-3 pr-2' : 'py-2 pl-3 pr-2'
+          }`}
         >
-          <Bell className="h-5 w-5 shrink-0" />
-          <span className="font-bold tracking-wide text-sm">SOCIAL</span>
+          {isSection ? (
+            <Megaphone className="h-5 w-5 shrink-0" />
+          ) : (
+            <Bell className="h-5 w-5 shrink-0" />
+          )}
+          <span className="font-bold tracking-wide text-sm">
+            {isSection ? 'Section Social' : 'SOCIAL'}
+          </span>
         </button>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? 'Collapse' : 'Expand'}
-          className="flex shrink-0 items-center px-3 transition-colors hover:bg-[#8f1022]"
+          className={`flex shrink-0 items-center px-3 transition-colors ${hover}`}
         >
           <ChevronDown
             className={`h-4 w-4 opacity-90 transition-transform duration-200 ${

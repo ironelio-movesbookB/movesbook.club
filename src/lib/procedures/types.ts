@@ -24,10 +24,11 @@ export type ClubAuthContext = {
   userId: string;
   club: { id: string; name: string };
   /**
-   * Archive of Users is shared by Club and Team.
-   * When `team`, `club.id` is the selected team id (same shape for list helpers).
+   * Archive of Users is shared by Club, Team and Coach.
+   * When `team`, `club.id` is the selected team id; when `coach`, it is the coach's user id
+   * (same shape for list helpers).
    */
-  workspaceKind?: 'club' | 'team';
+  workspaceKind?: 'club' | 'team' | 'coach';
 };
 
 export type ProcedureRecordDto = {

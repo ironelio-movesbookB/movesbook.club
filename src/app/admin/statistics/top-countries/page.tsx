@@ -5,7 +5,7 @@ import StatisticsPageShell from '@/components/admin/statistics/StatisticsPageShe
 import { StatisticsPieBlock } from '@/components/admin/statistics/StatisticsCharts';
 import { useStatisticsGraphTheme } from '@/components/admin/statistics/StatisticsGraphTheme';
 import VersionDistributionDrilldown from '@/components/admin/statistics/VersionDistributionDrilldown';
-import { useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
+import { formatEuro, useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
 import { aggregateVersionsForScope } from '@/lib/admin/statisticsDrilldown';
 import {
   STATS_KIND_LABELS,
@@ -89,7 +89,7 @@ export default function TopCountriesDistributionPage() {
             <StatisticsPieBlock
               key={row.country}
               title={row.country}
-              subtitle={`${row.total} registrations`}
+              subtitle={`${row.total} registrations · ${formatEuro(row.distribution.totalIncome)}`}
               slices={row.distribution.slices}
               kindColors
               height={240}
@@ -106,7 +106,7 @@ export default function TopCountriesDistributionPage() {
           <div className="pt-1">
             <StatisticsPieBlock
               title="Rest of the world"
-              subtitle={`${rest.total} registrations across ${rest.countryCount} other countr${
+              subtitle={`${rest.total} registrations · ${formatEuro(rest.distribution.totalIncome)} across ${rest.countryCount} other countr${
                 rest.countryCount === 1 ? 'y' : 'ies'
               }`}
               slices={rest.distribution.slices}

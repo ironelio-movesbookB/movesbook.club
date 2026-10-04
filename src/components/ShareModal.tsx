@@ -1,30 +1,53 @@
 'use client';
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { 
   X, 
   Link as LinkIcon, 
   Send, 
   Facebook, 
   MessageCircle, 
-  PenSquare 
+  PenSquare,
+  Mail,
 } from "lucide-react";
 
 type ShareModalProps = {
   open: boolean;
   onClose: () => void;
+  title?: string;
+  /** Defaults to the current page URL. */
+  url?: string;
+  description?: string;
+  /** Hide the "Post on Movesbook" action. */
+  hidePost?: boolean;
+  /** Show an Email option (mailto). */
+  showEmail?: boolean;
 };
 
-export default function ShareModal({ open, onClose }: ShareModalProps) {
+export default function ShareModal({
+  open,
+  onClose,
+  title = "Share this page",
+  url,
+  description,
+  hidePost = false,
+  showEmail = false,
+}: ShareModalProps) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) setCopied(false);
+  }, [open]);
+
   if (!open) return null;
 
   const shareUrl =
-    typeof window !== "undefined" ? window.location.href : "";
+    url ?? (typeof window !== "undefined" ? window.location.href : "");
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
-      alert("Link copied to clipboard!");
+      setCopied(true);
     } catch (err) {
       alert("Failed to copy link");
     }
@@ -43,12 +66,15 @@ export default function ShareModal({ open, onClose }: ShareModalProps) {
         </button>
 
         {/* Title */}
-        <h2 className="text-lg font-semibold mb-5">
-          Share this page
+        <h2 className={`text-lg font-semibold ${description ? "mb-2" : "mb-5"}`}>
+          {title}
         </h2>
+        {description ? (
+          <p className="mb-5 text-sm text-gray-600">{description}</p>
+        ) : null}
 
         {/* Social Share */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className={`grid ${showEmail ? "grid-cols-4" : "grid-cols-3"} gap-3 mb-5`}>
 
           {/* WhatsApp */}
           <a
@@ -83,24 +109,36 @@ export default function ShareModal({ open, onClose }: ShareModalProps) {
             <span className="text-sm mt-1">Facebook</span>
           </a>
 
+          {showEmail ? (
+            <a
+              href={`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`}
+              className="flex flex-col items-center justify-center border rounded-lg py-3 hover:bg-gray-100 transition text-gray-700"
+            >
+              <Mail size={22} className="text-gray-600" />
+              <span className="text-sm mt-1">Email</span>
+            </a>
+          ) : null}
+
         </div>
 
         {/* Get Link */}
         <button
           onClick={handleCopy}
-          className="w-full flex items-center gap-2 border rounded-lg px-3 py-2 mb-3 hover:bg-gray-100 transition text-gray-700"
+          className={`w-full flex items-center gap-2 border rounded-lg px-3 py-2 ${hidePost ? "" : "mb-3"} hover:bg-gray-100 transition text-gray-700`}
         >
           <LinkIcon size={16} />
-          <span>Get link</span>
+          <span>{copied ? "Link copied!" : "Get link"}</span>
         </button>
 
         {/* Post Button */}
-        <button
-          className="w-full flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-100 transition text-gray-700"
-        >
-          <PenSquare size={16} />
-          <span>Post on Movesbook</span>
-        </button>
+        {hidePost ? null : (
+          <button
+            className="w-full flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-100 transition text-gray-700"
+          >
+            <PenSquare size={16} />
+            <span>Post on Movesbook</span>
+          </button>
+        )}
 
       </div>
     </div>

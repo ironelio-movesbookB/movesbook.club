@@ -4,6 +4,8 @@ import {
   addClubMemberFavourites,
   listClubMemberFavouriteIds,
   listClubMemberFavourites,
+  removeClubMemberFavourites,
+  resolveMemberGroupFilter,
 } from '@/lib/club/memberLists';
 import type { ArchiveQueryParams } from '@/lib/club/archives/legacyArchiveQueries';
 
@@ -20,12 +22,13 @@ function parseArchiveParams(request: NextRequest): ArchiveQueryParams {
     orderBy: (sp.get('orderBy') as 'recent' | 'old') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
+    memberGroupId: sp.get('memberGroupId') ?? undefined,
   };
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const listOnly = request.nextUrl.searchParams.get('idsOnly') === '1';
@@ -34,7 +37,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ memberIds });
     }
 
-    const result = await listClubMemberFavourites(auth.ctx, parseArchiveParams(request));
+    const result = await listClubMemberFavourites(
+      auth.ctx,
+      await resolveMemberGroupFilter(auth.ctx.club.id, parseArchiveParams(request)),
+    );
     return NextResponse.json(result);
   } catch (error) {
     console.error('GET club member favourites:', error);
@@ -44,7 +50,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await getClubAuthContext(request, { allowCoach: true });
     if ('error' in auth) return auth.error;
 
     const body = await request.json().catch(() => ({}));
@@ -58,6 +64,26 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     const status = message.includes('Select') ? 400 : 500;
     if (status === 500) console.error('POST club member favourites:', error);
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await getClubAuthContext(request, { allowCoach: true });
+    if ('error' in auth) return auth.error;
+
+    const body = await request.json().catch(() => ({}));
+    const memberIds = Array.isArray(body.memberIds)
+      ? body.memberIds.filter((id: unknown) => typeof id === 'string')
+      : [];
+
+    const removed = await removeClubMemberFavourites(auth.ctx, memberIds);
+    return NextResponse.json({ removed });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    const status = message.includes('Select') ? 400 : 500;
+    if (status === 500) console.error('DELETE club member favourites:', error);
     return NextResponse.json({ error: message }, { status });
   }
 }

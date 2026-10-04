@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type CategoryOption = { id: string; categoryName: string };
 
@@ -147,7 +148,7 @@ export default function NewsCategoryMultiSelect({ value, onChange, disabled }: P
             : 'Select categories'}
       </button>
       {typeof document !== 'undefined' && menu
-        ? createPortal(menu, document.body)
+        ? createPortal(<AutoTranslate>{menu}</AutoTranslate>, document.body)
         : null}
     </div>
   );

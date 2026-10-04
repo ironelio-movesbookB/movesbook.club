@@ -16,13 +16,18 @@ function getUserId(request: NextRequest): string | null {
   return decoded?.userId ?? null;
 }
 
-async function loadClub(clubId: string) {
-  const clubs = await prisma.$queryRaw<
-    { id: string; name: string; adminId: string; description: string | null }[]
-  >`
+type Owner = { id: string; name: string; adminId: string; description: string | null };
+
+/** The [clubId] segment may also carry a team id; teams keep the same description meta. */
+async function loadClub(clubId: string): Promise<(Owner & { kind: 'club' | 'team' }) | null> {
+  const clubs = await prisma.$queryRaw<Owner[]>`
     SELECT id, name, adminId, description FROM clubs_new WHERE id = ${clubId} LIMIT 1
   `;
-  return clubs[0] ?? null;
+  if (clubs[0]) return { ...clubs[0], kind: 'club' };
+  const teams = await prisma.$queryRaw<Owner[]>`
+    SELECT id, name, adminId, description FROM teams_new WHERE id = ${clubId} LIMIT 1
+  `;
+  return teams[0] ? { ...teams[0], kind: 'team' } : null;
 }
 
 export async function GET(
@@ -41,10 +46,15 @@ export async function GET(
 
   const isAdmin = club.adminId === userId;
   const isMember = Boolean(
-    await prisma.clubMember.findFirst({
-      where: { clubId: params.clubId, memberId: userId },
-      select: { id: true },
-    }),
+    club.kind === 'team'
+      ? await prisma.teamMember.findFirst({
+          where: { teamId: params.clubId, athleteId: userId },
+          select: { id: true },
+        })
+      : await prisma.clubMember.findFirst({
+          where: { clubId: params.clubId, memberId: userId },
+          select: { id: true },
+        }),
   );
   if (!isAdmin && !isMember) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -69,7 +79,7 @@ export async function PATCH(
   const club = await loadClub(params.clubId);
   if (!club || club.adminId !== userId) {
     return NextResponse.json(
-      { error: 'Only the club admin can edit default payment methods' },
+      { error: 'Only the club/team admin can edit default payment methods' },
       { status: 403 },
     );
   }
@@ -85,9 +95,15 @@ export async function PATCH(
     (body as { defaultPaymentMethods?: unknown })?.defaultPaymentMethods,
   );
   const description = mergeClubDefaultPaymentMethodsForSave(club.description, methods);
-  await prisma.$executeRaw`
-    UPDATE clubs_new SET description = ${description} WHERE id = ${params.clubId}
-  `;
+  if (club.kind === 'team') {
+    await prisma.$executeRaw`
+      UPDATE teams_new SET description = ${description} WHERE id = ${params.clubId}
+    `;
+  } else {
+    await prisma.$executeRaw`
+      UPDATE clubs_new SET description = ${description} WHERE id = ${params.clubId}
+    `;
+  }
 
   return NextResponse.json({ success: true, defaultPaymentMethods: methods });
 }

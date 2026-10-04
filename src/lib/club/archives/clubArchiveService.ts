@@ -7,6 +7,7 @@ import {
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
 import { getProcedureTypology } from '@/lib/procedures/registry';
+import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
 import { fetchClubStaffOperators } from '@/lib/procedures/clubOperators';
@@ -30,6 +31,9 @@ import {
   text,
   type PaginatedArchive,
 } from '@/lib/club/archives/legacyArchiveQueries';
+
+import { loadClubMemberTypeNames, memberTypeIdFromProfileJson } from '@/lib/club/clubMemberTypes';
+import { listCoachAthleteLinks } from '@/lib/club/coachMemberLists';
 
 export type { ArchiveQueryParams, PaginatedArchive };
 
@@ -152,6 +156,7 @@ export async function listClubMembersArchive(
           gender: true,
           birthdate: true,
           country: true,
+          userType: true,
           createdAt: true,
         },
       },
@@ -238,6 +243,7 @@ export async function listClubMembersArchive(
     staffRows.map((row) => [row.userId, row]),
   );
   const memberUserIds = new Set(rows.map((row) => row.memberId));
+  const memberTypeNames = await loadClubMemberTypeNames(ctx.club.id);
 
   const memberItems: Record<string, unknown>[] = rows.map((row) => {
     const staff = staffByUserId.get(row.memberId);
@@ -273,9 +279,14 @@ export async function listClubMembersArchive(
       membershipRole: row.role,
     });
 
+    const memberTypeId = memberTypeIdFromProfileJson(row.profile?.profileJson);
+
     return {
       ...base,
+      memberType: memberTypeNames.get(memberTypeId) || '-',
+      memberTypeId,
       email: text(row.member.email) || '',
+      isCoach: row.member.userType === 'COACH',
       clubMemberId: row.id,
       sport,
       groupTrained,
@@ -296,6 +307,7 @@ export async function listClubMembersArchive(
         staffRole: row.role,
         isStaffOnly: true,
       }),
+      memberType: '-',
       sport: '-',
       groupTrained: '-',
       groupTrainedId: '',
@@ -340,12 +352,15 @@ export async function listTeamMembersArchive(
           gender: true,
           birthdate: true,
           country: true,
+          userType: true,
           createdAt: true,
         },
       },
+      profile: { select: { profileJson: true } },
     },
     orderBy: { joinedAt: 'desc' },
   });
+  const memberTypeNames = await loadClubMemberTypeNames(teamId);
 
   const memberIds = rows.map((r) => r.athleteId);
   let extrasRows: Array<{ userId: string; ownerJson: string }> = [];
@@ -383,17 +398,97 @@ export async function listTeamMembersArchive(
       operatorLabel: 'Member',
       membershipRole: row.role,
     });
+    const memberTypeId = memberTypeIdFromProfileJson(row.profile?.profileJson);
     return {
       ...base,
       number: i + 1,
       email: text(row.athlete.email) || '',
+      isCoach: row.athlete.userType === 'COACH',
       teamMemberId: row.id,
+      memberType: memberTypeNames.get(memberTypeId) || '-',
+      memberTypeId,
       sport,
       groupTrained: '-',
       groupTrainedId: '',
       casual: 'No',
     };
   });
+
+  return paginate(applyFilters(items, params), page, pageSize);
+}
+
+/** Coach workspace: athletes trained (direct links + members of the coach's groups trained). */
+export async function listCoachAthletesArchive(
+  ctx: ClubAuthContext,
+  params: ArchiveQueryParams = {},
+): Promise<PaginatedArchive<Record<string, unknown>>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  const coachId = ctx.club.id;
+
+  const [links, groups] = await Promise.all([
+    listCoachAthleteLinks(coachId),
+    prisma.coachingGroup.findMany({ where: { coachId }, select: { id: true, name: true } }),
+  ]);
+  if (links.length === 0) return paginate([], page, pageSize);
+  const groupName = new Map(groups.map((g) => [g.id, g.name]));
+  const athleteIds = links.map((l) => l.athleteId);
+
+  const [athletes, extrasRows] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: athleteIds } },
+      select: {
+        id: true,
+        firstName: true,
+        surname: true,
+        name: true,
+        username: true,
+        email: true,
+        image: true,
+        gender: true,
+        birthdate: true,
+        country: true,
+        userType: true,
+      },
+    }),
+    prisma.userProfileExtras
+      .findMany({ where: { userId: { in: athleteIds } }, select: { userId: true, ownerJson: true } })
+      .catch(() => [] as Array<{ userId: string; ownerJson: string }>),
+  ]);
+  const athleteById = new Map(athletes.map((a) => [a.id, a]));
+  const ownerSportByUser = new Map<string, string>();
+  for (const ex of extrasRows) {
+    try {
+      const owner = JSON.parse(ex.ownerJson || '{}') as { personal?: { mainSport?: string } };
+      const sport = text(owner.personal?.mainSport);
+      if (sport) ownerSportByUser.set(ex.userId, sport);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const items: Record<string, unknown>[] = [];
+  for (const link of links) {
+    const athlete = athleteById.get(link.athleteId);
+    if (!athlete) continue;
+    const groupNames = link.groupIds.map((id) => groupName.get(id)).filter(Boolean) as string[];
+    items.push({
+      ...mapArchivePersonRow({
+        person: athlete,
+        joinedAt: link.joinedAt,
+        membershipType: 'Standard',
+        operatorLabel: athlete.userType === 'COACH' ? 'Coach' : 'Athlete trained',
+        membershipRole: null,
+      }),
+      number: items.length + 1,
+      email: text(athlete.email) || '',
+      isCoach: athlete.userType === 'COACH',
+      sport: ownerSportByUser.get(athlete.id) || '-',
+      groupTrained: groupNames.join(', ') || '-',
+      groupTrainedId: link.groupIds[0] ?? '',
+      casual: 'No',
+    });
+  }
 
   return paginate(applyFilters(items, params), page, pageSize);
 }
@@ -1308,8 +1403,12 @@ export async function listUnifiedPayments(
     }
   }
 
-  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
-  return paginate(applyFilters(items, params), page, pageSize);
+  const unverified = await loadToBeVerifiedPaymentIds(items.map((row) => String(row.id)));
+  for (const row of items) row.toBeVerified = unverified.has(String(row.id));
+  const listed = params.toBeVerified ? items.filter((row) => row.toBeVerified) : items;
+
+  listed.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
+  return paginate(applyFilters(listed, params), page, pageSize);
 }
 
 /** Archives menu: all typologies in one Receipts list. */

@@ -235,8 +235,14 @@ export default function AddMemberModal({
         {activeOption === 'existing' && (
           <form onSubmit={handleSubmitExistingUser} className="space-y-4 p-6">
             <p className="text-sm text-gray-600">
-              Enter the Movesbook username and password of the user to add as a{' '}
-              {entityType === 'team' ? 'team' : 'club'} member.
+              Enter the Movesbook username and password of the user to add as{' '}
+              {entityType === 'coaching-group'
+                ? 'an athlete trained by you'
+                : `a ${entityType === 'team' ? 'team' : 'club'} member`}
+              .{' '}
+              <span className="text-gray-500">
+                Only Single Users and Coaches can be added.
+              </span>
             </p>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Username</label>

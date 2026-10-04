@@ -14,6 +14,7 @@ import {
 } from '@/lib/club/memberProfileDefaults';
 import { getLatestMembershipDates } from '@/lib/club/memberMembershipArchive';
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
+import { copyMemberMedicalFile } from '@/lib/club/memberMedicalAccess';
 import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
 import {
   fetchClubCoachOptions,
@@ -23,6 +24,9 @@ import {
   normalizeSupportImageUrls,
   parseSupportImageUrlsJson,
 } from '@/lib/messages/supportImages';
+import { syncMemberSettingsDeadlines } from '@/lib/club/memberSettingsDeadlines';
+import { isCoachAthlete } from '@/lib/club/coachMemberLists';
+import { CREATE_DEADLINES_PAYMENT_STATUS } from '@/lib/club/memberProfileTypes';
 import type {
   ActivitiesData,
   ClubMemberScopedData,
@@ -32,6 +36,16 @@ import type {
   OwnerProfileData,
   ParentData,
 } from '@/lib/club/memberProfileTypes';
+
+/** Each phone can be linked to WhatsApp or Telegram, not both (WhatsApp wins on legacy data). */
+function oneMessengerPerPhone(address: OwnerProfileData['address']): OwnerProfileData['address'] {
+  return {
+    ...address,
+    phoneTelegram: address.phoneTelegram && !address.phoneWhatsapp,
+    mobile1Telegram: address.mobile1Telegram && !address.mobile1Whatsapp,
+    mobile2Telegram: address.mobile2Telegram && !address.mobile2Whatsapp,
+  };
+}
 
 function cuid() {
   return `c${randomBytes(12).toString('hex')}`;
@@ -310,11 +324,54 @@ async function upsertTeamProfile(opts: {
   );
 }
 
-async function getNotes(clubMemberId: string): Promise<NoteRow[]> {
-  await ensureNoteImageColumn();
+/**
+ * Alert posted / Coach notes live in `club_member_notes` (FK to club members). Team members use
+ * `team_member_notes` with the same columns; there `clubMemberId` holds the team member id.
+ */
+export type MemberNoteStore = 'club' | 'team';
+
+function noteTable(store: MemberNoteStore): string {
+  return store === 'team' ? 'team_member_notes' : 'club_member_notes';
+}
+
+let teamNotesTableReady = false;
+
+export async function ensureNotesTable(store: MemberNoteStore) {
+  if (store === 'club') {
+    await ensureNoteImageColumn();
+    return;
+  }
+  if (teamNotesTableReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS team_member_notes (
+      id VARCHAR(191) NOT NULL,
+      clubMemberId VARCHAR(191) NOT NULL,
+      kind VARCHAR(191) NOT NULL,
+      title VARCHAR(191) NOT NULL DEFAULT '',
+      body TEXT NOT NULL,
+      authorId VARCHAR(191) NULL,
+      parentId VARCHAR(191) NULL,
+      visibleToMember TINYINT(1) NOT NULL DEFAULT 0,
+      commentsEnabled TINYINT(1) NOT NULL DEFAULT 0,
+      enableFrom DATETIME(3) NULL,
+      enableTo DATETIME(3) NULL,
+      showAtLogin TINYINT(1) NOT NULL DEFAULT 0,
+      showAtLogout TINYINT(1) NOT NULL DEFAULT 0,
+      imageUrlsJson TEXT NULL,
+      createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updatedAt DATETIME(3) NOT NULL,
+      PRIMARY KEY (id),
+      KEY team_member_notes_clubMemberId_kind_idx (clubMemberId, kind)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  teamNotesTableReady = true;
+}
+
+async function getNotes(memberLinkId: string, store: MemberNoteStore = 'club'): Promise<NoteRow[]> {
+  await ensureNotesTable(store);
   return prisma.$queryRawUnsafe<NoteRow[]>(
-    `SELECT * FROM club_member_notes WHERE clubMemberId = ? ORDER BY createdAt DESC`,
-    clubMemberId,
+    `SELECT * FROM ${noteTable(store)} WHERE clubMemberId = ? ORDER BY createdAt DESC`,
+    memberLinkId,
   );
 }
 
@@ -356,127 +413,111 @@ async function ensureNoteImageColumn() {
 }
 
 /** Team Admin Archive of Users — shared owner tabs + empty team-scoped dossier. */
-async function loadTeamMemberProfileBundle(opts: {
-  clubId: string;
-  memberUserId: string;
-  viewerUserId: string;
-}): Promise<MemberProfileBundle | { error: string; status: number }> {
-  const team = await prisma.team.findUnique({
-    where: { id: opts.clubId },
-    select: { id: true, name: true, adminId: true, description: true, sport: true },
-  });
-  if (!team) return { error: 'Club or team not found', status: 404 };
-
-  const teamMember = await prisma.teamMember.findUnique({
-    where: {
-      teamId_athleteId: { teamId: opts.clubId, athleteId: opts.memberUserId },
-    },
-    include: {
-      athlete: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          name: true,
-          firstName: true,
-          surname: true,
-          gender: true,
-          birthdate: true,
-          country: true,
-          image: true,
-        },
-      },
-    },
-  });
-  if (!teamMember) return { error: 'Member not found in this team', status: 404 };
-
-  const isClubAdmin = team.adminId === opts.viewerUserId;
-  const isSelf = teamMember.athleteId === opts.viewerUserId;
-  if (!isClubAdmin && !isSelf) {
-    return { error: 'Access denied', status: 403 };
-  }
-
-  const extras = await getExtras(opts.memberUserId);
-  const teamProfile = await getTeamProfile(teamMember.id);
-  const ownerStored = safeJsonParse(extras?.ownerJson, emptyOwnerProfile());
-  const contactsRaw = safeJsonParse(extras?.contactsJson, emptyContacts());
-  const activitiesRaw = safeJsonParse(extras?.activitiesJson, emptyActivities());
-  const contacts: ContactsData = normalizeContacts(contactsRaw);
-  const activities: ActivitiesData = normalizeActivities(activitiesRaw);
-
-  const teamMeta = parseClubDescriptionMeta(team.description);
-  const entitySportDefault = normalizeEntitySport(
-    team.sport || teamMeta.category || '',
+/** Alert posted (staff) and Coach notes roots with replies, filtered by what the member may read. */
+async function mapMemberNotesForBundle(
+  notes: NoteRow[],
+  isAdmin: boolean,
+  visibility: ClubMemberScopedData['visibility'],
+): Promise<Pick<MemberProfileBundle, 'staffNotes' | 'coachNotes'>> {
+  const authorIds = Array.from(
+    new Set(notes.map((n) => n.authorId).filter(Boolean) as string[]),
   );
+  const authors =
+    authorIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, username: true, name: true, image: true },
+        })
+      : [];
+  const authorMap = new Map(authors.map((a) => [a.id, a.username || a.name]));
+  const authorImageMap = new Map(authors.map((a) => [a.id, a.image]));
 
-  const clubScoped = mergeClubScoped(
-    teamProfile?.profileJson
-      ? (safeJsonParse(teamProfile.profileJson, {}) as Partial<ClubMemberScopedData>)
-      : ({
-          settings: {
-            memberSettingKind: 'team',
-            clubGymEnabled: false,
-            teamFootballEnabled: true,
-            sportMode: 'TEAM-FOOTBALL',
-            teamSport: entitySportDefault || 'Football',
-            accessFunctionsEnabled: false,
-          },
-          visibility: {
-            payFor: true,
-            otherDetails: true,
-            parents: true,
-            settings: true,
-            messagesStaff: false,
-            notesCoach: false,
-            presences: true,
-          },
-        } as Partial<ClubMemberScopedData>),
-  );
+  const staffRoots = notes.filter((n) => n.kind === 'staff' && !n.parentId);
+  const coachRoots = notes.filter((n) => n.kind === 'coach' && !n.parentId);
+  const repliesOf = (parentId: string) =>
+    notes
+      .filter((n) => n.parentId === parentId)
+      .map((n) => ({
+        id: n.id,
+        body: n.body,
+        createdAt: new Date(n.createdAt).toISOString(),
+        authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'User',
+      }));
 
-  if (!clubScoped.settings.teamSport?.trim()) {
-    clubScoped.settings.teamSport = entitySportDefault || 'Football';
-  } else {
-    clubScoped.settings.teamSport = normalizeEntitySport(clubScoped.settings.teamSport);
-  }
-  // Team archive hides staff/coach notes until a notes store exists.
-  clubScoped.visibility = {
-    ...clubScoped.visibility,
-    messagesStaff: false,
-    notesCoach: false,
+  return {
+    staffNotes: (isAdmin || visibility.messagesStaff ? staffRoots : []).map((n) => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      createdAt: new Date(n.createdAt).toISOString(),
+      authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'Staff',
+      imageUrls: parseSupportImageUrlsJson(n.imageUrlsJson),
+      showAtLogin: Boolean(n.showAtLogin),
+      showAtLogout: Boolean(n.showAtLogout),
+      replies: repliesOf(n.id),
+    })),
+    coachNotes: (isAdmin || visibility.notesCoach ? coachRoots : [])
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        createdAt: new Date(n.createdAt).toISOString(),
+        authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'Coach',
+        authorImage: (n.authorId && authorImageMap.get(n.authorId)) || null,
+        visibleToMember: Boolean(n.visibleToMember),
+        commentsEnabled: Boolean(n.commentsEnabled),
+        imageUrls: parseSupportImageUrlsJson(n.imageUrlsJson),
+        enableFrom: n.enableFrom ? new Date(n.enableFrom).toISOString().slice(0, 10) : '',
+        enableTo: n.enableTo ? new Date(n.enableTo).toISOString().slice(0, 10) : '',
+        showAtLogin: Boolean(n.showAtLogin),
+        showAtLogout: Boolean(n.showAtLogout),
+        replies: repliesOf(n.id),
+      })),
   };
+}
 
-  const birthIso = teamMember.athlete.birthdate
-    ? teamMember.athlete.birthdate.toISOString().slice(0, 10)
-    : ownerStored.personal.dateOfBirth || '';
-  const age = calcAge(birthIso);
-  const underage = age != null && age < 18;
-
-  const owner: OwnerProfileData = emptyOwnerProfile({
+/** Shared (user DB) owner profile of a person, merged over what they saved in user_profile_extras. */
+function buildSharedOwnerProfile(
+  person: {
+    username: string;
+    email: string;
+    firstName: string | null;
+    surname: string | null;
+    gender: string | null;
+    country: string | null;
+    image: string | null;
+  },
+  ownerStored: OwnerProfileData,
+  extras: ExtrasRow | null,
+  birthIso: string,
+  age: number | null,
+): OwnerProfileData {
+  return emptyOwnerProfile({
     ...ownerStored,
     privateSettings: {
       disallowClubAdmins: Boolean(extras?.disallowClubAdmins),
     },
-    photoUrl: teamMember.athlete.image || ownerStored.photoUrl || '',
+    photoUrl: person.image || ownerStored.photoUrl || '',
     qrCodeUrl: normalizeStoredQrCodeUrl(extras?.qrCodeUrl || ownerStored.qrCodeUrl || ''),
     login: {
       ...emptyOwnerProfile().login,
       ...ownerStored.login,
-      username: teamMember.athlete.username,
-      firstName: teamMember.athlete.firstName || ownerStored.login?.firstName || '',
-      lastName: teamMember.athlete.surname || ownerStored.login?.lastName || '',
-      email: teamMember.athlete.email,
+      username: person.username,
+      firstName: person.firstName || ownerStored.login?.firstName || '',
+      lastName: person.surname || ownerStored.login?.lastName || '',
+      email: person.email,
       newPassword: '',
       repeatPassword: '',
     },
     address: {
       ...emptyOwnerProfile().address,
       ...ownerStored.address,
-      country: teamMember.athlete.country || ownerStored.address?.country || '',
+      country: person.country || ownerStored.address?.country || '',
     },
     personal: {
       ...emptyOwnerProfile().personal,
       ...ownerStored.personal,
-      gender: teamMember.athlete.gender || ownerStored.personal?.gender || '',
+      gender: person.gender || ownerStored.personal?.gender || '',
       dateOfBirth: birthIso,
       age,
       otherSports: Array.isArray(ownerStored.personal?.otherSports)
@@ -527,6 +568,99 @@ async function loadTeamMemberProfileBundle(opts: {
       ...ownerStored.otherReferences,
     },
   });
+}
+
+async function loadTeamMemberProfileBundle(opts: {
+  clubId: string;
+  memberUserId: string;
+  viewerUserId: string;
+}): Promise<MemberProfileBundle | { error: string; status: number }> {
+  const team = await prisma.team.findUnique({
+    where: { id: opts.clubId },
+    select: { id: true, name: true, adminId: true, description: true, sport: true },
+  });
+  if (!team) return loadCoachAthleteProfileBundle(opts);
+
+  const teamMember = await prisma.teamMember.findUnique({
+    where: {
+      teamId_athleteId: { teamId: opts.clubId, athleteId: opts.memberUserId },
+    },
+    include: {
+      athlete: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          name: true,
+          firstName: true,
+          surname: true,
+          gender: true,
+          birthdate: true,
+          country: true,
+          image: true,
+        },
+      },
+    },
+  });
+  if (!teamMember) return { error: 'Member not found in this team', status: 404 };
+
+  const isClubAdmin = team.adminId === opts.viewerUserId;
+  const isSelf = teamMember.athleteId === opts.viewerUserId;
+  if (!isClubAdmin && !isSelf) {
+    return { error: 'Access denied', status: 403 };
+  }
+
+  const extras = await getExtras(opts.memberUserId);
+  const teamProfile = await getTeamProfile(teamMember.id);
+  const notes = await getNotes(teamMember.id, 'team');
+  const ownerStored = safeJsonParse(extras?.ownerJson, emptyOwnerProfile());
+  const contactsRaw = safeJsonParse(extras?.contactsJson, emptyContacts());
+  const activitiesRaw = safeJsonParse(extras?.activitiesJson, emptyActivities());
+  const contacts: ContactsData = normalizeContacts(contactsRaw);
+  const activities: ActivitiesData = normalizeActivities(activitiesRaw);
+
+  const teamMeta = parseClubDescriptionMeta(team.description);
+  const entitySportDefault = normalizeEntitySport(
+    team.sport || teamMeta.category || '',
+  );
+
+  const clubScoped = mergeClubScoped(
+    teamProfile?.profileJson
+      ? (safeJsonParse(teamProfile.profileJson, {}) as Partial<ClubMemberScopedData>)
+      : ({
+          settings: {
+            memberSettingKind: 'team',
+            clubGymEnabled: false,
+            teamFootballEnabled: true,
+            sportMode: 'TEAM-FOOTBALL',
+            teamSport: entitySportDefault || 'Football',
+            accessFunctionsEnabled: false,
+          },
+          visibility: {
+            payFor: true,
+            otherDetails: true,
+            parents: true,
+            settings: true,
+            messagesStaff: false,
+            notesCoach: false,
+            presences: true,
+          },
+        } as Partial<ClubMemberScopedData>),
+  );
+
+  if (!clubScoped.settings.teamSport?.trim()) {
+    clubScoped.settings.teamSport = entitySportDefault || 'Football';
+  } else {
+    clubScoped.settings.teamSport = normalizeEntitySport(clubScoped.settings.teamSport);
+  }
+
+  const birthIso = teamMember.athlete.birthdate
+    ? teamMember.athlete.birthdate.toISOString().slice(0, 10)
+    : ownerStored.personal.dateOfBirth || '';
+  const age = calcAge(birthIso);
+  const underage = age != null && age < 18;
+
+  const owner = buildSharedOwnerProfile(teamMember.athlete, ownerStored, extras, birthIso, age);
 
   clubScoped.otherDetails.userUnderage = underage;
   syncSignatureFromColumn(clubScoped, teamProfile?.signatureDataUrl, underage);
@@ -613,6 +747,93 @@ async function loadTeamMemberProfileBundle(opts: {
     coachOptions: [],
     clubParentsCatalog: [],
     customQuestions,
+    ...(await mapMemberNotesForBundle(notes, isClubAdmin, clubScoped.visibility)),
+  };
+}
+
+/** A coach reading one of their athletes trained: shared labels only, read-only. */
+async function loadCoachAthleteProfileBundle(opts: {
+  clubId: string;
+  memberUserId: string;
+  viewerUserId: string;
+}): Promise<MemberProfileBundle | { error: string; status: number }> {
+  const coachId = opts.clubId;
+  if (coachId !== opts.viewerUserId) return { error: 'Club or team not found', status: 404 };
+  const coach = await prisma.user.findUnique({
+    where: { id: coachId },
+    select: { userType: true, username: true, firstName: true, surname: true, name: true },
+  });
+  if (!coach || coach.userType !== 'COACH') {
+    return { error: 'Club or team not found', status: 404 };
+  }
+  if (!(await isCoachAthlete(coachId, opts.memberUserId))) {
+    return { error: 'This athlete is not trained by you', status: 404 };
+  }
+
+  const athlete = await prisma.user.findUnique({
+    where: { id: opts.memberUserId },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      name: true,
+      firstName: true,
+      surname: true,
+      gender: true,
+      birthdate: true,
+      country: true,
+      image: true,
+    },
+  });
+  if (!athlete) return { error: 'Member not found', status: 404 };
+
+  const extras = await getExtras(athlete.id);
+  const ownerStored = safeJsonParse(extras?.ownerJson, emptyOwnerProfile());
+  const birthIso = athlete.birthdate
+    ? athlete.birthdate.toISOString().slice(0, 10)
+    : ownerStored.personal.dateOfBirth || '';
+  const age = calcAge(birthIso);
+
+  return {
+    clubId: coachId,
+    workspaceKind: 'coach',
+    clubName: formatName(coach.firstName, coach.surname, coach.name) || coach.username,
+    entitySportDefault: normalizeEntitySport(ownerStored.personal?.mainSport || '') || 'Football',
+    clubMemberId: '',
+    memberId: athlete.id,
+    role: null,
+    membershipType: null,
+    viewer: {
+      isClubAdmin: false,
+      isSelf: false,
+      canEditOwner: false,
+      canEditContactsActivitiesReferences: false,
+      canEditClubScoped: false,
+      canEditMemberSignature: false,
+    },
+    user: {
+      id: athlete.id,
+      username: athlete.username,
+      email: athlete.email,
+      name: athlete.name,
+      firstName: athlete.firstName,
+      surname: athlete.surname,
+      gender: athlete.gender,
+      birthdate: birthIso || null,
+      country: athlete.country,
+      image: athlete.image,
+    },
+    owner: buildSharedOwnerProfile(athlete, ownerStored, extras, birthIso, age),
+    contacts: normalizeContacts(safeJsonParse(extras?.contactsJson, emptyContacts())),
+    activities: normalizeActivities(safeJsonParse(extras?.activitiesJson, emptyActivities())),
+    referencesHtml: extras?.referencesHtml || '',
+    referencesLevel: String(extras?.referencesLevel || '1').trim() || '1',
+    club: emptyClubScoped(),
+    clubMembersForPayFor: [],
+    vendorCoachOptions: [],
+    coachOptions: [],
+    clubParentsCatalog: [],
+    customQuestions: [],
     staffNotes: [],
     coachNotes: [],
   };
@@ -799,32 +1020,7 @@ export async function loadMemberProfileBundle(opts: {
     orderBy: { joinedAt: 'desc' },
   });
 
-  const authorIds = Array.from(
-    new Set(notes.map((n) => n.authorId).filter(Boolean) as string[]),
-  );
-  const authors =
-    authorIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: authorIds } },
-          select: { id: true, username: true, name: true, image: true },
-        })
-      : [];
-  const authorMap = new Map(authors.map((a) => [a.id, a.username || a.name]));
-  const authorImageMap = new Map(authors.map((a) => [a.id, a.image]));
-
-  const staffRoots = notes.filter((n) => n.kind === 'staff' && !n.parentId);
-  const coachRoots = notes.filter((n) => n.kind === 'coach' && !n.parentId);
-  const repliesOf = (parentId: string) =>
-    notes
-      .filter((n) => n.parentId === parentId)
-      .map((n) => ({
-        id: n.id,
-        body: n.body,
-        createdAt: new Date(n.createdAt).toISOString(),
-        authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'User',
-      }));
-
-  const visibility = clubScoped.visibility;
+  const memberNotes = await mapMemberNotesForBundle(notes, isClubAdmin, clubScoped.visibility);
 
   const [operatorOptions, coachStaffOptions] = await Promise.all([
     fetchClubOperatorOptions(opts.clubId),
@@ -974,34 +1170,7 @@ export async function loadMemberProfileBundle(opts: {
     coachOptions,
     clubParentsCatalog,
     customQuestions,
-    staffNotes: (isClubAdmin || visibility.messagesStaff ? staffRoots : []).map((n) => ({
-      id: n.id,
-      title: n.title,
-      body: n.body,
-      createdAt: new Date(n.createdAt).toISOString(),
-      authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'Staff',
-      showAtLogin: Boolean(n.showAtLogin),
-      showAtLogout: Boolean(n.showAtLogout),
-      replies: repliesOf(n.id),
-    })),
-    coachNotes: (isClubAdmin || visibility.notesCoach ? coachRoots : [])
-      .filter((n) => isClubAdmin || Boolean(n.visibleToMember))
-      .map((n) => ({
-        id: n.id,
-        title: n.title,
-        body: n.body,
-        createdAt: new Date(n.createdAt).toISOString(),
-        authorLabel: (n.authorId && authorMap.get(n.authorId)) || 'Coach',
-        authorImage: (n.authorId && authorImageMap.get(n.authorId)) || null,
-        visibleToMember: Boolean(n.visibleToMember),
-        commentsEnabled: Boolean(n.commentsEnabled),
-        imageUrls: parseSupportImageUrlsJson(n.imageUrlsJson),
-        enableFrom: n.enableFrom ? new Date(n.enableFrom).toISOString().slice(0, 10) : '',
-        enableTo: n.enableTo ? new Date(n.enableTo).toISOString().slice(0, 10) : '',
-        showAtLogin: Boolean(n.showAtLogin),
-        showAtLogout: Boolean(n.showAtLogout),
-        replies: repliesOf(n.id),
-      })),
+    ...memberNotes,
   };
 }
 
@@ -1053,6 +1222,7 @@ async function upsertExtras(opts: {
 /** Persist shared (user) profile fields for a team athlete; team-scoped dossier is not stored yet. */
 async function saveTeamMemberSharedProfile(opts: {
   memberUserId: string;
+  viewerUserId: string;
   loaded: MemberProfileBundle;
   payload: {
     owner?: OwnerProfileData;
@@ -1100,6 +1270,7 @@ async function saveTeamMemberSharedProfile(opts: {
     const ownerToStore: OwnerProfileData = {
       ...owner,
       login: { ...owner.login, newPassword: '', repeatPassword: '' },
+      address: oneMessengerPerPhone(owner.address),
     };
 
     await upsertExtras({
@@ -1161,6 +1332,26 @@ async function saveTeamMemberSharedProfile(opts: {
       if (!loaded.viewer.canEditClubScoped && loaded.viewer.isSelf) {
         clubData = mergeMemberSelfClubSave(loaded.club, clubData);
       }
+      const previousDeadlines = loaded.club.settings.football.deadlines;
+      clubData.settings.football.deadlines = previousDeadlines;
+      if (loaded.viewer.canEditClubScoped) {
+        try {
+          clubData.settings.football.deadlines = await syncMemberSettingsDeadlines({
+            clubId: loaded.clubId,
+            workspaceKind: 'team',
+            memberUserId: opts.memberUserId,
+            operatorId: opts.viewerUserId,
+            football: clubData.settings.football,
+            previous: previousDeadlines,
+          });
+        } catch (error) {
+          console.error('saveTeamMemberSharedProfile: deadlines sync failed', error);
+          return {
+            error: 'Could not create the deadlines in the Archive of the Deadlines. Nothing was saved.',
+            status: 500,
+          };
+        }
+      }
       const age = calcAge(loaded.owner.personal.dateOfBirth);
       const underage = age != null && age < 18;
       clubData.otherDetails.userUnderage = underage;
@@ -1198,9 +1389,13 @@ export async function saveMemberProfileBundle(opts: {
   });
   if ('error' in loaded) return loaded;
 
+  if (loaded.workspaceKind === 'coach') {
+    return { error: 'Athlete trained profiles are read-only for coaches', status: 403 };
+  }
   if (loaded.workspaceKind === 'team') {
     return saveTeamMemberSharedProfile({
       memberUserId: opts.memberUserId,
+      viewerUserId: opts.viewerUserId,
       loaded,
       payload: opts.payload,
     });
@@ -1249,6 +1444,7 @@ export async function saveMemberProfileBundle(opts: {
     const ownerToStore: OwnerProfileData = {
       ...owner,
       login: { ...owner.login, newPassword: '', repeatPassword: '' },
+      address: oneMessengerPerPhone(owner.address),
     };
 
     await upsertExtras({
@@ -1337,6 +1533,26 @@ export async function saveMemberProfileBundle(opts: {
       let clubData = opts.payload.club;
       if (!loaded.viewer.canEditClubScoped && loaded.viewer.isSelf) {
         clubData = mergeMemberSelfClubSave(loaded.club, clubData);
+      }
+      const previousDeadlines = loaded.club.settings.football.deadlines;
+      clubData.settings.football.deadlines = previousDeadlines;
+      if (loaded.viewer.canEditClubScoped) {
+        try {
+          clubData.settings.football.deadlines = await syncMemberSettingsDeadlines({
+            clubId: opts.clubId,
+            workspaceKind: 'club',
+            memberUserId: opts.memberUserId,
+            operatorId: opts.viewerUserId,
+            football: clubData.settings.football,
+            previous: previousDeadlines,
+          });
+        } catch (error) {
+          console.error('saveMemberProfileBundle: deadlines sync failed', error);
+          return {
+            error: 'Could not create the deadlines in the Archive of the Deadlines. Nothing was saved.',
+            status: 500,
+          };
+        }
       }
       const age = calcAge(loaded.owner.personal.dateOfBirth);
       const underage = age != null && age < 18;
@@ -1582,6 +1798,7 @@ export async function saveSelfMemberProfileBundle(opts: {
     const ownerToStore: OwnerProfileData = {
       ...owner,
       login: { ...owner.login, newPassword: '', repeatPassword: '' },
+      address: oneMessengerPerPhone(owner.address),
       privateSettings: {
         disallowClubAdmins: Boolean(owner.privateSettings.disallowClubAdmins),
       },
@@ -1631,18 +1848,26 @@ export async function saveSelfMemberProfileBundle(opts: {
   return { ok: true };
 }
 
-export async function getMemberNoteById(clubMemberId: string, noteId: string) {
-  await ensureNoteImageColumn();
+export async function getMemberNoteById(
+  clubMemberId: string,
+  noteId: string,
+  store: MemberNoteStore = 'club',
+) {
+  await ensureNotesTable(store);
   const rows = await prisma.$queryRawUnsafe<NoteRow[]>(
-    `SELECT * FROM club_member_notes WHERE clubMemberId = ? AND id = ? LIMIT 1`,
+    `SELECT * FROM ${noteTable(store)} WHERE clubMemberId = ? AND id = ? LIMIT 1`,
     clubMemberId,
     noteId,
   );
   return rows[0] ?? null;
 }
 
-export async function getClubMemberVisibility(clubMemberId: string) {
-  const profile = await getClubProfile(clubMemberId);
+export async function getClubMemberVisibility(
+  clubMemberId: string,
+  store: MemberNoteStore = 'club',
+) {
+  const profile =
+    store === 'team' ? await getTeamProfile(clubMemberId) : await getClubProfile(clubMemberId);
   const clubScoped = mergeClubScoped(
     profile?.profileJson
       ? (safeJsonParse(profile.profileJson, {}) as Partial<ClubMemberScopedData>)
@@ -1665,13 +1890,15 @@ export async function createMemberNote(opts: {
   enableTo?: Date | null;
   showAtLogin?: boolean;
   showAtLogout?: boolean;
+  store?: MemberNoteStore;
 }) {
-  await ensureNoteImageColumn();
+  const store = opts.store ?? 'club';
+  await ensureNotesTable(store);
   const now = new Date();
   const id = cuid();
   const imageUrlsJson = JSON.stringify(normalizeSupportImageUrls(opts.imageUrls ?? []));
   await prisma.$executeRawUnsafe(
-    `INSERT INTO club_member_notes (id, clubMemberId, kind, title, body, authorId, parentId, visibleToMember, commentsEnabled, imageUrlsJson, enableFrom, enableTo, showAtLogin, showAtLogout, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO ${noteTable(store)} (id, clubMemberId, kind, title, body, authorId, parentId, visibleToMember, commentsEnabled, imageUrlsJson, enableFrom, enableTo, showAtLogin, showAtLogout, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     id,
     opts.clubMemberId,
     opts.kind,
@@ -1696,10 +1923,20 @@ export async function deleteMemberNotes(opts: {
   clubMemberId: string;
   noteId?: string;
   resetKind?: string;
+  store?: MemberNoteStore;
+  /** Remove every note of the membership (membership deleted). */
+  all?: boolean;
 }) {
+  const store = opts.store ?? 'club';
+  await ensureNotesTable(store);
+  const table = noteTable(store);
+  if (opts.all) {
+    await prisma.$executeRawUnsafe(`DELETE FROM ${table} WHERE clubMemberId=?`, opts.clubMemberId);
+    return;
+  }
   if (opts.resetKind) {
     await prisma.$executeRawUnsafe(
-      `DELETE FROM club_member_notes WHERE clubMemberId=? AND kind=?`,
+      `DELETE FROM ${table} WHERE clubMemberId=? AND kind=?`,
       opts.clubMemberId,
       opts.resetKind,
     );
@@ -1707,7 +1944,7 @@ export async function deleteMemberNotes(opts: {
   }
   if (opts.noteId) {
     await prisma.$executeRawUnsafe(
-      `DELETE FROM club_member_notes WHERE clubMemberId=? AND (id=? OR parentId=?)`,
+      `DELETE FROM ${table} WHERE clubMemberId=? AND (id=? OR parentId=?)`,
       opts.clubMemberId,
       opts.noteId,
       opts.noteId,
@@ -1762,6 +1999,25 @@ export async function duplicateMemberProfileSections(opts: {
         email: target.owner.login.email,
         newPassword: '',
         repeatPassword: '',
+      },
+      address: oneMessengerPerPhone(source.owner.address),
+      medical: {
+        ...source.owner.medical,
+        imageUrl: await copyMemberMedicalFile(
+          source.owner.medical.imageUrl,
+          opts.sourceMemberUserId,
+          opts.targetMemberUserId,
+        ),
+        pdfUrl: await copyMemberMedicalFile(
+          source.owner.medical.pdfUrl,
+          opts.sourceMemberUserId,
+          opts.targetMemberUserId,
+        ),
+        ecgUrl: await copyMemberMedicalFile(
+          source.owner.medical.ecgUrl || '',
+          opts.sourceMemberUserId,
+          opts.targetMemberUserId,
+        ),
       },
       privateSettings: target.owner.privateSettings,
     };
@@ -1823,7 +2079,22 @@ export async function duplicateMemberProfileSections(opts: {
       copied.push('other-data');
     }
     if (opts.sections.includes('settings')) {
-      clubData = { ...clubData, settings: source.club.settings };
+      const sourceFootball = source.club.settings.football;
+      // The source's paid tick / "Create deadlines" must not file payments or debts for the target.
+      clubData = {
+        ...clubData,
+        settings: {
+          ...source.club.settings,
+          football: {
+            ...sourceFootball,
+            paymentStatus:
+              sourceFootball.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS
+                ? 'Pending'
+                : sourceFootball.paymentStatus,
+            firstPayment: { ...sourceFootball.firstPayment, status: '' },
+          },
+        },
+      };
       copied.push('settings');
     }
     const saved = await saveMemberProfileBundle({
@@ -1835,17 +2106,19 @@ export async function duplicateMemberProfileSections(opts: {
     if ('error' in saved) return saved;
   }
 
+  const noteStore = isTeam ? 'team' : 'club';
   const copyRootNotes = async (kind: 'staff' | 'coach') => {
-    if (isTeam) return;
-    const sourceNotes = await getNotes(source.clubMemberId);
+    const sourceNotes = await getNotes(source.clubMemberId, noteStore);
     const roots = sourceNotes.filter((n) => n.kind === kind && !n.parentId);
     await deleteMemberNotes({
       clubMemberId: target.clubMemberId,
       resetKind: kind,
+      store: noteStore,
     });
     for (const n of roots) {
       await createMemberNote({
         clubMemberId: target.clubMemberId,
+        store: noteStore,
         kind,
         title: n.title,
         body: n.body,
@@ -1862,11 +2135,11 @@ export async function duplicateMemberProfileSections(opts: {
     }
   };
 
-  if (opts.sections.includes('alert-posted') && !isTeam) {
+  if (opts.sections.includes('alert-posted')) {
     await copyRootNotes('staff');
     copied.push('alert-posted');
   }
-  if (opts.sections.includes('coach-notes') && !isTeam) {
+  if (opts.sections.includes('coach-notes')) {
     await copyRootNotes('coach');
     copied.push('coach-notes');
   }

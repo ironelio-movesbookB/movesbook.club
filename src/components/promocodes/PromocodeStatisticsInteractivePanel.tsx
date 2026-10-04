@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PromocodeStatsChartPanel from '@/components/promocodes/PromocodeStatsChartPanel';
 import { promocodesFetch } from '@/components/promocodes/usePromocodesAdminAuth';
 import type { PromocodeStatisticsResult } from '@/lib/promocodes/promocodeMonthlyStatsService';
 import {
   countryDisplayName,
   countryMonthlySlices,
+  countryRowKey,
   monthMetricSlices,
   PROMOCODE_MONTH_LABELS,
   topCountriesForMonth,
@@ -52,6 +53,11 @@ export default function PromocodeStatisticsInteractivePanel({
   const [data, setData] = useState<PromocodeStatisticsResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [chartView, setChartView] = useState<ChartView | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chartView) chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [chartView]);
 
   const years = useMemo(() => {
     const list: number[] = [];
@@ -59,21 +65,24 @@ export default function PromocodeStatisticsInteractivePanel({
     return list;
   }, [currentYear]);
 
+  const latestRequest = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++latestRequest.current;
+    // A slower answer for a previously selected year must not overwrite the current one.
+    const isStale = () => requestId !== latestRequest.current;
     setLoading(true);
     try {
       const res = await promocodesFetch(`/api/admin/promocodes/statistics?year=${year}`);
-      if (!res.ok) {
-        setData(null);
-        return;
-      }
-      setData(await res.json());
+      const json = res.ok ? await res.json() : null;
+      if (isStale()) return;
+      setData(json);
       setChartView(null);
     } catch (e) {
       console.error(e);
-      setData(null);
+      if (!isStale()) setData(null);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [year]);
 
@@ -87,7 +96,7 @@ export default function PromocodeStatisticsInteractivePanel({
     if (chartView.kind === 'month-metric') {
       const slices = monthMetricSlices(data.months, chartView.metric);
       return {
-        title: `${METRIC_LABELS[chartView.metric]} by month — ${year}`,
+        title: `${METRIC_LABELS[chartView.metric]} by month — ${data.year}`,
         subtitle: 'Pie slices use the specified month colors (Jan–Dec).',
         slices,
         showBar: false,
@@ -96,11 +105,9 @@ export default function PromocodeStatisticsInteractivePanel({
     }
 
     if (chartView.kind === 'country') {
-      const row = data.countryMatrix.find(
-        (r) => `${r.countryId}:${r.countryCode}` === chartView.countryKey,
-      );
+      const row = data.countryMatrix.find((r) => countryRowKey(r) === chartView.countryKey);
       if (!row) return null;
-      const name = countryDisplayName(row.countryCode, row.countryId);
+      const name = countryDisplayName(row);
       const slices = countryMonthlySlices(row, 'registrations');
       const regTotal = slices.reduce((s, x) => s + x.value, 0);
       const useInvites = regTotal === 0;
@@ -109,7 +116,7 @@ export default function PromocodeStatisticsInteractivePanel({
         : slices;
       return {
         title: `${name} — monthly ${useInvites ? 'invites' : 'registrations'}`,
-        subtitle: `${year} · pie + bar (month colors)`,
+        subtitle: `${data.year} · pie + bar (month colors)`,
         slices: finalSlices,
         showBar: true,
         valueSuffix: undefined as string | undefined,
@@ -119,13 +126,13 @@ export default function PromocodeStatisticsInteractivePanel({
     const month = chartView.month;
     const slices = topCountriesForMonth(data.countryMatrix, month, 'registrations', 15);
     return {
-      title: `Registrations by country — ${PROMOCODE_MONTH_LABELS[month - 1]} ${year}`,
+      title: `Registrations by country — ${PROMOCODE_MONTH_LABELS[month - 1]} ${data.year}`,
       subtitle: 'Top 15 countries + Rest of the world (ID 0 excluded).',
       slices,
       showBar: true,
       valueSuffix: undefined as string | undefined,
     };
-  }, [chartView, data, year]);
+  }, [chartView, data]);
 
   const maxBar = Math.max(
     1,
@@ -281,11 +288,9 @@ export default function PromocodeStatisticsInteractivePanel({
                   </tr>
                 ) : (
                   (data?.countryMatrix ?? []).map((row) => {
-                    const key = `${row.countryId}:${row.countryCode}`;
-                    const isIdZero = Number(row.countryId) === 0;
-                    const label = isIdZero
-                      ? 'ID 0'
-                      : countryDisplayName(row.countryCode, row.countryId);
+                    const key = countryRowKey(row);
+                    const isIdZero = row.isUnknown;
+                    const label = countryDisplayName(row);
                     return (
                       <tr key={key} className="border-t">
                         <td className="p-2">
@@ -320,18 +325,24 @@ export default function PromocodeStatisticsInteractivePanel({
                 )}
               </tbody>
             </table>
+            <p className="p-2 text-xs text-gray-600">
+              Each cell is <strong>invites sent / registrations</strong>. Click a country for its
+              months, or a month for its countries.
+            </p>
           </div>
 
-          {chartPayload ? (
-            <PromocodeStatsChartPanel
-              title={chartPayload.title}
-              subtitle={chartPayload.subtitle}
-              slices={chartPayload.slices}
-              showBar={chartPayload.showBar}
-              valueSuffix={chartPayload.valueSuffix}
-              onClose={() => setChartView(null)}
-            />
-          ) : null}
+          <div ref={chartRef}>
+            {chartPayload ? (
+              <PromocodeStatsChartPanel
+                title={chartPayload.title}
+                subtitle={chartPayload.subtitle}
+                slices={chartPayload.slices}
+                showBar={chartPayload.showBar}
+                valueSuffix={chartPayload.valueSuffix}
+                onClose={() => setChartView(null)}
+              />
+            ) : null}
+          </div>
         </>
       )}
     </div>

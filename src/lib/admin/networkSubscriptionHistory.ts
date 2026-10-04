@@ -28,6 +28,8 @@ export type NetworkSubscriptionPeriod = {
   paymentMethod?: string;
   amountPaid?: string;
   discountPercent?: string;
+  /** Club whose admin purchased this account for one of his members (Club accounts). */
+  purchasedByClubId?: string | null;
 };
 
 export type MembershipViewMode = 'all' | 'current' | 'last' | 'lastPerUser';
@@ -382,12 +384,242 @@ export function pickLatestSubscriptionByExpiry(
 export function hasActiveLastSubscription(
   adminSettingsRaw: string | null | undefined,
 ): boolean {
-  const periods = readNetworkSubscriptionHistory(adminSettingsRaw);
-  // Legacy accounts with no history yet: keep counted (cannot prove expiry).
-  if (periods.length === 0) return true;
-  const last = pickLatestSubscriptionByExpiry(periods);
-  if (!last) return true;
-  return isActiveMembershipPeriod(last.dateEnd, last.status);
+  return resolveStatsSubscription(adminSettingsRaw).active;
+}
+
+/** "100", "100.50", "1.234,50", "1.200", "€ 80" → number of euros; anything else → 0. */
+export function parseAmountPaid(raw: string | null | undefined): number {
+  let s = String(raw ?? '').replace(/[^\d.,-]/g, '');
+  if (!s) return 0;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    // Both separators: the last one is the decimal separator.
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else {
+    const sep = lastComma >= 0 ? ',' : '.';
+    const groups = s.split(sep);
+    // One kind only: "1.200" / "12,500,000" are thousands, "12,5" / "80.50" are decimals.
+    const thousands = groups.length > 2 || (groups.length === 2 && groups[1]!.length === 3);
+    s = thousands ? groups.join('') : groups.join('.');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+export type StatsSubscription = {
+  /** Counted as a current user: the last subscription (highest expiry) has not expired. */
+  active: boolean;
+  /** Version of the subscription running today, when stored on it. */
+  version: string | null;
+  /** Latest version found anywhere in the history (fallback after the account's own version). */
+  historyVersion: string | null;
+  /** € recorded as paid for the subscription running today (0 when nothing was recorded). */
+  amountPaid: number;
+  /** The user had a previous subscription that ended before the current one started. */
+  renewal: boolean;
+  /** The current subscription was purchased by a club admin for his member. */
+  clubAccount: boolean;
+};
+
+/**
+ * Every subscription of one user: the stored history (minus admin-deleted periods) plus the live
+ * access window when no history row matches it.
+ */
+export function listStatsSubscriptionPeriods(
+  adminSettingsRaw: string | null | undefined,
+): NetworkSubscriptionPeriod[] {
+  const deleted = readDeletedSubscriptionPeriods(adminSettingsRaw);
+  const history = readNetworkSubscriptionHistory(adminSettingsRaw).filter(
+    (p) => !isSubscriptionPeriodDeleted(p, deleted),
+  );
+  const periods = [...history];
+  const access = readPcuAccessSettings(adminSettingsRaw, { accessStartIso: '', accessEndIso: '' });
+  const accessStart = sliceYmd(access.accessStartIso);
+  if (accessStart) {
+    const accessPeriod: NetworkSubscriptionPeriod = {
+      id: 'pcu-access-account',
+      dateStart: accessStart,
+      dateEnd: sliceYmd(access.accessEndIso) || null,
+      entityId: null,
+    };
+    if (
+      !history.some(
+        (p) =>
+          sliceYmd(p.dateStart) === accessStart &&
+          sliceYmd(p.dateEnd) === sliceYmd(accessPeriod.dateEnd),
+      ) &&
+      !isSubscriptionPeriodDeleted(accessPeriod, deleted)
+    ) {
+      periods.push(accessPeriod);
+    }
+  }
+  return periods;
+}
+
+/**
+ * One user's current subscription for statistics: the stored history (minus admin-deleted
+ * periods) plus the live access window, which renewals move without adding a history row.
+ */
+export function resolveStatsSubscription(
+  adminSettingsRaw: string | null | undefined,
+): StatsSubscription {
+  const deleted = readDeletedSubscriptionPeriods(adminSettingsRaw);
+  const history = readNetworkSubscriptionHistory(adminSettingsRaw).filter(
+    (p) => !isSubscriptionPeriodDeleted(p, deleted),
+  );
+  const candidates = [...history];
+  const access = readPcuAccessSettings(adminSettingsRaw, { accessStartIso: '', accessEndIso: '' });
+  const accessStart = sliceYmd(access.accessStartIso);
+  if (accessStart) {
+    const accessPeriod: NetworkSubscriptionPeriod = {
+      id: 'pcu-access-account',
+      dateStart: accessStart,
+      dateEnd: sliceYmd(access.accessEndIso) || null,
+      entityId: null,
+    };
+    // The account window is shared with the primary club, whose rows carry the club id.
+    if (
+      !history.some(
+        (p) =>
+          sliceYmd(p.dateStart) === accessStart &&
+          sliceYmd(p.dateEnd) === sliceYmd(accessPeriod.dateEnd),
+      ) &&
+      !isSubscriptionPeriodDeleted(accessPeriod, deleted)
+    ) {
+      candidates.push(accessPeriod);
+    }
+  }
+
+  // Legacy accounts with no history yet: keep counted (cannot prove expiry), nothing paid on record.
+  if (candidates.length === 0) {
+    return {
+      active: true,
+      version: null,
+      historyVersion: null,
+      amountPaid: 0,
+      renewal: false,
+      clubAccount: false,
+    };
+  }
+
+  // A missing end means start + standard duration (as in the admin lists), not "never expires".
+  const effectiveEndMs = (p: NetworkSubscriptionPeriod) =>
+    parseYmdMs(inferMembershipEndDateYmd(p.dateStart, p.dateEnd));
+  const last = [...candidates].sort(
+    (a, b) =>
+      effectiveEndMs(b) - effectiveEndMs(a) || parseYmdMs(b.dateStart) - parseYmdMs(a.dateStart),
+  )[0]!;
+  if (!isActiveMembershipPeriod(last.dateStart, last.dateEnd)) {
+    return {
+      active: false,
+      version: null,
+      historyVersion: null,
+      amountPaid: 0,
+      renewal: false,
+      clubAccount: false,
+    };
+  }
+
+  const runningToday = candidates.filter(
+    (p) => periodStatusFromDates(p) !== 'Expired' && !isNotYetActiveMembershipPeriod(p),
+  );
+  const current = runningToday.length > 0 ? sortPeriodsByStartDesc(runningToday)[0]! : last;
+  // A renewal starts the day after the previous end (or later when it had already expired).
+  const currentStartMs = parseYmdMs(sliceYmd(current.dateStart));
+  const renewal =
+    currentStartMs > 0 &&
+    candidates.some(
+      (p) =>
+        p !== current &&
+        parseYmdMs(sliceYmd(p.dateStart)) < currentStartMs &&
+        effectiveEndMs(p) > 0 &&
+        effectiveEndMs(p) <= currentStartMs + 24 * 60 * 60 * 1000,
+    );
+  return {
+    active: true,
+    version: current.version?.trim() || null,
+    historyVersion:
+      sortPeriodsByStartDesc(history).find((p) => p.version?.trim())?.version?.trim() || null,
+    amountPaid: parseAmountPaid(current.amountPaid),
+    renewal,
+    clubAccount: Boolean(current.purchasedByClubId?.trim()),
+  };
+}
+
+/**
+ * Records what was paid for one membership window. Updates the history row with the same
+ * entity + dates, or adds one (hidden in the admin lists, which show the live row for it).
+ */
+export function setMembershipPeriodAmountPaid(
+  adminSettingsRaw: string | null | undefined,
+  window: Pick<NetworkSubscriptionPeriod, 'entityId' | 'dateStart' | 'dateEnd' | 'version' | 'username' | 'companyName'>,
+  amountPaid: string,
+): string {
+  const history = readNetworkSubscriptionHistory(adminSettingsRaw);
+  const period: NetworkSubscriptionPeriod = {
+    id: `payment-${Date.now()}`,
+    dateStart: sliceYmd(window.dateStart),
+    dateEnd: sliceYmd(window.dateEnd) || null,
+    entityId: window.entityId ?? null,
+    version: window.version,
+    username: window.username,
+    companyName: window.companyName,
+  };
+  const key = periodDedupeKey(period);
+  const existing = history.find((p) => periodDedupeKey(p) === key);
+  if (existing) {
+    return mergeNetworkSubscriptionHistory(
+      adminSettingsRaw,
+      history.map((p) => (p === existing ? { ...p, amountPaid } : p)),
+    );
+  }
+  if (!amountPaid) return adminSettingsRaw?.trim() || '{}';
+  return mergeNetworkSubscriptionHistory(adminSettingsRaw, [
+    ...history,
+    { ...period, status: periodDisplayStatus(period.dateEnd), amountPaid },
+  ]);
+}
+
+/** When only the end date of a window is corrected, its recorded payment moves with it. */
+export function moveMembershipPeriodEnd(
+  adminSettingsRaw: string | null | undefined,
+  window: { entityId: string | null; dateStart: string; previousEnd: string | null; nextEnd: string | null },
+): string {
+  const history = readNetworkSubscriptionHistory(adminSettingsRaw);
+  const fromKey = periodDedupeKey({
+    entityId: window.entityId,
+    dateStart: window.dateStart,
+    dateEnd: window.previousEnd,
+  } as NetworkSubscriptionPeriod);
+  const target = history.find((p) => periodDedupeKey(p) === fromKey && p.amountPaid?.trim());
+  if (!target || sliceYmd(window.previousEnd) === sliceYmd(window.nextEnd)) {
+    return adminSettingsRaw?.trim() || '{}';
+  }
+  return mergeNetworkSubscriptionHistory(
+    adminSettingsRaw,
+    history.map((p) => (p === target ? { ...p, dateEnd: sliceYmd(window.nextEnd) || null } : p)),
+  );
+}
+
+/** Amount recorded for one membership window ('' when none). */
+export function readMembershipPeriodAmountPaid(
+  adminSettingsRaw: string | null | undefined,
+  window: { entityId: string | null; dateStart: string; dateEnd: string | null },
+): string {
+  const key = periodDedupeKey(window as NetworkSubscriptionPeriod);
+  const history = readNetworkSubscriptionHistory(adminSettingsRaw);
+  const exact = history.find((p) => periodDedupeKey(p) === key);
+  if (exact || window.entityId) return exact?.amountPaid ?? '';
+  // The account window is shared with the primary club, whose rows carry the club id.
+  return (
+    history.find(
+      (p) =>
+        sliceYmd(p.dateStart) === sliceYmd(window.dateStart) &&
+        sliceYmd(p.dateEnd) === sliceYmd(window.dateEnd) &&
+        p.amountPaid?.trim(),
+    )?.amountPaid ?? ''
+  );
 }
 
 export function readNetworkSubscriptionHistory(
@@ -413,6 +645,10 @@ export function readNetworkSubscriptionHistory(
       paymentMethod: typeof p.paymentMethod === 'string' ? p.paymentMethod : undefined,
       amountPaid: typeof p.amountPaid === 'string' ? p.amountPaid : undefined,
       discountPercent: typeof p.discountPercent === 'string' ? p.discountPercent : undefined,
+      purchasedByClubId:
+        typeof p.purchasedByClubId === 'string' && p.purchasedByClubId.trim()
+          ? p.purchasedByClubId
+          : undefined,
     }))
     .filter((p) => Boolean(p.dateStart));
   return dedupeSubscriptionPeriods(parsed);

@@ -82,6 +82,12 @@ export async function GET(request: NextRequest) {
           }
         },
         
+        teamMemberships: {
+          select: {
+            team: { select: { id: true, name: true } },
+          },
+        },
+
         // If you migrated coach relationships
         coaches: {
           include: {

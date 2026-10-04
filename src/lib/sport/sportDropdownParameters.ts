@@ -132,6 +132,7 @@ export const DEFAULT_SPORT_DROPDOWN_PARAM_KEYS = [
   { key: 'category', enLabel: 'Category' },
   { key: 'position', enLabel: 'Position' },
   { key: 'specialty', enLabel: 'Specialty' },
+  { key: 'registration_type', enLabel: 'Registration type' },
 ] as const;
 
 const ITEM_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#a855f7', '#f59e0b', '#06b6d4'];

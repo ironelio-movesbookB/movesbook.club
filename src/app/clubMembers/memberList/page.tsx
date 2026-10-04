@@ -3,12 +3,16 @@ import Image from 'next/image';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CalendarClock, Pencil, Trash2, User, UserPlus } from 'lucide-react';
-import ClubMemberArchivePage, { memberTypeBadge } from '@/components/club/members/ClubMemberArchivePage';
+import { CalendarClock, Eye, Pencil, Trash2, UserPlus } from 'lucide-react';
+import ClubMemberArchivePage, {
+  memberTypeBadge,
+  type MemberArchiveViewMode,
+} from '@/components/club/members/ClubMemberArchivePage';
 import AddMemberModal from '@/components/AddMemberModal';
 import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import ClubMemberArchiveHeader from './components/status';
 import MemberArchiveTopNav, {
+  MemberArchiveTitle,
   type MemberArchiveNavMode,
   type MemberArchiveNavRole,
   type MemberArchiveSection,
@@ -35,7 +39,13 @@ import {
 } from '@/lib/entity/entityProfileLabels';
 import type { Column, Member } from '@/types/clubTable';
 import { staffRowTextClass } from '@/lib/club/clubStaff.constants';
-import type { MemberArchiveStatus } from '@/lib/club/memberArchiveStatus';
+import {
+  memberArchiveStatusShortLabel,
+  memberArchiveStatusTextClass,
+  normalizeMemberArchiveStatus,
+  type MemberArchiveStatus,
+} from '@/lib/club/memberArchiveStatus';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type MemberCapacityResponse = {
   subscriptionSettingId: number | null;
@@ -103,6 +113,8 @@ function MemberListPageContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [addError, setAddError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [archiveViewMode, setArchiveViewMode] = useState<MemberArchiveViewMode>('all');
+  const [favouritePendingRemove, setFavouritePendingRemove] = useState<Member | null>(null);
   const [capacityPayload, setCapacityPayload] = useState<MemberCapacityResponse | null>(null);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -112,6 +124,8 @@ function MemberListPageContent() {
     [user?.userType],
   );
   const isTeamWorkspace = entityKind === 'team';
+  /** Coach (ID6): athletes trained + groups trained of the signed-in coach. */
+  const isCoachWorkspace = entityKind === 'coaching-group';
 
   const archiveNavRole = useMemo(
     () => archiveNavRoleFromUserType(user?.userType),
@@ -190,11 +204,11 @@ function MemberListPageContent() {
   );
 
   const clubId = useMemo(() => {
-    if (isTeamWorkspace) return null;
+    if (isTeamWorkspace || isCoachWorkspace) return null;
     if (contextClubId) return contextClubId;
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('selectedClub');
-  }, [contextClubId, isTeamWorkspace]);
+  }, [contextClubId, isTeamWorkspace, isCoachWorkspace]);
 
   useEffect(() => {
     if (!isTeamWorkspace) {
@@ -237,25 +251,57 @@ function MemberListPageContent() {
     };
   }, [isTeamWorkspace, refreshKey]);
 
-  const workspaceId = isTeamWorkspace ? teamId : clubId;
+  const workspaceId = isCoachWorkspace ? user?.id ?? null : isTeamWorkspace ? teamId : clubId;
 
   const openMemberProfile = useCallback(
     (member: Member, mode: 'view' | 'edit') => {
       const id = member.memberId || member.id;
       if (!id) return;
       const q = new URLSearchParams();
-      if (isTeamWorkspace && teamId) q.set('teamId', teamId);
+      if (isCoachWorkspace && user?.id) q.set('coachId', user.id);
+      else if (isTeamWorkspace && teamId) q.set('teamId', teamId);
       else if (clubId) q.set('clubId', clubId);
       q.set('mode', mode);
       router.push(`/clubMembers/memberProfile/${encodeURIComponent(id)}?${q.toString()}`);
     },
-    [clubId, isTeamWorkspace, router, teamId],
+    [clubId, isCoachWorkspace, isTeamWorkspace, router, teamId, user?.id],
   );
 
   const requestDeleteMember = useCallback((member: Member) => {
     setAddError('');
     setMemberPendingDelete(member);
   }, []);
+
+  const handleConfirmRemoveFavourite = useCallback(async () => {
+    const member = favouritePendingRemove;
+    if (!member) return;
+    const id = member.memberId || member.id;
+    if (!id) {
+      setFavouritePendingRemove(null);
+      return;
+    }
+    setBusyId(id);
+    setAddError('');
+    try {
+      const res = await fetch(withSelectedClubId('/api/club/member-favourites'), {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberIds: [id] }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : 'Failed to remove from Favourites',
+        );
+      }
+      setFavouritePendingRemove(null);
+      setRefreshKey((k) => k + 1);
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : 'Failed to remove from Favourites');
+    } finally {
+      setBusyId(null);
+    }
+  }, [favouritePendingRemove]);
 
   const handleConfirmDeleteMember = useCallback(async () => {
     const member = memberPendingDelete;
@@ -282,7 +328,9 @@ function MemberListPageContent() {
     setBusyId(id);
     setAddError('');
     try {
-      const url = isTeamWorkspace
+      const url = isCoachWorkspace
+        ? `/api/coach/athletes/${encodeURIComponent(id)}`
+        : isTeamWorkspace
         ? `/api/teams/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`
         : withSelectedClubId(
             `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/${encodeURIComponent(id)}`,
@@ -301,7 +349,7 @@ function MemberListPageContent() {
     } finally {
       setBusyId(null);
     }
-  }, [isTeamWorkspace, memberPendingDelete, workspaceId]);
+  }, [isCoachWorkspace, isTeamWorkspace, memberPendingDelete, workspaceId]);
 
   const deleteConfirmMessage = useMemo(() => {
     if (!memberPendingDelete) return '';
@@ -312,33 +360,36 @@ function MemberListPageContent() {
       memberPendingDelete.username ||
       memberPendingDelete.memberId ||
       memberPendingDelete.id;
+    if (isCoachWorkspace) {
+      return `Stop training ${label}? They are also removed from your groups trained. Their Movesbook account will not be deleted.`;
+    }
     return `Remove ${label} from this ${isTeamWorkspace ? 'team' : 'club'}? Their Movesbook account will not be deleted.`;
-  }, [isTeamWorkspace, memberPendingDelete]);
+  }, [isCoachWorkspace, isTeamWorkspace, memberPendingDelete]);
 
   const columns: Column[] = useMemo(
     () => [
-      {
-        key: 'image',
-        header: 'Image',
-        render: (value) =>
-          value ? (
+  {
+    key: 'image',
+    header: 'Image',
+    render: (value) =>
+      value ? (
             <Image
-              src={String(value)}
-              alt=""
+          src={String(value)}
+          alt=""
               className="h-10 w-10 rounded-full object-cover"
               width={40}
               height={40}
               unoptimized
-            />
-          ) : (
+        />
+      ) : (
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400">
-              —
-            </span>
-          ),
-      },
-      { key: 'surname', header: 'Surname' },
-      { key: 'name', header: 'Name' },
-      { key: 'gender', header: 'Gender' },
+          —
+        </span>
+      ),
+  },
+  { key: 'surname', header: 'Surname' },
+  { key: 'name', header: 'Name' },
+  { key: 'gender', header: 'Gender' },
       {
         key: 'dateOfBirth',
         header: 'Date of Birth',
@@ -347,34 +398,41 @@ function MemberListPageContent() {
       },
       {
         key: 'operator',
-        header: 'Operator',
+        header: 'Type of User',
         render: (value, row) => {
           const label = String(value ?? 'Member');
           const staffType = String(row.staffType ?? '');
-          // Keep A/B/C row colors; only staff types get their own accent.
-          const colorClass = staffType
-            ? staffRowTextClass({
-                staffType,
-                role: String(row.staffRole ?? ''),
-              })
-            : undefined;
-          return <span className={colorClass}>{label}</span>;
+          if (staffType) {
+            return (
+              <span className={staffRowTextClass({ staffType, role: String(row.staffRole ?? '') })}>
+                {label}
+              </span>
+            );
+          }
+          // Coach view labels (Coach / Athlete trained) are not membership statuses.
+          if (label !== 'Member') return <span>{label}</span>;
+          const status = normalizeMemberArchiveStatus(String(row.membershipStatus ?? ''));
+          return (
+            <span className={memberArchiveStatusTextClass(status)}>
+              {memberArchiveStatusShortLabel(status)}
+            </span>
+          );
         },
       },
-      {
-        key: 'memberType',
-        header: 'Member Type',
-        render: (value) => memberTypeBadge(value),
-      },
-      {
-        key: 'localCity',
-        header: 'Local City',
-        render: (value, row) => String(value || row.Localcity || '-'),
-      },
-      { key: 'phone', header: 'Phone' },
-      {
-        key: 'insertDate',
-        header: 'Insert Date',
+  {
+    key: 'memberType',
+    header: 'Member Type',
+    render: (value) => memberTypeBadge(value),
+  },
+  {
+    key: 'localCity',
+    header: 'Local City',
+    render: (value, row) => String(value || row.Localcity || '-'),
+  },
+  { key: 'phone', header: 'Phone' },
+  {
+    key: 'insertDate',
+    header: 'Insert Date',
         render: (_value, row) =>
           String(row.insertDateDisplay || formatDisplayDate(row.insertDate) || '-'),
       },
@@ -393,7 +451,7 @@ function MemberListPageContent() {
                 onClick={() => openMemberProfile(row, 'view')}
                 className="rounded p-1 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40"
               >
-                <User className="h-4 w-4" />
+                <Eye className="h-4 w-4" />
               </button>
               <button
                 type="button"
@@ -414,9 +472,24 @@ function MemberListPageContent() {
               </button>
               <button
                 type="button"
-                title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
+                title={
+                  archiveViewMode === 'favourites'
+                    ? 'Remove from Favourites'
+                    : isCoachWorkspace
+                      ? 'Stop training'
+                      : isTeamWorkspace
+                      ? 'Remove from team'
+                      : 'Remove from club'
+                }
                 disabled={busy}
-                onClick={() => requestDeleteMember(row)}
+                onClick={() => {
+                  if (archiveViewMode === 'favourites') {
+                    setAddError('');
+                    setFavouritePendingRemove(row);
+                  } else {
+                    requestDeleteMember(row);
+                  }
+                }}
                 className="rounded p-1 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" />
@@ -426,23 +499,25 @@ function MemberListPageContent() {
         },
       },
     ],
-    [busyId, isTeamWorkspace, openMemberProfile, requestDeleteMember],
+    [archiveViewMode, busyId, isCoachWorkspace, isTeamWorkspace, openMemberProfile, requestDeleteMember],
   );
 
+  const capacityOwnerId = isCoachWorkspace ? null : workspaceId;
   const loadCapacity = useCallback(async () => {
-    if (isTeamWorkspace || !clubId) {
+    if (!capacityOwnerId) {
       setCapacityPayload(null);
       return;
     }
     try {
+      const param = isTeamWorkspace ? 'teamId' : 'clubId';
       const response = await clubApiFetch<MemberCapacityResponse>(
-        `/api/club/member-capacity?clubId=${encodeURIComponent(clubId)}`,
+        `/api/club/member-capacity?${param}=${encodeURIComponent(capacityOwnerId)}`,
       );
       setCapacityPayload(response);
     } catch {
       setCapacityPayload(null);
     }
-  }, [clubId, isTeamWorkspace]);
+  }, [capacityOwnerId, isTeamWorkspace]);
 
   useEffect(() => {
     void loadCapacity();
@@ -500,6 +575,21 @@ function MemberListPageContent() {
             : 'Select a club under My clubs before adding members.',
         );
       }
+      if (isCoachWorkspace) {
+        const response = await fetch('/api/coach/athletes/add', {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: data.username, password: data.password }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof payload.error === 'string' ? payload.error : 'Failed to add athlete',
+          );
+        }
+        setRefreshKey((k) => k + 1);
+        return;
+      }
       if (!data.membershipStatus) {
         throw new Error('Please choose which list to put the new member in.');
       }
@@ -510,13 +600,13 @@ function MemberListPageContent() {
             `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/add`,
           );
       const response = await fetch(url, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          username: data.username,
-          password: data.password,
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            username: data.username,
+            password: data.password,
           membershipStatus: data.membershipStatus,
-        }),
+          }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -527,7 +617,7 @@ function MemberListPageContent() {
 
       setRefreshKey((k) => k + 1);
     },
-    [isTeamWorkspace, workspaceId],
+    [isCoachWorkspace, isTeamWorkspace, workspaceId],
   );
 
   return (
@@ -540,9 +630,14 @@ function MemberListPageContent() {
         navMode={archiveNavMode}
       />
 
+      <MemberArchiveTitle
+        settingsActive={archiveSection === 'settings'}
+        onSettingsClick={() => setArchiveSection('settings')}
+      />
+
       {showMembersArchive ? (
         <>
-          {archiveSection === 'athletes' && capacity && !isTeamWorkspace ? (
+          {archiveSection === 'athletes' && capacity ? (
             <ClubMemberArchiveHeader
               capacity={capacity}
               onPurchaseMembers={() => {
@@ -556,7 +651,7 @@ function MemberListPageContent() {
             />
           ) : null}
 
-          {archiveSection === 'athletes' && !capacity && clubId && !isTeamWorkspace ? (
+          {archiveSection === 'athletes' && !capacity && capacityOwnerId ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               Loading member capacity from your subscription version…
             </div>
@@ -568,16 +663,20 @@ function MemberListPageContent() {
                 ? 'Select a team under My Team to view members.'
                 : 'Select a club workspace to view member capacity from your subscription version.'}
             </div>
-          ) : null}
+      ) : null}
 
           {addError ? <p className="text-sm text-red-600">{addError}</p> : null}
           <ClubMemberArchivePage
-            columns={columns}
-            refreshKey={refreshKey}
+        columns={columns}
+        refreshKey={refreshKey}
             membershipStatusFilter={membershipStatusFilter}
             onMembershipStatusChanged={() => setRefreshKey((k) => k + 1)}
+            onViewModeChange={setArchiveViewMode}
+            statusChangesEnabled={!isCoachWorkspace}
             footerHint={
-              membershipStatusFilter === 'all'
+              isCoachWorkspace
+                ? 'Athletes trained by you: added directly or members of your groups trained. Groups and the Group of training filter use your groups trained.'
+                : membershipStatusFilter === 'all'
                 ? 'All profiles: black = Athlete\\Member (green → archive), red = pending, blue = not member. Archived members are under Members Archived.'
                 : membershipStatusFilter === 'archived'
                   ? 'Members Archived — grey rows. Click the grey circle to restore as Athlete\\Member.'
@@ -587,21 +686,26 @@ function MemberListPageContent() {
             }
             addMemberAction={
               archiveSection === 'athletes' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddError('');
-                    setShowAddMemberModal(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-50"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Add a member
-                </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAddError('');
+              setShowAddMemberModal(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add a member
+          </button>
               ) : null
             }
           />
         </>
+      ) : archiveSection === 'parents' && isCoachWorkspace ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+          Parents &amp; tutors are kept by the athletes&apos; clubs and teams. Open an athlete
+          trained from Members to read their profile.
+        </div>
       ) : archiveSection === 'parents' ? (
         workspaceId ? (
           <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -633,13 +737,13 @@ function MemberListPageContent() {
       <AddMemberModal
         isOpen={showAddMemberModal}
         onClose={() => setShowAddMemberModal(false)}
-        entityType={isTeamWorkspace ? 'team' : 'club'}
+        entityType={isCoachWorkspace ? 'coaching-group' : isTeamWorkspace ? 'team' : 'club'}
         onAddExistingUser={handleAddExistingUser}
       />
 
       <PromocodeConfirmModal
         open={Boolean(memberPendingDelete)}
-        title={isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
+        title={isCoachWorkspace ? 'Stop training' : isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
         message={deleteConfirmMessage}
         confirmLabel="Remove"
         cancelLabel="Cancel"
@@ -655,6 +759,27 @@ function MemberListPageContent() {
         }}
         onConfirm={() => void handleConfirmDeleteMember()}
       />
+
+      <PromocodeConfirmModal
+        open={Boolean(favouritePendingRemove)}
+        title="Remove from Favourites"
+        message={`Remove ${
+          [favouritePendingRemove?.name, favouritePendingRemove?.surname].filter(Boolean).join(' ') ||
+          'this member'
+        } from Favourites? The member stays in the club list.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        loading={Boolean(
+          favouritePendingRemove &&
+            busyId === (favouritePendingRemove.memberId || favouritePendingRemove.id),
+        )}
+        onClose={() => {
+          if (busyId) return;
+          setFavouritePendingRemove(null);
+        }}
+        onConfirm={() => void handleConfirmRemoveFavourite()}
+      />
     </div>
   );
 }
@@ -662,7 +787,9 @@ function MemberListPageContent() {
 export default function MemberListPage() {
   return (
     <Suspense fallback={<p className="p-4 text-sm text-gray-500">Loading…</p>}>
-      <MemberListPageContent />
+      <AutoTranslate>
+        <MemberListPageContent />
+      </AutoTranslate>
     </Suspense>
   );
 }

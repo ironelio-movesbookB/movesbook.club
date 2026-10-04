@@ -38,6 +38,8 @@ type Props = {
   onSortChange?: (next: ArchiveSortState) => void;
   /** Extra classes on each data row (e.g. status text color). */
   getRowClassName?: (row: Member) => string;
+  /** Grid lines around every cell (header and body). */
+  bordered?: boolean;
 };
 
 const ACTION_KEYS = new Set(['edit', 'delete', 'options']);
@@ -59,7 +61,9 @@ export default function ProcedureArchiveTable({
   sort: controlledSort,
   onSortChange,
   getRowClassName,
+  bordered = false,
 }: Props) {
+  const cellBorder = bordered ? 'border border-gray-300' : '';
   const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(null);
   const sort = controlledSort !== undefined ? controlledSort : internalSort;
   const clientSort = !onSortChange;
@@ -97,12 +101,12 @@ export default function ProcedureArchiveTable({
     dataColumns.length + (actionColumns.length > 0 ? 1 : 0) + (selectable ? 1 : 0);
 
   return (
-    <div className="border rounded-lg overflow-x-auto">
-      <table className="min-w-full text-sm">
+    <div className={`isolate border rounded-lg overflow-x-auto ${bordered ? 'border-gray-300' : ''}`}>
+      <table className={`min-w-full text-sm ${bordered ? 'border-collapse' : ''}`}>
         <thead className="bg-teal-800 text-white">
           <tr>
             {selectable && (
-              <th className="px-2 py-2 w-10">
+              <th className={`px-2 py-2 w-10 ${cellBorder}`}>
                 <input
                   type="checkbox"
                   checked={allSelectableChecked}
@@ -121,7 +125,10 @@ export default function ProcedureArchiveTable({
               const sortable = isColumnSortable(col.key, col.sortable);
               const active = sort?.key === col.key;
               return (
-                <th key={String(col.key)} className="px-3 py-2 text-left whitespace-nowrap">
+                <th
+                  key={String(col.key)}
+                  className={`px-3 py-2 text-left whitespace-nowrap ${cellBorder}`}
+                >
                   <ArchiveSortHeader
                     label={col.header}
                     sortable={sortable}
@@ -133,7 +140,11 @@ export default function ProcedureArchiveTable({
               );
             })}
             {actionColumns.length > 0 && (
-              <th className="sticky right-0 z-20 border-l border-teal-700 bg-teal-800 px-3 py-2 text-left whitespace-nowrap">
+              <th
+                className={`sticky right-0 z-20 bg-teal-800 px-3 py-2 text-left whitespace-nowrap ${
+                  bordered ? cellBorder : 'border-l border-teal-700'
+                }`}
+              >
                 <span className="flex items-center gap-4">
                   {actionColumns.map((col) => (
                     <span key={String(col.key)}>{col.header}</span>
@@ -146,13 +157,19 @@ export default function ProcedureArchiveTable({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={Math.max(colSpan, 1)} className="px-3 py-8 text-center text-gray-500">
+              <td
+                colSpan={Math.max(colSpan, 1)}
+                className={`px-3 py-8 text-center text-gray-500 ${cellBorder}`}
+              >
                 Loading...
               </td>
             </tr>
           ) : displayRows.length === 0 ? (
             <tr>
-              <td colSpan={Math.max(colSpan, 1)} className="px-3 py-8 text-center text-gray-500">
+              <td
+                colSpan={Math.max(colSpan, 1)}
+                className={`px-3 py-8 text-center text-gray-500 ${cellBorder}`}
+              >
                 {emptyMessage}
               </td>
             </tr>
@@ -178,14 +195,14 @@ export default function ProcedureArchiveTable({
               return (
                 <tr
                   key={row.id ?? `${row.name}-${row.insertDate}`}
-                  className={`group border-t cursor-pointer ${rowBg} ${rowHover} ${
+                  className={`group ${bordered ? '' : 'border-t'} cursor-pointer ${rowBg} ${rowHover} ${
                     row.isDuplicate ? 'text-red-800' : ''
                   } ${statusClass}`}
                   onClick={() => onRowClick?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                 >
                   {selectable && (
-                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td className={`px-2 py-2 ${cellBorder}`} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -198,7 +215,7 @@ export default function ProcedureArchiveTable({
                   {dataColumns.map((col) => (
                     <td
                       key={String(col.key)}
-                      className={`px-3 py-2 whitespace-nowrap ${statusClass || 'text-gray-800'}`}
+                      className={`px-3 py-2 whitespace-nowrap ${cellBorder} ${statusClass || 'text-gray-800'}`}
                     >
                       {col.render
                         ? col.render(row[col.key], row)
@@ -207,7 +224,9 @@ export default function ProcedureArchiveTable({
                   ))}
                   {actionColumns.length > 0 && (
                     <td
-                      className={`sticky right-0 z-10 border-l border-gray-200 px-3 py-2 text-gray-800 whitespace-nowrap ${rowBg} ${actionHover}`}
+                      className={`sticky right-0 z-10 px-3 py-2 text-gray-800 whitespace-nowrap ${
+                        bordered ? cellBorder : 'border-l border-gray-200'
+                      } ${rowBg} ${actionHover}`}
                     >
                       <span className="flex items-center gap-4">
                         {actionColumns.map((col) => (

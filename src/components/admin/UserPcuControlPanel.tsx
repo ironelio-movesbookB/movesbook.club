@@ -302,6 +302,9 @@ export default function UserPcuControlPanel({
   );
   const [profilePanelSaving, setProfilePanelSaving] = useState(false);
   const [pcuAccessSaving, setPcuAccessSaving] = useState(false);
+  /** € paid for the window shown in Start/End (statistics Income uses it). */
+  const [periodAmountPaid, setPeriodAmountPaid] = useState('');
+  const periodAmountSavedRef = useRef('');
   const [profileRowSelected, setProfileRowSelected] = useState<Set<string>>(() => new Set());
   const [actionBusy, setActionBusy] = useState(false);
   const [msgModalOpen, setMsgModalOpen] = useState(false);
@@ -2034,9 +2037,34 @@ export default function UserPcuControlPanel({
     [user.userId, tagUser, favouritePriority],
   );
 
+  useEffect(() => {
+    const token = getAdminBearerToken();
+    if (!token || !accessStart) return;
+    let cancelled = false;
+    const qs = new URLSearchParams({ dateStart: accessStart, dateEnd: accessEnd });
+    if (user.entityId) qs.set('entityId', user.entityId);
+    if (user.entityKind) qs.set('entityKind', user.entityKind);
+    void fetch(
+      `/api/admin/registered-users/${encodeURIComponent(user.userId)}/pcu-access?${qs}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const value = String(data.amountPaid ?? '');
+        periodAmountSavedRef.current = value;
+        setPeriodAmountPaid(value);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user.userId, user.entityId, user.entityKind, accessStart, accessEnd]);
+
   const savePcuAccessSettings = useCallback(
-    async (patch: Partial<PcuAccessSettings>) => {
+    async (patch: Partial<PcuAccessSettings> & { amountPaid?: string }) => {
       const prev = { ...pcuAccessSnapshotRef.current };
+      const prevAmount = periodAmountSavedRef.current;
       const merged = {
         accessStartIso: patch.accessStartIso ?? prev.accessStart,
         accessEndIso: patch.accessEndIso ?? prev.accessEnd,
@@ -2087,6 +2115,7 @@ export default function UserPcuControlPanel({
             },
             body: JSON.stringify({
               ...merged,
+              ...(patch.amountPaid !== undefined ? { amountPaid: patch.amountPaid } : {}),
               clubId: user.entityId ?? undefined,
               entityId: user.entityId ?? undefined,
               entityKind: user.entityKind ?? undefined,
@@ -2095,6 +2124,10 @@ export default function UserPcuControlPanel({
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || 'Failed to save access settings');
+        if (typeof data.amountPaid === 'string') {
+          periodAmountSavedRef.current = data.amountPaid;
+          setPeriodAmountPaid(data.amountPaid);
+        }
         if (data.pcuAccess) {
           const { accessStart: start, accessEnd: end } = resolvePcuAccessDates(
             user,
@@ -2121,6 +2154,7 @@ export default function UserPcuControlPanel({
         setSuspendAccessControl(prev.suspendAccessControl);
         setSuspend(prev.suspend);
         pcuAccessSnapshotRef.current = prev;
+        setPeriodAmountPaid(prevAmount);
         window.alert(e instanceof Error ? e.message : 'Failed to save access settings');
       } finally {
         setPcuAccessSaving(false);
@@ -2425,6 +2459,26 @@ export default function UserPcuControlPanel({
                   <span className="text-green-600 font-semibold">(already renewed)</span>
                 ) : null}
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <span>Amount paid (€)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={periodAmountPaid}
+                  disabled={pcuAccessSaving || !accessStart}
+                  placeholder="0.00"
+                  title="Money received for this Start–End period (used by Statistics → Income)"
+                  onChange={(e) => setPeriodAmountPaid(e.target.value)}
+                  onBlur={() => {
+                    if (periodAmountPaid.trim() === periodAmountSavedRef.current.trim()) return;
+                    void savePcuAccessSettings({ amountPaid: periodAmountPaid.trim() });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                  className="w-24 rounded border border-gray-300 px-2 py-1 text-right"
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"

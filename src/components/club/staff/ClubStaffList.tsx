@@ -242,8 +242,8 @@ export default function ClubStaffList() {
 
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 
-      <div className="overflow-x-auto border border-gray-200 border-t-0 bg-white">
-        <table className="min-w-full text-sm">
+      <div className="overflow-x-auto border border-gray-300 border-t-0 bg-white">
+        <table className="min-w-full border-collapse text-sm [&_td]:border [&_td]:border-gray-300 [&_th]:border [&_th]:border-gray-300">
           <thead>
             <tr className="bg-[#efe7b3] text-left text-gray-900">
               <th className="w-10 px-3 py-2">
@@ -287,7 +287,7 @@ export default function ClubStaffList() {
                 return (
                   <tr
                     key={row.id}
-                    className={`border-t ${row.isClubAdmin ? 'bg-[#efe7b3]' : 'bg-[#e8f4fc]'}`}
+                    className={row.isClubAdmin ? 'bg-[#efe7b3]' : 'bg-[#e8f4fc]'}
                   >
                     <td className="px-3 py-2">
                       {row.isClubAdmin ? null : (

@@ -5,11 +5,12 @@
         "seed": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed.ts"
     },
     "scripts": {
-        "dev": "next dev -p 3000",
+        "dev": "next dev -p 3001",
         "build": "prisma generate && node --max-old-space-size=6144 ./node_modules/next/dist/bin/next build",
         "build:clean": "rm -rf .next && npm run build",
         "start": "next start -p 3000",
         "lint": "next lint",
+        "i18n:extract": "node scripts/extract-ui-texts.cjs",
         "db:push": "prisma db push",
         "db:fix-food-legacy-ids": "npx tsx scripts/fix-food-database-legacy-ids.ts",
         "db:migrate": "prisma migrate deploy",
@@ -33,6 +34,9 @@
         "db:seed-outcome-settings": "node scripts/seed-outcome-settings-dev.js",
         "db:seed-procedures": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed-procedure-types.ts",
         "db:seed-outcomes": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed-outcomes.ts",
+        "db:export-sport-translations": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/export-sport-translations.ts",
+        "db:seed-sport-translations": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed-sport-translations.ts",
+        "db:seed-payment-info": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed-payment-info.ts",
         "db:migrate-outcomes": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json scripts/migrate-outcomes-from-legacy.ts",
         "db:ensure-promocode-meta": "npx tsx scripts/ensure-promocode-meta.ts",
         "db:backfill-versions": "npx tsx scripts/backfill-subscription-versions.ts"

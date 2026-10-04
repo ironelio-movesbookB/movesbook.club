@@ -12,6 +12,7 @@ import { applyEntityLogoOnSave } from '@/lib/entity/applyEntityLogoOnSave';
 import { useAuth } from '@/hooks/useAuth';
 import { isClubCreatedFromForm } from '@/lib/club/clubSidebarLabel';
 import { isTeamAccountUserType } from '@/utils/dashboardRouting';
+import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type TeamRecord = {
   id: string;
@@ -222,7 +223,9 @@ export default function EditTeamProfilePage() {
         </div>
       }
     >
-      <EditTeamProfileContent />
+      <AutoTranslate>
+        <EditTeamProfileContent />
+      </AutoTranslate>
     </Suspense>
   );
 }

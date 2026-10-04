@@ -35,11 +35,18 @@ const CODE_TO_NAME: Record<string, string> = Object.fromEntries(
   COUNTRIES_WITH_CODES.map(({ name, id }) => [id.toUpperCase(), name]),
 );
 
-export function countryDisplayName(code: string, countryId?: number): string {
-  const trimmed = String(code ?? '').trim();
-  if (!trimmed && (countryId == null || countryId === 0)) return 'Unknown / ID 0';
-  if (!trimmed) return countryId != null ? `ID ${countryId}` : 'Unknown';
-  return CODE_TO_NAME[trimmed.toUpperCase()] ?? trimmed;
+/** Full country name for a matrix row (server name first, never a bare code when it is known). */
+export function countryDisplayName(row: Pick<CountryMatrixRow, 'countryCode' | 'countryId' | 'countryName' | 'isUnknown'>): string {
+  if (row.isUnknown) return 'ID 0';
+  const code = String(row.countryCode ?? '').trim().toUpperCase();
+  const name = String(row.countryName ?? '').trim();
+  if (name && name.toUpperCase() !== code) return name;
+  return (code && CODE_TO_NAME[code]) || name || code || `Country #${row.countryId}`;
+}
+
+export function countryRowKey(row: Pick<CountryMatrixRow, 'countryCode' | 'countryId' | 'isUnknown'>): string {
+  if (row.isUnknown) return 'unknown';
+  return row.countryCode ? `code:${row.countryCode}` : `id:${row.countryId}`;
 }
 
 export type MonthMetricKey = 'invitesSent' | 'registrations' | 'successRate';
@@ -83,10 +90,12 @@ export type CountryMonthCell = { invitesSent: number; registrations: number };
 export type CountryMatrixRow = {
   countryId: number;
   countryCode: string;
+  countryName: string;
+  isUnknown: boolean;
   months: Record<number, CountryMonthCell>;
 };
 
-/** Rank countries by total registrations (excluding ID 0); keep top 15 + Rest of the world. */
+/** One month's countries ranked by value (the ID 0 row excluded): top 15 + "Rest of the world". */
 export function topCountriesForMonth(
   rows: CountryMatrixRow[],
   month: number,
@@ -94,13 +103,13 @@ export function topCountriesForMonth(
   topN = 15,
 ): Array<{ key: string; label: string; value: number; color: string }> {
   const scored = rows
-    .filter((r) => Number(r.countryId) !== 0)
+    .filter((r) => !r.isUnknown)
     .map((r) => {
       const cell = r.months[month];
       const value = cell ? Number(cell[metric] ?? 0) : 0;
       return {
-        key: `${r.countryId}:${r.countryCode}`,
-        label: countryDisplayName(r.countryCode, r.countryId),
+        key: countryRowKey(r),
+        label: countryDisplayName(r),
         value,
       };
     })

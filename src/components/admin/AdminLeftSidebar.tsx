@@ -272,10 +272,6 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                   <ClipboardList className="w-4 h-4 text-white" />
                   <span>Overview totals</span>
                 </Link>
-                <Link href="/admin/statistics/recovery" className="flex items-center gap-3 px-3 py-2 bg-[#941751] border border-[#aeaeae] hover:bg-[#7a1343] transition text-sm">
-                  <ClipboardList className="w-4 h-4 text-white" />
-                  <span>Recovery plan</span>
-                </Link>
                 <Link href="/admin/statistics/logins" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm">
                   <ClipboardCheck className="w-4 h-4 text-white" />
                   <span>Users Login</span>
@@ -306,6 +302,11 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                     <div className="w-[92%] ml-auto space-y-1">
                       {(
                         [
+                          {
+                            href: '/admin/statistics/recovery',
+                            label: 'Cost recovery plan',
+                            Icon: ClipboardList,
+                          },
                           {
                             href: '/admin/statistics/users-distribution',
                             label: 'Pie of distribution users',

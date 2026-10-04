@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { getUserInfo } from '@/utils/auth.utils';
+import { isTeamAccountUserType } from '@/utils/dashboardRouting';
 
 type TablesTabsProps = {
   active: string;
@@ -19,11 +22,20 @@ const TABLE_TABS = [
   { key: 'special_services', label: 'Special Services', href: '/club/settings/tables/special_services', enabled: true }
 ] as const;
 
+/** Team admins only manage member types; the other tables are club-only. */
+const TEAM_TABLE_KEYS = new Set<string>(['member_type']);
+
 export default function TablesTabs({ active }: TablesTabsProps) {
+  const [isTeamAccount, setIsTeamAccount] = useState(false);
+  useEffect(() => {
+    setIsTeamAccount(isTeamAccountUserType(String(getUserInfo()?.userType || '')));
+  }, []);
+  const tabs = isTeamAccount ? TABLE_TABS.filter((tab) => TEAM_TABLE_KEYS.has(tab.key)) : TABLE_TABS;
+
   return (
     <div className="overflow-x-auto border-b border-gray-200 bg-white">
       <div className="flex min-w-max items-center px-4">
-        {TABLE_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.key === active;
           const className = `relative px-4 py-3 text-sm font-semibold transition ${
             isActive

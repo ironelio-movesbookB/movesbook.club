@@ -7,7 +7,7 @@ import StatisticsPageShell, {
 } from '@/components/admin/statistics/StatisticsPageShell';
 import { StatisticsPieBlock } from '@/components/admin/statistics/StatisticsCharts';
 import VersionDistributionDrilldown from '@/components/admin/statistics/VersionDistributionDrilldown';
-import { useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
+import { formatEuro, useAdminStatistics } from '@/components/admin/statistics/useAdminStatistics';
 import { aggregateVersionsForScope } from '@/lib/admin/statisticsDrilldown';
 import type {
   StatsTypeKindFilter,
@@ -91,7 +91,7 @@ export default function TypeByCountryPage() {
           title={`${block?.label ?? 'Type'} — top 15 countries${hasOthers ? ' + Others' : ''}`}
           subtitle={
             block
-              ? `${block.total} users · ${sliceCount} slice${sliceCount === 1 ? '' : 's'}`
+              ? `${block.total} users · ${formatEuro(block.totalIncome)} · ${sliceCount} slice${sliceCount === 1 ? '' : 's'}`
               : undefined
           }
           slices={block?.countries ?? []}

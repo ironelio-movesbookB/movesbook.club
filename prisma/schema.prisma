@@ -1711,8 +1711,6 @@ model Club {
   memberGroups       ClubMemberGroup[]
   memberFavorites    ClubMemberFavorite[]
   websiteTopics      ClubWebsiteTopic[]
-  procedureRecords   ProcedureRecord[]
-  procedureReceipts  ProcedureReceipt[]
   outcomeSetting     ClubOutcomeSetting?
   customOutcomes     ClubCustomOutcome[]
   admin              User         @relation("ClubOwner", fields: [adminId], references: [id], onDelete: Cascade)
@@ -2035,6 +2033,129 @@ model SuperAdminSettings {
   updatedAt DateTime @updatedAt
 
   @@map("super_admin_settings")
+}
+
+/// Super Admin → Statistics → Cost recovery plan: costs and planned subscriptions per version (JSON).
+/// Also created on first use by src/lib/admin/costRecoveryPlanStore.ts (keep both in sync).
+model CostRecoveryPlan {
+  version   String   @id @db.VarChar(20)
+  data      String   @db.LongText
+  updatedAt DateTime @updatedAt
+
+  @@map("cost_recovery_plans")
+}
+
+/// Tables below are read/written with raw SQL and also created on first use by the listed file;
+/// they are declared here (ignored by the client) so `prisma db push` keeps them.
+
+/// src/lib/club/coachMemberLists.ts
+model CoachMemberFavoriteRow {
+  coachId   String   @map("coach_id")
+  memberId  String   @map("member_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([coachId, memberId])
+  @@index([memberId])
+  @@map("coach_member_favorites")
+  @@ignore
+}
+
+/// src/lib/club/teamMemberLists.ts
+model TeamMemberFavoriteRow {
+  teamId    String   @map("team_id")
+  memberId  String   @map("member_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([teamId, memberId])
+  @@index([memberId])
+  @@map("team_member_favorites")
+  @@ignore
+}
+
+/// src/lib/club/teamMemberLists.ts
+model TeamMemberGroupRow {
+  id        String   @id
+  teamId    String   @map("team_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@index([teamId])
+  @@map("team_member_groups")
+  @@ignore
+}
+
+/// src/lib/club/teamMemberLists.ts
+model TeamMemberGroupMemberRow {
+  groupId   String   @map("group_id")
+  memberId  String   @map("member_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([groupId, memberId])
+  @@index([memberId])
+  @@map("team_member_group_members")
+  @@ignore
+}
+
+/// src/lib/club/memberNotePopupDismissals.ts
+model MemberNotePopupDismissalRow {
+  userId     String   @map("user_id")
+  dismissKey String   @map("dismiss_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([userId, dismissKey])
+  @@map("member_note_popup_dismissals")
+  @@ignore
+}
+
+/// src/lib/club/memberProfileService.ts
+model TeamMemberNoteRow {
+  id              String    @id
+  clubMemberId    String
+  kind            String
+  title           String    @default("")
+  body            String    @db.Text
+  authorId        String?
+  parentId        String?
+  visibleToMember Boolean   @default(false)
+  commentsEnabled Boolean   @default(false)
+  enableFrom      DateTime?
+  enableTo        DateTime?
+  showAtLogin     Boolean   @default(false)
+  showAtLogout    Boolean   @default(false)
+  imageUrlsJson   String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+
+  @@index([clubMemberId, kind])
+  @@map("team_member_notes")
+  @@ignore
+}
+
+/// src/lib/promocodes/ensureMetaTables.ts
+model PromocodeAppSettingRow {
+  settingKey   String  @id @db.VarChar(64) @map("setting_key")
+  settingValue String? @db.Text @map("setting_value")
+
+  @@map("promocode_app_settings")
+  @@ignore
+}
+
+/// src/lib/messages/versionHistory.ts
+model WhyMovesbookSectionRow {
+  id           Int       @id @default(autoincrement())
+  sectionName  String    @default("") @db.VarChar(255) @map("section_name")
+  content      String?   @db.MediumText
+  langId       Int       @default(1) @map("lang_id")
+  module       String    @default("") @db.VarChar(64)
+  articleGroup String?   @db.VarChar(36) @map("article_group")
+  created      DateTime? @default(now()) @db.DateTime(0)
+  modified     DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([articleGroup], map: "idx_why_movesbook_article_group")
+  @@index([module, langId], map: "idx_why_movesbook_module_lang")
+  @@map("why_movesbook_sections")
+  @@ignore
 }
 
 /// Operator and Co-Admin accounts managed from the admin console (separate from `User` / `users_new`).
@@ -2758,6 +2879,7 @@ model ProcedureType {
 model ProcedureRecord {
   id              String                @id @default(cuid())
   procedureTypeId String
+  /// clubs_new.id, or teams_new.id in a Team workspace — so no foreign key to clubs_new.
   clubId          String
   memberId        String
   operatorId      String?
@@ -2773,7 +2895,6 @@ model ProcedureRecord {
   updatedAt       DateTime              @updatedAt
 
   procedureType ProcedureType    @relation(fields: [procedureTypeId], references: [id], onDelete: Restrict)
-  club          Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
   member        User             @relation("ProcedureMember", fields: [memberId], references: [id], onDelete: Restrict)
   operator      User?            @relation("ProcedureOperator", fields: [operatorId], references: [id], onDelete: SetNull)
   payments      ProcedurePayment[]
@@ -2798,6 +2919,8 @@ model ProcedurePayment {
   notes             String?  @db.Text
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  /// Also added on first use by src/lib/procedures/paymentVerification.ts.
+  toBeVerified      Boolean  @default(false)
 
   procedureRecord ProcedureRecord  @relation(fields: [procedureRecordId], references: [id], onDelete: Cascade)
   operator        User?            @relation("ProcedurePaymentOperator", fields: [operatorId], references: [id], onDelete: SetNull)
@@ -2811,6 +2934,7 @@ model ProcedureReceipt {
   id                 String   @id @default(cuid())
   procedureRecordId  String
   procedurePaymentId String?
+  /// clubs_new.id, or teams_new.id in a Team workspace — so no foreign key to clubs_new.
   clubId             String
   memberId           String
   operatorId         String?
@@ -2826,7 +2950,6 @@ model ProcedureReceipt {
 
   procedureRecord  ProcedureRecord   @relation(fields: [procedureRecordId], references: [id], onDelete: Cascade)
   procedurePayment ProcedurePayment? @relation(fields: [procedurePaymentId], references: [id], onDelete: SetNull)
-  club             Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   member           User              @relation("ProcedureReceiptMember", fields: [memberId], references: [id], onDelete: Restrict)
   operator         User?             @relation("ProcedureReceiptOperator", fields: [operatorId], references: [id], onDelete: SetNull)
 
@@ -3532,6 +3655,8 @@ model LegacyClubSettingServices {
   serviceImg String? @db.VarChar(255) @map("service_img")
   created DateTime?
   modified DateTime?
+  serviceQty String? @db.VarChar(80) @map("service_qty")
+  serviceAvailable Boolean @default(true) @map("service_available")
   @@index([serviceName], map: "idx_club_setting_services_name")
   @@index([sectorId], map: "idx_club_setting_services_sector")
   @@index([userId, clubId], map: "idx_club_setting_services_user_club")

@@ -8,6 +8,10 @@ import {
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
 import {
   appendArchivedPeriodIfChanged,
+  moveMembershipPeriodEnd,
+  parseAmountPaid,
+  readMembershipPeriodAmountPaid,
+  setMembershipPeriodAmountPaid,
   shouldSyncPcuAccessOnRenewal,
   sliceYmd,
   validateSubscriptionDateRange,
@@ -87,19 +91,8 @@ async function updateEntityDescription(
   }
 }
 
-/** PATCH — Update PCU access dates and suspend flags for a user. */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireAdmin(request);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
-  const userId = params?.id;
-  if (!userId) {
-    return NextResponse.json({ error: 'User id is required' }, { status: 400 });
-  }
-
-  const user = await prisma.user.findUnique({
+function loadUserWithEntities(userId: string) {
+  return prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -149,6 +142,87 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       settings: { select: { adminSettings: true } },
     },
   });
+}
+
+type UserWithEntities = NonNullable<Awaited<ReturnType<typeof loadUserWithEntities>>>;
+
+/** The membership window an admin edit applies to: one owned entity, or the account itself. */
+function resolveMembershipTarget(
+  user: UserWithEntities,
+  entityIdRaw: unknown,
+  entityKindRaw: unknown,
+) {
+  const entityIdParam = String(entityIdRaw ?? '').trim();
+  const targetEntity = entityIdParam
+    ? findOwnedMembershipEntity(user, entityIdParam, parseMembershipEntityKind(entityKindRaw))
+    : null;
+  const entityWindow = targetEntity
+    ? subscriptionWindowFromEntity(targetEntity.description, targetEntity.createdAt)
+    : null;
+  const defaultStart = entityWindow?.dateStart || user.createdAt.toISOString().slice(0, 10);
+  const defaultEnd = entityWindow?.dateEnd || '';
+  const previousAccess = readPcuAccessSettings(user.settings?.adminSettings, {
+    accessStartIso: defaultStart,
+    accessEndIso: defaultEnd,
+  });
+  const currentWindow = entityWindow ?? {
+    dateStart: sliceYmd(previousAccess.accessStartIso),
+    dateEnd: sliceYmd(previousAccess.accessEndIso),
+  };
+  return { targetEntity, entityWindow, defaultStart, defaultEnd, previousAccess, currentWindow };
+}
+
+function windowAmountKey(entityId: string | null, window: { dateStart: string; dateEnd: string }) {
+  return { entityId, dateStart: window.dateStart, dateEnd: window.dateEnd || null };
+}
+
+/**
+ * GET — Amount recorded as paid for the current membership window
+ * (?entityId=&entityKind=, optional dateStart=&dateEnd= for the window shown in the panel).
+ */
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+  const user = params?.id ? await loadUserWithEntities(params.id) : null;
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+  const { searchParams } = new URL(request.url);
+  const { targetEntity, currentWindow } = resolveMembershipTarget(
+    user,
+    searchParams.get('entityId'),
+    searchParams.get('entityKind'),
+  );
+  const shownStart = sliceYmd(searchParams.get('dateStart'));
+  const window = shownStart
+    ? { dateStart: shownStart, dateEnd: sliceYmd(searchParams.get('dateEnd')) }
+    : currentWindow;
+  return NextResponse.json({
+    ok: true,
+    dateStart: window.dateStart,
+    dateEnd: window.dateEnd,
+    amountPaid: readMembershipPeriodAmountPaid(
+      user.settings?.adminSettings,
+      windowAmountKey(targetEntity?.id ?? null, window),
+    ),
+  });
+}
+
+/** PATCH — Update PCU access dates, suspend flags and the amount paid for the current window. */
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const userId = params?.id;
+  if (!userId) {
+    return NextResponse.json({ error: 'User id is required' }, { status: 400 });
+  }
+
+  const user = await loadUserWithEntities(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
@@ -158,6 +232,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         clubId?: string;
         entityId?: string;
         entityKind?: string;
+        amountPaid?: string | number | null;
       })
     | null;
   if (!body || typeof body !== 'object') {
@@ -170,33 +245,27 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if ('suspendAccessControl' in body) patch.suspendAccessControl = Boolean(body.suspendAccessControl);
   if ('suspend' in body) patch.suspend = Boolean(body.suspend);
 
-  if (Object.keys(patch).length === 0) {
+  let amountPaid: string | null = null;
+  if ('amountPaid' in body) {
+    const raw = String(body.amountPaid ?? '').trim();
+    const value = parseAmountPaid(raw);
+    if (raw && value === 0 && !/^0+([.,]0*)?$/.test(raw.replace(/[^\d.,]/g, ''))) {
+      return NextResponse.json({ error: 'Amount paid must be a number of euros' }, { status: 400 });
+    }
+    amountPaid = raw ? value.toFixed(2) : '';
+  }
+
+  if (Object.keys(patch).length === 0 && amountPaid === null) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
 
-  const entityIdParam = String(body.clubId ?? body.entityId ?? '').trim();
-  const entityKindParam = parseMembershipEntityKind(body.entityKind);
-  const targetEntity = entityIdParam
-    ? findOwnedMembershipEntity(user, entityIdParam, entityKindParam)
-    : null;
-
-  const accountDefaultStart = user.createdAt.toISOString().slice(0, 10);
-  const accountDefaultEnd = '';
-  const entityWindow = targetEntity
-    ? subscriptionWindowFromEntity(targetEntity.description, targetEntity.createdAt)
-    : null;
-
-  const defaultStart = entityWindow?.dateStart || accountDefaultStart;
-  const defaultEnd = entityWindow?.dateEnd || accountDefaultEnd;
-
-  const previousAccess = readPcuAccessSettings(user.settings?.adminSettings, {
-    accessStartIso: defaultStart,
-    accessEndIso: defaultEnd,
-  });
+  const { targetEntity, entityWindow, defaultStart, defaultEnd, previousAccess, currentWindow } =
+    resolveMembershipTarget(user, body.clubId ?? body.entityId, body.entityKind);
+  const windowEntityId = targetEntity?.id ?? null;
 
   let adminSettingsRaw = user.settings?.adminSettings ?? null;
-  let savedStart = defaultStart;
-  let savedEnd = defaultEnd;
+  let savedStart = currentWindow.dateStart;
+  let savedEnd = currentWindow.dateEnd;
 
   if ('accessStartIso' in patch || 'accessEndIso' in patch) {
     const nextAccess = {
@@ -211,6 +280,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const rangeError = validateSubscriptionDateRange(nextStart, nextEnd);
     if (rangeError) {
       return NextResponse.json({ error: rangeError }, { status: 400 });
+    }
+
+    if (sliceYmd(currentWindow.dateStart) === nextStart) {
+      adminSettingsRaw = moveMembershipPeriodEnd(adminSettingsRaw, {
+        entityId: windowEntityId,
+        dateStart: nextStart,
+        previousEnd: currentWindow.dateEnd || null,
+        nextEnd: nextEnd || null,
+      });
     }
 
     if (targetEntity) {
@@ -277,6 +355,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
   }
 
+  const savedWindow = windowAmountKey(windowEntityId, { dateStart: savedStart, dateEnd: savedEnd });
+  if (amountPaid !== null) {
+    const entityMeta = targetEntity ? parseClubDescriptionMeta(targetEntity.description) : null;
+    adminSettingsRaw = setMembershipPeriodAmountPaid(
+      adminSettingsRaw,
+      {
+        ...savedWindow,
+        companyName: targetEntity?.name?.trim(),
+        username: entityMeta?.username?.trim() || user.username,
+      },
+      amountPaid,
+    );
+  }
+
   const adminSettings = mergePcuAccessIntoAdminSettings(adminSettingsRaw, patch);
   await upsertAdminSettings(userId, adminSettings);
 
@@ -286,5 +378,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   });
   pcuAccess.accessStartIso = savedStart;
   pcuAccess.accessEndIso = savedEnd;
-  return NextResponse.json({ ok: true, pcuAccess });
+  return NextResponse.json({
+    ok: true,
+    pcuAccess,
+    amountPaid: readMembershipPeriodAmountPaid(adminSettings, savedWindow),
+  });
 }

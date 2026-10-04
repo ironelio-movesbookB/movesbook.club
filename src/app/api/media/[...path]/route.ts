@@ -2,6 +2,8 @@ import { readFile, stat } from 'fs/promises';
 import { join, normalize, sep } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublicDirCandidates } from '@/lib/serverPublicDir';
+import { verifyToken } from '@/lib/auth';
+import { canViewMemberMedical, MEMBER_MEDICAL_FOLDER } from '@/lib/club/memberMedicalAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,12 +51,39 @@ async function resolveExistingFilePath(segments: string[]): Promise<string | nul
   return null;
 }
 
+function isMemberMedicalPath(segments: string[]): boolean {
+  return segments[0] === 'uploads' && segments[1] === MEMBER_MEDICAL_FOLDER;
+}
+
+async function memberMedicalAccessError(
+  request: NextRequest,
+  segments: string[],
+): Promise<NextResponse | null> {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '').trim();
+  const decoded = token ? verifyToken(token) : null;
+  if (!decoded?.userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const allowed = await canViewMemberMedical({
+    viewerUserId: String(decoded.userId),
+    viewerUserType: decoded.userType ? String(decoded.userType) : null,
+    memberUserId: segments[2] ?? '',
+  });
+  return allowed ? null : NextResponse.json({ error: 'Not found' }, { status: 404 });
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ) {
   try {
     const { path: segments } = await context.params;
+    const isPrivate = isMemberMedicalPath(segments);
+    if (isPrivate) {
+      const denied = await memberMedicalAccessError(request, segments);
+      if (denied) return denied;
+    }
+
     const filePath = await resolveExistingFilePath(segments);
     if (!filePath) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -66,7 +95,7 @@ export async function GET(
       headers: {
         'Content-Type': contentTypeForPath(filePath),
         'Content-Length': String(body.length),
-        'Cache-Control': 'public, max-age=86400, immutable',
+        'Cache-Control': isPrivate ? 'private, no-store' : 'public, max-age=86400, immutable',
       },
     });
   } catch {

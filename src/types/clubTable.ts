@@ -92,6 +92,8 @@ export type Member = {
   service?: string;
   /** Another receipt shares this row's document type + number. */
   isDuplicate?: boolean;
+  /** Archive of Payments: stored as "To be verified" and not confirmed yet (grey row). */
+  toBeVerified?: boolean;
   /**
    * Archive of Users A/B/C/D:
    * member | pending | not_member | archived
@@ -99,6 +101,8 @@ export type Member = {
   membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived';
   /** Staff-only archive rows (no pending/not-member actions). */
   isStaffOnly?: boolean;
+  /** Member account is a Coach (ID6) — status circle is half filled. */
+  isCoach?: boolean;
   options?: React.ReactNode;
   edit?: React.ReactNode;
   delete?: React.ReactNode;

@@ -204,6 +204,38 @@ export async function applyPaymentToInstallments(
   }
 }
 
+/** Undo `applyPaymentToInstallments` for a deleted payment: the latest paid installments reopen first. */
+export async function reversePaymentOnInstallments(
+  recordId: string,
+  amount: number,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx ?? prisma;
+  let remaining = roundMoney(amount);
+  if (remaining <= 0) return;
+
+  const rows = await client.procedureInstallment.findMany({
+    where: { procedureRecordId: recordId, paid: { gt: 0 } },
+    orderBy: [{ expireDate: 'desc' }, { paymentDate: 'desc' }, { createdAt: 'desc' }],
+  });
+
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    const bal = decimalToNumber(row.balance as never);
+    const paid = decimalToNumber(row.paid as never);
+    const undo = Math.min(paid, remaining);
+    if (undo <= 0) continue;
+    await client.procedureInstallment.update({
+      where: { id: row.id },
+      data: {
+        balance: roundMoney(bal + undo),
+        paid: roundMoney(paid - undo),
+      },
+    });
+    remaining = roundMoney(remaining - undo);
+  }
+}
+
 /**
  * If installment rests drifted from the parent record (e.g. older payments),
  * bring them in line so a fully paid service never shows Rest > 0 on deadlines.

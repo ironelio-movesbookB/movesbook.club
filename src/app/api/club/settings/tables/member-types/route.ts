@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isTeamAccountUserType } from '@/utils/dashboardRouting';
 
 export const dynamic = 'force-dynamic';
 
@@ -343,19 +344,39 @@ async function getOwnedClub(userId: string, requestedClubId: string | null) {
   return fallback[0] ?? null;
 }
 
+/** Team admins keep their own member types; `club_id` then holds the team id. */
+async function getOwnedTeam(userId: string, requestedTeamId: string | null) {
+  if (requestedTeamId) {
+    const selected = await prisma.team.findFirst({
+      where: { id: requestedTeamId, adminId: userId },
+      select: { id: true, name: true },
+    });
+    if (selected) return selected;
+  }
+  return prisma.team.findFirst({
+    where: { adminId: userId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, name: true },
+  });
+}
+
 async function getAuthorizedContext(request: NextRequest) {
   const decoded = getTokenPayload(request);
   if (!decoded?.userId || !decoded.userType) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  if (!isClubAccountUserType(String(decoded.userType))) {
+  const userType = String(decoded.userType);
+  const isTeamAccount = isTeamAccountUserType(userType);
+  if (!isClubAccountUserType(userType) && !isTeamAccount) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
 
   const userId = String(decoded.userId);
-  const requestedClubId = request.nextUrl.searchParams.get('clubId');
-  const club = await getOwnedClub(userId, requestedClubId);
+  const sp = request.nextUrl.searchParams;
+  const club = isTeamAccount
+    ? await getOwnedTeam(userId, sp.get('teamId') || sp.get('clubId'))
+    : await getOwnedClub(userId, sp.get('clubId'));
   const legacyUserId = await getLegacyUserId(userId);
   const userIds = Array.from(new Set([userId, legacyUserId].filter(Boolean) as string[]));
 
@@ -380,7 +401,10 @@ async function getProfileReadContext(request: NextRequest) {
     WHERE id = ${clubId}
     LIMIT 1
   `;
-  const club = clubRows[0];
+  const team = clubRows[0]
+    ? null
+    : await prisma.team.findUnique({ where: { id: clubId }, select: { id: true, adminId: true } });
+  const club = clubRows[0] ?? team;
   if (!club) {
     return { error: NextResponse.json({ error: 'Club not found' }, { status: 404 }) };
   }
@@ -388,10 +412,15 @@ async function getProfileReadContext(request: NextRequest) {
   const viewerId = String(decoded.userId);
   const isAdmin = club.adminId === viewerId;
   if (!isAdmin) {
-    const membership = await prisma.clubMember.findUnique({
-      where: { clubId_memberId: { clubId, memberId: viewerId } },
-      select: { id: true },
-    });
+    const membership = team
+      ? await prisma.teamMember.findUnique({
+          where: { teamId_athleteId: { teamId: clubId, athleteId: viewerId } },
+          select: { id: true },
+        })
+      : await prisma.clubMember.findUnique({
+          where: { clubId_memberId: { clubId, memberId: viewerId } },
+          select: { id: true },
+        });
     if (!membership) {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }

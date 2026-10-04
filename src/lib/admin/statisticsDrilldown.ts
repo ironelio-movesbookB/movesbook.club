@@ -1,6 +1,14 @@
-import type { StatsSlice, StatsUserLite, VersionBar } from '@/lib/admin/buildStatistics';
+import type {
+  CountryKindRow,
+  StatsSlice,
+  StatsUserLite,
+  SubscriptionDetailRow,
+  VersionBar,
+} from '@/lib/admin/buildStatistics';
 import {
+  STATS_DETAIL_KINDS,
   STATS_KIND_LABELS,
+  type StatsDetailKind,
   STATS_USER_KINDS,
   STATS_VERSION_BUCKETS,
   type StatsTypeKindFilter,
@@ -84,6 +92,65 @@ export function aggregateVersionsForScope(
     percent: total > 0 ? Math.round((counts[version] / total) * 1000) / 10 : 0,
   })).filter((s) => s.count > 0);
   return { total, totalIncome, bars, slices };
+}
+
+/** New subscriptions vs renewals per type of user (club accounts apart), as in “Display details”. */
+export function subscriptionDetailsForUsers(
+  users: StatsUserLite[],
+): Record<StatsDetailKind, SubscriptionDetailRow> {
+  const details = Object.fromEntries(
+    STATS_DETAIL_KINDS.map((k) => [k, { newCount: 0, renewCount: 0, newIncome: 0, renewIncome: 0 }]),
+  ) as Record<StatsDetailKind, SubscriptionDetailRow>;
+  for (const u of users) {
+    const row = details[u.clubAccount ? 'clubAccounts' : u.kind];
+    if (u.renewal) {
+      row.renewCount += 1;
+      row.renewIncome += u.income ?? 0;
+    } else {
+      row.newCount += 1;
+      row.newIncome += u.income ?? 0;
+    }
+  }
+  for (const k of STATS_DETAIL_KINDS) {
+    details[k].newIncome = roundEuro(details[k].newIncome);
+    details[k].renewIncome = roundEuro(details[k].renewIncome);
+  }
+  return details;
+}
+
+/** Users and income per type of user for each group (country or continent), largest first. */
+export function kindRowsByGroup(
+  users: StatsUserLite[],
+  groupOf: (u: StatsUserLite) => string,
+): CountryKindRow[] {
+  const groups = new Map<string, CountryKindRow>();
+  for (const u of users) {
+    const key = groupOf(u);
+    let row = groups.get(key);
+    if (!row) {
+      row = {
+        country: key,
+        total: 0,
+        totalIncome: 0,
+        byKind: { single: 0, coaches: 0, teams: 0, clubs: 0, groups: 0 },
+        byKindIncome: { single: 0, coaches: 0, teams: 0, clubs: 0, groups: 0 },
+      };
+      groups.set(key, row);
+    }
+    row.byKind[u.kind] += 1;
+    row.byKindIncome[u.kind] += u.income ?? 0;
+    row.total += 1;
+    row.totalIncome += u.income ?? 0;
+  }
+  return [...groups.values()]
+    .map((r) => ({
+      ...r,
+      totalIncome: roundEuro(r.totalIncome),
+      byKindIncome: Object.fromEntries(
+        STATS_USER_KINDS.map((k) => [k, roundEuro(r.byKindIncome[k])]),
+      ) as Record<StatsUserKind, number>,
+    }))
+    .sort((a, b) => b.total - a.total || a.country.localeCompare(b.country));
 }
 
 /** User-type distribution for a selected version (optional country). */

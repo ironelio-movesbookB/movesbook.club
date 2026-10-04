@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
@@ -48,8 +48,14 @@ export default function ClubMembersDashboardSection({
   youtubeChannelUrl,
   canManageClub,
   onYoutubeChannelUrlSaved,
-  onClubBootstrapped
+  onClubBootstrapped,
+  title,
+  children
 }: {
+  /** Header label; defaults to the "MY CLUB - Dashboard for the members" translation. */
+  title?: string;
+  /** Extra rows shown under the dashboard links while the section is open. */
+  children?: ReactNode;
   clubId?: string;
   youtubeChannelUrl?: string | null;
   canManageClub: boolean;
@@ -306,7 +312,7 @@ export default function ClubMembersDashboardSection({
           >
             <Mail className="h-5 w-5 shrink-0" />
             <span className="truncate font-semibold tracking-wide">
-              {t('sidebar_dashboard_members')}
+              {title ?? t('sidebar_dashboard_members')}
             </span>
           </button>
           <button
@@ -492,6 +498,7 @@ export default function ClubMembersDashboardSection({
                 <Settings className="h-4 w-4" />
               </button>
             </div>
+            {children ? <div className="border-t border-black/25">{children}</div> : null}
           </div>
         )}
       </div>

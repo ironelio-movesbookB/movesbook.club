@@ -94,6 +94,8 @@ export default function SidebarClubMyEntityTop({
     userImageUrl,
   });
   const country = userCountry ?? fallbackCountry;
+  /** Official MY CLUB menu: dashboard, social and visitors rows move below Club Info (DarkSidebar). */
+  const officialClubLayout = isClubAccountUserType(userType);
 
   return (
     <div className="bg-[#252525] flex-shrink-0 border-b border-gray-700/80">
@@ -162,15 +164,17 @@ export default function SidebarClubMyEntityTop({
       </div>
 
       {/* MY CLUB - Dashboard for the members (topics/subtopics from website editor) */}
-      <div className="border-t border-gray-700/60">
-        <ClubMembersDashboardSection
-          clubId={club?.id}
-          youtubeChannelUrl={club?.youtubeChannelUrl}
-          canManageClub={canManageClub}
-          onYoutubeChannelUrlSaved={onClubYoutubeSaved}
-          onClubBootstrapped={onClubBootstrapped}
-        />
-      </div>
+      {officialClubLayout ? null : (
+        <div className="border-t border-gray-700/60">
+          <ClubMembersDashboardSection
+            clubId={club?.id}
+            youtubeChannelUrl={club?.youtubeChannelUrl}
+            canManageClub={canManageClub}
+            onYoutubeChannelUrlSaved={onClubYoutubeSaved}
+            onClubBootstrapped={onClubBootstrapped}
+          />
+        </div>
+      )}
 
       {/* Primary menus below dashboard */}
       <div className="border-t border-gray-700/60">
@@ -187,9 +191,9 @@ export default function SidebarClubMyEntityTop({
           </div>
         </div>
 
-        <ClubSocialSubmenu onChatClick={onChatClick} />
+        {officialClubLayout ? null : <ClubSocialSubmenu onChatClick={onChatClick} />}
 
-        {isClubAccountUserType(userType) ? (
+        {officialClubLayout ? (
           <ClubMyClubInfoSubmenu clubId={club?.id} />
         ) : (
           <button
@@ -204,16 +208,18 @@ export default function SidebarClubMyEntityTop({
           </button>
         )}
 
-        <button
-          type="button"
-          className="w-full bg-teal-800 hover:bg-teal-700 text-white py-2.5 px-3 flex items-center justify-between transition-colors border-b border-teal-700"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Eye className="w-5 h-5 shrink-0" />
-            <span className="font-semibold tracking-wide truncate">Club page for visitors</span>
-          </div>
-          <ChevronDown className="w-4 h-4 opacity-90" />
-        </button>
+        {officialClubLayout ? null : (
+          <button
+            type="button"
+            className="w-full bg-teal-800 hover:bg-teal-700 text-white py-2.5 px-3 flex items-center justify-between transition-colors border-b border-teal-700"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Eye className="w-5 h-5 shrink-0" />
+              <span className="font-semibold tracking-wide truncate">Club page for visitors</span>
+            </div>
+            <ChevronDown className="w-4 h-4 opacity-90" />
+          </button>
+        )}
 
       </div>
     </div>
