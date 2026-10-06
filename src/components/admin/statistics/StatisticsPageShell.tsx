@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   STATS_KIND_LABELS,
   STATS_TYPE_KIND_FILTER_LABELS,
@@ -28,6 +29,37 @@ type StatisticsPageShellProps = {
   filters?: ReactNode;
   children: ReactNode;
 };
+
+function SubscriptionModeToggle() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const specialOnly = searchParams?.get('offers') === 'special';
+
+  const setMode = (special: boolean) => {
+    const qs = new URLSearchParams(searchParams?.toString() ?? '');
+    if (special) qs.set('offers', 'special');
+    else qs.delete('offers');
+    const query = qs.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname || '', { scroll: false });
+  };
+
+  const buttonClass = (active: boolean) =>
+    `border-2 border-red-600 px-3 py-1 text-sm font-semibold transition-colors ${
+      active ? 'bg-red-600 text-white' : 'bg-white text-red-600 hover:bg-red-50'
+    }`;
+
+  return (
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={() => setMode(false)} className={buttonClass(!specialOnly)}>
+        All subscriptions
+      </button>
+      <button type="button" onClick={() => setMode(true)} className={buttonClass(specialOnly)}>
+        Only Special offers
+      </button>
+    </div>
+  );
+}
 
 function StatisticsPageShellInner({
   title,
@@ -60,6 +92,9 @@ function StatisticsPageShellInner({
               {description}
             </p>
           ) : null}
+          <div className="mt-2">
+            <SubscriptionModeToggle />
+          </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-stretch justify-end gap-2">
