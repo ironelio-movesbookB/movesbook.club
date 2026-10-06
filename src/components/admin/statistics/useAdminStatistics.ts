@@ -37,6 +37,7 @@ export function useAdminStatistics(options?: {
   const router = useRouter();
   const searchParams = useSearchParams();
   const countryFromUrl = searchParams.get('country')?.trim() || '';
+  const specialOffersOnly = searchParams?.get('offers') === 'special';
   const [authChecked, setAuthChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +81,9 @@ export function useAdminStatistics(options?: {
     }
     if (options?.topCountriesN) qs.set('topCountriesN', String(options.topCountriesN));
     if (options?.typeCountriesN) qs.set('typeCountriesN', String(options.typeCountriesN));
+    if (specialOffersOnly) qs.set('offers', 'special');
     return qs.toString();
-  }, [filters, options?.enableCountry, options?.enableUserType, options?.enableTypeKind, options?.topCountriesN, options?.typeCountriesN]);
+  }, [filters, specialOffersOnly, options?.enableCountry, options?.enableUserType, options?.enableTypeKind, options?.topCountriesN, options?.typeCountriesN]);
 
   const load = useCallback(async () => {
     const token = getAdminBearerToken();

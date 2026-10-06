@@ -56,6 +56,8 @@ export interface AdminRegisteredUsersListProps {
   statsBarScope?: StatsBarScope | null;
   /** Called when user clears the embedded statistics-bar filter. */
   onClearStatsBar?: () => void;
+  /** Only users registered with the special offer of this subscription version. */
+  specialOfferVersionId?: number | null;
 }
 
 interface ProfilePayload {
@@ -116,6 +118,19 @@ interface RowUser {
   entityKind?: 'club' | 'team' | 'group' | 'coaching_group';
   accountUsername?: string;
   imageUrl?: string | null;
+  specialOffer?: boolean;
+  specialOfferTitle?: string;
+}
+
+function VersionCell({ row }: { row: RowUser }) {
+  return (
+    <td
+      className={`px-3 py-2 border-t border-gray-300 ${row.specialOffer ? 'text-red-600 font-semibold' : ''}`}
+      title={row.specialOffer ? `Special offer${row.specialOfferTitle ? `: ${row.specialOfferTitle}` : ''}` : undefined}
+    >
+      {row.version}
+    </td>
+  );
 }
 
 function rowListKey(r: RowUser): string {
@@ -357,6 +372,7 @@ export default function AdminRegisteredUsersList({
   historicalSubtitle,
   statsBarScope = null,
   onClearStatsBar,
+  specialOfferVersionId = null,
 }: AdminRegisteredUsersListProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -559,6 +575,7 @@ export default function AdminRegisteredUsersList({
       if (appliedFilters.rangeFrom) params.set('createdFrom', appliedFilters.rangeFrom);
       if (appliedFilters.rangeTo) params.set('createdTo', appliedFilters.rangeTo);
       params.set('membership', membershipTab);
+      if (specialOfferVersionId) params.set('specialOfferVersionId', String(specialOfferVersionId));
       if (statsBarActive) {
         params.set('statsBar', '1');
         if (statsBarCountry) params.set('country', statsBarCountry);
@@ -592,6 +609,7 @@ export default function AdminRegisteredUsersList({
     statsBarCountry,
     statsBarKind,
     statsBarVersion,
+    specialOfferVersionId,
   ]);
 
   useEffect(() => {
@@ -2083,7 +2101,7 @@ export default function AdminRegisteredUsersList({
                     <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
                       {r.dateEnd ?? '—'}
                     </td>
-                    <td className="px-3 py-2 border-t border-gray-300">{r.version}</td>
+                    <VersionCell row={r} />
                     <td className="px-3 py-2 border-t border-gray-300 font-medium">
                       {isClubsSegment || (isAllSegment && isClubUserType(r.userType)) ? (
                         <button

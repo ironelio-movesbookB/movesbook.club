@@ -41,6 +41,10 @@ import {
   parseStatsKindParam,
   parseStatsVersionParam,
 } from '@/lib/admin/statsBarListHref';
+import {
+  listSpecialOfferRegistrations,
+  type SpecialOfferUserRegistration,
+} from '@/lib/subscriptions/specialOffers';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,7 +146,14 @@ export async function GET(request: NextRequest) {
         segment === 'groups' ||
         segment === 'coaches'),
   );
-  const fetchAllMatchingUsers = hasSubDateRange || needsRowLevelSearchFilter;
+  const specialOfferVersionRaw = Number(url.searchParams.get('specialOfferVersionId') || '0');
+  const specialOfferVersionId =
+    Number.isInteger(specialOfferVersionRaw) && specialOfferVersionRaw > 0
+      ? specialOfferVersionRaw
+      : null;
+  const specialOfferOnly =
+    url.searchParams.get('specialOffer') === '1' || specialOfferVersionId !== null;
+  const fetchAllMatchingUsers = hasSubDateRange || needsRowLevelSearchFilter || specialOfferOnly;
   const userTypeCategory = (url.searchParams.get('userTypeCategory') || '').trim();
   const membershipMode = parseMembershipViewMode(url.searchParams.get('membership'));
   const membershipSort =
@@ -181,6 +192,14 @@ export async function GET(request: NextRequest) {
       version: subscriptionVersion,
     });
     andClauses.push({ id: { in: ids.length > 0 ? ids : ['__no_stats_bar_match__'] } });
+  }
+
+  const offerFilterRegistrations: SpecialOfferUserRegistration[] = specialOfferOnly
+    ? await listSpecialOfferRegistrations({ versionId: specialOfferVersionId })
+    : [];
+  if (specialOfferOnly) {
+    const ids = [...new Set(offerFilterRegistrations.map((r) => r.userId))];
+    andClauses.push({ id: { in: ids.length > 0 ? ids : ['__no_special_offer_match__'] } });
   }
 
   if (search) {
@@ -601,6 +620,41 @@ export async function GET(request: NextRequest) {
       deletedByUserId,
       pcuAccessByUserId,
     );
+  }
+
+  if (userIds.length > 0) {
+    const offerRegs: SpecialOfferUserRegistration[] = specialOfferOnly
+      ? offerFilterRegistrations
+      : await listSpecialOfferRegistrations({ userIds });
+    if (offerRegs.length > 0) {
+      const regsByUser = new Map<string, SpecialOfferUserRegistration[]>();
+      for (const reg of offerRegs) {
+        const list = regsByUser.get(reg.userId) ?? [];
+        list.push(reg);
+        regsByUser.set(reg.userId, list);
+      }
+      users = users.map((row) => {
+        if (row.entityId && row.entityId !== row.primaryClubId) return row;
+        const rowStartMs = Date.parse(`${row.dateStart}T00:00:00Z`);
+        const reg = regsByUser
+          .get(row.id)
+          ?.find(
+            (r) =>
+              Math.abs(Date.parse(`${r.dateStart}T00:00:00Z`) - rowStartMs) <= 24 * 60 * 60 * 1000,
+          );
+        if (!reg) return row;
+        return {
+          ...row,
+          version: reg.versionName,
+          amount: `€ ${reg.costEuro}`,
+          specialOffer: true,
+          specialOfferTitle: reg.offerTitle,
+        };
+      });
+    }
+    if (specialOfferOnly) {
+      users = users.filter((row) => row.specialOffer);
+    }
   }
 
   if (needsRowLevelSearchFilter) {

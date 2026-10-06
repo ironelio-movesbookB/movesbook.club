@@ -31,6 +31,10 @@ import {
   type StatsUserKind,
   type StatsVersionBucket,
 } from '@/lib/admin/statisticsKinds';
+import {
+  listSpecialOfferRegistrations,
+  type SpecialOfferUserRegistration,
+} from '@/lib/subscriptions/specialOffers';
 
 export type StatsSlice = {
   key: string;
@@ -355,6 +359,8 @@ export type BuildStatisticsOptions = {
   topCountriesN?: number;
   typeCountriesN?: number;
   typeKind?: StatsTypeKindFilter;
+  /** Only users whose subscription was purchased in "Special offer" mode. */
+  specialOffersOnly?: boolean;
 };
 
 export async function buildStatisticsPayload(
@@ -376,7 +382,20 @@ export async function buildStatisticsPayload(
         ? options.typeKind
         : 'single';
 
-  const rawUsers = await loadRawUsers();
+  const [allRawUsers, offerRegistrations] = await Promise.all([
+    loadRawUsers(),
+    options.specialOffersOnly
+      ? listSpecialOfferRegistrations()
+      : Promise.resolve([] as SpecialOfferUserRegistration[]),
+  ]);
+  // Registrations are newest first: keep each user's latest special-offer purchase.
+  const offerByUser = new Map<string, SpecialOfferUserRegistration>();
+  for (const reg of offerRegistrations) {
+    if (!offerByUser.has(reg.userId)) offerByUser.set(reg.userId, reg);
+  }
+  const rawUsers = options.specialOffersOnly
+    ? allRawUsers.filter((u) => offerByUser.has(u.id))
+    : allRawUsers;
 
   const countrySet = new Set<string>();
   for (const u of rawUsers) {
@@ -435,8 +454,11 @@ export async function buildStatisticsPayload(
     }
 
     const country = u.country || 'Unknown';
-    const versionBucket = classifyVersionBucket(resolveCurrentVersion(u, kind));
-    const userIncome = u.subscription.amountPaid;
+    const offerReg = offerByUser.get(u.id);
+    const versionBucket = classifyVersionBucket(
+      offerReg?.versionName ?? resolveCurrentVersion(u, kind),
+    );
+    const userIncome = offerReg ? offerReg.costEuro : u.subscription.amountPaid;
     usersLite.push({
       country,
       kind,

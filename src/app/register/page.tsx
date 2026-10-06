@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -34,7 +34,16 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [specialOfferVersionId, setSpecialOfferVersionId] = useState<number | null>(null);
   const router = useRouter();
+
+  const specialOfferConfirmed =
+    specialOfferVersionId !== null && specialOfferVersionId === formData.subscriptionVersionId;
+  const selectedVersionId = formData.subscriptionVersionId;
+  const handleSpecialOfferConfirmChange = useCallback(
+    (confirmed: boolean) => setSpecialOfferVersionId(confirmed ? selectedVersionId : null),
+    [selectedVersionId],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,12 +83,14 @@ export default function RegisterPage() {
           country: formData.country,
           language: formData.language,
           subscriptionVersionId: formData.subscriptionVersionId ?? undefined,
+          useSpecialOffer: specialOfferConfirmed,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.specialOfferUnavailable) setSpecialOfferVersionId(null);
         throw new Error(data.error || 'Registration failed');
       }
 
@@ -195,6 +206,8 @@ export default function RegisterPage() {
                 setFormData({ ...formData, subscriptionVersionId })
               }
               lang={formData.language}
+              specialOfferConfirmed={specialOfferConfirmed}
+              onSpecialOfferConfirmChange={handleSpecialOfferConfirmChange}
             />
 
             {/* Name + Surname - 2 Columns */}
@@ -432,6 +445,8 @@ export default function RegisterPage() {
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                   {t('btn_creating_account')}
                 </div>
+              ) : specialOfferConfirmed ? (
+                'Create Account in special offer'
               ) : (
                 t('btn_register')
               )}

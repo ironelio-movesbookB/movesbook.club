@@ -1050,15 +1050,17 @@ export default function AdminCustomerFeedbackPanel({
                 />
               </div>
             </div>
-            <label className="flex items-center gap-2 mb-4 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filterSeeInappropriates}
-                onChange={(e) => setFilterSeeInappropriates(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">See the inappropriates</span>
-            </label>
+            {!aggregateInappropriate ? (
+              <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterSeeInappropriates}
+                  onChange={(e) => setFilterSeeInappropriates(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-slate-700">See the inappropriates</span>
+              </label>
+            ) : null}
             <button
               type="button"
               disabled={bulkDeleting || !filterFromDate || !filterToDate}
