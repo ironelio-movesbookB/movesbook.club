@@ -12,7 +12,8 @@ function ClubNotificationInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clubId = searchParams?.get('clubId') || null;
-  const audience = searchParams?.get('audience') === 'staff' ? 'staff' : 'members';
+  const viewParam = searchParams?.get('view') || searchParams?.get('audience');
+  const view = viewParam === 'staff' ? 'staff' : viewParam === 'members' ? 'members' : 'all';
 
   useEffect(() => {
     if (!loading && !user) {
@@ -28,7 +29,7 @@ function ClubNotificationInner() {
 
   // Only scope to one club when ?clubId= is present (MY CLUB).
   // Bare /users/clubnotification = MY PAGE → all owned clubs.
-  return <ClubNotificationsPanel clubId={clubId} initialAudienceKind={audience} />;
+  return <ClubNotificationsPanel clubId={clubId} view={view} />;
 }
 
 export default function ClubNotificationPage() {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MapPin } from 'lucide-react';
 import type { NotificationDto } from '@/lib/notifications/notificationService';
+import NotificationRecipients from '@/components/notifications/NotificationRecipients';
 
 function userToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -12,9 +13,16 @@ function userToken(): string | null {
 
 type Props = {
   source: 'movesbook' | 'clubs';
+  /** MY CLUB: only notifications sent to this club */
+  clubId?: string | null;
 };
 
-export default function NotificationsInboxPanel({ source }: Props) {
+type RecipientFilter = 'all' | 'members' | 'staff';
+
+export default function NotificationsInboxPanel({ source, clubId = null }: Props) {
+  const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>('all');
+  const [clubFilter, setClubFilter] = useState('');
+  const [myClubs, setMyClubs] = useState<{ id: string; name: string }[]>([]);
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -40,6 +48,11 @@ export default function NotificationsInboxPanel({ source }: Props) {
         pageSize: String(pageSize),
         q: search,
       });
+      if (source === 'clubs') {
+        const scopedClub = clubId || clubFilter;
+        if (scopedClub) qs.set('clubId', scopedClub);
+        if (recipientFilter !== 'all') qs.set('audience', recipientFilter);
+      }
       const res = await fetch(`/api/notifications?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
@@ -53,11 +66,28 @@ export default function NotificationsInboxPanel({ source }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [source, page, pageSize, search]);
+  }, [source, page, pageSize, search, clubId, clubFilter, recipientFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (source !== 'clubs' || clubId) return;
+    const token = userToken();
+    if (!token) return;
+    void (async () => {
+      const res = await fetch('/api/club/messages?clubs=1', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setMyClubs(
+        (data.clubs || []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })),
+      );
+    })();
+  }, [source, clubId]);
 
   async function openItem(item: NotificationDto) {
     setExpandedId((v) => (v === item.id ? null : item.id));
@@ -104,8 +134,7 @@ export default function NotificationsInboxPanel({ source }: Props) {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const title =
-    source === 'movesbook' ? 'Notifications by Movesbook' : 'Notifications by Club Staff';
+  const title = source === 'movesbook' ? 'Notifications by Movesbook' : 'Notifications received';
 
   return (
     <div className="w-full p-4 md:p-6 text-gray-900">
@@ -123,7 +152,7 @@ export default function NotificationsInboxPanel({ source }: Props) {
             By Movesbook
           </Link>
           <Link
-            href="/users/notification/all/all/clubs"
+            href={`/users/notification/all/all/clubs${clubId ? `?clubId=${encodeURIComponent(clubId)}` : ''}`}
             className={`rounded border px-3 py-1.5 ${
               source === 'clubs'
                 ? 'bg-teal-800 text-white border-teal-900'
@@ -174,6 +203,43 @@ export default function NotificationsInboxPanel({ source }: Props) {
             </option>
           ))}
         </select>
+        {source === 'clubs' ? (
+          <>
+            <select
+              value={recipientFilter}
+              onChange={(e) => {
+                setRecipientFilter(e.target.value as RecipientFilter);
+                setPage(1);
+              }}
+              aria-label="Type of recipient"
+              title="Type of recipient"
+              className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
+            >
+              <option value="all">Type of recipient: All</option>
+              <option value="members">Members</option>
+              <option value="staff">Staff</option>
+            </select>
+            {!clubId ? (
+              <select
+                value={clubFilter}
+                onChange={(e) => {
+                  setClubFilter(e.target.value);
+                  setPage(1);
+                }}
+                aria-label="Club\Team"
+                title="Club\Team"
+                className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
+              >
+                <option value="">All Clubs\Teams</option>
+                {myClubs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       {loading ? (
@@ -209,26 +275,11 @@ export default function NotificationsInboxPanel({ source }: Props) {
                       {item.createdAt.slice(0, 10)} · until {item.untilDate}
                     </p>
                   </div>
-                  <div className="min-w-[7.5rem] max-w-[11rem] shrink-0 text-right">
-                    <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
-                      {item.senderOfficialName || item.submittedByName || 'Staff'}
-                    </p>
-                    {item.submittedByUsername ? (
-                      <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
-                    ) : null}
-                  </div>
-                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
-                    {item.senderLogoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.senderLogoUrl}
-                        alt=""
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span className="text-[10px] text-gray-500">N/A</span>
-                    )}
-                  </div>
+                  <NotificationRecipients
+                    item={item}
+                    showAudienceIcon={source === 'clubs'}
+                    fallbackName="Staff"
+                  />
                 </div>
               </button>
               {expandedId === item.id ? (

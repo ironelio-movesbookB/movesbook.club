@@ -51,8 +51,16 @@ export type NotificationDto = {
   senderLogoUrl: string | null;
   /** Official name shown beside logo */
   senderOfficialName: string | null;
+  /** Every recipient club/team/group (logo + name) for org notifications */
+  recipientClubs: NotificationRecipientEntity[];
   createdAt: string;
   visited: boolean;
+};
+
+export type NotificationRecipientEntity = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
 };
 
 function startOfTodayUtc(): Date {
@@ -141,13 +149,20 @@ function mapRow(
     submittedByImage: row.submittedByUser?.image ?? null,
     senderLogoUrl,
     senderOfficialName,
+    recipientClubs: [],
     createdAt: row.createdAt.toISOString(),
     visited: visitedIds ? visitedIds.has(row.id) : false,
   };
 }
 
-/** Resolve club/team/group logo + official name for org-sourced inbox cards. */
-async function enrichOrgSenderDisplay(items: NotificationDto[]): Promise<NotificationDto[]> {
+/**
+ * Resolve club/team/group logo + official name for org-sourced cards.
+ * `focusEntityId` limits recipients to one club (Club Admin MY CLUB view).
+ */
+async function enrichOrgSenderDisplay(
+  items: NotificationDto[],
+  focusEntityId?: string | null,
+): Promise<NotificationDto[]> {
   const orgItems = items.filter((i) => i.source !== 'movesbook_staff' && i.clubIds.length > 0);
   if (orgItems.length === 0) return items;
 
@@ -202,27 +217,45 @@ async function enrichOrgSenderDisplay(items: NotificationDto[]): Promise<Notific
         senderOfficialName: item.senderOfficialName || 'Movesbook Staff',
       };
     }
-    const entityId = item.clubIds[0];
-    if (!entityId) {
+    const entityMap =
+      item.source === 'club_admin'
+        ? clubMap
+        : item.source === 'team_admin'
+          ? teamMap
+          : item.source === 'group_admin'
+            ? groupMap
+            : item.source === 'coach'
+              ? coachMap
+              : null;
+
+    const scopedIds =
+      focusEntityId && item.clubIds.includes(focusEntityId) ? [focusEntityId] : item.clubIds;
+    const recipientClubs: NotificationRecipientEntity[] = [];
+    for (const id of scopedIds) {
+      const entity = entityMap?.get(id);
+      if (!entity) continue;
+      recipientClubs.push({
+        id,
+        name: entity.name,
+        logoUrl: getLogoUrlFromEntityDescription(entity.description),
+      });
+    }
+
+    const first = recipientClubs[0];
+    if (!first) {
       return {
         ...item,
+        recipientClubs,
         senderLogoUrl: item.submittedByImage || item.senderLogoUrl,
         senderOfficialName:
           item.submittedByName || item.submittedByUsername || item.senderOfficialName,
       };
     }
-    let entity: { name: string; description: string | null } | undefined;
-    if (item.source === 'club_admin') entity = clubMap.get(entityId);
-    else if (item.source === 'team_admin') entity = teamMap.get(entityId);
-    else if (item.source === 'group_admin') entity = groupMap.get(entityId);
-    else if (item.source === 'coach') entity = coachMap.get(entityId);
-
-    const logo = entity ? getLogoUrlFromEntityDescription(entity.description) : null;
     return {
       ...item,
-      senderLogoUrl: logo || item.submittedByImage || item.senderLogoUrl,
-      senderOfficialName:
-        entity?.name || item.submittedByName || item.submittedByUsername || item.senderOfficialName,
+      recipientClubs,
+      senderLogoUrl: first.logoUrl || item.submittedByImage || item.senderLogoUrl,
+      senderOfficialName: first.name,
     };
   });
 }
@@ -581,6 +614,10 @@ export async function listOrgSentNotifications(params: {
   search?: string;
   /** all = everything; active = visible & untilDate >= today; expired = untilDate < today */
   status?: SentNotificationStatusFilter;
+  /** Recipient type filter (club notifications) */
+  audienceKind?: ClubAudienceKind | null;
+  /** Club/team filter chosen in MY PAGE (does not narrow the recipients shown) */
+  filterEntityId?: string | null;
   page?: number;
   pageSize?: number;
 }) {
@@ -594,8 +631,12 @@ export async function listOrgSentNotifications(params: {
   if (params.search?.trim()) {
     where.title = { contains: params.search.trim() };
   }
-  if (params.entityId?.trim()) {
-    where.clubIdsJson = { contains: params.entityId.trim() };
+  const entityFilter = params.entityId?.trim() || params.filterEntityId?.trim();
+  if (entityFilter) {
+    where.clubIdsJson = { contains: `"${entityFilter}"` };
+  }
+  if (params.audienceKind === 'staff' || params.audienceKind === 'members') {
+    where.audienceKind = params.audienceKind;
   }
   if (params.status === 'active') {
     where.isShow = true;
@@ -618,7 +659,10 @@ export async function listOrgSentNotifications(params: {
   ]);
 
   return {
-    items: await enrichOrgSenderDisplay(rows.map((r) => mapRow(r))),
+    items: await enrichOrgSenderDisplay(
+      rows.map((r) => mapRow(r)),
+      params.entityId?.trim() || null,
+    ),
     total,
     page,
     pageSize,
@@ -630,6 +674,8 @@ export async function listClubAdminSentNotifications(params: {
   clubId?: string | null;
   search?: string;
   status?: SentNotificationStatusFilter;
+  audienceKind?: ClubAudienceKind | null;
+  filterClubId?: string | null;
   page?: number;
   pageSize?: number;
 }) {
@@ -639,6 +685,8 @@ export async function listClubAdminSentNotifications(params: {
     entityId: params.clubId,
     search: params.search,
     status: params.status,
+    audienceKind: params.audienceKind,
+    filterEntityId: params.filterClubId,
     page: params.page,
     pageSize: params.pageSize,
   });
@@ -737,6 +785,10 @@ export async function listInboxForUser(params: {
   page?: number;
   pageSize?: number;
   activeOnly?: boolean;
+  /** MY CLUB / Club\Team filter: only notifications sent to this club */
+  clubId?: string | null;
+  /** Type of recipient filter for club notifications */
+  audienceKind?: ClubAudienceKind | null;
 }) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(50, Math.max(5, params.pageSize ?? 10));
@@ -808,6 +860,10 @@ export async function listInboxForUser(params: {
     ...(activeOnly ? { isShow: true, untilDate: { gte: today } } : {}),
   };
   if (params.search?.trim()) where.title = { contains: params.search.trim() };
+  if (params.clubId?.trim()) where.clubIdsJson = { contains: `"${params.clubId.trim()}"` };
+  if (params.audienceKind === 'staff' || params.audienceKind === 'members') {
+    where.audienceKind = params.audienceKind;
+  }
 
   const candidates = await prisma.notification.findMany({
     where,

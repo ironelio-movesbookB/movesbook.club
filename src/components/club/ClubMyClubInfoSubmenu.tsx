@@ -42,10 +42,10 @@ export default function ClubMyClubInfoSubmenu({ clubId }: { clubId?: string | nu
     },
     {
       key: 'messages',
-      label: 'Messages received by the members',
+      label: 'Messages among Staff and members',
       needsClub: false,
       icon: MessageCircle,
-      href: '/clubs/messages?view=received',
+      href: clubId ? `/clubs/messages?clubId=${encodeURIComponent(clubId)}` : '/clubs/messages',
     },
     {
       key: 'settings',

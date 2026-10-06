@@ -19,6 +19,7 @@ import RegistrationSubscriptionPricingBlock from './RegistrationSubscriptionPric
 import RegistrationMonthlyCostLine from './RegistrationMonthlyCostLine';
 import RegistrationVersionLastNewsBlock from './RegistrationVersionLastNewsBlock';
 import RegistrationVersionNewsModal from './RegistrationVersionNewsModal';
+import RegistrationSpecialOfferBox from './RegistrationSpecialOfferBox';
 import { SubscriptionSharingSummary } from '@/components/admin/subscriptions/SubscriptionMembershipSharingDisplay';
 
 type WaysToGetStartedSectionProps = {
@@ -27,6 +28,8 @@ type WaysToGetStartedSectionProps = {
   selectedVersionId: number | null;
   onVersionSelect: (versionId: number) => void;
   lang: string;
+  specialOfferConfirmed?: boolean;
+  onSpecialOfferConfirmChange?: (confirmed: boolean) => void;
 };
 
 export default function WaysToGetStartedSection({
@@ -35,6 +38,8 @@ export default function WaysToGetStartedSection({
   selectedVersionId,
   onVersionSelect,
   lang,
+  specialOfferConfirmed = false,
+  onSpecialOfferConfirmChange,
 }: WaysToGetStartedSectionProps) {
   const [expanded, setExpanded] = useState(true);
   const [showPackageInfo, setShowPackageInfo] = useState(false);
@@ -176,7 +181,7 @@ export default function WaysToGetStartedSection({
                 ) : null}
               </div>
 
-              <div className="flex sm:flex-col gap-2 sm:w-36 shrink-0 justify-center sm:justify-start">
+              <div className="flex flex-wrap sm:flex-nowrap sm:flex-col gap-2 sm:w-44 shrink-0 justify-center sm:justify-start">
                 <button
                   type="button"
                   onClick={() => setShowPackageInfo(true)}
@@ -192,6 +197,15 @@ export default function WaysToGetStartedSection({
                 >
                   News about version
                 </button>
+                {onSpecialOfferConfirmChange ? (
+                  <RegistrationSpecialOfferBox
+                    versionId={selectedVersionId}
+                    durationDays={selectedVersion?.durationDays}
+                    lang={lang}
+                    confirmed={specialOfferConfirmed}
+                    onConfirmChange={onSpecialOfferConfirmChange}
+                  />
+                ) : null}
               </div>
             </div>
           </div>

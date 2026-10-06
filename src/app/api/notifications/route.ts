@@ -42,6 +42,13 @@ export async function GET(request: NextRequest) {
       search: searchParams.get('q') || '',
       page: Number(searchParams.get('page') || '1'),
       pageSize: Number(searchParams.get('pageSize') || '10'),
+      clubId: searchParams.get('clubId'),
+      audienceKind:
+        searchParams.get('audience') === 'staff'
+          ? 'staff'
+          : searchParams.get('audience') === 'members'
+            ? 'members'
+            : null,
     });
     return NextResponse.json(result);
   } catch (e) {

@@ -3,6 +3,20 @@ import bcrypt from 'bcryptjs';
 import { SportType, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
+import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
+import {
+  mergeNetworkSubscriptionHistory,
+  periodDisplayStatus,
+} from '@/lib/admin/networkSubscriptionHistory';
+import {
+  addDaysYmd,
+  ensureSpecialOfferTables,
+  reserveSpecialOfferSlot,
+  SpecialOfferUnavailableError,
+  todayYmd,
+  versionDurationDays,
+  type SpecialOfferRegistration,
+} from '@/lib/subscriptions/specialOffers';
 
 
 export async function POST(request: NextRequest) {
@@ -18,8 +32,22 @@ export async function POST(request: NextRequest) {
       gender, 
       birthdate, 
       country,
-      language
+      language,
+      subscriptionVersionId,
+      useSpecialOffer,
     } = await request.json();
+
+    const requestedVersion =
+      subscriptionVersionId != null ? getSubscriptionById(Number(subscriptionVersionId)) : undefined;
+    const selectedVersion =
+      requestedVersion && requestedVersion.userType === userType ? requestedVersion : undefined;
+    const withSpecialOffer = Boolean(useSpecialOffer && selectedVersion);
+    if (useSpecialOffer && !selectedVersion) {
+      return NextResponse.json(
+        { error: 'Select the version of the special offer' },
+        { status: 400 },
+      );
+    }
 
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
     const normalizedEmail = typeof email === 'string' ? email.trim() : '';
@@ -79,6 +107,7 @@ export async function POST(request: NextRequest) {
     console.log(`Loading admin defaults for language: ${userLanguage}`);
 
     await ensureUserSettingsColumns();
+    if (withSpecialOffer) await ensureSpecialOfferTables();
 
     const [colorDefaults, toolsDefaults, favouritesDefaults] = await Promise.all([
       prisma.colorDefaults.findUnique({ where: { language: userLanguage } }),
@@ -145,9 +174,36 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      let offerRegistration: SpecialOfferRegistration | null = null;
+      if (withSpecialOffer && selectedVersion) {
+        offerRegistration = await reserveSpecialOfferSlot(tx, {
+          versionId: selectedVersion.id,
+          userId: created.id,
+        });
+      }
+
+      let adminSettings = '{}';
+      if (selectedVersion) {
+        const dateStart = offerRegistration?.dateStart ?? todayYmd();
+        const dateEnd =
+          offerRegistration?.dateEnd ??
+          addDaysYmd(dateStart, versionDurationDays(selectedVersion.id));
+        adminSettings = mergeNetworkSubscriptionHistory('{}', [
+          {
+            id: `register-${Date.now()}`,
+            dateStart,
+            dateEnd,
+            version: selectedVersion.name,
+            status: periodDisplayStatus(dateEnd),
+            amountPaid: String(offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0),
+          },
+        ]);
+      }
+
       await tx.userSettings.create({
         data: {
           userId: created.id,
+          adminSettings,
           colorSettings: colorDefaults?.data
             ? JSON.stringify(colorDefaults.data)
             : JSON.stringify(defaultColorSettings),
@@ -156,7 +212,6 @@ export async function POST(request: NextRequest) {
             ? JSON.stringify(favouritesDefaults.data)
             : '{}',
           myBestSettings: '{}',
-          adminSettings: '{}',
           workoutPreferences: '{}',
           socialSettings: '{}',
           notificationSettings: '{}',
@@ -216,6 +271,10 @@ export async function POST(request: NextRequest) {
       user,
     });
   } catch (error: any) {
+    if (error instanceof SpecialOfferUnavailableError) {
+      return NextResponse.json({ error: error.message, specialOfferUnavailable: true }, { status: 409 });
+    }
+
     console.error('Registration error:', error);
 
     // More detailed error logging

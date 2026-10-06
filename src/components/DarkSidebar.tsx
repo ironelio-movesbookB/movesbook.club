@@ -2457,10 +2457,7 @@ export default function DarkSidebar({
                     type="button"
                     onClick={() => {
                       if (isClubAccountUserType(userType)) {
-                        const qs = selectedEntityId
-                          ? `?clubId=${encodeURIComponent(selectedEntityId)}`
-                          : '';
-                        router.push(`/users/clubnotification${qs}`);
+                        router.push('/users/clubnotification?view=all');
                         return;
                       }
                       if (userType === 'COACH') {
@@ -3149,9 +3146,9 @@ export default function DarkSidebar({
                         onClick={() => {
                           if (isClubAccountUserType(userType)) {
                             const qs = selectedEntityId
-                              ? `?clubId=${encodeURIComponent(selectedEntityId)}`
+                              ? `&clubId=${encodeURIComponent(selectedEntityId)}`
                               : '';
-                            router.push(`/users/clubnotification${qs}`);
+                            router.push(`/users/clubnotification?view=all${qs}`);
                             return;
                           }
                           if (userType === 'COACH') {
@@ -3175,7 +3172,11 @@ export default function DarkSidebar({
                             router.push(`/users/groupnotification${qs}`);
                             return;
                           }
-                          router.push('/users/notification/all/all/clubs');
+                          router.push(
+                            selectedEntityId
+                              ? `/users/notification/all/all/clubs?clubId=${encodeURIComponent(selectedEntityId)}`
+                              : '/users/notification/all/all/clubs',
+                          );
                         }}
                         className="flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
                       >
