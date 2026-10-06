@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
 import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
@@ -25,6 +26,8 @@ type Props = {
   clubId?: string | null;
   /** Prefer this team when the admin is a Team Admin. */
   teamId?: string | null;
+  /** Scope to one member (Member Overview → Mngmnt). Falls back to ?memberId=. */
+  memberId?: string | null;
   headerAction?: ReactNode;
   /** Bump to force a reload (e.g. after adding a member). */
   refreshKey?: number;
@@ -33,7 +36,7 @@ type Props = {
   bordered?: boolean;
 };
 
-export default function ClubArchivePage({
+function ClubArchivePageInner({
   title,
   archiveType,
   columns,
@@ -45,12 +48,16 @@ export default function ClubArchivePage({
   selectable = false,
   clubId,
   teamId,
+  memberId: memberIdProp,
   headerAction,
   refreshKey = 0,
   onEditItem,
   onDeleteItem,
   bordered = false,
 }: Props) {
+  const searchParams = useSearchParams();
+  const memberIdFromUrl = searchParams?.get('memberId') || null;
+  const memberId = memberIdProp || memberIdFromUrl;
   const filters = useArchiveListFilters();
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -70,6 +77,7 @@ export default function ClubArchivePage({
         direction: archiveType === 'cash-movements' ? direction : undefined,
         clubId: clubId || undefined,
         teamId: teamId || undefined,
+        memberId: memberId || undefined,
         ...filters.applied,
       });
       setTotal(res.total);
@@ -124,6 +132,7 @@ export default function ClubArchivePage({
     pageSize,
     clubId,
     teamId,
+    memberId,
     onEditItem,
     onDeleteItem,
     refreshKey,
@@ -135,7 +144,7 @@ export default function ClubArchivePage({
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied]);
+  }, [filters.applied, memberId]);
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;
@@ -222,5 +231,13 @@ export default function ClubArchivePage({
         }
       />
     </ProcedureArchiveShell>
+  );
+}
+
+export default function ClubArchivePage(props: Props) {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading…</div>}>
+      <ClubArchivePageInner {...props} />
+    </Suspense>
   );
 }

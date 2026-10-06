@@ -749,9 +749,12 @@ export async function listClubSubscriptionsArchive(
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     for (const row of rows) {
-      const user = userMap.get(String(row.user_id ?? ''));
+      const uid = String(row.user_id ?? '');
+      const user = userMap.get(uid);
       items.push({
         id: String(row.id),
+        memberId: uid || undefined,
+        userId: uid || undefined,
         name: user ? formatName(user.firstName, user.surname, user.name) : '-',
         image: user?.image ?? null,
         service: text(row.subscription_name) || '-',
@@ -799,9 +802,12 @@ async function loadLegacyProductSaleItems(ctx: ClubAuthContext): Promise<Record<
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     for (const row of rows) {
-      const user = userMap.get(String(row.user_id ?? ''));
+      const uid = String(row.user_id ?? '');
+      const user = userMap.get(uid);
       items.push({
         id: String(row.id),
+        memberId: uid || undefined,
+        userId: uid || undefined,
         name: user ? formatName(user.firstName, user.surname, user.name) : '-',
         image: user?.image ?? null,
         insertDate: row.purchase_date ? String(row.purchase_date).slice(0, 10) : '-',
@@ -827,11 +833,14 @@ export async function listUnifiedProductSales(
     const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
       page: 1,
       pageSize: 500,
+      memberId: params.memberId,
     });
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
       items.push({
         id: `proc-${row.id}`,
+        memberId: row.memberId,
+        userId: row.memberId,
         name: row.memberName,
         image: null,
         insertDate: row.recordDate,
@@ -870,6 +879,8 @@ export async function listAccessesArchive(
       const user = userMap.get(uid);
       return {
         id: String(row.id),
+        memberId: uid || undefined,
+        userId: uid || undefined,
         name: user ? formatName(user.firstName, user.surname, user.name) : '-',
         image: user?.image ?? null,
         outcome: text(row.outcome),
@@ -892,9 +903,12 @@ export async function listReservationsArchive(
   return queryLegacyTableArchive(
     ['reservations'],
     (row, userMap) => {
-      const user = userMap.get(String(row.user_id ?? ''));
+      const uid = String(row.user_id ?? '');
+      const user = userMap.get(uid);
       return {
         id: String(row.id),
+        memberId: uid || undefined,
+        userId: uid || undefined,
         name: text(row.name) || (user ? formatName(user.firstName, user.surname, user.name) : '-'),
         image: user?.image ?? null,
         course: text(row.course_name) || text(row.course) || '-',

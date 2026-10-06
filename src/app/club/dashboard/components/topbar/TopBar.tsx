@@ -1,11 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { Settings, Menu, ChevronDown, MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Settings, Menu, MessageSquare, User } from "lucide-react";
 
 import useTopBarSettings from "./hooks/useTopBarSettings";
 import { useChatUnreadCount } from "@/hooks/useChatUnreadCount";
 import ChatUnreadBadge from "@/components/chat/ChatUnreadBadge";
+import ClubAdminMenuDropdown from "@/components/club/topbar/ClubAdminMenuDropdown";
+import { writeClubWorkspaceTab } from "@/lib/club/clubWorkspaceTab";
 
 import CustomizeMenu from "./components/CustomizeMenu";
 import GeneralSettingsMenu from "./components/GeneralSettingsMenu";
@@ -20,6 +23,7 @@ type TopBarProps = {
 };
 
 export default function TopBar({ onChatPanelClick }: TopBarProps) {
+    const router = useRouter();
 
     const {
         menuData,
@@ -103,13 +107,18 @@ export default function TopBar({ onChatPanelClick }: TopBarProps) {
                     >
                         <Settings size={22} />
                     </button>
-                    <button className="h-[28px] px-3 bg-[#333333] text-white rounded-sm text-[13px] flex items-center gap-1">
-                        Insert data
-                        <ChevronDown size={14} />
-                    </button>
-                    <button className="h-[28px] px-3 bg-white border border-gray-300 rounded-sm text-[13px] flex items-center gap-1">
-                        Archive data
-                        <ChevronDown size={14} />
+                    <ClubAdminMenuDropdown variant="insert" tone="dark" />
+                    <ClubAdminMenuDropdown variant="archive" tone="light" />
+                    <button
+                        type="button"
+                        onClick={() => {
+                            writeClubWorkspaceTab('my-entity');
+                            router.push('/club/member-overview');
+                        }}
+                        className="h-[28px] px-3 bg-white border border-gray-300 rounded-sm text-[13px] flex items-center gap-1 hover:bg-gray-50"
+                    >
+                        <User size={14} />
+                        Member Overview
                     </button>
                 </div>
 

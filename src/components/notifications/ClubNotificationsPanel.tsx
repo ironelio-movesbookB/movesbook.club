@@ -22,9 +22,18 @@ type Props = {
   clubId?: string | null;
   /** Prefill For Club Staff when opened from Quick menu */
   initialAudienceKind?: 'members' | 'staff';
+  /**
+   * Member Overview: only show notifies whose audience is club members
+   * (broadcasts that apply to the selected member).
+   */
+  memberAudienceOnly?: boolean;
 };
 
-export default function ClubNotificationsPanel({ clubId, initialAudienceKind = 'members' }: Props) {
+export default function ClubNotificationsPanel({
+  clubId,
+  initialAudienceKind = 'members',
+  memberAudienceOnly = false,
+}: Props) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -71,14 +80,18 @@ export default function ClubNotificationsPanel({ clubId, initialAudienceKind = '
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setItems(data.items || []);
-      setTotal(data.total || 0);
+      const rawItems = (data.items || []) as NotificationDto[];
+      const filtered = memberAudienceOnly
+        ? rawItems.filter((item) => item.audienceKind === 'members')
+        : rawItems;
+      setItems(filtered);
+      setTotal(memberAudienceOnly ? filtered.length : data.total || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [clubId, page, statusFilter]);
+  }, [clubId, page, statusFilter, memberAudienceOnly]);
 
   const loadOwnedClubs = useCallback(async () => {
     const token = userToken();
