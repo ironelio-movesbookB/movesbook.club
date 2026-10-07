@@ -2132,6 +2132,123 @@ model TeamMemberNoteRow {
   @@ignore
 }
 
+/// src/lib/club/clubCoachService.ts
+model ClubCoachRow {
+  id               String    @id @db.VarChar(191)
+  workspaceKind    String    @db.VarChar(10) @map("workspace_kind")
+  workspaceId      String    @db.VarChar(191) @map("workspace_id")
+  userId           String?   @db.VarChar(191) @map("user_id")
+  status           String    @default("active") @db.VarChar(20)
+  source           String    @default("manual") @db.VarChar(20)
+  surname          String    @db.VarChar(120)
+  firstName        String    @db.VarChar(120) @map("first_name")
+  taxCode          String    @db.VarChar(40) @map("tax_code")
+  email            String?   @db.VarChar(191)
+  phone            String?   @db.VarChar(60)
+  birthDate        DateTime? @db.Date @map("birth_date")
+  membershipNumber String?   @db.VarChar(80) @map("membership_number")
+  iban             String?   @db.VarChar(60)
+  address          String?   @db.VarChar(255)
+  city             String?   @db.VarChar(120)
+  province         String?   @db.VarChar(60)
+  zip              String?   @db.VarChar(20)
+  birthCountry     String?   @db.VarChar(120) @map("birth_country")
+  birthCity        String?   @db.VarChar(120) @map("birth_city")
+  birthProvince    String?   @db.VarChar(60) @map("birth_province")
+  role             String?   @db.VarChar(80)
+  groupId          String?   @db.VarChar(191) @map("group_id")
+  notes            String?   @db.Text
+  createdAt        DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt        DateTime  @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@unique([workspaceKind, workspaceId, taxCode], map: "club_coaches_workspace_tax_code_key")
+  @@index([workspaceKind, workspaceId, status], map: "club_coaches_workspace_status_idx")
+  @@index([userId], map: "club_coaches_user_id_idx")
+  @@map("club_coaches")
+  @@ignore
+}
+
+/// src/lib/club/clubWorkGroupService.ts
+model ClubWorkGroupRow {
+  id                 String    @id @db.VarChar(191)
+  workspaceKind      String    @db.VarChar(10) @map("workspace_kind")
+  workspaceId        String    @db.VarChar(191) @map("workspace_id")
+  name               String    @db.VarChar(160)
+  category           String    @default("Mixed") @db.VarChar(40)
+  sport              String    @default("") @db.VarChar(80)
+  season             String    @default("") @db.VarChar(20)
+  dateFrom           DateTime? @db.Date @map("date_from")
+  dateTo             DateTime? @db.Date @map("date_to")
+  showInRegistration Boolean   @default(false) @map("show_in_registration")
+  registrationNote   String?   @db.Text @map("registration_note")
+  price              Decimal?  @db.Decimal(10, 2)
+  timetableJson      String?   @db.LongText @map("timetable_json")
+  paymentPlansJson   String?   @db.Text @map("payment_plans_json")
+  createdAt          DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt          DateTime  @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId], map: "club_work_groups_workspace_idx")
+  @@map("club_work_groups")
+  @@ignore
+}
+
+/// src/lib/club/clubWorkGroupService.ts
+model ClubWorkGroupCoachRow {
+  groupId String @db.VarChar(191) @map("group_id")
+  coachId String @db.VarChar(191) @map("coach_id")
+
+  @@id([groupId, coachId])
+  @@index([coachId], map: "club_work_group_coaches_coach_idx")
+  @@map("club_work_group_coaches")
+  @@ignore
+}
+
+/// src/lib/club/clubWorkGroupService.ts
+model ClubWorkGroupMemberRow {
+  groupId String @db.VarChar(191) @map("group_id")
+  userId  String @db.VarChar(191) @map("user_id")
+
+  @@id([groupId, userId])
+  @@index([userId], map: "club_work_group_members_user_idx")
+  @@map("club_work_group_members")
+  @@ignore
+}
+
+/// src/lib/club/clubWorkGroupService.ts
+model ClubWorkRoomRow {
+  id            String   @id @db.VarChar(191)
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  name          String   @db.VarChar(120)
+  createdAt     DateTime @default(now()) @db.DateTime(3) @map("created_at")
+
+  @@unique([workspaceKind, workspaceId, name], map: "club_work_rooms_workspace_name_key")
+  @@map("club_work_rooms")
+  @@ignore
+}
+
+/// src/lib/club/clubWorkGroupService.ts
+model ClubWorkGroupAnnouncementRow {
+  id             String    @id @db.VarChar(191)
+  groupId        String    @db.VarChar(191) @map("group_id")
+  title          String    @db.VarChar(191)
+  message        String    @db.Text
+  sendMail       Boolean   @default(false) @map("send_mail")
+  postToAccount  Boolean   @default(false) @map("post_to_account")
+  showAtLogin    Boolean   @default(false) @map("show_at_login")
+  enableFrom     DateTime? @db.Date @map("enable_from")
+  enableTo       DateTime? @db.Date @map("enable_to")
+  attachmentName String?   @db.VarChar(191) @map("attachment_name")
+  mailedCount    Int       @default(0) @map("mailed_count")
+  postedCount    Int       @default(0) @map("posted_count")
+  authorId       String?   @db.VarChar(191) @map("author_id")
+  createdAt      DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+
+  @@index([groupId], map: "club_work_group_announcements_group_idx")
+  @@map("club_work_group_announcements")
+  @@ignore
+}
+
 /// src/lib/promocodes/ensureMetaTables.ts
 model PromocodeAppSettingRow {
   settingKey   String  @id @db.VarChar(64) @map("setting_key")

@@ -66,6 +66,8 @@ export type TimetableSlot = {
   maxNumber: string;
   payable: PayableValue;
   instructor: string;
+  /** Room id; used by the Groups of work timetable, not saved by the typology timetable. */
+  room?: string;
 };
 
 export type TimetableDaySchedule = {

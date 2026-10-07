@@ -450,7 +450,14 @@
  },
  "sport_about_me": {
   "en": "About Me",
-  "it": "Su di me"
+  "it": "Su di me",
+  "de": "Über mich",
+  "es": "Sobre mí",
+  "fr": "À propos de moi",
+  "hi": "मेरे बारे में",
+  "pt": "Sobre mim",
+  "ru": "Обо мне",
+  "zh": "关于我"
  },
  "sport_ac75_f50_imoca_ilca_470_49er_etc": {
   "de": "AC75, F50, IMOCA, ILCA, 470, 49er usw.",
@@ -541,7 +548,14 @@
  },
  "sport_add": {
   "en": "ADD",
-  "it": "AGGIUNGI"
+  "it": "AGGIUNGI",
+  "es": "Añadir",
+  "fr": "Ajouter",
+  "de": "Hinzufügen",
+  "pt": "Adicionar",
+  "ru": "Добавить",
+  "zh": "添加",
+  "hi": "जोड़ें"
  },
  "sport_add_a_member": {
   "en": "Add a member",
@@ -580,7 +594,14 @@
  },
  "sport_address": {
   "en": "Address",
-  "it": "Indirizzo"
+  "it": "Indirizzo",
+  "de": "Adresse",
+  "es": "Dirección",
+  "fr": "Adresse",
+  "hi": "पता",
+  "pt": "Morada",
+  "ru": "Адрес",
+  "zh": "地址"
  },
  "sport_admin_can_view_these_fields_but_only_the_member_or_an_admin_with_signature_permission_can_change_them": {
   "en": "admin can view these fields but only the member (or an admin with signature permission) can change them.",
@@ -869,7 +890,14 @@
  },
  "sport_alternate_email": {
   "en": "Alternate Email",
-  "it": "Email alternativa"
+  "it": "Email alternativa",
+  "de": "Alternative E-Mail",
+  "es": "Correo alternativo",
+  "fr": "E-mail secondaire",
+  "hi": "वैकल्पिक ईमेल",
+  "pt": "E-mail alternativo",
+  "ru": "Дополнительный e-mail",
+  "zh": "备用邮箱"
  },
  "sport_alternative_mail": {
   "en": "Alternative mail",
@@ -1167,7 +1195,14 @@
  },
  "sport_assistant_coach": {
   "en": "Assistant coach",
-  "it": "Vice allenatore"
+  "it": "Vice allenatore",
+  "de": "Co-Trainer",
+  "es": "Entrenador asistente",
+  "fr": "Entraîneur adjoint",
+  "hi": "सहायक कोच",
+  "pt": "Treinador adjunto",
+  "ru": "Помощник тренера",
+  "zh": "助理教练"
  },
  "sport_assists": {
   "de": "Unterstützt",
@@ -1902,7 +1937,14 @@
  },
  "sport_birthdate": {
   "en": "Birthdate",
-  "it": "Data di nascita"
+  "it": "Data di nascita",
+  "de": "Geburtsdatum",
+  "es": "Fecha de nacimiento",
+  "fr": "Date de naissance",
+  "hi": "जन्म तिथि",
+  "pt": "Data de nascimento",
+  "ru": "Дата рождения",
+  "zh": "出生日期"
  },
  "sport_birthday_country": {
   "en": "Birthday country",
@@ -2402,7 +2444,14 @@
  },
  "sport_cancel": {
   "en": "Cancel",
-  "it": "Annulla"
+  "it": "Annulla",
+  "de": "Abbrechen",
+  "es": "Cancelar",
+  "fr": "Annuler",
+  "hi": "रद्द करें",
+  "pt": "Cancelar",
+  "ru": "Отмена",
+  "zh": "取消"
  },
  "sport_canoe": {
   "de": "Kanu",
@@ -3325,7 +3374,14 @@
  },
  "sport_clear": {
   "en": "Clear",
-  "it": "Cancella"
+  "it": "Cancella",
+  "es": "Limpiar",
+  "fr": "Effacer",
+  "de": "Zurücksetzen",
+  "pt": "Limpar",
+  "ru": "Сбросить",
+  "zh": "清除",
+  "hi": "साफ़ करें"
  },
  "sport_clear_signature": {
   "en": "Clear signature",
@@ -3385,7 +3441,14 @@
  },
  "sport_close": {
   "en": "Close",
-  "it": "Chiudi"
+  "it": "Chiudi",
+  "de": "Schließen",
+  "es": "Cerrar",
+  "fr": "Fermer",
+  "hi": "बंद करें",
+  "pt": "Fechar",
+  "ru": "Закрыть",
+  "zh": "关闭"
  },
  "sport_clothing": {
   "en": "Clothing",
@@ -3519,7 +3582,14 @@
  },
  "sport_coach": {
   "en": "Coach",
-  "it": "Allenatore"
+  "it": "Allenatore",
+  "de": "Trainer",
+  "es": "entrenador",
+  "fr": "entraîneur",
+  "hi": "कोच",
+  "pt": "treinador",
+  "ru": "тренер",
+  "zh": "位教练"
  },
  "sport_coach_caddie_staff": {
   "de": "Trainer-/Caddy-Personal",
@@ -3776,7 +3846,8 @@
   "hi": "पुष्टि करें",
   "it": "Conferma",
   "pt": "Confirmar",
-  "ru": "Подтвердить"
+  "ru": "Подтвердить",
+  "zh": "确认"
  },
  "sport_confirm_club_admin_password": {
   "en": "Confirm Club Admin password",
@@ -3934,7 +4005,14 @@
  },
  "sport_country": {
   "en": "Country",
-  "it": "Paese"
+  "it": "Paese",
+  "de": "Land",
+  "es": "País",
+  "fr": "Pays",
+  "hi": "देश",
+  "pt": "País",
+  "ru": "Страна",
+  "zh": "国家"
  },
  "sport_countryside": {
   "en": "Countryside",
@@ -4294,7 +4372,14 @@
  },
  "sport_date_of_birth": {
   "en": "Date of birth",
-  "it": "Data di nascita"
+  "it": "Data di nascita",
+  "de": "Geburtsdatum",
+  "es": "Fecha de nacimiento",
+  "fr": "Date de naissance",
+  "hi": "जन्म तिथि",
+  "pt": "Data de nascimento",
+  "ru": "Дата рождения",
+  "zh": "出生日期"
  },
  "sport_date_of_initial_affiliation": {
   "en": "Date of initial affiliation",
@@ -4411,7 +4496,14 @@
  },
  "sport_delete": {
   "en": "Delete",
-  "it": "Elimina"
+  "it": "Elimina",
+  "de": "Löschen",
+  "es": "Eliminar",
+  "fr": "Supprimer",
+  "hi": "हटाएँ",
+  "pt": "Eliminar",
+  "ru": "Удалить",
+  "zh": "删除"
  },
  "sport_delete_failed": {
   "en": "Delete failed",
@@ -4419,7 +4511,14 @@
  },
  "sport_delete_group": {
   "en": "Delete group",
-  "it": "Elimina gruppo"
+  "it": "Elimina gruppo",
+  "es": "Eliminar grupo",
+  "fr": "Supprimer le groupe",
+  "de": "Gruppe löschen",
+  "pt": "Eliminar grupo",
+  "ru": "Удалить группу",
+  "zh": "删除小组",
+  "hi": "समूह हटाएँ"
  },
  "sport_delete_group_0_members_are_not_removed_from_the_club": {
   "en": "Delete group \"{0}\"? Members are not removed from the club.",
@@ -4671,7 +4770,14 @@
  },
  "sport_discount": {
   "en": "Discount",
-  "it": "Sconto"
+  "it": "Sconto",
+  "es": "Descuento",
+  "fr": "Remise",
+  "de": "Rabatt",
+  "pt": "Desconto",
+  "ru": "Скидка",
+  "zh": "折扣",
+  "hi": "छूट"
  },
  "sport_discount_disabled": {
   "en": "Discount disabled",
@@ -5328,7 +5434,14 @@
  },
  "sport_email": {
   "en": "Email",
-  "it": "Email"
+  "it": "Email",
+  "de": "E-Mail",
+  "es": "Correo electrónico",
+  "fr": "E-mail",
+  "hi": "ईमेल",
+  "pt": "E-mail",
+  "ru": "Эл. почта",
+  "zh": "电子邮箱"
  },
  "sport_email_only": {
   "en": "Email only",
@@ -5715,7 +5828,14 @@
  },
  "sport_failed_to_load": {
   "en": "Failed to load",
-  "it": "Caricamento non riuscito"
+  "it": "Caricamento non riuscito",
+  "de": "Laden fehlgeschlagen",
+  "es": "Error al cargar",
+  "fr": "Échec du chargement",
+  "hi": "लोड करने में विफल",
+  "pt": "Falha ao carregar",
+  "ru": "Не удалось загрузить",
+  "zh": "加载失败"
  },
  "sport_failed_to_load_club": {
   "en": "Failed to load club",
@@ -6184,7 +6304,14 @@
  },
  "sport_female": {
   "en": "Female",
-  "it": "Femmina"
+  "it": "Femmina",
+  "de": "Weiblich",
+  "es": "Femenino",
+  "fr": "Femme",
+  "hi": "महिला",
+  "pt": "Feminino",
+  "ru": "Женский",
+  "zh": "女"
  },
  "sport_fg_made_att": {
   "de": "FG Made/Att",
@@ -6325,7 +6452,14 @@
  },
  "sport_filter": {
   "en": "Filter",
-  "it": "Filtro"
+  "it": "Filtro",
+  "de": "Filter",
+  "es": "Filtro",
+  "fr": "Filtre",
+  "hi": "फ़िल्टर",
+  "pt": "Filtro",
+  "ru": "Фильтр",
+  "zh": "筛选"
  },
  "sport_fim": {
   "de": "FIM",
@@ -6391,7 +6525,14 @@
  },
  "sport_first_name": {
   "en": "First name",
-  "it": "Nome"
+  "it": "Nome",
+  "de": "Vorname",
+  "es": "Nombre",
+  "fr": "Prénom",
+  "hi": "पहला नाम",
+  "pt": "Nome",
+  "ru": "Имя",
+  "zh": "名"
  },
  "sport_first_page": {
   "en": "First page",
@@ -6761,11 +6902,25 @@
  },
  "sport_fri": {
   "en": "Fri",
-  "it": "Ven"
+  "it": "Ven",
+  "es": "Vie",
+  "fr": "Ven",
+  "de": "Fr",
+  "pt": "Sex",
+  "ru": "Пт",
+  "zh": "周五",
+  "hi": "शुक्र"
  },
  "sport_from": {
   "en": "From",
-  "it": "Da"
+  "it": "Da",
+  "es": "Desde",
+  "fr": "Du",
+  "de": "Von",
+  "pt": "De",
+  "ru": "С",
+  "zh": "从",
+  "hi": "से"
  },
  "sport_from_favourites_the_member_stays_in_the_club_list": {
   "en": "from Favourites? The member stays in the club list.",
@@ -6825,7 +6980,14 @@
  },
  "sport_full_name": {
   "en": "Full name",
-  "it": "Nome completo"
+  "it": "Nome completo",
+  "de": "Vollständiger Name",
+  "es": "Nombre completo",
+  "fr": "Nom complet",
+  "hi": "पूरा नाम",
+  "pt": "Nome completo",
+  "ru": "Полное имя",
+  "zh": "全名"
  },
  "sport_ga": {
   "de": "GA",
@@ -6930,7 +7092,14 @@
  },
  "sport_gender": {
   "en": "Gender",
-  "it": "Sesso"
+  "it": "Sesso",
+  "de": "Geschlecht",
+  "es": "Sexo",
+  "fr": "Sexe",
+  "hi": "लिंग",
+  "pt": "Sexo",
+  "ru": "Пол",
+  "zh": "性别"
  },
  "sport_generali_italia": {
   "en": "GENERALI ITALIA",
@@ -7031,7 +7200,14 @@
  },
  "sport_goalkeeper_coach": {
   "en": "Goalkeeper coach",
-  "it": "Preparatore dei portieri"
+  "it": "Preparatore dei portieri",
+  "de": "Torwarttrainer",
+  "es": "Entrenador de porteros",
+  "fr": "Entraîneur des gardiens",
+  "hi": "गोलकीपर कोच",
+  "pt": "Treinador de guarda-redes",
+  "ru": "Тренер вратарей",
+  "zh": "守门员教练"
  },
  "sport_goalkeeper_left_right_wing_left_right_back_centre_back_pivot": {
   "de": "Torwart, linker/rechter Flügel, linker/rechter Verteidiger, Innenverteidiger, Pivot",
@@ -7147,7 +7323,14 @@
  },
  "sport_google_map": {
   "en": "Google map",
-  "it": "Mappa Google"
+  "it": "Mappa Google",
+  "de": "Google Maps",
+  "es": "Google Maps",
+  "fr": "Google Maps",
+  "hi": "Google मैप",
+  "pt": "Google Maps",
+  "ru": "Google Карты",
+  "zh": "谷歌地图"
  },
  "sport_google_pay": {
   "en": "Google Pay",
@@ -7264,7 +7447,14 @@
  },
  "sport_group": {
   "en": "Group",
-  "it": "Gruppo"
+  "it": "Gruppo",
+  "de": "Gruppe",
+  "es": "Grupo",
+  "fr": "Groupe",
+  "hi": "समूह",
+  "pt": "Grupo",
+  "ru": "Группа",
+  "zh": "分组"
  },
  "sport_group_0_saved": {
   "en": "Group \"{0}\" saved.",
@@ -7284,7 +7474,14 @@
  },
  "sport_group_name": {
   "en": "Group name",
-  "it": "Nome del gruppo"
+  "it": "Nome del gruppo",
+  "es": "Nombre del grupo",
+  "fr": "Nom du groupe",
+  "de": "Gruppenname",
+  "pt": "Nome do grupo",
+  "ru": "Название группы",
+  "zh": "小组名称",
+  "hi": "समूह का नाम"
  },
  "sport_group_of_training": {
   "en": "Group of training",
@@ -7292,7 +7489,14 @@
  },
  "sport_group_profile": {
   "en": "Group Profile",
-  "it": "Profilo del gruppo"
+  "it": "Profilo del gruppo",
+  "es": "Perfil del grupo",
+  "fr": "Profil du groupe",
+  "de": "Gruppenprofil",
+  "pt": "Perfil do grupo",
+  "ru": "Профиль группы",
+  "zh": "小组资料",
+  "hi": "समूह प्रोफ़ाइल"
  },
  "sport_group_renamed_to": {
   "en": "Group renamed to \"",
@@ -7838,7 +8042,14 @@
  },
  "sport_iban": {
   "en": "IBAN",
-  "it": "IBAN"
+  "it": "IBAN",
+  "de": "IBAN",
+  "es": "IBAN",
+  "fr": "IBAN",
+  "hi": "IBAN",
+  "pt": "IBAN",
+  "ru": "IBAN",
+  "zh": "IBAN"
  },
  "sport_iban_alphanumeric": {
   "en": "IBAN (alphanumeric)",
@@ -7959,7 +8170,14 @@
  },
  "sport_image": {
   "en": "Image",
-  "it": "Immagine"
+  "it": "Immagine",
+  "es": "Imagen",
+  "fr": "Image",
+  "de": "Bild",
+  "pt": "Imagem",
+  "ru": "Фото",
+  "zh": "图片",
+  "hi": "चित्र"
  },
  "sport_image_release": {
   "en": "Image release",
@@ -8999,7 +9217,14 @@
  },
  "sport_loading": {
   "en": "Loading…",
-  "it": "Caricamento…"
+  "it": "Caricamento…",
+  "de": "Wird geladen...",
+  "es": "Cargando...",
+  "fr": "Chargement...",
+  "hi": "लोड हो रहा है...",
+  "pt": "A carregar...",
+  "ru": "Загрузка...",
+  "zh": "加载中..."
  },
  "sport_loading_categories": {
   "en": "Loading categories…",
@@ -9011,7 +9236,14 @@
  },
  "sport_loading_editor": {
   "en": "Loading editor…",
-  "it": "Caricamento editor…"
+  "it": "Caricamento editor…",
+  "de": "Editor wird geladen…",
+  "es": "Cargando editor…",
+  "fr": "Chargement de l'éditeur…",
+  "hi": "संपादक लोड हो रहा है…",
+  "pt": "Carregando editor…",
+  "ru": "Загрузка редактора…",
+  "zh": "正在加载编辑器…"
  },
  "sport_loading_groups": {
   "en": "Loading groups...",
@@ -9159,7 +9391,14 @@
  },
  "sport_mail": {
   "en": "Mail",
-  "it": "Mail"
+  "it": "Mail",
+  "de": "E-Mail",
+  "es": "Correo",
+  "fr": "E-mail",
+  "hi": "मेल",
+  "pt": "E-mail",
+  "ru": "Почта",
+  "zh": "邮件"
  },
  "sport_mail_address": {
   "en": "Mail address",
@@ -9194,7 +9433,14 @@
  },
  "sport_male": {
   "en": "Male",
-  "it": "Maschio"
+  "it": "Maschio",
+  "de": "Männlich",
+  "es": "Masculino",
+  "fr": "Homme",
+  "hi": "पुरुष",
+  "pt": "Masculino",
+  "ru": "Мужской",
+  "zh": "男"
  },
  "sport_manage_customized_fields": {
   "en": "Manage customized fields",
@@ -9631,7 +9877,14 @@
  },
  "sport_member": {
   "en": "Member",
-  "it": "Membro"
+  "it": "Membro",
+  "de": "Mitglied",
+  "es": "Miembro",
+  "fr": "Membre",
+  "hi": "सदस्य",
+  "pt": "Membro",
+  "ru": "Участник",
+  "zh": "成员"
  },
  "sport_member_info": {
   "en": "Member info",
@@ -9873,7 +10126,14 @@
  },
  "sport_message": {
   "en": "Message",
-  "it": "Messaggio"
+  "it": "Messaggio",
+  "es": "Mensaje",
+  "fr": "Message",
+  "de": "Nachricht",
+  "pt": "Mensagem",
+  "ru": "Сообщение",
+  "zh": "消息",
+  "hi": "संदेश"
  },
  "sport_message_at_logout": {
   "en": "Message at logout",
@@ -9973,7 +10233,14 @@
  },
  "sport_mon": {
   "en": "Mon",
-  "it": "Lun"
+  "it": "Lun",
+  "es": "Lun",
+  "fr": "Lun",
+  "de": "Mo",
+  "pt": "Seg",
+  "ru": "Пн",
+  "zh": "周一",
+  "hi": "सोम"
  },
  "sport_monuments": {
   "de": "Denkmäler",
@@ -9988,7 +10255,14 @@
  },
  "sport_most_recent": {
   "en": "Most recent",
-  "it": "Più recenti"
+  "it": "Più recenti",
+  "es": "Más recientes",
+  "fr": "Plus récents",
+  "de": "Neueste",
+  "pt": "Mais recentes",
+  "ru": "Сначала новые",
+  "zh": "最新",
+  "hi": "सबसे नए"
  },
  "sport_mother": {
   "en": "Mother",
@@ -10119,7 +10393,14 @@
  },
  "sport_my_blog_site": {
   "en": "My blog site",
-  "it": "Il mio blog"
+  "it": "Il mio blog",
+  "de": "Mein Blog",
+  "es": "Mi blog",
+  "fr": "Mon blog",
+  "hi": "मेरा ब्लॉग",
+  "pt": "Meu blog",
+  "ru": "Мой блог",
+  "zh": "我的博客"
  },
  "sport_my_club_password": {
   "en": "My Club password",
@@ -10170,12 +10451,24 @@
  "sport_my_website": {
   "en": "My Website",
   "fr": "Mon site Web",
-  "it": "Il mio sito web"
+  "it": "Il mio sito web",
+  "de": "Meine Website",
+  "es": "Mi sitio web",
+  "hi": "मेरी वेबसाइट",
+  "pt": "Meu site",
+  "ru": "Мой сайт",
+  "zh": "我的网站"
  },
  "sport_name": {
   "en": "Name",
   "fr": "Nom",
-  "it": "Nome"
+  "it": "Nome",
+  "de": "Vorname",
+  "es": "Nombre",
+  "hi": "नाम",
+  "pt": "Nome",
+  "ru": "Имя",
+  "zh": "名"
  },
  "sport_name_day_day_month": {
   "en": "Name day (day-month)",
@@ -10346,7 +10639,13 @@
  "sport_new_password": {
   "en": "New password",
   "fr": "Nouveau mot de passe",
-  "it": "Nuova password"
+  "it": "Nuova password",
+  "de": "Neues Passwort",
+  "es": "Nueva contraseña",
+  "hi": "नया पासवर्ड",
+  "pt": "Nova senha",
+  "ru": "Новый пароль",
+  "zh": "新密码"
  },
  "sport_new_password_and_repeat_pass_do_not_match": {
   "en": "New Password and Repeat Pass. do not match.",
@@ -10356,7 +10655,13 @@
  "sport_next": {
   "en": "Next",
   "fr": "Suivant",
-  "it": "Avanti"
+  "it": "Avanti",
+  "de": "Weiter",
+  "es": "Sig.",
+  "hi": "अगला",
+  "pt": "Seg.",
+  "ru": "Далее",
+  "zh": "下一页"
  },
  "sport_next_page": {
   "en": "Next page",
@@ -10610,7 +10915,13 @@
  "sport_notes": {
   "en": "Notes",
   "fr": "Remarques",
-  "it": "Note"
+  "it": "Note",
+  "de": "Notizen",
+  "es": "Notas",
+  "hi": "टिप्पणियाँ",
+  "pt": "Notas",
+  "ru": "Примечания",
+  "zh": "备注"
  },
  "sport_notes_about_the_user": {
   "en": "Notes about the user",
@@ -10897,7 +11208,13 @@
  "sport_order": {
   "en": "Order",
   "fr": "Commande",
-  "it": "Ordine"
+  "it": "Ordine",
+  "es": "Orden",
+  "de": "Sortierung",
+  "pt": "Ordem",
+  "ru": "Сортировка",
+  "zh": "排序",
+  "hi": "क्रम"
  },
  "sport_orientering": {
   "en": "Orientering",
@@ -11583,7 +11900,13 @@
  "sport_pending": {
   "en": "Pending",
   "fr": "En attente",
-  "it": "In attesa"
+  "it": "In attesa",
+  "de": "Ausstehend",
+  "es": "Pendiente",
+  "hi": "लंबित",
+  "pt": "Pendente",
+  "ru": "Ожидает",
+  "zh": "待审核"
  },
  "sport_penhold": {
   "de": "Penhold",
@@ -11642,7 +11965,13 @@
  "sport_personal_data": {
   "en": "Personal Data",
   "fr": "Données personnelles",
-  "it": "Dati personali"
+  "it": "Dati personali",
+  "de": "Persönliche Daten",
+  "es": "Datos personales",
+  "hi": "व्यक्तिगत जानकारी",
+  "pt": "Dados pessoais",
+  "ru": "Личные данные",
+  "zh": "个人资料"
  },
  "sport_personal_documents": {
   "en": "Personal documents",
@@ -11678,7 +12007,13 @@
  "sport_phone": {
   "en": "Phone",
   "fr": "Téléphone",
-  "it": "Telefono"
+  "it": "Telefono",
+  "de": "Telefon",
+  "es": "Teléfono",
+  "hi": "फ़ोन",
+  "pt": "Telefone",
+  "ru": "Телефон",
+  "zh": "电话"
  },
  "sport_phone_1": {
   "en": "Phone 1",
@@ -12466,7 +12801,13 @@
  "sport_print": {
   "en": "Print",
   "fr": "Imprimer",
-  "it": "Stampa"
+  "it": "Stampa",
+  "es": "Imprimir",
+  "de": "Drucken",
+  "pt": "Imprimir",
+  "ru": "Печать",
+  "zh": "打印",
+  "hi": "प्रिंट करें"
  },
  "sport_privacy": {
   "en": "Privacy (",
@@ -12560,7 +12901,13 @@
  "sport_province": {
   "en": "Province",
   "fr": "Province",
-  "it": "Provincia"
+  "it": "Provincia",
+  "de": "Provinz",
+  "es": "Provincia",
+  "hi": "प्रांत",
+  "pt": "Província",
+  "ru": "Провинция",
+  "zh": "省份"
  },
  "sport_provincial_delegation": {
   "en": "Provincial Delegation",
@@ -12960,7 +13307,14 @@
  },
  "sport_references_level": {
   "en": "References level",
-  "it": "Livello delle referenze"
+  "it": "Livello delle referenze",
+  "de": "Referenzstufe",
+  "es": "Nivel de referencias",
+  "fr": "Niveau des références",
+  "hi": "संदर्भ स्तर",
+  "pt": "Nível de referências",
+  "ru": "Уровень рекомендаций",
+  "zh": "推荐级别"
  },
  "sport_references_of_the_club": {
   "en": "References of the club",
@@ -13073,7 +13427,14 @@
  },
  "sport_remove": {
   "en": "[ Remove ]",
-  "it": "[ Rimuovi ]"
+  "it": "[ Rimuovi ]",
+  "es": "Quitar",
+  "fr": "Retirer",
+  "de": "Entfernen",
+  "pt": "Remover",
+  "ru": "Убрать",
+  "zh": "移除",
+  "hi": "हटाएँ"
  },
  "sport_remove_0_from_favourites_the_member_stays_in_the_club_list": {
   "en": "Remove {0} from Favourites? The member stays in the club list.",
@@ -13193,7 +13554,14 @@
  },
  "sport_residence_address": {
   "en": "Residence address",
-  "it": "Indirizzo di residenza"
+  "it": "Indirizzo di residenza",
+  "de": "Wohnadresse",
+  "es": "Dirección de residencia",
+  "fr": "Adresse de résidence",
+  "hi": "निवास का पता",
+  "pt": "Morada de residência",
+  "ru": "Адрес проживания",
+  "zh": "居住地址"
  },
  "sport_residence_data": {
   "en": "Residence data",
@@ -13770,7 +14138,14 @@
  },
  "sport_sat": {
   "en": "Sat",
-  "it": "Sab"
+  "it": "Sab",
+  "es": "Sáb",
+  "fr": "Sam",
+  "de": "Sa",
+  "pt": "Sáb",
+  "ru": "Сб",
+  "zh": "周六",
+  "hi": "शनि"
  },
  "sport_satispay": {
   "en": "Satispay",
@@ -13778,7 +14153,14 @@
  },
  "sport_save": {
   "en": "Save",
-  "it": "Salva"
+  "it": "Salva",
+  "de": "Speichern",
+  "es": "Guardar",
+  "fr": "Enregistrer",
+  "hi": "सहेजें",
+  "pt": "Guardar",
+  "ru": "Сохранить",
+  "zh": "保存"
  },
  "sport_save_as_a_group": {
   "en": "Save as a group",
@@ -13817,7 +14199,14 @@
  },
  "sport_saving": {
   "en": "Saving…",
-  "it": "Salvataggio…"
+  "it": "Salvataggio…",
+  "de": "Wird gespeichert…",
+  "es": "Guardando…",
+  "fr": "Enregistrement…",
+  "hi": "सहेजा जा रहा है…",
+  "pt": "A guardar…",
+  "ru": "Сохранение…",
+  "zh": "正在保存…"
  },
  "sport_schedule_timetable": {
   "de": "Zeitplan / Zeitplan",
@@ -13866,7 +14255,14 @@
  },
  "sport_search": {
   "en": "Search",
-  "it": "Cerca"
+  "it": "Cerca",
+  "de": "Suchen",
+  "es": "Buscar",
+  "fr": "Rechercher",
+  "hi": "खोजें",
+  "pt": "Pesquisar",
+  "ru": "Поиск",
+  "zh": "搜索"
  },
  "sport_search_member_types": {
   "en": "Search member types",
@@ -13979,7 +14375,14 @@
  },
  "sport_select": {
   "en": "Select",
-  "it": "Seleziona"
+  "it": "Seleziona",
+  "de": "— Auswählen —",
+  "es": "— Selecciona —",
+  "fr": "— Sélectionnez —",
+  "hi": "— चुनें —",
+  "pt": "— Selecione —",
+  "ru": "— Выберите —",
+  "zh": "— 请选择 —"
  },
  "sport_select_a_club": {
   "en": "select a club",
@@ -14039,7 +14442,14 @@
  },
  "sport_select_country": {
   "en": "Select country",
-  "it": "Seleziona paese"
+  "it": "Seleziona paese",
+  "de": "— Land auswählen —",
+  "es": "— Selecciona un país —",
+  "fr": "— Sélectionnez un pays —",
+  "hi": "— देश चुनें —",
+  "pt": "— Selecione o país —",
+  "ru": "— Выберите страну —",
+  "zh": "— 选择国家 —"
  },
  "sport_select_country_first": {
   "en": "Select country first",
@@ -14113,7 +14523,14 @@
  },
  "sport_send_data": {
   "en": "Send data",
-  "it": "Invia dati"
+  "it": "Invia dati",
+  "es": "Enviar datos",
+  "fr": "Envoyer les données",
+  "de": "Daten senden",
+  "pt": "Enviar dados",
+  "ru": "Отправить данные",
+  "zh": "发送数据",
+  "hi": "डेटा भेजें"
  },
  "sport_send_in_the_club_channel": {
   "en": "Send in the Club Channel",
@@ -14129,7 +14546,14 @@
  },
  "sport_send_msg": {
   "en": "Send Msg",
-  "it": "Invia msg"
+  "it": "Invia msg",
+  "es": "Enviar msj",
+  "fr": "Envoyer msg",
+  "de": "Nachricht senden",
+  "pt": "Enviar msg",
+  "ru": "Написать",
+  "zh": "发送消息",
+  "hi": "संदेश भेजें"
  },
  "sport_send_payment_module": {
   "en": "Send payment module",
@@ -14425,7 +14849,14 @@
  },
  "sport_share": {
   "en": "Share",
-  "it": "Condividi"
+  "it": "Condividi",
+  "es": "Compartir",
+  "fr": "Partager",
+  "de": "Teilen",
+  "pt": "Partilhar",
+  "ru": "Поделиться",
+  "zh": "分享",
+  "hi": "साझा करें"
  },
  "sport_share_the_link_of_this_list": {
   "en": "Share the link of this list",
@@ -14955,7 +15386,14 @@
  },
  "sport_social_site": {
   "en": "Social Site",
-  "it": "Sito social"
+  "it": "Sito social",
+  "de": "Soziales Netzwerk",
+  "es": "Red social",
+  "fr": "Réseau social",
+  "hi": "सोशल साइट",
+  "pt": "Rede social",
+  "ru": "Социальная сеть",
+  "zh": "社交网站"
  },
  "sport_southpaw": {
   "de": "Südpfote",
@@ -15131,7 +15569,14 @@
  },
  "sport_sport": {
   "en": "Sport",
-  "it": "Sport"
+  "it": "Sport",
+  "es": "Deporte",
+  "fr": "Sport",
+  "de": "Sportart",
+  "pt": "Desporto",
+  "ru": "Вид спорта",
+  "zh": "运动",
+  "hi": "खेल"
  },
  "sport_sport_data": {
   "en": "Sport data",
@@ -15675,7 +16120,14 @@
  },
  "sport_status": {
   "en": "Status",
-  "it": "Stato"
+  "it": "Stato",
+  "de": "Status",
+  "es": "Estado",
+  "fr": "Statut",
+  "hi": "स्थिति",
+  "pt": "Estado",
+  "ru": "Статус",
+  "zh": "状态"
  },
  "sport_status_is_managed_by_the_athlete_s_club_or_team": {
   "en": "— status is managed by the athlete's club or team",
@@ -15896,7 +16348,14 @@
  },
  "sport_sun": {
   "en": "Sun",
-  "it": "Dom"
+  "it": "Dom",
+  "es": "Dom",
+  "fr": "Dim",
+  "de": "So",
+  "pt": "Dom",
+  "ru": "Вс",
+  "zh": "周日",
+  "hi": "रवि"
  },
  "sport_sup": {
   "de": "SUP",
@@ -16016,7 +16475,14 @@
  },
  "sport_surname": {
   "en": "Surname",
-  "it": "Cognome"
+  "it": "Cognome",
+  "de": "Nachname",
+  "es": "Apellido",
+  "fr": "Nom",
+  "hi": "उपनाम",
+  "pt": "Apelido",
+  "ru": "Фамилия",
+  "zh": "姓"
  },
  "sport_suspended": {
   "en": "Suspended",
@@ -17103,7 +17569,14 @@
  },
  "sport_to": {
   "en": "To",
-  "it": "A"
+  "it": "A",
+  "es": "Hasta",
+  "fr": "Au",
+  "de": "Bis",
+  "pt": "Até",
+  "ru": "По",
+  "zh": "至",
+  "hi": "तक"
  },
  "sport_to_be_verified": {
   "en": "To be verified",
@@ -17711,7 +18184,14 @@
  },
  "sport_username": {
   "en": "Username",
-  "it": "Username"
+  "it": "Username",
+  "de": "Benutzername",
+  "es": "Nombre de usuario",
+  "fr": "Nom d'utilisateur",
+  "hi": "उपयोगकर्ता नाम",
+  "pt": "Nome de utilizador",
+  "ru": "Имя пользователя",
+  "zh": "用户名"
  },
  "sport_uses_all_members_of_the_current_filtered_list": {
   "en": "Uses all members of the current (filtered) list",
@@ -18087,7 +18567,14 @@
  },
  "sport_wed": {
   "en": "Wed",
-  "it": "Mer"
+  "it": "Mer",
+  "es": "Mié",
+  "fr": "Mer",
+  "de": "Mi",
+  "pt": "Qua",
+  "ru": "Ср",
+  "zh": "周三",
+  "hi": "बुध"
  },
  "sport_weight": {
   "en": "Weight",
@@ -18891,5 +19378,4229 @@
  "sport_zurich_connect": {
   "en": "Zurich Connect",
   "it": "Zurich Connect"
+ },
+ "sport_0_invites_you_to_join_as_a_coach_on_movesbook_register_here": {
+  "de": "{0} lädt dich ein, als Trainer auf Movesbook beizutreten. Hier registrieren:",
+  "en": "{0} invites you to join as a coach on Movesbook. Register here:",
+  "es": "{0} te invita a unirte como entrenador en Movesbook. Regístrate aquí:",
+  "fr": "{0} vous invite à rejoindre Movesbook en tant qu'entraîneur. Inscrivez-vous ici :",
+  "hi": "{0} आपको Movesbook पर कोच के रूप में जुड़ने के लिए आमंत्रित करता है। यहाँ पंजीकरण करें:",
+  "it": "{0} ti invita a unirti come allenatore su Movesbook. Registrati qui:",
+  "pt": "{0} convida-o a juntar-se como treinador no Movesbook. Registe-se aqui:",
+  "ru": "{0} приглашает вас присоединиться в качестве тренера на Movesbook. Зарегистрируйтесь здесь:",
+  "zh": "{0} 邀请您以教练身份加入 Movesbook。在此注册："
+ },
+ "sport_a_coach_with_this_tax_code_already_exists": {
+  "de": "Ein Trainer mit dieser Steuernummer existiert bereits",
+  "en": "A coach with this tax code already exists",
+  "es": "Ya existe un entrenador con este código fiscal",
+  "fr": "Un entraîneur avec ce code fiscal existe déjà",
+  "hi": "इस कर कोड वाला कोच पहले से मौजूद है",
+  "it": "Esiste già un allenatore con questo codice fiscale",
+  "pt": "Já existe um treinador com este código fiscal",
+  "ru": "Тренер с таким ИНН уже существует",
+  "zh": "已存在使用此税号的教练"
+ },
+ "sport_a_registration_with_this_tax_code_is_already_waiting_for_approval": {
+  "de": "Eine Anmeldung mit dieser Steuernummer wartet bereits auf Freigabe",
+  "en": "A registration with this tax code is already waiting for approval",
+  "es": "Ya hay una inscripción con este código fiscal pendiente de aprobación",
+  "fr": "Une inscription avec ce code fiscal est déjà en attente d'approbation",
+  "hi": "इस कर कोड वाला पंजीकरण पहले से अनुमोदन की प्रतीक्षा में है",
+  "it": "Un'iscrizione con questo codice fiscale è già in attesa di approvazione",
+  "pt": "Já existe uma inscrição com este código fiscal a aguardar aprovação",
+  "ru": "Регистрация с таким ИНН уже ожидает одобрения",
+  "zh": "使用此税号的注册已在等待审核"
+ },
+ "sport_account_not_found": {
+  "de": "Konto nicht gefunden",
+  "en": "Account not found",
+  "es": "Cuenta no encontrada",
+  "fr": "Compte introuvable",
+  "hi": "खाता नहीं मिला",
+  "it": "Account non trovato",
+  "pt": "Conta não encontrada",
+  "ru": "Аккаунт не найден",
+  "zh": "未找到账户"
+ },
+ "sport_action": {
+  "de": "Aktion",
+  "en": "Action",
+  "es": "Acción",
+  "fr": "Action",
+  "hi": "कार्रवाई",
+  "it": "Azione",
+  "pt": "Ação",
+  "ru": "Действие",
+  "zh": "操作"
+ },
+ "sport_action_failed": {
+  "de": "Aktion fehlgeschlagen",
+  "en": "Action failed",
+  "es": "La acción ha fallado",
+  "fr": "L'action a échoué",
+  "hi": "कार्रवाई विफल रही",
+  "it": "Operazione non riuscita",
+  "pt": "A ação falhou",
+  "ru": "Действие не выполнено",
+  "zh": "操作失败"
+ },
+ "sport_add_a_coach": {
+  "de": "Trainer hinzufügen",
+  "en": "Add a coach",
+  "es": "Añadir un entrenador",
+  "fr": "Ajouter un entraîneur",
+  "hi": "कोच जोड़ें",
+  "it": "Aggiungi un allenatore",
+  "pt": "Adicionar um treinador",
+  "ru": "Добавить тренера",
+  "zh": "添加教练"
+ },
+ "sport_address_street_avenue_square": {
+  "de": "Adresse (Straße, Allee, Platz)",
+  "en": "Address (Street, Avenue, Square)",
+  "es": "Dirección (Calle, Avenida, Plaza)",
+  "fr": "Adresse (Rue, Avenue, Place)",
+  "hi": "पता (सड़क, एवेन्यू, चौक)",
+  "it": "Indirizzo (Via, Viale, Piazza)",
+  "pt": "Morada (Rua, Avenida, Praça)",
+  "ru": "Адрес (улица, проспект, площадь)",
+  "zh": "地址（街道、大道、广场）"
+ },
+ "sport_approve": {
+  "de": "Freigeben",
+  "en": "Approve",
+  "es": "Aprobar",
+  "fr": "Approuver",
+  "hi": "स्वीकृत करें",
+  "it": "Approva",
+  "pt": "Aprovar",
+  "ru": "Одобрить",
+  "zh": "批准"
+ },
+ "sport_approve_0": {
+  "de": "{0} freigeben",
+  "en": "Approve {0}",
+  "es": "Aprobar {0}",
+  "fr": "Approuver {0}",
+  "hi": "{0} को स्वीकृत करें",
+  "it": "Approva {0}",
+  "pt": "Aprovar {0}",
+  "ru": "Одобрить {0}",
+  "zh": "批准 {0}"
+ },
+ "sport_archive": {
+  "de": "Archivieren",
+  "en": "Archive",
+  "es": "Archivar",
+  "fr": "Archiver",
+  "hi": "संग्रहीत करें",
+  "it": "Archivia",
+  "pt": "Arquivar",
+  "ru": "В архив",
+  "zh": "归档"
+ },
+ "sport_archived": {
+  "de": "Archiviert",
+  "en": "Archived",
+  "es": "Archivados",
+  "fr": "Archivés",
+  "hi": "संग्रहीत",
+  "it": "Archiviati",
+  "pt": "Arquivados",
+  "ru": "В архиве",
+  "zh": "已归档"
+ },
+ "sport_archived_coaches": {
+  "de": "Archivierte Trainer",
+  "en": "Archived coaches",
+  "es": "Entrenadores archivados",
+  "fr": "Entraîneurs archivés",
+  "hi": "संग्रहीत कोच",
+  "it": "Allenatori archiviati",
+  "pt": "Treinadores arquivados",
+  "ru": "Тренеры в архиве",
+  "zh": "已归档的教练"
+ },
+ "sport_athletic_trainer": {
+  "de": "Athletiktrainer",
+  "en": "Athletic trainer",
+  "es": "Preparador físico",
+  "fr": "Préparateur physique",
+  "hi": "एथलेटिक ट्रेनर",
+  "it": "Preparatore atletico",
+  "pt": "Preparador físico",
+  "ru": "Тренер по физподготовке",
+  "zh": "体能教练"
+ },
+ "sport_birth_city": {
+  "de": "Geburtsort",
+  "en": "Birth city",
+  "es": "Ciudad de nacimiento",
+  "fr": "Ville de naissance",
+  "hi": "जन्म शहर",
+  "it": "Città di nascita",
+  "pt": "Cidade de nascimento",
+  "ru": "Город рождения",
+  "zh": "出生城市"
+ },
+ "sport_birth_country": {
+  "de": "Geburtsland",
+  "en": "Birth country",
+  "es": "País de nacimiento",
+  "fr": "Pays de naissance",
+  "hi": "जन्म देश",
+  "it": "Nazione di nascita",
+  "pt": "País de nascimento",
+  "ru": "Страна рождения",
+  "zh": "出生国家"
+ },
+ "sport_birth_province": {
+  "de": "Geburtsprovinz",
+  "en": "Birth province",
+  "es": "Provincia de nacimiento",
+  "fr": "Province de naissance",
+  "hi": "जन्म प्रांत",
+  "it": "Provincia di nascita",
+  "pt": "Província de nascimento",
+  "ru": "Провинция рождения",
+  "zh": "出生省份"
+ },
+ "sport_city": {
+  "de": "Stadt",
+  "en": "City",
+  "es": "Ciudad",
+  "fr": "Ville",
+  "hi": "शहर",
+  "it": "Città",
+  "pt": "Cidade",
+  "ru": "Город",
+  "zh": "城市"
+ },
+ "sport_close_modal": {
+  "de": "Fenster schließen",
+  "en": "Close modal",
+  "es": "Cerrar ventana",
+  "fr": "Fermer la fenêtre",
+  "hi": "विंडो बंद करें",
+  "it": "Chiudi finestra",
+  "pt": "Fechar janela",
+  "ru": "Закрыть окно",
+  "zh": "关闭窗口"
+ },
+ "sport_club_admin": {
+  "de": "Vereinsadministrator",
+  "en": "Club admin",
+  "es": "Administrador del club",
+  "fr": "Administrateur du club",
+  "hi": "क्लब व्यवस्थापक",
+  "it": "Amministratore della società",
+  "pt": "Administrador do clube",
+  "ru": "Администратор клуба",
+  "zh": "俱乐部管理员"
+ },
+ "sport_coach_list": {
+  "de": "Trainerliste",
+  "en": "Coach List",
+  "es": "Lista de entrenadores",
+  "fr": "Liste des entraîneurs",
+  "hi": "कोच सूची",
+  "it": "Lista allenatori",
+  "pt": "Lista de treinadores",
+  "ru": "Список тренеров",
+  "zh": "教练列表"
+ },
+ "sport_coach_not_found": {
+  "de": "Trainer nicht gefunden",
+  "en": "Coach not found",
+  "es": "Entrenador no encontrado",
+  "fr": "Entraîneur introuvable",
+  "hi": "कोच नहीं मिला",
+  "it": "Allenatore non trovato",
+  "pt": "Treinador não encontrado",
+  "ru": "Тренер не найден",
+  "zh": "未找到教练"
+ },
+ "sport_coach_registration": {
+  "de": "Traineranmeldung",
+  "en": "Coach registration",
+  "es": "Inscripción de entrenador",
+  "fr": "Inscription d'entraîneur",
+  "hi": "कोच पंजीकरण",
+  "it": "Iscrizione allenatore",
+  "pt": "Inscrição de treinador",
+  "ru": "Регистрация тренера",
+  "zh": "教练注册"
+ },
+ "sport_coach_registrations_waiting_for_approval": {
+  "de": "Traineranmeldungen, die auf Freigabe warten",
+  "en": "Coach registrations waiting for approval",
+  "es": "Inscripciones de entrenadores pendientes de aprobación",
+  "fr": "Inscriptions d'entraîneurs en attente d'approbation",
+  "hi": "अनुमोदन की प्रतीक्षा में कोच पंजीकरण",
+  "it": "Iscrizioni di allenatori in attesa di approvazione",
+  "pt": "Inscrições de treinadores a aguardar aprovação",
+  "ru": "Регистрации тренеров, ожидающие одобрения",
+  "zh": "等待审核的教练注册"
+ },
+ "sport_coaches": {
+  "de": "Trainer",
+  "en": "coaches",
+  "es": "Entrenadores",
+  "fr": "Entraîneurs",
+  "hi": "कोच",
+  "it": "Allenatori",
+  "pt": "Treinadores",
+  "ru": "Тренеры",
+  "zh": "教练"
+ },
+ "sport_coaches_are_managed_from_a_club_or_team": {
+  "de": "Trainer werden über einen Verein oder ein Team verwaltet",
+  "en": "Coaches are managed from a Club or Team",
+  "es": "Los entrenadores se gestionan desde un club o un equipo",
+  "fr": "Les entraîneurs se gèrent depuis un club ou une équipe",
+  "hi": "कोच का प्रबंधन क्लब या टीम से किया जाता है",
+  "it": "Gli allenatori si gestiscono da una società o da una squadra",
+  "pt": "Os treinadores são geridos a partir de um clube ou de uma equipa",
+  "ru": "Тренерами управляют из клуба или команды",
+  "zh": "教练需在俱乐部或球队中管理"
+ },
+ "sport_coaches_list": {
+  "de": "Trainerliste",
+  "en": "Coaches list",
+  "es": "Lista de entrenadores",
+  "fr": "Liste des entraîneurs",
+  "hi": "कोच सूची",
+  "it": "Lista allenatori",
+  "pt": "Lista de treinadores",
+  "ru": "Список тренеров",
+  "zh": "教练列表"
+ },
+ "sport_copy_link": {
+  "de": "Link kopieren",
+  "en": "Copy link",
+  "es": "Copiar enlace",
+  "fr": "Copier le lien",
+  "hi": "लिंक कॉपी करें",
+  "it": "Copia link",
+  "pt": "Copiar link",
+  "ru": "Копировать ссылку",
+  "zh": "复制链接"
+ },
+ "sport_copy_share_or_put_on_your_website_the_link_below_and_receive_the_registrations_of_coaches_to_your_club": {
+  "de": "Kopiere, teile oder veröffentliche den Link unten auf deiner Website und erhalte die Anmeldungen von Trainern für deinen Verein.",
+  "en": "Copy, share or put on your website the link below and receive the registrations of coaches to your club.",
+  "es": "Copia, comparte o publica en tu sitio web el enlace de abajo y recibe las inscripciones de entrenadores en tu club.",
+  "fr": "Copiez, partagez ou publiez sur votre site le lien ci-dessous et recevez les inscriptions des entraîneurs dans votre club.",
+  "hi": "नीचे दिया गया लिंक कॉपी करें, साझा करें या अपनी वेबसाइट पर लगाएँ और अपने क्लब में कोच के पंजीकरण प्राप्त करें।",
+  "it": "Copia, condividi o inserisci sul tuo sito web il link qui sotto e ricevi le registrazioni degli allenatori alla tua società.",
+  "pt": "Copie, partilhe ou publique no seu site o link abaixo e receba as inscrições de treinadores no seu clube.",
+  "ru": "Скопируйте, поделитесь или разместите на своём сайте ссылку ниже и получайте регистрации тренеров в ваш клуб.",
+  "zh": "复制、分享或将下方链接放到您的网站上，即可接收教练加入您俱乐部的注册申请。"
+ },
+ "sport_copy_share_or_put_on_your_website_the_link_below_and_receive_the_registrations_of_coaches_to_your_team": {
+  "de": "Kopiere, teile oder veröffentliche den Link unten auf deiner Website und erhalte die Anmeldungen von Trainern für dein Team.",
+  "en": "Copy, share or put on your website the link below and receive the registrations of coaches to your team.",
+  "es": "Copia, comparte o publica en tu sitio web el enlace de abajo y recibe las inscripciones de entrenadores en tu equipo.",
+  "fr": "Copiez, partagez ou publiez sur votre site le lien ci-dessous et recevez les inscriptions des entraîneurs dans votre équipe.",
+  "hi": "नीचे दिया गया लिंक कॉपी करें, साझा करें या अपनी वेबसाइट पर लगाएँ और अपनी टीम में कोच के पंजीकरण प्राप्त करें।",
+  "it": "Copia, condividi o inserisci sul tuo sito web il link qui sotto e ricevi le registrazioni degli allenatori alla tua squadra.",
+  "pt": "Copie, partilhe ou publique no seu site o link abaixo e receba as inscrições de treinadores na sua equipa.",
+  "ru": "Скопируйте, поделитесь или разместите на своём сайте ссылку ниже и получайте регистрации тренеров в вашу команду.",
+  "zh": "复制、分享或将下方链接放到您的网站上，即可接收教练加入您球队的注册申请。"
+ },
+ "sport_copy_the_link": {
+  "de": "Link kopieren",
+  "en": "Copy the link",
+  "es": "Copia el enlace",
+  "fr": "Copiez le lien",
+  "hi": "लिंक कॉपी करें",
+  "it": "Copia il link",
+  "pt": "Copie o link",
+  "ru": "Скопируйте ссылку",
+  "zh": "复制此链接"
+ },
+ "sport_could_not_access_your_coach_account": {
+  "de": "Zugriff auf dein Trainerkonto nicht möglich",
+  "en": "Could not access your coach account",
+  "es": "No se pudo acceder a tu cuenta de entrenador",
+  "fr": "Impossible d'accéder à votre compte entraîneur",
+  "hi": "आपके कोच खाते तक पहुँच नहीं हो सकी",
+  "it": "Impossibile accedere al tuo account allenatore",
+  "pt": "Não foi possível aceder à sua conta de treinador",
+  "ru": "Не удалось войти в ваш аккаунт тренера",
+  "zh": "无法访问您的教练账户"
+ },
+ "sport_could_not_load_the_invitation": {
+  "de": "Einladung konnte nicht geladen werden",
+  "en": "Could not load the invitation",
+  "es": "No se pudo cargar la invitación",
+  "fr": "Impossible de charger l'invitation",
+  "hi": "आमंत्रण लोड नहीं हो सका",
+  "it": "Impossibile caricare l'invito",
+  "pt": "Não foi possível carregar o convite",
+  "ru": "Не удалось загрузить приглашение",
+  "zh": "无法加载邀请"
+ },
+ "sport_country_is_required": {
+  "de": "Land ist erforderlich",
+  "en": "Country is required",
+  "es": "El país es obligatorio",
+  "fr": "Le pays est obligatoire",
+  "hi": "देश आवश्यक है",
+  "it": "La nazione è obbligatoria",
+  "pt": "O país é obrigatório",
+  "ru": "Укажите страну",
+  "zh": "请选择国家"
+ },
+ "sport_create_coach": {
+  "de": "Trainer anlegen",
+  "en": "Create coach",
+  "es": "Crear entrenador",
+  "fr": "Créer un entraîneur",
+  "hi": "कोच बनाएँ",
+  "it": "Creazione allenatore",
+  "pt": "Criar treinador",
+  "ru": "Создать тренера",
+  "zh": "创建教练"
+ },
+ "sport_create_new": {
+  "de": "Neu erstellen",
+  "en": "Create new",
+  "es": "Crear nuevo",
+  "fr": "Créer nouveau",
+  "hi": "नया बनाएँ",
+  "it": "Crea nuovo",
+  "pt": "Criar novo",
+  "ru": "Создать",
+  "zh": "新建"
+ },
+ "sport_date_of_birth_is_required": {
+  "de": "Geburtsdatum ist erforderlich",
+  "en": "Date of birth is required",
+  "es": "La fecha de nacimiento es obligatoria",
+  "fr": "La date de naissance est obligatoire",
+  "hi": "जन्म तिथि आवश्यक है",
+  "it": "La data di nascita è obbligatoria",
+  "pt": "A data de nascimento é obrigatória",
+  "ru": "Укажите дату рождения",
+  "zh": "请填写出生日期"
+ },
+ "sport_delete_0": {
+  "de": "{0} löschen",
+  "en": "Delete {0}",
+  "es": "Eliminar {0}",
+  "fr": "Supprimer {0}",
+  "hi": "{0} हटाएँ",
+  "it": "Elimina {0}",
+  "pt": "Eliminar {0}",
+  "ru": "Удалить {0}",
+  "zh": "删除 {0}"
+ },
+ "sport_delete_0_this_cannot_be_undone": {
+  "de": "{0} löschen? Dies kann nicht rückgängig gemacht werden.",
+  "en": "Delete {0}? This cannot be undone.",
+  "es": "¿Eliminar a {0}? Esta acción no se puede deshacer.",
+  "fr": "Supprimer {0} ? Cette action est irréversible.",
+  "hi": "{0} को हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "it": "Eliminare {0}? L'operazione non può essere annullata.",
+  "pt": "Eliminar {0}? Esta ação não pode ser anulada.",
+  "ru": "Удалить {0}? Это действие нельзя отменить.",
+  "zh": "删除 {0}？此操作无法撤销。"
+ },
+ "sport_delete_coach": {
+  "de": "Trainer löschen",
+  "en": "Delete coach",
+  "es": "Eliminar entrenador",
+  "fr": "Supprimer l'entraîneur",
+  "hi": "कोच हटाएँ",
+  "it": "Elimina allenatore",
+  "pt": "Eliminar treinador",
+  "ru": "Удалить тренера",
+  "zh": "删除教练"
+ },
+ "sport_delete_the_0_selected_coaches_this_cannot_be_undone": {
+  "de": "Die {0} ausgewählten Trainer löschen? Dies kann nicht rückgängig gemacht werden.",
+  "en": "Delete the {0} selected coaches? This cannot be undone.",
+  "es": "¿Eliminar los {0} entrenadores seleccionados? Esta acción no se puede deshacer.",
+  "fr": "Supprimer les {0} entraîneurs sélectionnés ? Cette action est irréversible.",
+  "hi": "चुने गए {0} कोच हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "it": "Eliminare i {0} allenatori selezionati? L'operazione non può essere annullata.",
+  "pt": "Eliminar os {0} treinadores selecionados? Esta ação não pode ser anulada.",
+  "ru": "Удалить выбранных тренеров ({0})? Это действие нельзя отменить.",
+  "zh": "删除所选的 {0} 位教练？此操作无法撤销。"
+ },
+ "sport_delete_this_coach_this_cannot_be_undone": {
+  "de": "Diesen Trainer löschen? Dies kann nicht rückgängig gemacht werden.",
+  "en": "Delete this coach? This cannot be undone.",
+  "es": "¿Eliminar a este entrenador? Esta acción no se puede deshacer.",
+  "fr": "Supprimer cet entraîneur ? Cette action est irréversible.",
+  "hi": "इस कोच को हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "it": "Eliminare questo allenatore? L'operazione non può essere annullata.",
+  "pt": "Eliminar este treinador? Esta ação não pode ser anulada.",
+  "ru": "Удалить этого тренера? Это действие нельзя отменить.",
+  "zh": "删除此教练？此操作无法撤销。"
+ },
+ "sport_do_you_want_to_duplicate_an_existing_profile": {
+  "de": "Möchtest du ein bestehendes Profil duplizieren?",
+  "en": "Do you want to duplicate an existing profile?",
+  "es": "¿Quieres duplicar un perfil existente?",
+  "fr": "Voulez-vous dupliquer un profil existant ?",
+  "hi": "क्या आप किसी मौजूदा प्रोफ़ाइल की प्रतिलिपि बनाना चाहते हैं?",
+  "it": "Vuoi duplicare un'anagrafica esistente?",
+  "pt": "Quer duplicar um perfil existente?",
+  "ru": "Хотите скопировать существующий профиль?",
+  "zh": "要复制已有的资料吗？"
+ },
+ "sport_edit": {
+  "de": "Bearbeiten",
+  "en": "Edit",
+  "es": "Editar",
+  "fr": "Modifier",
+  "hi": "संपादित करें",
+  "it": "Modifica",
+  "pt": "Editar",
+  "ru": "Изменить",
+  "zh": "编辑"
+ },
+ "sport_edit_0": {
+  "de": "{0} bearbeiten",
+  "en": "Edit {0}",
+  "es": "Editar {0}",
+  "fr": "Modifier {0}",
+  "hi": "{0} संपादित करें",
+  "it": "Modifica {0}",
+  "pt": "Editar {0}",
+  "ru": "Изменить {0}",
+  "zh": "编辑 {0}"
+ },
+ "sport_edit_coach": {
+  "de": "Trainer bearbeiten",
+  "en": "Edit coach",
+  "es": "Editar entrenador",
+  "fr": "Modifier l'entraîneur",
+  "hi": "कोच संपादित करें",
+  "it": "Modifica allenatore",
+  "pt": "Editar treinador",
+  "ru": "Изменить тренера",
+  "zh": "编辑教练"
+ },
+ "sport_email_is_not_valid": {
+  "de": "E-Mail ist ungültig",
+  "en": "Email is not valid",
+  "es": "El correo electrónico no es válido",
+  "fr": "L'e-mail n'est pas valide",
+  "hi": "ईमेल मान्य नहीं है",
+  "it": "L'email non è valida",
+  "pt": "O e-mail não é válido",
+  "ru": "Некорректный адрес эл. почты",
+  "zh": "电子邮箱无效"
+ },
+ "sport_email_is_required": {
+  "de": "E-Mail ist erforderlich",
+  "en": "Email is required",
+  "es": "El correo electrónico es obligatorio",
+  "fr": "L'e-mail est obligatoire",
+  "hi": "ईमेल आवश्यक है",
+  "it": "L'email è obbligatoria",
+  "pt": "O e-mail é obrigatório",
+  "ru": "Укажите эл. почту",
+  "zh": "请填写电子邮箱"
+ },
+ "sport_enter_your_username_or_email_and_password": {
+  "de": "Gib deinen Benutzernamen oder deine E-Mail und dein Passwort ein",
+  "en": "Enter your username or email and password",
+  "es": "Introduce tu nombre de usuario o correo y la contraseña",
+  "fr": "Saisissez votre nom d'utilisateur ou e-mail et votre mot de passe",
+  "hi": "अपना उपयोगकर्ता नाम या ईमेल और पासवर्ड दर्ज करें",
+  "it": "Inserisci nome utente o email e password",
+  "pt": "Introduza o nome de utilizador ou e-mail e a palavra-passe",
+  "ru": "Введите имя пользователя или эл. почту и пароль",
+  "zh": "请输入用户名或电子邮箱以及密码"
+ },
+ "sport_export": {
+  "de": "Exportieren",
+  "en": "Export",
+  "es": "Exportar",
+  "fr": "Exporter",
+  "hi": "निर्यात",
+  "it": "Esporta",
+  "pt": "Exportar",
+  "ru": "Экспорт",
+  "zh": "导出"
+ },
+ "sport_export_list": {
+  "de": "Liste exportieren",
+  "en": "Export list",
+  "es": "Exportar lista",
+  "fr": "Exporter la liste",
+  "hi": "सूची निर्यात करें",
+  "it": "Esporta lista",
+  "pt": "Exportar lista",
+  "ru": "Экспорт списка",
+  "zh": "导出列表"
+ },
+ "sport_failed_to_load_coach": {
+  "de": "Trainer konnte nicht geladen werden",
+  "en": "Failed to load coach",
+  "es": "No se pudo cargar el entrenador",
+  "fr": "Impossible de charger l'entraîneur",
+  "hi": "कोच लोड नहीं हो सका",
+  "it": "Impossibile caricare l'allenatore",
+  "pt": "Não foi possível carregar o treinador",
+  "ru": "Не удалось загрузить тренера",
+  "zh": "无法加载教练"
+ },
+ "sport_failed_to_load_coaches": {
+  "de": "Trainer konnten nicht geladen werden",
+  "en": "Failed to load coaches",
+  "es": "No se pudieron cargar los entrenadores",
+  "fr": "Impossible de charger les entraîneurs",
+  "hi": "कोच लोड नहीं हो सके",
+  "it": "Impossibile caricare gli allenatori",
+  "pt": "Não foi possível carregar os treinadores",
+  "ru": "Не удалось загрузить тренеров",
+  "zh": "无法加载教练"
+ },
+ "sport_failed_to_save": {
+  "de": "Speichern fehlgeschlagen",
+  "en": "Failed to save",
+  "es": "Error al guardar",
+  "fr": "Échec de l'enregistrement",
+  "hi": "सहेजने में विफल",
+  "it": "Salvataggio non riuscito",
+  "pt": "Falha ao guardar",
+  "ru": "Не удалось сохранить",
+  "zh": "保存失败"
+ },
+ "sport_get_link": {
+  "de": "Link abrufen",
+  "en": "Get link",
+  "es": "Obtener enlace",
+  "fr": "Obtenir le lien",
+  "hi": "लिंक प्राप्त करें",
+  "it": "Ottieni link",
+  "pt": "Obter link",
+  "ru": "Получить ссылку",
+  "zh": "获取链接"
+ },
+ "sport_head_coach": {
+  "de": "Cheftrainer",
+  "en": "Head coach",
+  "es": "Entrenador principal",
+  "fr": "Entraîneur principal",
+  "hi": "मुख्य कोच",
+  "it": "Allenatore capo",
+  "pt": "Treinador principal",
+  "ru": "Главный тренер",
+  "zh": "主教练"
+ },
+ "sport_i_already_have_a_coach_account": {
+  "de": "Ich habe bereits ein Trainerkonto",
+  "en": "I already have a coach account",
+  "es": "Ya tengo una cuenta de entrenador",
+  "fr": "J'ai déjà un compte entraîneur",
+  "hi": "मेरे पास पहले से कोच खाता है",
+  "it": "Ho già un account allenatore",
+  "pt": "Já tenho uma conta de treinador",
+  "ru": "У меня уже есть аккаунт тренера",
+  "zh": "我已有教练账户"
+ },
+ "sport_invalid_coach_data": {
+  "de": "Ungültige Trainerdaten",
+  "en": "Invalid coach data",
+  "es": "Datos del entrenador no válidos",
+  "fr": "Données de l'entraîneur non valides",
+  "hi": "कोच की जानकारी अमान्य है",
+  "it": "Dati dell'allenatore non validi",
+  "pt": "Dados do treinador inválidos",
+  "ru": "Некорректные данные тренера",
+  "zh": "教练资料无效"
+ },
+ "sport_invalid_status": {
+  "de": "Ungültiger Status",
+  "en": "Invalid status",
+  "es": "Estado no válido",
+  "fr": "Statut non valide",
+  "hi": "स्थिति अमान्य है",
+  "it": "Stato non valido",
+  "pt": "Estado inválido",
+  "ru": "Недопустимый статус",
+  "zh": "状态无效"
+ },
+ "sport_invitation_to_join_0_as_a_coach": {
+  "de": "Einladung, {0} als Trainer beizutreten",
+  "en": "Invitation to join {0} as a coach",
+  "es": "Invitación para unirte a {0} como entrenador",
+  "fr": "Invitation à rejoindre {0} en tant qu'entraîneur",
+  "hi": "{0} में कोच के रूप में जुड़ने का आमंत्रण",
+  "it": "Invito a unirti a {0} come allenatore",
+  "pt": "Convite para se juntar a {0} como treinador",
+  "ru": "Приглашение присоединиться к {0} в качестве тренера",
+  "zh": "邀请您以教练身份加入 {0}"
+ },
+ "sport_invite_coaches": {
+  "de": "Trainer einladen",
+  "en": "Invite coaches",
+  "es": "Invitar entrenadores",
+  "fr": "Inviter des entraîneurs",
+  "hi": "कोच आमंत्रित करें",
+  "it": "Invita gli allenatori",
+  "pt": "Convidar treinadores",
+  "ru": "Пригласить тренеров",
+  "zh": "邀请教练"
+ },
+ "sport_link_copied": {
+  "de": "Link kopiert!",
+  "en": "Link copied!",
+  "es": "¡Enlace copiado!",
+  "fr": "Lien copié !",
+  "hi": "लिंक कॉपी हो गया!",
+  "it": "Link copiato!",
+  "pt": "Link copiado!",
+  "ru": "Ссылка скопирована!",
+  "zh": "链接已复制！"
+ },
+ "sport_linked_to": {
+  "de": "Verknüpft mit",
+  "en": "Linked to",
+  "es": "Vinculado a",
+  "fr": "Lié à",
+  "hi": "इससे जुड़ा",
+  "it": "Collegato a",
+  "pt": "Ligado a",
+  "ru": "Связан с",
+  "zh": "已关联到"
+ },
+ "sport_loading_invitation": {
+  "de": "Einladung wird geladen…",
+  "en": "Loading invitation…",
+  "es": "Cargando invitación…",
+  "fr": "Chargement de l'invitation…",
+  "hi": "आमंत्रण लोड हो रहा है…",
+  "it": "Caricamento invito…",
+  "pt": "A carregar convite…",
+  "ru": "Загрузка приглашения…",
+  "zh": "正在加载邀请…"
+ },
+ "sport_log_in_or_create_your_coach_account_first": {
+  "de": "Melde dich an oder erstelle zuerst dein Trainerkonto",
+  "en": "Log in or create your coach account first",
+  "es": "Inicia sesión o crea primero tu cuenta de entrenador",
+  "fr": "Connectez-vous ou créez d'abord votre compte entraîneur",
+  "hi": "पहले लॉग इन करें या अपना कोच खाता बनाएँ",
+  "it": "Accedi o crea prima il tuo account allenatore",
+  "pt": "Inicie sessão ou crie primeiro a sua conta de treinador",
+  "ru": "Сначала войдите или создайте аккаунт тренера",
+  "zh": "请先登录或创建您的教练账户"
+ },
+ "sport_log_out_first_or_open_the_link_in_a_private_window_to_register_as_a_coach_in_the_club_0": {
+  "de": "Melde dich zuerst ab oder öffne den Link in einem privaten Fenster, um dich als Trainer im Verein {0} zu registrieren.",
+  "en": "Log out first, or open the link in a private window, to register as a coach in the club {0}.",
+  "es": "Cierra sesión primero, o abre el enlace en una ventana privada, para registrarte como entrenador en el club {0}.",
+  "fr": "Déconnectez-vous d'abord, ou ouvrez le lien dans une fenêtre privée, pour vous inscrire comme entraîneur dans le club {0}.",
+  "hi": "क्लब {0} में कोच के रूप में पंजीकरण करने के लिए पहले लॉग आउट करें, या लिंक को निजी विंडो में खोलें।",
+  "it": "Esci prima dall'account, oppure apri il link in una finestra privata, per registrarti come allenatore nella società {0}.",
+  "pt": "Termine a sessão primeiro, ou abra o link numa janela privada, para se registar como treinador no clube {0}.",
+  "ru": "Сначала выйдите из аккаунта или откройте ссылку в приватном окне, чтобы зарегистрироваться тренером в клубе {0}.",
+  "zh": "请先退出登录，或在隐私窗口中打开此链接，以教练身份注册到俱乐部 {0}。"
+ },
+ "sport_log_out_first_or_open_the_link_in_a_private_window_to_register_as_a_coach_in_the_team_0": {
+  "de": "Melde dich zuerst ab oder öffne den Link in einem privaten Fenster, um dich als Trainer im Team {0} zu registrieren.",
+  "en": "Log out first, or open the link in a private window, to register as a coach in the team {0}.",
+  "es": "Cierra sesión primero, o abre el enlace en una ventana privada, para registrarte como entrenador en el equipo {0}.",
+  "fr": "Déconnectez-vous d'abord, ou ouvrez le lien dans une fenêtre privée, pour vous inscrire comme entraîneur dans l'équipe {0}.",
+  "hi": "टीम {0} में कोच के रूप में पंजीकरण करने के लिए पहले लॉग आउट करें, या लिंक को निजी विंडो में खोलें।",
+  "it": "Esci prima dall'account, oppure apri il link in una finestra privata, per registrarti come allenatore nella squadra {0}.",
+  "pt": "Termine a sessão primeiro, ou abra o link numa janela privada, para se registar como treinador na equipa {0}.",
+  "ru": "Сначала выйдите из аккаунта или откройте ссылку в приватном окне, чтобы зарегистрироваться тренером в команде {0}.",
+  "zh": "请先退出登录，或在隐私窗口中打开此链接，以教练身份注册到球队 {0}。"
+ },
+ "sport_logged_in_as": {
+  "de": "Angemeldet als",
+  "en": "Logged in as",
+  "es": "Sesión iniciada como",
+  "fr": "Connecté en tant que",
+  "hi": "इस रूप में लॉग इन",
+  "it": "Accesso effettuato come",
+  "pt": "Sessão iniciada como",
+  "ru": "Вы вошли как",
+  "zh": "当前登录账户"
+ },
+ "sport_membership_no": {
+  "de": "Mitgliedsnr.",
+  "en": "Membership no.",
+  "es": "N.º de afiliación",
+  "fr": "N° de licence",
+  "hi": "सदस्यता सं.",
+  "it": "N. tesseramento",
+  "pt": "N.º de filiação",
+  "ru": "№ членства",
+  "zh": "会员编号"
+ },
+ "sport_membership_number": {
+  "de": "Mitgliedsnummer",
+  "en": "Membership number",
+  "es": "Número de afiliación",
+  "fr": "Numéro de licence",
+  "hi": "सदस्यता संख्या",
+  "it": "Numero tesseramento",
+  "pt": "Número de filiação",
+  "ru": "Номер членства",
+  "zh": "会员编号"
+ },
+ "sport_name_a_z": {
+  "de": "Name A-Z",
+  "en": "Name A-Z",
+  "es": "Nombre A-Z",
+  "fr": "Nom A-Z",
+  "hi": "नाम A-Z",
+  "it": "Nome A-Z",
+  "pt": "Nome A-Z",
+  "ru": "Имя А-Я",
+  "zh": "姓名 A-Z"
+ },
+ "sport_name_is_required": {
+  "de": "Vorname ist erforderlich",
+  "en": "Name is required",
+  "es": "El nombre es obligatorio",
+  "fr": "Le prénom est obligatoire",
+  "hi": "नाम आवश्यक है",
+  "it": "Il nome è obbligatorio",
+  "pt": "O nome é obrigatório",
+  "ru": "Укажите имя",
+  "zh": "请填写名"
+ },
+ "sport_name_or_tax_code": {
+  "de": "Name oder Steuernummer",
+  "en": "Name or tax code",
+  "es": "Nombre o código fiscal",
+  "fr": "Nom ou code fiscal",
+  "hi": "नाम या कर कोड",
+  "it": "Nome o codice fiscale",
+  "pt": "Nome ou código fiscal",
+  "ru": "Имя или ИНН",
+  "zh": "姓名或税号"
+ },
+ "sport_name_z_a": {
+  "de": "Name Z-A",
+  "en": "Name Z-A",
+  "es": "Nombre Z-A",
+  "fr": "Nom Z-A",
+  "hi": "नाम Z-A",
+  "it": "Nome Z-A",
+  "pt": "Nome Z-A",
+  "ru": "Имя Я-А",
+  "zh": "姓名 Z-A"
+ },
+ "sport_new_coach_account": {
+  "de": "Neues Trainerkonto",
+  "en": "New coach account",
+  "es": "Nueva cuenta de entrenador",
+  "fr": "Nouveau compte entraîneur",
+  "hi": "नया कोच खाता",
+  "it": "Nuovo account allenatore",
+  "pt": "Nova conta de treinador",
+  "ru": "Новый аккаунт тренера",
+  "zh": "新建教练账户"
+ },
+ "sport_newest_first": {
+  "de": "Neueste zuerst",
+  "en": "Newest first",
+  "es": "Más recientes",
+  "fr": "Plus récents",
+  "hi": "नवीनतम पहले",
+  "it": "Più recenti",
+  "pt": "Mais recentes",
+  "ru": "Сначала новые",
+  "zh": "最新优先"
+ },
+ "sport_no_archived_coaches": {
+  "de": "Keine archivierten Trainer.",
+  "en": "No archived coaches.",
+  "es": "No hay entrenadores archivados.",
+  "fr": "Aucun entraîneur archivé.",
+  "hi": "कोई संग्रहीत कोच नहीं है।",
+  "it": "Nessun allenatore archiviato.",
+  "pt": "Não há treinadores arquivados.",
+  "ru": "Нет тренеров в архиве.",
+  "zh": "没有已归档的教练。"
+ },
+ "sport_no_coaches_found": {
+  "de": "Keine Trainer gefunden.",
+  "en": "No coaches found.",
+  "es": "No se encontraron entrenadores.",
+  "fr": "Aucun entraîneur trouvé.",
+  "hi": "कोई कोच नहीं मिला।",
+  "it": "Nessun allenatore trovato.",
+  "pt": "Nenhum treinador encontrado.",
+  "ru": "Тренеры не найдены.",
+  "zh": "未找到教练。"
+ },
+ "sport_no_image": {
+  "de": "KEIN BILD",
+  "en": "NO IMAGE",
+  "es": "SIN IMAGEN",
+  "fr": "PAS D'IMAGE",
+  "hi": "कोई छवि नहीं",
+  "it": "NESSUNA IMMAGINE",
+  "pt": "SEM IMAGEM",
+  "ru": "НЕТ ФОТО",
+  "zh": "无图片"
+ },
+ "sport_no_members_or_staff_of_this_club_match": {
+  "de": "Keine Mitglieder oder Mitarbeiter dieses Vereins gefunden.",
+  "en": "No members or staff of this club match.",
+  "es": "Ningún miembro ni personal de este club coincide.",
+  "fr": "Aucun membre ni personnel de ce club ne correspond.",
+  "hi": "इस क्लब का कोई सदस्य या स्टाफ़ मेल नहीं खाता।",
+  "it": "Nessun componente o staff di questa società corrisponde.",
+  "pt": "Nenhum membro ou elemento do staff deste clube corresponde.",
+  "ru": "Нет подходящих участников или сотрудников этого клуба.",
+  "zh": "本俱乐部没有匹配的成员或工作人员。"
+ },
+ "sport_no_members_or_staff_of_this_team_match": {
+  "de": "Keine Mitglieder oder Mitarbeiter dieses Teams gefunden.",
+  "en": "No members or staff of this team match.",
+  "es": "Ningún miembro ni personal de este equipo coincide.",
+  "fr": "Aucun membre ni personnel de cette équipe ne correspond.",
+  "hi": "इस टीम का कोई सदस्य या स्टाफ़ मेल नहीं खाता।",
+  "it": "Nessun componente o staff di questa squadra corrisponde.",
+  "pt": "Nenhum membro ou elemento do staff desta equipa corresponde.",
+  "ru": "Нет подходящих участников или сотрудников этой команды.",
+  "zh": "本球队没有匹配的成员或工作人员。"
+ },
+ "sport_no_registrations_waiting_for_approval": {
+  "de": "Keine Anmeldungen warten auf Freigabe.",
+  "en": "No registrations waiting for approval.",
+  "es": "No hay inscripciones pendientes de aprobación.",
+  "fr": "Aucune inscription en attente d'approbation.",
+  "hi": "अनुमोदन की प्रतीक्षा में कोई पंजीकरण नहीं है।",
+  "it": "Nessuna iscrizione in attesa di approvazione.",
+  "pt": "Não há inscrições a aguardar aprovação.",
+  "ru": "Нет регистраций, ожидающих одобрения.",
+  "zh": "没有等待审核的注册。"
+ },
+ "sport_only_coach_accounts_can_register_with_this_link": {
+  "de": "Nur Trainerkonten können sich mit diesem Link registrieren.",
+  "en": "Only coach accounts can register with this link.",
+  "es": "Solo las cuentas de entrenador pueden registrarse con este enlace.",
+  "fr": "Seuls les comptes entraîneur peuvent s'inscrire avec ce lien.",
+  "hi": "केवल कोच खाते इस लिंक से पंजीकरण कर सकते हैं।",
+  "it": "Solo gli account allenatore possono registrarsi con questo link.",
+  "pt": "Só as contas de treinador se podem registar com este link.",
+  "ru": "По этой ссылке могут регистрироваться только аккаунты тренеров.",
+  "zh": "只有教练账户可以通过此链接注册。"
+ },
+ "sport_only_coach_accounts_can_register_with_this_link_log_out_and_register_as_a_coach": {
+  "de": "Nur Trainerkonten können sich mit diesem Link registrieren. Melde dich ab und registriere dich als Trainer.",
+  "en": "Only coach accounts can register with this link. Log out and register as a coach.",
+  "es": "Solo las cuentas de entrenador pueden registrarse con este enlace. Cierra sesión y regístrate como entrenador.",
+  "fr": "Seuls les comptes entraîneur peuvent s'inscrire avec ce lien. Déconnectez-vous et inscrivez-vous comme entraîneur.",
+  "hi": "केवल कोच खाते इस लिंक से पंजीकरण कर सकते हैं। लॉग आउट करें और कोच के रूप में पंजीकरण करें।",
+  "it": "Solo gli account allenatore possono registrarsi con questo link. Esci e registrati come allenatore.",
+  "pt": "Só as contas de treinador se podem registar com este link. Termine a sessão e registe-se como treinador.",
+  "ru": "По этой ссылке могут регистрироваться только аккаунты тренеров. Выйдите и зарегистрируйтесь как тренер.",
+  "zh": "只有教练账户可以通过此链接注册。请退出登录并以教练身份注册。"
+ },
+ "sport_only_coach_accounts_can_register_with_this_link_log_out_first_then_open_the_link_again": {
+  "de": "Nur Trainerkonten können sich mit diesem Link registrieren. Melde dich zuerst ab und öffne den Link dann erneut.",
+  "en": "Only coach accounts can register with this link. Log out first, then open the link again.",
+  "es": "Solo las cuentas de entrenador pueden registrarse con este enlace. Cierra sesión primero y vuelve a abrir el enlace.",
+  "fr": "Seuls les comptes entraîneur peuvent s'inscrire avec ce lien. Déconnectez-vous d'abord, puis rouvrez le lien.",
+  "hi": "केवल कोच खाते इस लिंक से पंजीकरण कर सकते हैं। पहले लॉग आउट करें, फिर लिंक दोबारा खोलें।",
+  "it": "Solo gli account allenatore possono registrarsi con questo link. Esci prima dall'account, poi apri di nuovo il link.",
+  "pt": "Só as contas de treinador se podem registar com este link. Termine a sessão primeiro e abra o link novamente.",
+  "ru": "По этой ссылке могут регистрироваться только аккаунты тренеров. Сначала выйдите из аккаунта, затем снова откройте ссылку.",
+  "zh": "只有教练账户可以通过此链接注册。请先退出登录，然后重新打开此链接。"
+ },
+ "sport_or_enter_the_data_manually": {
+  "de": "oder gib die Daten manuell ein",
+  "en": "or enter the data manually",
+  "es": "o introduce los datos manualmente",
+  "fr": "ou saisissez les données manuellement",
+  "hi": "या जानकारी मैन्युअल रूप से दर्ज करें",
+  "it": "oppure inserisci manualmente i dati",
+  "pt": "ou introduza os dados manualmente",
+  "ru": "или введите данные вручную",
+  "zh": "或手动输入资料"
+ },
+ "sport_ordering": {
+  "de": "Sortierung",
+  "en": "Ordering",
+  "es": "Orden",
+  "fr": "Tri",
+  "hi": "क्रम",
+  "it": "Ordinamento",
+  "pt": "Ordenação",
+  "ru": "Сортировка",
+  "zh": "排序"
+ },
+ "sport_password": {
+  "de": "Passwort",
+  "en": "Password",
+  "es": "Contraseña",
+  "fr": "Mot de passe",
+  "hi": "पासवर्ड",
+  "it": "Password",
+  "pt": "Palavra-passe",
+  "ru": "Пароль",
+  "zh": "密码"
+ },
+ "sport_password_must_be_at_least_6_characters": {
+  "de": "Das Passwort muss mindestens 6 Zeichen lang sein",
+  "en": "Password must be at least 6 characters",
+  "es": "La contraseña debe tener al menos 6 caracteres",
+  "fr": "Le mot de passe doit contenir au moins 6 caractères",
+  "hi": "पासवर्ड कम से कम 6 अक्षरों का होना चाहिए",
+  "it": "La password deve avere almeno 6 caratteri",
+  "pt": "A palavra-passe deve ter pelo menos 6 caracteres",
+  "ru": "Пароль должен содержать не менее 6 символов",
+  "zh": "密码至少需要 6 个字符"
+ },
+ "sport_pending_registrations": {
+  "de": "Ausstehende Anmeldungen",
+  "en": "Pending registrations",
+  "es": "Inscripciones pendientes",
+  "fr": "Inscriptions en attente",
+  "hi": "लंबित पंजीकरण",
+  "it": "Iscrizioni in attesa",
+  "pt": "Inscrições pendentes",
+  "ru": "Ожидающие регистрации",
+  "zh": "待审核注册"
+ },
+ "sport_photo": {
+  "de": "Foto",
+  "en": "Photo",
+  "es": "Foto",
+  "fr": "Photo",
+  "hi": "फ़ोटो",
+  "it": "Foto",
+  "pt": "Foto",
+  "ru": "Фото",
+  "zh": "照片"
+ },
+ "sport_place_of_birth": {
+  "de": "Geburtsort",
+  "en": "Place of birth",
+  "es": "Lugar de nacimiento",
+  "fr": "Lieu de naissance",
+  "hi": "जन्म स्थान",
+  "it": "Luogo di nascita",
+  "pt": "Local de nascimento",
+  "ru": "Место рождения",
+  "zh": "出生地"
+ },
+ "sport_prev": {
+  "de": "Zurück",
+  "en": "Prev",
+  "es": "Ant.",
+  "fr": "Préc.",
+  "hi": "पिछला",
+  "it": "Prec.",
+  "pt": "Ant.",
+  "ru": "Назад",
+  "zh": "上一页"
+ },
+ "sport_registration_failed": {
+  "de": "Anmeldung fehlgeschlagen",
+  "en": "Registration failed",
+  "es": "La inscripción ha fallado",
+  "fr": "L'inscription a échoué",
+  "hi": "पंजीकरण विफल रहा",
+  "it": "Iscrizione non riuscita",
+  "pt": "A inscrição falhou",
+  "ru": "Регистрация не удалась",
+  "zh": "注册失败"
+ },
+ "sport_reject": {
+  "de": "Ablehnen",
+  "en": "Reject",
+  "es": "Rechazar",
+  "fr": "Refuser",
+  "hi": "अस्वीकार करें",
+  "it": "Rifiuta",
+  "pt": "Rejeitar",
+  "ru": "Отклонить",
+  "zh": "拒绝"
+ },
+ "sport_reject_registration": {
+  "de": "Anmeldung ablehnen",
+  "en": "Reject registration",
+  "es": "Rechazar inscripción",
+  "fr": "Refuser l'inscription",
+  "hi": "पंजीकरण अस्वीकार करें",
+  "it": "Rifiuta iscrizione",
+  "pt": "Rejeitar inscrição",
+  "ru": "Отклонить регистрацию",
+  "zh": "拒绝注册"
+ },
+ "sport_reject_the_0_selected_registrations_the_requests_will_be_removed": {
+  "de": "Die {0} ausgewählten Anmeldungen ablehnen? Die Anfragen werden entfernt.",
+  "en": "Reject the {0} selected registrations? The requests will be removed.",
+  "es": "¿Rechazar las {0} inscripciones seleccionadas? Las solicitudes se eliminarán.",
+  "fr": "Refuser les {0} inscriptions sélectionnées ? Les demandes seront supprimées.",
+  "hi": "चुने गए {0} पंजीकरण अस्वीकार करें? अनुरोध हटा दिए जाएँगे।",
+  "it": "Rifiutare le {0} iscrizioni selezionate? Le richieste verranno eliminate.",
+  "pt": "Rejeitar as {0} inscrições selecionadas? Os pedidos serão removidos.",
+  "ru": "Отклонить выбранные регистрации ({0})? Заявки будут удалены.",
+  "zh": "拒绝所选的 {0} 个注册？这些申请将被删除。"
+ },
+ "sport_reject_the_registration_of_0_the_request_will_be_removed": {
+  "de": "Die Anmeldung von {0} ablehnen? Die Anfrage wird entfernt.",
+  "en": "Reject the registration of {0}? The request will be removed.",
+  "es": "¿Rechazar la inscripción de {0}? La solicitud se eliminará.",
+  "fr": "Refuser l'inscription de {0} ? La demande sera supprimée.",
+  "hi": "{0} का पंजीकरण अस्वीकार करें? अनुरोध हटा दिया जाएगा।",
+  "it": "Rifiutare l'iscrizione di {0}? La richiesta verrà eliminata.",
+  "pt": "Rejeitar a inscrição de {0}? O pedido será removido.",
+  "ru": "Отклонить регистрацию {0}? Заявка будет удалена.",
+  "zh": "拒绝 {0} 的注册？该申请将被删除。"
+ },
+ "sport_reject_this_registration_the_request_will_be_removed": {
+  "de": "Diese Anmeldung ablehnen? Die Anfrage wird entfernt.",
+  "en": "Reject this registration? The request will be removed.",
+  "es": "¿Rechazar esta inscripción? La solicitud se eliminará.",
+  "fr": "Refuser cette inscription ? La demande sera supprimée.",
+  "hi": "यह पंजीकरण अस्वीकार करें? अनुरोध हटा दिया जाएगा।",
+  "it": "Rifiutare questa iscrizione? La richiesta verrà eliminata.",
+  "pt": "Rejeitar esta inscrição? O pedido será removido.",
+  "ru": "Отклонить эту регистрацию? Заявка будет удалена.",
+  "zh": "拒绝此注册？该申请将被删除。"
+ },
+ "sport_remove_link": {
+  "de": "Verknüpfung entfernen",
+  "en": "Remove link",
+  "es": "Quitar vínculo",
+  "fr": "Supprimer le lien",
+  "hi": "लिंक हटाएँ",
+  "it": "Rimuovi collegamento",
+  "pt": "Remover ligação",
+  "ru": "Удалить связь",
+  "zh": "取消关联"
+ },
+ "sport_request_sent": {
+  "de": "Anfrage gesendet",
+  "en": "Request sent",
+  "es": "Solicitud enviada",
+  "fr": "Demande envoyée",
+  "hi": "अनुरोध भेजा गया",
+  "it": "Richiesta inviata",
+  "pt": "Pedido enviado",
+  "ru": "Заявка отправлена",
+  "zh": "申请已发送"
+ },
+ "sport_required": {
+  "de": "Erforderlich",
+  "en": "Required",
+  "es": "Obligatorio",
+  "fr": "Obligatoire",
+  "hi": "आवश्यक",
+  "it": "Obbligatorio",
+  "pt": "Obrigatório",
+  "ru": "Обязательно",
+  "zh": "必填"
+ },
+ "sport_restore": {
+  "de": "Wiederherstellen",
+  "en": "Restore",
+  "es": "Restaurar",
+  "fr": "Restaurer",
+  "hi": "पुनर्स्थापित करें",
+  "it": "Ripristina",
+  "pt": "Restaurar",
+  "ru": "Восстановить",
+  "zh": "恢复"
+ },
+ "sport_role_in_the_club": {
+  "de": "Rolle im Verein",
+  "en": "Role in the club",
+  "es": "Función en el club",
+  "fr": "Rôle dans le club",
+  "hi": "क्लब में भूमिका",
+  "it": "Ruolo nella società",
+  "pt": "Função no clube",
+  "ru": "Роль в клубе",
+  "zh": "在俱乐部中的角色"
+ },
+ "sport_role_in_the_team": {
+  "de": "Rolle im Team",
+  "en": "Role in the team",
+  "es": "Función en el equipo",
+  "fr": "Rôle dans l'équipe",
+  "hi": "टीम में भूमिका",
+  "it": "Ruolo nella squadra",
+  "pt": "Função na equipa",
+  "ru": "Роль в команде",
+  "zh": "在球队中的角色"
+ },
+ "sport_search_member": {
+  "de": "Mitglied suchen…",
+  "en": "Search member…",
+  "es": "Buscar miembro…",
+  "fr": "Rechercher un membre…",
+  "hi": "सदस्य खोजें…",
+  "it": "Cerca componente…",
+  "pt": "Pesquisar membro…",
+  "ru": "Найти участника…",
+  "zh": "搜索成员…"
+ },
+ "sport_searching": {
+  "de": "Suche läuft…",
+  "en": "Searching…",
+  "es": "Buscando…",
+  "fr": "Recherche…",
+  "hi": "खोज रहे हैं…",
+  "it": "Ricerca in corso…",
+  "pt": "A pesquisar…",
+  "ru": "Поиск…",
+  "zh": "正在搜索…"
+ },
+ "sport_select_0": {
+  "de": "{0} auswählen",
+  "en": "Select {0}",
+  "es": "Seleccionar {0}",
+  "fr": "Sélectionner {0}",
+  "hi": "{0} चुनें",
+  "it": "Seleziona {0}",
+  "pt": "Selecionar {0}",
+  "ru": "Выбрать {0}",
+  "zh": "选择 {0}"
+ },
+ "sport_select_a_group": {
+  "de": "Gruppe wählen",
+  "en": "Select a group",
+  "es": "Selecciona un grupo",
+  "fr": "Sélectionnez un groupe",
+  "hi": "समूह चुनें",
+  "it": "Seleziona un gruppo",
+  "pt": "Selecione um grupo",
+  "ru": "Выберите группу",
+  "zh": "选择分组"
+ },
+ "sport_select_a_role": {
+  "de": "Rolle wählen",
+  "en": "Select a role",
+  "es": "Selecciona una función",
+  "fr": "Sélectionnez un rôle",
+  "hi": "भूमिका चुनें",
+  "it": "Seleziona un ruolo",
+  "pt": "Selecione uma função",
+  "ru": "Выберите роль",
+  "zh": "选择角色"
+ },
+ "sport_select_a_valid_group": {
+  "de": "Wähle eine gültige Gruppe",
+  "en": "Select a valid group",
+  "es": "Selecciona un grupo válido",
+  "fr": "Sélectionnez un groupe valide",
+  "hi": "एक मान्य समूह चुनें",
+  "it": "Seleziona un gruppo valido",
+  "pt": "Selecione um grupo válido",
+  "ru": "Выберите допустимую группу",
+  "zh": "请选择有效的分组"
+ },
+ "sport_select_all_coaches_on_this_page": {
+  "de": "Alle Trainer auf dieser Seite auswählen",
+  "en": "Select all coaches on this page",
+  "es": "Seleccionar todos los entrenadores de esta página",
+  "fr": "Sélectionner tous les entraîneurs de cette page",
+  "hi": "इस पृष्ठ के सभी कोच चुनें",
+  "it": "Seleziona tutti gli allenatori di questa pagina",
+  "pt": "Selecionar todos os treinadores desta página",
+  "ru": "Выбрать всех тренеров на этой странице",
+  "zh": "选择本页所有教练"
+ },
+ "sport_select_at_least_one_coach": {
+  "de": "Wähle mindestens einen Trainer",
+  "en": "Select at least one coach",
+  "es": "Selecciona al menos un entrenador",
+  "fr": "Sélectionnez au moins un entraîneur",
+  "hi": "कम से कम एक कोच चुनें",
+  "it": "Seleziona almeno un allenatore",
+  "pt": "Selecione pelo menos um treinador",
+  "ru": "Выберите хотя бы одного тренера",
+  "zh": "请至少选择一位教练"
+ },
+ "sport_selected_profile_no_longer_exists": {
+  "de": "Das ausgewählte Profil existiert nicht mehr",
+  "en": "Selected profile no longer exists",
+  "es": "El perfil seleccionado ya no existe",
+  "fr": "Le profil sélectionné n'existe plus",
+  "hi": "चुनी गई प्रोफ़ाइल अब मौजूद नहीं है",
+  "it": "Il profilo selezionato non esiste più",
+  "pt": "O perfil selecionado já não existe",
+  "ru": "Выбранный профиль больше не существует",
+  "zh": "所选资料已不存在"
+ },
+ "sport_send_registration": {
+  "de": "Anmeldung senden",
+  "en": "Send registration",
+  "es": "Enviar inscripción",
+  "fr": "Envoyer l'inscription",
+  "hi": "पंजीकरण भेजें",
+  "it": "Invia iscrizione",
+  "pt": "Enviar inscrição",
+  "ru": "Отправить регистрацию",
+  "zh": "提交注册"
+ },
+ "sport_send_the_invite": {
+  "de": "Einladung senden",
+  "en": "Send the invite",
+  "es": "Enviar la invitación",
+  "fr": "Envoyer l'invitation",
+  "hi": "आमंत्रण भेजें",
+  "it": "Invia l'invito",
+  "pt": "Enviar o convite",
+  "ru": "Отправить приглашение",
+  "zh": "发送邀请"
+ },
+ "sport_something_went_wrong": {
+  "de": "Etwas ist schiefgelaufen",
+  "en": "Something went wrong",
+  "es": "Algo salió mal",
+  "fr": "Une erreur s'est produite",
+  "hi": "कुछ गलत हो गया",
+  "it": "Si è verificato un errore",
+  "pt": "Ocorreu um erro",
+  "ru": "Что-то пошло не так",
+  "zh": "出错了"
+ },
+ "sport_staff": {
+  "de": "Mitarbeiter",
+  "en": "Staff",
+  "es": "Personal",
+  "fr": "Personnel",
+  "hi": "स्टाफ़",
+  "it": "Staff",
+  "pt": "Staff",
+  "ru": "Персонал",
+  "zh": "工作人员"
+ },
+ "sport_surname_is_required": {
+  "de": "Nachname ist erforderlich",
+  "en": "Surname is required",
+  "es": "El apellido es obligatorio",
+  "fr": "Le nom est obligatoire",
+  "hi": "उपनाम आवश्यक है",
+  "it": "Il cognome è obbligatorio",
+  "pt": "O apelido é obrigatório",
+  "ru": "Укажите фамилию",
+  "zh": "请填写姓"
+ },
+ "sport_tax_code": {
+  "de": "Steuernummer",
+  "en": "Tax code",
+  "es": "Código fiscal",
+  "fr": "Code fiscal",
+  "hi": "कर कोड",
+  "it": "Codice fiscale",
+  "pt": "Código fiscal",
+  "ru": "ИНН",
+  "zh": "税号"
+ },
+ "sport_tax_code_a_z": {
+  "de": "Steuernummer A-Z",
+  "en": "Tax code A-Z",
+  "es": "Código fiscal A-Z",
+  "fr": "Code fiscal A-Z",
+  "hi": "कर कोड A-Z",
+  "it": "Codice fiscale A-Z",
+  "pt": "Código fiscal A-Z",
+  "ru": "ИНН А-Я",
+  "zh": "税号 A-Z"
+ },
+ "sport_tax_code_is_required": {
+  "de": "Steuernummer ist erforderlich",
+  "en": "Tax code is required",
+  "es": "El código fiscal es obligatorio",
+  "fr": "Le code fiscal est obligatoire",
+  "hi": "कर कोड आवश्यक है",
+  "it": "Il codice fiscale è obbligatorio",
+  "pt": "O código fiscal é obrigatório",
+  "ru": "Укажите ИНН",
+  "zh": "请填写税号"
+ },
+ "sport_team_admin": {
+  "de": "Teamadministrator",
+  "en": "Team admin",
+  "es": "Administrador del equipo",
+  "fr": "Administrateur de l'équipe",
+  "hi": "टीम व्यवस्थापक",
+  "it": "Amministratore della squadra",
+  "pt": "Administrador da equipa",
+  "ru": "Администратор команды",
+  "zh": "球队管理员"
+ },
+ "sport_technical_director": {
+  "de": "Technischer Direktor",
+  "en": "Technical director",
+  "es": "Director técnico",
+  "fr": "Directeur technique",
+  "hi": "तकनीकी निदेशक",
+  "it": "Direttore tecnico",
+  "pt": "Diretor técnico",
+  "ru": "Технический директор",
+  "zh": "技术总监"
+ },
+ "sport_this_account_already_has_a_registration_waiting_for_approval_in_this_club": {
+  "de": "Dieses Konto hat in diesem Verein bereits eine Anmeldung, die auf Freigabe wartet",
+  "en": "This account already has a registration waiting for approval in this club",
+  "es": "Esta cuenta ya tiene una inscripción pendiente de aprobación en este club",
+  "fr": "Ce compte a déjà une inscription en attente d'approbation dans ce club",
+  "hi": "इस खाते का इस क्लब में पहले से एक पंजीकरण अनुमोदन की प्रतीक्षा में है",
+  "it": "Questo account ha già un'iscrizione in attesa di approvazione in questa società",
+  "pt": "Esta conta já tem uma inscrição a aguardar aprovação neste clube",
+  "ru": "У этого аккаунта уже есть регистрация, ожидающая одобрения в этом клубе",
+  "zh": "该账户在本俱乐部已有一个等待审核的注册"
+ },
+ "sport_this_account_already_has_a_registration_waiting_for_approval_in_this_team": {
+  "de": "Dieses Konto hat in diesem Team bereits eine Anmeldung, die auf Freigabe wartet",
+  "en": "This account already has a registration waiting for approval in this team",
+  "es": "Esta cuenta ya tiene una inscripción pendiente de aprobación en este equipo",
+  "fr": "Ce compte a déjà une inscription en attente d'approbation dans cette équipe",
+  "hi": "इस खाते का इस टीम में पहले से एक पंजीकरण अनुमोदन की प्रतीक्षा में है",
+  "it": "Questo account ha già un'iscrizione in attesa di approvazione in questa squadra",
+  "pt": "Esta conta já tem uma inscrição a aguardar aprovação nesta equipa",
+  "ru": "У этого аккаунта уже есть регистрация, ожидающая одобрения в этой команде",
+  "zh": "该账户在本球队已有一个等待审核的注册"
+ },
+ "sport_this_account_is_already_a_coach_of_this_club": {
+  "de": "Dieses Konto ist bereits Trainer in diesem Verein",
+  "en": "This account is already a coach of this club",
+  "es": "Esta cuenta ya es entrenador de este club",
+  "fr": "Ce compte est déjà entraîneur de ce club",
+  "hi": "यह खाता पहले से इस क्लब का कोच है",
+  "it": "Questo account è già un allenatore di questa società",
+  "pt": "Esta conta já é treinador deste clube",
+  "ru": "Этот аккаунт уже является тренером этого клуба",
+  "zh": "该账户已是本俱乐部的教练"
+ },
+ "sport_this_account_is_already_a_coach_of_this_team": {
+  "de": "Dieses Konto ist bereits Trainer in diesem Team",
+  "en": "This account is already a coach of this team",
+  "es": "Esta cuenta ya es entrenador de este equipo",
+  "fr": "Ce compte est déjà entraîneur de cette équipe",
+  "hi": "यह खाता पहले से इस टीम का कोच है",
+  "it": "Questo account è già un allenatore di questa squadra",
+  "pt": "Esta conta já é treinador desta equipa",
+  "ru": "Этот аккаунт уже является тренером этой команды",
+  "zh": "该账户已是本球队的教练"
+ },
+ "sport_this_account_is_already_an_archived_coach_of_this_club": {
+  "de": "Dieses Konto ist bereits ein archivierter Trainer dieses Vereins",
+  "en": "This account is already an archived coach of this club",
+  "es": "Esta cuenta ya es un entrenador archivado de este club",
+  "fr": "Ce compte est déjà un entraîneur archivé de ce club",
+  "hi": "यह खाता पहले से इस क्लब का संग्रहीत कोच है",
+  "it": "Questo account è già un allenatore archiviato di questa società",
+  "pt": "Esta conta já é um treinador arquivado deste clube",
+  "ru": "Этот аккаунт уже является тренером этого клуба в архиве",
+  "zh": "该账户已是本俱乐部已归档的教练"
+ },
+ "sport_this_account_is_already_an_archived_coach_of_this_team": {
+  "de": "Dieses Konto ist bereits ein archivierter Trainer dieses Teams",
+  "en": "This account is already an archived coach of this team",
+  "es": "Esta cuenta ya es un entrenador archivado de este equipo",
+  "fr": "Ce compte est déjà un entraîneur archivé de cette équipe",
+  "hi": "यह खाता पहले से इस टीम का संग्रहीत कोच है",
+  "it": "Questo account è già un allenatore archiviato di questa squadra",
+  "pt": "Esta conta já é um treinador arquivado desta equipa",
+  "ru": "Этот аккаунт уже является тренером этой команды в архиве",
+  "zh": "该账户已是本球队已归档的教练"
+ },
+ "sport_this_coach_is_linked_to_a_movesbook_account": {
+  "de": "Dieser Trainer ist mit einem Movesbook-Konto verknüpft.",
+  "en": "This coach is linked to a Movesbook account.",
+  "es": "Este entrenador está vinculado a una cuenta de Movesbook.",
+  "fr": "Cet entraîneur est lié à un compte Movesbook.",
+  "hi": "यह कोच एक Movesbook खाते से जुड़ा है।",
+  "it": "Questo allenatore è collegato a un account Movesbook.",
+  "pt": "Este treinador está ligado a uma conta Movesbook.",
+  "ru": "Этот тренер связан с аккаунтом Movesbook.",
+  "zh": "该教练已关联 Movesbook 账户。"
+ },
+ "sport_this_invitation_link_is_not_valid": {
+  "de": "Dieser Einladungslink ist ungültig",
+  "en": "This invitation link is not valid",
+  "es": "Este enlace de invitación no es válido",
+  "fr": "Ce lien d'invitation n'est pas valide",
+  "hi": "यह आमंत्रण लिंक मान्य नहीं है",
+  "it": "Questo link di invito non è valido",
+  "pt": "Este link de convite não é válido",
+  "ru": "Эта ссылка-приглашение недействительна",
+  "zh": "此邀请链接无效"
+ },
+ "sport_use_another_account": {
+  "de": "Anderes Konto verwenden",
+  "en": "Use another account",
+  "es": "Usar otra cuenta",
+  "fr": "Utiliser un autre compte",
+  "hi": "दूसरा खाता उपयोग करें",
+  "it": "Usa un altro account",
+  "pt": "Usar outra conta",
+  "ru": "Использовать другой аккаунт",
+  "zh": "使用其他账户"
+ },
+ "sport_username_is_required": {
+  "de": "Benutzername ist erforderlich",
+  "en": "Username is required",
+  "es": "El nombre de usuario es obligatorio",
+  "fr": "Le nom d'utilisateur est obligatoire",
+  "hi": "उपयोगकर्ता नाम आवश्यक है",
+  "it": "Il nome utente è obbligatorio",
+  "pt": "O nome de utilizador é obrigatório",
+  "ru": "Укажите имя пользователя",
+  "zh": "请填写用户名"
+ },
+ "sport_username_or_email": {
+  "de": "Benutzername oder E-Mail",
+  "en": "Username or email",
+  "es": "Nombre de usuario o correo",
+  "fr": "Nom d'utilisateur ou e-mail",
+  "hi": "उपयोगकर्ता नाम या ईमेल",
+  "it": "Nome utente o email",
+  "pt": "Nome de utilizador ou e-mail",
+  "ru": "Имя пользователя или эл. почта",
+  "zh": "用户名或电子邮箱"
+ },
+ "sport_via_link": {
+  "de": "per Link",
+  "en": "via link",
+  "es": "por enlace",
+  "fr": "via lien",
+  "hi": "लिंक द्वारा",
+  "it": "tramite link",
+  "pt": "por link",
+  "ru": "по ссылке",
+  "zh": "通过链接"
+ },
+ "sport_you_are_logged_in_as_0_which_is_not_a_coach_account_only_coach_accounts_can_register_with_this_link": {
+  "de": "Du bist als {0} angemeldet, das ist kein Trainerkonto. Nur Trainerkonten können sich mit diesem Link registrieren.",
+  "en": "You are logged in as {0}, which is not a coach account. Only coach accounts can register with this link.",
+  "es": "Has iniciado sesión como {0}, que no es una cuenta de entrenador. Solo las cuentas de entrenador pueden registrarse con este enlace.",
+  "fr": "Vous êtes connecté en tant que {0}, qui n'est pas un compte entraîneur. Seuls les comptes entraîneur peuvent s'inscrire avec ce lien.",
+  "hi": "आप {0} के रूप में लॉग इन हैं, जो कोच खाता नहीं है। केवल कोच खाते इस लिंक से पंजीकरण कर सकते हैं।",
+  "it": "Hai effettuato l'accesso come {0}, che non è un account allenatore. Solo gli account allenatore possono registrarsi con questo link.",
+  "pt": "Tem sessão iniciada como {0}, que não é uma conta de treinador. Só as contas de treinador se podem registar com este link.",
+  "ru": "Вы вошли как {0}, это не аккаунт тренера. По этой ссылке могут регистрироваться только аккаунты тренеров.",
+  "zh": "您当前以 {0} 登录，这不是教练账户。只有教练账户可以通过此链接注册。"
+ },
+ "sport_you_have_been_invited_to_join_the_club_0_as_a_coach": {
+  "de": "Du wurdest eingeladen, dem Verein {0} als Trainer beizutreten.",
+  "en": "You have been invited to join the club {0} as a coach.",
+  "es": "Has sido invitado a unirte al club {0} como entrenador.",
+  "fr": "Vous avez été invité à rejoindre le club {0} en tant qu'entraîneur.",
+  "hi": "आपको क्लब {0} में कोच के रूप में जुड़ने के लिए आमंत्रित किया गया है।",
+  "it": "Sei stato invitato a unirti alla società {0} come allenatore.",
+  "pt": "Foi convidado a juntar-se ao clube {0} como treinador.",
+  "ru": "Вас пригласили присоединиться к клубу {0} в качестве тренера.",
+  "zh": "您已受邀以教练身份加入俱乐部 {0}。"
+ },
+ "sport_you_have_been_invited_to_join_the_team_0_as_a_coach": {
+  "de": "Du wurdest eingeladen, dem Team {0} als Trainer beizutreten.",
+  "en": "You have been invited to join the team {0} as a coach.",
+  "es": "Has sido invitado a unirte al equipo {0} como entrenador.",
+  "fr": "Vous avez été invité à rejoindre l'équipe {0} en tant qu'entraîneur.",
+  "hi": "आपको टीम {0} में कोच के रूप में जुड़ने के लिए आमंत्रित किया गया है।",
+  "it": "Sei stato invitato a unirti alla squadra {0} come allenatore.",
+  "pt": "Foi convidado a juntar-se à equipa {0} como treinador.",
+  "ru": "Вас пригласили присоединиться к команде {0} в качестве тренера.",
+  "zh": "您已受邀以教练身份加入球队 {0}。"
+ },
+ "sport_you_will_find_the_requests_in_the_section_pending_registrations": {
+  "de": "Die Anfragen findest du im Bereich „Ausstehende Anmeldungen“.",
+  "en": "You will find the requests in the section \"Pending registrations\".",
+  "es": "Encontrarás las solicitudes en la sección \"Inscripciones pendientes\".",
+  "fr": "Vous trouverez les demandes dans la section « Inscriptions en attente ».",
+  "hi": "अनुरोध आपको \"लंबित पंजीकरण\" अनुभाग में मिलेंगे।",
+  "it": "Troverai le richieste nella sezione \"Iscrizioni in attesa\".",
+  "pt": "Encontrará os pedidos na secção \"Inscrições pendentes\".",
+  "ru": "Заявки находятся в разделе «Ожидающие регистрации».",
+  "zh": "您可以在“待审核注册”栏目中找到这些申请。"
+ },
+ "sport_your_coach_account": {
+  "de": "Dein Trainerkonto",
+  "en": "Your coach account",
+  "es": "Tu cuenta de entrenador",
+  "fr": "Votre compte entraîneur",
+  "hi": "आपका कोच खाता",
+  "it": "Il tuo account allenatore",
+  "pt": "A sua conta de treinador",
+  "ru": "Ваш аккаунт тренера",
+  "zh": "您的教练账户"
+ },
+ "sport_your_coach_registration_has_been_sent_to_the_club_0_it_will_be_active_as_soon_as_the_club_approves_it": {
+  "de": "Deine Traineranmeldung wurde an den Verein {0} gesendet. Sie wird aktiv, sobald der Verein sie freigibt.",
+  "en": "Your coach registration has been sent to the club {0}. It will be active as soon as the club approves it.",
+  "es": "Tu inscripción como entrenador se ha enviado al club {0}. Estará activa en cuanto el club la apruebe.",
+  "fr": "Votre inscription d'entraîneur a été envoyée au club {0}. Elle sera active dès que le club l'aura approuvée.",
+  "hi": "आपका कोच पंजीकरण क्लब {0} को भेज दिया गया है। क्लब के स्वीकृत करते ही यह सक्रिय हो जाएगा।",
+  "it": "La tua iscrizione come allenatore è stata inviata alla società {0}. Sarà attiva non appena la società la approverà.",
+  "pt": "A sua inscrição como treinador foi enviada ao clube {0}. Ficará ativa assim que o clube a aprovar.",
+  "ru": "Ваша регистрация тренера отправлена в клуб {0}. Она станет активной, как только клуб её одобрит.",
+  "zh": "您的教练注册已发送至俱乐部 {0}。俱乐部批准后即可生效。"
+ },
+ "sport_your_coach_registration_has_been_sent_to_the_team_0_it_will_be_active_as_soon_as_the_team_approves_it": {
+  "de": "Deine Traineranmeldung wurde an das Team {0} gesendet. Sie wird aktiv, sobald das Team sie freigibt.",
+  "en": "Your coach registration has been sent to the team {0}. It will be active as soon as the team approves it.",
+  "es": "Tu inscripción como entrenador se ha enviado al equipo {0}. Estará activa en cuanto el equipo la apruebe.",
+  "fr": "Votre inscription d'entraîneur a été envoyée à l'équipe {0}. Elle sera active dès que l'équipe l'aura approuvée.",
+  "hi": "आपका कोच पंजीकरण टीम {0} को भेज दिया गया है। टीम के स्वीकृत करते ही यह सक्रिय हो जाएगा।",
+  "it": "La tua iscrizione come allenatore è stata inviata alla squadra {0}. Sarà attiva non appena la squadra la approverà.",
+  "pt": "A sua inscrição como treinador foi enviada à equipa {0}. Ficará ativa assim que a equipa a aprovar.",
+  "ru": "Ваша регистрация тренера отправлена в команду {0}. Она станет активной, как только команда её одобрит.",
+  "zh": "您的教练注册已发送至球队 {0}。球队批准后即可生效。"
+ },
+ "sport_youth_coach": {
+  "de": "Jugendtrainer",
+  "en": "Youth coach",
+  "es": "Entrenador de categorías inferiores",
+  "fr": "Entraîneur des jeunes",
+  "hi": "युवा कोच",
+  "it": "Allenatore giovanile",
+  "pt": "Treinador de formação",
+  "ru": "Детский тренер",
+  "zh": "青训教练"
+ },
+ "sport_zip_code": {
+  "de": "PLZ",
+  "en": "ZIP code",
+  "es": "Código postal",
+  "fr": "Code postal",
+  "hi": "पिन कोड",
+  "it": "CAP",
+  "pt": "Código postal",
+  "ru": "Почтовый индекс",
+  "zh": "邮政编码"
+ },
+ "sport_0_staff": {
+  "de": "{0} Mitarbeiter",
+  "en": "{0} staff",
+  "es": "{0} miembros del personal",
+  "fr": "{0} membres du personnel",
+  "hi": "{0} स्टाफ सदस्य",
+  "it": "{0} membri dello staff",
+  "pt": "{0} membros da equipe",
+  "ru": "Сотрудников: {0}",
+  "zh": "{0} 名员工"
+ },
+ "sport_accounting": {
+  "de": "Buchhaltung",
+  "en": "Accounting",
+  "es": "Contabilidad",
+  "fr": "Comptabilité",
+  "hi": "लेखा",
+  "it": "Contabilità",
+  "pt": "Contabilidade",
+  "ru": "Бухгалтерия",
+  "zh": "会计"
+ },
+ "sport_add_new": {
+  "de": "Neu hinzufügen",
+  "en": "Add new",
+  "es": "Añadir nuevo",
+  "fr": "Ajouter",
+  "hi": "नया जोड़ें",
+  "it": "Aggiungi nuovo",
+  "pt": "Adicionar novo",
+  "ru": "Добавить",
+  "zh": "新增"
+ },
+ "sport_all_types": {
+  "de": "Alle Typen",
+  "en": "All types",
+  "es": "Todos los tipos",
+  "fr": "Tous les types",
+  "hi": "सभी प्रकार",
+  "it": "Tutti i tipi",
+  "pt": "Todos os tipos",
+  "ru": "Все типы",
+  "zh": "所有类型"
+ },
+ "sport_cleaner": {
+  "de": "Reinigungskraft",
+  "en": "Cleaner",
+  "es": "Personal de limpieza",
+  "fr": "Agent d'entretien",
+  "hi": "सफाईकर्मी",
+  "it": "Addetto alle pulizie",
+  "pt": "Auxiliar de limpeza",
+  "ru": "Уборщик",
+  "zh": "清洁工"
+ },
+ "sport_coadmin": {
+  "de": "Co-Administrator",
+  "en": "Coadmin",
+  "es": "Coadministrador",
+  "fr": "Coadministrateur",
+  "hi": "सह-व्यवस्थापक",
+  "it": "Coamministratore",
+  "pt": "Coadministrador",
+  "ru": "Соадминистратор",
+  "zh": "协同管理员"
+ },
+ "sport_collaborator": {
+  "de": "Mitarbeiter (extern)",
+  "en": "Collaborator",
+  "es": "Colaborador",
+  "fr": "Collaborateur",
+  "hi": "सहयोगी",
+  "it": "Collaboratore",
+  "pt": "Colaborador",
+  "ru": "Сотрудник",
+  "zh": "合作者"
+ },
+ "sport_customer_care": {
+  "de": "Kundenservice",
+  "en": "Customer Care",
+  "es": "Atención al cliente",
+  "fr": "Service client",
+  "hi": "ग्राहक सेवा",
+  "it": "Assistenza clienti",
+  "pt": "Atendimento ao cliente",
+  "ru": "Обслуживание клиентов",
+  "zh": "客户服务"
+ },
+ "sport_customers_care": {
+  "de": "Kundenservice",
+  "en": "Customers Care",
+  "es": "Atención al cliente",
+  "fr": "Service client",
+  "hi": "ग्राहक सेवा",
+  "it": "Assistenza clienti",
+  "pt": "Atendimento ao cliente",
+  "ru": "Обслуживание клиентов",
+  "zh": "客户服务"
+ },
+ "sport_delete_0_club_staff_members": {
+  "de": "{0} Mitarbeiter löschen?",
+  "en": "Delete {0} club staff members?",
+  "es": "¿Eliminar a {0} miembros del personal?",
+  "fr": "Supprimer {0} membres du personnel ?",
+  "hi": "क्या {0} स्टाफ सदस्यों को हटाएं?",
+  "it": "Eliminare {0} membri dello staff?",
+  "pt": "Excluir {0} membros da equipe?",
+  "ru": "Удалить сотрудников ({0})?",
+  "zh": "删除 {0} 名员工？"
+ },
+ "sport_delete_this_club_staff_member": {
+  "de": "Diesen Mitarbeiter löschen?",
+  "en": "Delete this club staff member?",
+  "es": "¿Eliminar a este miembro del personal?",
+  "fr": "Supprimer ce membre du personnel ?",
+  "hi": "क्या इस स्टाफ सदस्य को हटाएं?",
+  "it": "Eliminare questo membro dello staff?",
+  "pt": "Excluir este membro da equipe?",
+  "ru": "Удалить этого сотрудника?",
+  "zh": "删除这名员工？"
+ },
+ "sport_director": {
+  "de": "Direktor",
+  "en": "Director",
+  "es": "Director",
+  "fr": "Directeur",
+  "hi": "निदेशक",
+  "it": "Direttore",
+  "pt": "Diretor",
+  "ru": "Директор",
+  "zh": "主任"
+ },
+ "sport_employment_area": {
+  "de": "Einsatzbereich",
+  "en": "Employment Area",
+  "es": "Área de trabajo",
+  "fr": "Domaine d'activité",
+  "hi": "कार्य क्षेत्र",
+  "it": "Area di impiego",
+  "pt": "Área de atuação",
+  "ru": "Сфера работы",
+  "zh": "工作领域"
+ },
+ "sport_failed_to_delete": {
+  "de": "Löschen fehlgeschlagen",
+  "en": "Failed to delete",
+  "es": "No se pudo eliminar",
+  "fr": "Échec de la suppression",
+  "hi": "हटाया नहीं जा सका",
+  "it": "Eliminazione non riuscita",
+  "pt": "Falha ao excluir",
+  "ru": "Не удалось удалить",
+  "zh": "删除失败"
+ },
+ "sport_failed_to_load_club_staff": {
+  "de": "Mitarbeiter konnten nicht geladen werden",
+  "en": "Failed to load club staff",
+  "es": "No se pudo cargar el personal",
+  "fr": "Impossible de charger le personnel",
+  "hi": "स्टाफ लोड नहीं हो सका",
+  "it": "Impossibile caricare lo staff",
+  "pt": "Não foi possível carregar a equipe",
+  "ru": "Не удалось загрузить персонал",
+  "zh": "无法加载员工"
+ },
+ "sport_instructor": {
+  "de": "Trainer",
+  "en": "Instructor",
+  "es": "Instructor",
+  "fr": "Instructeur",
+  "hi": "प्रशिक्षक",
+  "it": "Istruttore",
+  "pt": "Instrutor",
+  "ru": "Инструктор",
+  "zh": "教练员"
+ },
+ "sport_instructors": {
+  "de": "Trainer",
+  "en": "Instructors",
+  "es": "Instructores",
+  "fr": "Instructeurs",
+  "hi": "प्रशिक्षक",
+  "it": "Istruttori",
+  "pt": "Instrutores",
+  "ru": "Инструкторы",
+  "zh": "教练员"
+ },
+ "sport_list_of_the_staff": {
+  "de": "Mitarbeiterliste",
+  "en": "List of the Staff",
+  "es": "Lista del personal",
+  "fr": "Liste du personnel",
+  "hi": "स्टाफ की सूची",
+  "it": "Elenco dello staff",
+  "pt": "Lista da equipe",
+  "ru": "Список персонала",
+  "zh": "员工列表"
+ },
+ "sport_loading_staff_list": {
+  "de": "Mitarbeiterliste wird geladen…",
+  "en": "Loading staff list…",
+  "es": "Cargando la lista del personal…",
+  "fr": "Chargement de la liste du personnel…",
+  "hi": "स्टाफ सूची लोड हो रही है…",
+  "it": "Caricamento elenco staff…",
+  "pt": "Carregando a lista da equipe…",
+  "ru": "Загрузка списка персонала…",
+  "zh": "正在加载员工列表…"
+ },
+ "sport_maintenance_worker": {
+  "de": "Hausmeister",
+  "en": "Maintenance worker",
+  "es": "Operario de mantenimiento",
+  "fr": "Agent de maintenance",
+  "hi": "रखरखाव कर्मी",
+  "it": "Addetto alla manutenzione",
+  "pt": "Técnico de manutenção",
+  "ru": "Работник по обслуживанию",
+  "zh": "维修工"
+ },
+ "sport_nickname_name_role": {
+  "de": "Spitzname, Name, Rolle",
+  "en": "Nickname, name, role",
+  "es": "Apodo, nombre, función",
+  "fr": "Pseudo, nom, rôle",
+  "hi": "उपनाम, नाम, भूमिका",
+  "it": "Nickname, nome, ruolo",
+  "pt": "Apelido, nome, função",
+  "ru": "Ник, имя, роль",
+  "zh": "昵称、姓名、职务"
+ },
+ "sport_no_club_staff_found": {
+  "de": "Keine Mitarbeiter gefunden.",
+  "en": "No club staff found.",
+  "es": "No se encontró personal del club.",
+  "fr": "Aucun membre du personnel trouvé.",
+  "hi": "क्लब का कोई स्टाफ नहीं मिला।",
+  "it": "Nessun membro dello staff trovato.",
+  "pt": "Nenhum membro da equipe encontrado.",
+  "ru": "Сотрудники клуба не найдены.",
+  "zh": "未找到俱乐部员工。"
+ },
+ "sport_operative_level": {
+  "de": "Betriebsebene",
+  "en": "Operative Level",
+  "es": "Nivel operativo",
+  "fr": "Niveau opérationnel",
+  "hi": "परिचालन स्तर",
+  "it": "Livello operativo",
+  "pt": "Nível operacional",
+  "ru": "Уровень доступа",
+  "zh": "操作级别"
+ },
+ "sport_operator": {
+  "de": "Mitarbeiter",
+  "en": "Operator",
+  "es": "Operador",
+  "fr": "Opérateur",
+  "hi": "ऑपरेटर",
+  "it": "Operatore",
+  "pt": "Operador",
+  "ru": "Оператор",
+  "zh": "操作员"
+ },
+ "sport_operator_list": {
+  "de": "Mitarbeiterliste",
+  "en": "Operator List",
+  "es": "Lista de operadores",
+  "fr": "Liste des opérateurs",
+  "hi": "ऑपरेटर सूची",
+  "it": "Elenco operatori",
+  "pt": "Lista de operadores",
+  "ru": "Список операторов",
+  "zh": "操作员列表"
+ },
+ "sport_operator_name": {
+  "de": "Name des Mitarbeiters",
+  "en": "Operator Name",
+  "es": "Nombre del operador",
+  "fr": "Nom de l'opérateur",
+  "hi": "ऑपरेटर का नाम",
+  "it": "Nome operatore",
+  "pt": "Nome do operador",
+  "ru": "Имя оператора",
+  "zh": "操作员姓名"
+ },
+ "sport_operator_nickname": {
+  "de": "Spitzname des Mitarbeiters",
+  "en": "Operator Nickname",
+  "es": "Apodo del operador",
+  "fr": "Pseudo de l'opérateur",
+  "hi": "ऑपरेटर उपनाम",
+  "it": "Nickname operatore",
+  "pt": "Apelido do operador",
+  "ru": "Ник оператора",
+  "zh": "操作员昵称"
+ },
+ "sport_parking_attendant": {
+  "de": "Parkplatzwächter",
+  "en": "Parking attendant",
+  "es": "Encargado del aparcamiento",
+  "fr": "Gardien de parking",
+  "hi": "पार्किंग परिचारक",
+  "it": "Addetto al parcheggio",
+  "pt": "Manobrista",
+  "ru": "Работник парковки",
+  "zh": "停车场管理员"
+ },
+ "sport_personal_trainer": {
+  "de": "Personal Trainer",
+  "en": "Personal trainer",
+  "es": "Entrenador personal",
+  "fr": "Coach personnel",
+  "hi": "पर्सनल ट्रेनर",
+  "it": "Personal trainer",
+  "pt": "Personal trainer",
+  "ru": "Персональный тренер",
+  "zh": "私人教练"
+ },
+ "sport_personal_trainers": {
+  "de": "Personal Trainer",
+  "en": "Personal Trainers",
+  "es": "Entrenadores personales",
+  "fr": "Coachs personnels",
+  "hi": "पर्सनल ट्रेनर",
+  "it": "Personal trainer",
+  "pt": "Personal trainers",
+  "ru": "Персональные тренеры",
+  "zh": "私人教练"
+ },
+ "sport_receptionist": {
+  "de": "Rezeptionist",
+  "en": "Receptionist",
+  "es": "Recepcionista",
+  "fr": "Réceptionniste",
+  "hi": "रिसेप्शनिस्ट",
+  "it": "Receptionist",
+  "pt": "Recepcionista",
+  "ru": "Администратор ресепшн",
+  "zh": "前台接待"
+ },
+ "sport_sales": {
+  "de": "Vertrieb",
+  "en": "Sales",
+  "es": "Ventas",
+  "fr": "Ventes",
+  "hi": "बिक्री",
+  "it": "Vendite",
+  "pt": "Vendas",
+  "ru": "Продажи",
+  "zh": "销售"
+ },
+ "sport_select_all_staff_on_this_page": {
+  "de": "Alle Mitarbeiter auf dieser Seite auswählen",
+  "en": "Select all staff on this page",
+  "es": "Seleccionar todo el personal de esta página",
+  "fr": "Sélectionner tout le personnel de cette page",
+  "hi": "इस पृष्ठ के सभी स्टाफ चुनें",
+  "it": "Seleziona tutto lo staff di questa pagina",
+  "pt": "Selecionar toda a equipe desta página",
+  "ru": "Выбрать весь персонал на этой странице",
+  "zh": "选择本页所有员工"
+ },
+ "sport_select_at_least_one_staff_member": {
+  "de": "Wählen Sie mindestens einen Mitarbeiter aus.",
+  "en": "Select at least one staff member.",
+  "es": "Selecciona al menos un miembro del personal.",
+  "fr": "Sélectionnez au moins un membre du personnel.",
+  "hi": "कम से कम एक स्टाफ सदस्य चुनें।",
+  "it": "Seleziona almeno un membro dello staff.",
+  "pt": "Selecione pelo menos um membro da equipe.",
+  "ru": "Выберите хотя бы одного сотрудника.",
+  "zh": "请至少选择一名员工。"
+ },
+ "sport_staff_member_not_found": {
+  "de": "Mitarbeiter nicht gefunden.",
+  "en": "Staff member not found.",
+  "es": "Miembro del personal no encontrado.",
+  "fr": "Membre du personnel introuvable.",
+  "hi": "स्टाफ सदस्य नहीं मिला।",
+  "it": "Membro dello staff non trovato.",
+  "pt": "Membro da equipe não encontrado.",
+  "ru": "Сотрудник не найден.",
+  "zh": "未找到该员工。"
+ },
+ "sport_staff_type": {
+  "de": "Mitarbeitertyp",
+  "en": "Staff Type",
+  "es": "Tipo de personal",
+  "fr": "Type de personnel",
+  "hi": "स्टाफ प्रकार",
+  "it": "Tipo di staff",
+  "pt": "Tipo de equipe",
+  "ru": "Тип сотрудника",
+  "zh": "员工类型"
+ },
+ "sport_staff_user": {
+  "de": "Mitarbeiter-Benutzer",
+  "en": "Staff user",
+  "es": "Usuario del personal",
+  "fr": "Utilisateur du personnel",
+  "hi": "स्टाफ उपयोगकर्ता",
+  "it": "Utente staff",
+  "pt": "Usuário da equipe",
+  "ru": "Пользователь персонала",
+  "zh": "员工用户"
+ },
+ "sport_supervisor": {
+  "de": "Supervisor",
+  "en": "Supervisor",
+  "es": "Supervisor",
+  "fr": "Superviseur",
+  "hi": "पर्यवेक्षक",
+  "it": "Supervisore",
+  "pt": "Supervisor",
+  "ru": "Руководитель",
+  "zh": "主管"
+ },
+ "sport_username_a_z": {
+  "de": "Benutzername A-Z",
+  "en": "Username A-Z",
+  "es": "Usuario A-Z",
+  "fr": "Nom d'utilisateur A-Z",
+  "hi": "उपयोगकर्ता नाम A-Z",
+  "it": "Username A-Z",
+  "pt": "Usuário A-Z",
+  "ru": "Логин А-Я",
+  "zh": "用户名 A-Z"
+ },
+ "sport_username_z_a": {
+  "de": "Benutzername Z-A",
+  "en": "Username Z-A",
+  "es": "Usuario Z-A",
+  "fr": "Nom d'utilisateur Z-A",
+  "hi": "उपयोगकर्ता नाम Z-A",
+  "it": "Username Z-A",
+  "pt": "Usuário Z-A",
+  "ru": "Логин Я-А",
+  "zh": "用户名 Z-A"
+ },
+ "sport_account_type": {
+  "de": "Kontotyp",
+  "en": "Account type",
+  "es": "Tipo de cuenta",
+  "fr": "Type de compte",
+  "hi": "खाते का प्रकार",
+  "it": "Tipo di account",
+  "pt": "Tipo de conta",
+  "ru": "Тип учётной записи",
+  "zh": "账户类型"
+ },
+ "sport_add_club_staff": {
+  "de": "Vereinsmitarbeiter hinzufügen",
+  "en": "Add Club Staff",
+  "es": "Añadir personal del club",
+  "fr": "Ajouter du personnel du club",
+  "hi": "क्लब स्टाफ जोड़ें",
+  "it": "Aggiungi staff della società",
+  "pt": "Adicionar equipe do clube",
+  "ru": "Добавить сотрудника клуба",
+  "zh": "添加俱乐部员工"
+ },
+ "sport_back_to_staff_list": {
+  "de": "← Zurück zur Mitarbeiterliste",
+  "en": "← Back to staff list",
+  "es": "← Volver a la lista del personal",
+  "fr": "← Retour à la liste du personnel",
+  "hi": "← स्टाफ सूची पर वापस जाएँ",
+  "it": "← Torna alla lista dello staff",
+  "pt": "← Voltar à lista da equipe",
+  "ru": "← Назад к списку сотрудников",
+  "zh": "← 返回员工列表"
+ },
+ "sport_change_profile_photo": {
+  "de": "Profilfoto ändern",
+  "en": "Change profile photo",
+  "es": "Cambiar foto de perfil",
+  "fr": "Changer la photo de profil",
+  "hi": "प्रोफ़ाइल फ़ोटो बदलें",
+  "it": "Cambia foto profilo",
+  "pt": "Alterar foto de perfil",
+  "ru": "Изменить фото профиля",
+  "zh": "更换头像"
+ },
+ "sport_change_staff_password": {
+  "de": "Mitarbeiterpasswort ändern",
+  "en": "Change Staff Password",
+  "es": "Cambiar contraseña del personal",
+  "fr": "Modifier le mot de passe du personnel",
+  "hi": "स्टाफ पासवर्ड बदलें",
+  "it": "Cambia password dello staff",
+  "pt": "Alterar senha da equipe",
+  "ru": "Изменить пароль сотрудника",
+  "zh": "更改员工密码"
+ },
+ "sport_club_staff": {
+  "de": "Vereinsmitarbeiter",
+  "en": "Club staff",
+  "es": "Personal del club",
+  "fr": "Personnel du club",
+  "hi": "क्लब स्टाफ",
+  "it": "Staff della società",
+  "pt": "Equipe do clube",
+  "ru": "Сотрудник клуба",
+  "zh": "俱乐部员工"
+ },
+ "sport_club_staff_added_successfully": {
+  "de": "Vereinsmitarbeiter erfolgreich hinzugefügt.",
+  "en": "Club staff added successfully.",
+  "es": "Personal del club añadido correctamente.",
+  "fr": "Personnel du club ajouté avec succès.",
+  "hi": "क्लब स्टाफ सफलतापूर्वक जोड़ा गया।",
+  "it": "Staff della società aggiunto correttamente.",
+  "pt": "Equipe do clube adicionada com sucesso.",
+  "ru": "Сотрудник клуба успешно добавлен.",
+  "zh": "俱乐部员工添加成功。"
+ },
+ "sport_club_staff_information": {
+  "de": "Informationen zum Vereinsmitarbeiter",
+  "en": "Club Staff Information",
+  "es": "Información del personal del club",
+  "fr": "Informations sur le personnel du club",
+  "hi": "क्लब स्टाफ जानकारी",
+  "it": "Informazioni sullo staff della società",
+  "pt": "Informações da equipe do clube",
+  "ru": "Информация о сотруднике клуба",
+  "zh": "俱乐部员工信息"
+ },
+ "sport_club_staff_profile": {
+  "de": "Profil des Vereinsmitarbeiters",
+  "en": "Club Staff Profile",
+  "es": "Perfil del personal del club",
+  "fr": "Profil du personnel du club",
+  "hi": "क्लब स्टाफ प्रोफ़ाइल",
+  "it": "Profilo staff della società",
+  "pt": "Perfil da equipe do clube",
+  "ru": "Профиль сотрудника клуба",
+  "zh": "俱乐部员工资料"
+ },
+ "sport_club_staff_profile_saved": {
+  "de": "Mitarbeiterprofil gespeichert.",
+  "en": "Club staff profile saved.",
+  "es": "Perfil del personal guardado.",
+  "fr": "Profil du personnel enregistré.",
+  "hi": "स्टाफ प्रोफ़ाइल सहेजी गई।",
+  "it": "Profilo dello staff salvato.",
+  "pt": "Perfil da equipe salvo.",
+  "ru": "Профиль сотрудника сохранён.",
+  "zh": "员工资料已保存。"
+ },
+ "sport_confirm_password": {
+  "de": "Passwort bestätigen",
+  "en": "Confirm Password",
+  "es": "Confirmar contraseña",
+  "fr": "Confirmer le mot de passe",
+  "hi": "पासवर्ड की पुष्टि करें",
+  "it": "Conferma password",
+  "pt": "Confirmar senha",
+  "ru": "Подтвердите пароль",
+  "zh": "确认密码"
+ },
+ "sport_confirm_password_does_not_match": {
+  "de": "Die Passwortbestätigung stimmt nicht überein.",
+  "en": "Confirm password does not match.",
+  "es": "La confirmación de la contraseña no coincide.",
+  "fr": "La confirmation du mot de passe ne correspond pas.",
+  "hi": "पुष्टि पासवर्ड मेल नहीं खाता।",
+  "it": "La conferma della password non coincide.",
+  "pt": "A confirmação da senha não coincide.",
+  "ru": "Подтверждение пароля не совпадает.",
+  "zh": "确认密码不一致。"
+ },
+ "sport_contact_page": {
+  "de": "Kontaktseite",
+  "en": "Contact page",
+  "es": "Página de contacto",
+  "fr": "Page de contact",
+  "hi": "संपर्क पेज",
+  "it": "Pagina contatti",
+  "pt": "Página de contato",
+  "ru": "Страница контактов",
+  "zh": "联系页面"
+ },
+ "sport_contact_page_qr_code": {
+  "de": "QR-Code der Kontaktseite",
+  "en": "Contact page QR code",
+  "es": "Código QR de la página de contacto",
+  "fr": "Code QR de la page de contact",
+  "hi": "संपर्क पेज का QR कोड",
+  "it": "Codice QR della pagina contatti",
+  "pt": "Código QR da página de contato",
+  "ru": "QR-код страницы контактов",
+  "zh": "联系页面二维码"
+ },
+ "sport_display_name": {
+  "de": "Anzeigename",
+  "en": "Display name",
+  "es": "Nombre visible",
+  "fr": "Nom affiché",
+  "hi": "प्रदर्शित नाम",
+  "it": "Nome visualizzato",
+  "pt": "Nome de exibição",
+  "ru": "Отображаемое имя",
+  "zh": "显示名称"
+ },
+ "sport_display_name_is_required": {
+  "de": "Der Anzeigename ist erforderlich.",
+  "en": "Display name is required.",
+  "es": "El nombre visible es obligatorio.",
+  "fr": "Le nom affiché est obligatoire.",
+  "hi": "प्रदर्शित नाम आवश्यक है।",
+  "it": "Il nome visualizzato è obbligatorio.",
+  "pt": "O nome de exibição é obrigatório.",
+  "ru": "Укажите отображаемое имя.",
+  "zh": "显示名称为必填项。"
+ },
+ "sport_edit_the_details_below_then_click_save_profile_to_update_this_staff_account": {
+  "de": "Bearbeiten Sie die Daten unten und klicken Sie dann auf Profil speichern, um dieses Mitarbeiterkonto zu aktualisieren.",
+  "en": "Edit the details below, then click Save profile to update this staff account.",
+  "es": "Edita los datos a continuación y haz clic en Guardar perfil para actualizar esta cuenta del personal.",
+  "fr": "Modifiez les informations ci-dessous, puis cliquez sur Enregistrer le profil pour mettre à jour ce compte du personnel.",
+  "hi": "नीचे विवरण संपादित करें, फिर इस स्टाफ खाते को अपडेट करने के लिए प्रोफ़ाइल सहेजें पर क्लिक करें।",
+  "it": "Modifica i dati qui sotto, poi clicca Salva profilo per aggiornare questo account dello staff.",
+  "pt": "Edite os dados abaixo e clique em Salvar perfil para atualizar esta conta da equipe.",
+  "ru": "Измените данные ниже, затем нажмите «Сохранить профиль», чтобы обновить эту учётную запись сотрудника.",
+  "zh": "请修改以下信息，然后点击“保存资料”更新此员工账户。"
+ },
+ "sport_email_already_exists": {
+  "de": "Die E-Mail existiert bereits",
+  "en": "Email already exists",
+  "es": "El correo electrónico ya existe",
+  "fr": "Cet e-mail existe déjà",
+  "hi": "ईमेल पहले से मौजूद है",
+  "it": "L'email esiste già",
+  "pt": "O e-mail já existe",
+  "ru": "Такой e-mail уже существует",
+  "zh": "邮箱已存在"
+ },
+ "sport_failed_to_create_club_staff": {
+  "de": "Vereinsmitarbeiter konnte nicht erstellt werden",
+  "en": "Failed to create club staff",
+  "es": "No se pudo crear el personal del club",
+  "fr": "Impossible de créer le personnel du club",
+  "hi": "क्लब स्टाफ बनाया नहीं जा सका",
+  "it": "Impossibile creare lo staff della società",
+  "pt": "Não foi possível criar a equipe do clube",
+  "ru": "Не удалось создать сотрудника клуба",
+  "zh": "无法创建俱乐部员工"
+ },
+ "sport_failed_to_delete_club_staff": {
+  "de": "Vereinsmitarbeiter konnte nicht gelöscht werden",
+  "en": "Failed to delete club staff",
+  "es": "No se pudo eliminar el personal del club",
+  "fr": "Impossible de supprimer le personnel du club",
+  "hi": "क्लब स्टाफ हटाया नहीं जा सका",
+  "it": "Impossibile eliminare lo staff della società",
+  "pt": "Não foi possível excluir a equipe do clube",
+  "ru": "Не удалось удалить сотрудника клуба",
+  "zh": "无法删除俱乐部员工"
+ },
+ "sport_failed_to_load_staff_profile": {
+  "de": "Mitarbeiterprofil konnte nicht geladen werden",
+  "en": "Failed to load staff profile",
+  "es": "No se pudo cargar el perfil del personal",
+  "fr": "Impossible de charger le profil du personnel",
+  "hi": "स्टाफ प्रोफ़ाइल लोड नहीं हो सकी",
+  "it": "Impossibile caricare il profilo dello staff",
+  "pt": "Não foi possível carregar o perfil da equipe",
+  "ru": "Не удалось загрузить профиль сотрудника",
+  "zh": "无法加载员工资料"
+ },
+ "sport_failed_to_save_club_staff": {
+  "de": "Vereinsmitarbeiter konnte nicht gespeichert werden",
+  "en": "Failed to save club staff",
+  "es": "No se pudo guardar el personal del club",
+  "fr": "Impossible d'enregistrer le personnel du club",
+  "hi": "क्लब स्टाफ सहेजा नहीं जा सका",
+  "it": "Impossibile salvare lo staff della società",
+  "pt": "Não foi possível salvar a equipe do clube",
+  "ru": "Не удалось сохранить сотрудника клуба",
+  "zh": "无法保存俱乐部员工"
+ },
+ "sport_failed_to_save_password": {
+  "de": "Passwort konnte nicht gespeichert werden",
+  "en": "Failed to save password",
+  "es": "No se pudo guardar la contraseña",
+  "fr": "Impossible d'enregistrer le mot de passe",
+  "hi": "पासवर्ड सहेजा नहीं जा सका",
+  "it": "Impossibile salvare la password",
+  "pt": "Não foi possível salvar a senha",
+  "ru": "Не удалось сохранить пароль",
+  "zh": "无法保存密码"
+ },
+ "sport_failed_to_update_club_staff": {
+  "de": "Vereinsmitarbeiter konnte nicht aktualisiert werden",
+  "en": "Failed to update club staff",
+  "es": "No se pudo actualizar el personal del club",
+  "fr": "Impossible de mettre à jour le personnel du club",
+  "hi": "क्लब स्टाफ अपडेट नहीं हो सका",
+  "it": "Impossibile aggiornare lo staff della società",
+  "pt": "Não foi possível atualizar a equipe do clube",
+  "ru": "Не удалось обновить сотрудника клуба",
+  "zh": "无法更新俱乐部员工"
+ },
+ "sport_failed_to_update_password": {
+  "de": "Passwort konnte nicht aktualisiert werden",
+  "en": "Failed to update password",
+  "es": "No se pudo actualizar la contraseña",
+  "fr": "Impossible de mettre à jour le mot de passe",
+  "hi": "पासवर्ड अपडेट नहीं हो सका",
+  "it": "Impossibile aggiornare la password",
+  "pt": "Não foi possível atualizar a senha",
+  "ru": "Не удалось обновить пароль",
+  "zh": "无法更新密码"
+ },
+ "sport_failed_to_upload_photo": {
+  "de": "Foto konnte nicht hochgeladen werden",
+  "en": "Failed to upload photo",
+  "es": "No se pudo subir la foto",
+  "fr": "Impossible de téléverser la photo",
+  "hi": "फ़ोटो अपलोड नहीं हो सकी",
+  "it": "Impossibile caricare la foto",
+  "pt": "Não foi possível enviar a foto",
+  "ru": "Не удалось загрузить фото",
+  "zh": "照片上传失败"
+ },
+ "sport_file_size_exceeds_5mb_limit": {
+  "de": "Die Datei überschreitet das Limit von 5 MB",
+  "en": "File size exceeds 5MB limit",
+  "es": "El archivo supera el límite de 5MB",
+  "fr": "Le fichier dépasse la limite de 5 Mo",
+  "hi": "फ़ाइल का आकार 5MB सीमा से अधिक है",
+  "it": "Il file supera il limite di 5MB",
+  "pt": "O arquivo excede o limite de 5MB",
+  "ru": "Размер файла превышает 5 МБ",
+  "zh": "文件大小超过 5MB 限制"
+ },
+ "sport_fill_the_staff_details_below_then_click_save_profile_to_add_this_account": {
+  "de": "Füllen Sie die Mitarbeiterdaten unten aus und klicken Sie dann auf Profil speichern, um dieses Konto hinzuzufügen.",
+  "en": "Fill the staff details below, then click Save profile to add this account.",
+  "es": "Rellena los datos del personal a continuación y haz clic en Guardar perfil para añadir esta cuenta.",
+  "fr": "Remplissez les informations du personnel ci-dessous, puis cliquez sur Enregistrer le profil pour ajouter ce compte.",
+  "hi": "नीचे स्टाफ का विवरण भरें, फिर यह खाता जोड़ने के लिए प्रोफ़ाइल सहेजें पर क्लिक करें।",
+  "it": "Compila i dati dello staff qui sotto, poi clicca Salva profilo per aggiungere questo account.",
+  "pt": "Preencha os dados da equipe abaixo e clique em Salvar perfil para adicionar esta conta.",
+  "ru": "Заполните данные сотрудника ниже, затем нажмите «Сохранить профиль», чтобы добавить эту учётную запись.",
+  "zh": "请填写以下员工信息，然后点击“保存资料”添加此账户。"
+ },
+ "sport_forgot_your_password": {
+  "de": "Passwort vergessen?",
+  "en": "Forgot your password?",
+  "es": "¿Olvidaste tu contraseña?",
+  "fr": "Mot de passe oublié ?",
+  "hi": "पासवर्ड भूल गए?",
+  "it": "Hai dimenticato la password?",
+  "pt": "Esqueceu sua senha?",
+  "ru": "Забыли пароль?",
+  "zh": "忘记密码？"
+ },
+ "sport_invalid_file_type_only_images_are_allowed": {
+  "de": "Ungültiger Dateityp. Nur Bilder sind erlaubt",
+  "en": "Invalid file type. Only images are allowed",
+  "es": "Tipo de archivo no válido. Solo se permiten imágenes",
+  "fr": "Type de fichier non valide. Seules les images sont autorisées",
+  "hi": "अमान्य फ़ाइल प्रकार। केवल छवियों की अनुमति है",
+  "it": "Tipo di file non valido. Sono ammesse solo immagini",
+  "pt": "Tipo de arquivo inválido. Apenas imagens são permitidas",
+  "ru": "Недопустимый тип файла. Разрешены только изображения",
+  "zh": "文件类型无效，仅允许图片"
+ },
+ "sport_loading_staff_profile": {
+  "de": "Mitarbeiterprofil wird geladen…",
+  "en": "Loading staff profile…",
+  "es": "Cargando perfil del personal…",
+  "fr": "Chargement du profil du personnel…",
+  "hi": "स्टाफ प्रोफ़ाइल लोड हो रही है…",
+  "it": "Caricamento profilo staff…",
+  "pt": "Carregando perfil da equipe…",
+  "ru": "Загрузка профиля сотрудника…",
+  "zh": "正在加载员工资料…"
+ },
+ "sport_main_sports": {
+  "de": "Hauptsportarten",
+  "en": "Main sports",
+  "es": "Deportes principales",
+  "fr": "Sports principaux",
+  "hi": "मुख्य खेल",
+  "it": "Sport principali",
+  "pt": "Esportes principais",
+  "ru": "Основные виды спорта",
+  "zh": "主要运动项目"
+ },
+ "sport_management_functions": {
+  "de": "Verwaltungsfunktionen",
+  "en": "Management Functions",
+  "es": "Funciones de gestión",
+  "fr": "Fonctions de gestion",
+  "hi": "प्रबंधन कार्य",
+  "it": "Funzioni di gestione",
+  "pt": "Funções de gestão",
+  "ru": "Функции управления",
+  "zh": "管理功能"
+ },
+ "sport_member_since": {
+  "de": "Mitglied seit",
+  "en": "Member Since",
+  "es": "Miembro desde",
+  "fr": "Membre depuis",
+  "hi": "सदस्य कब से",
+  "it": "Membro dal",
+  "pt": "Membro desde",
+  "ru": "Участник с",
+  "zh": "注册时间"
+ },
+ "sport_new_club_staff": {
+  "de": "Neuer Vereinsmitarbeiter",
+  "en": "New club staff",
+  "es": "Nuevo miembro del personal",
+  "fr": "Nouveau membre du personnel",
+  "hi": "नया क्लब स्टाफ",
+  "it": "Nuovo membro dello staff",
+  "pt": "Novo membro da equipe",
+  "ru": "Новый сотрудник клуба",
+  "zh": "新俱乐部员工"
+ },
+ "sport_no_file_provided": {
+  "de": "Keine Datei angegeben",
+  "en": "No file provided",
+  "es": "No se proporcionó ningún archivo",
+  "fr": "Aucun fichier fourni",
+  "hi": "कोई फ़ाइल नहीं दी गई",
+  "it": "Nessun file fornito",
+  "pt": "Nenhum arquivo enviado",
+  "ru": "Файл не передан",
+  "zh": "未提供文件"
+ },
+ "sport_old_password": {
+  "de": "Altes Passwort",
+  "en": "Old Password",
+  "es": "Contraseña anterior",
+  "fr": "Ancien mot de passe",
+  "hi": "पुराना पासवर्ड",
+  "it": "Vecchia password",
+  "pt": "Senha antiga",
+  "ru": "Старый пароль",
+  "zh": "旧密码"
+ },
+ "sport_old_password_and_new_password_are_required": {
+  "de": "Altes und neues Passwort sind erforderlich.",
+  "en": "Old password and new password are required.",
+  "es": "Se requieren la contraseña anterior y la nueva.",
+  "fr": "L'ancien et le nouveau mot de passe sont obligatoires.",
+  "hi": "पुराना और नया पासवर्ड दोनों आवश्यक हैं।",
+  "it": "Sono obbligatorie la vecchia e la nuova password.",
+  "pt": "A senha antiga e a nova são obrigatórias.",
+  "ru": "Требуются старый и новый пароли.",
+  "zh": "必须填写旧密码和新密码。"
+ },
+ "sport_old_password_is_incorrect": {
+  "de": "Das alte Passwort ist falsch.",
+  "en": "Old password is incorrect.",
+  "es": "La contraseña anterior es incorrecta.",
+  "fr": "L'ancien mot de passe est incorrect.",
+  "hi": "पुराना पासवर्ड गलत है।",
+  "it": "La vecchia password non è corretta.",
+  "pt": "A senha antiga está incorreta.",
+  "ru": "Старый пароль неверен.",
+  "zh": "旧密码不正确。"
+ },
+ "sport_password_ready_to_save": {
+  "de": "Passwort bereit zum Speichern",
+  "en": "Password ready to save",
+  "es": "Contraseña lista para guardar",
+  "fr": "Mot de passe prêt à être enregistré",
+  "hi": "पासवर्ड सहेजने के लिए तैयार",
+  "it": "Password pronta per il salvataggio",
+  "pt": "Senha pronta para salvar",
+  "ru": "Пароль готов к сохранению",
+  "zh": "密码已就绪，可保存"
+ },
+ "sport_password_set_click_save_profile_to_create_this_staff_account": {
+  "de": "Passwort festgelegt. Klicken Sie auf Profil speichern, um dieses Mitarbeiterkonto zu erstellen.",
+  "en": "Password set. Click Save profile to create this staff account.",
+  "es": "Contraseña establecida. Haz clic en Guardar perfil para crear esta cuenta del personal.",
+  "fr": "Mot de passe défini. Cliquez sur Enregistrer le profil pour créer ce compte du personnel.",
+  "hi": "पासवर्ड सेट हो गया। यह स्टाफ खाता बनाने के लिए प्रोफ़ाइल सहेजें पर क्लिक करें।",
+  "it": "Password impostata. Clicca Salva profilo per creare questo account dello staff.",
+  "pt": "Senha definida. Clique em Salvar perfil para criar esta conta da equipe.",
+  "ru": "Пароль задан. Нажмите «Сохранить профиль», чтобы создать учётную запись сотрудника.",
+  "zh": "密码已设置。点击“保存资料”创建此员工账户。"
+ },
+ "sport_passwords_do_not_match": {
+  "de": "Die Passwörter stimmen nicht überein.",
+  "en": "Passwords do not match.",
+  "es": "Las contraseñas no coinciden.",
+  "fr": "Les mots de passe ne correspondent pas.",
+  "hi": "पासवर्ड मेल नहीं खाते।",
+  "it": "Le password non coincidono.",
+  "pt": "As senhas não coincidem.",
+  "ru": "Пароли не совпадают.",
+  "zh": "两次密码不一致。"
+ },
+ "sport_passwords_do_not_match_use_set_password_again": {
+  "de": "Die Passwörter stimmen nicht überein. Verwenden Sie erneut Passwort festlegen.",
+  "en": "Passwords do not match. Use Set Password again.",
+  "es": "Las contraseñas no coinciden. Usa de nuevo Establecer contraseña.",
+  "fr": "Les mots de passe ne correspondent pas. Utilisez à nouveau Définir le mot de passe.",
+  "hi": "पासवर्ड मेल नहीं खाते। फिर से पासवर्ड सेट करें का उपयोग करें।",
+  "it": "Le password non coincidono. Usa di nuovo Imposta password.",
+  "pt": "As senhas não coincidem. Use Definir senha novamente.",
+  "ru": "Пароли не совпадают. Снова нажмите «Задать пароль».",
+  "zh": "两次密码不一致，请重新“设置密码”。"
+ },
+ "sport_payment_functions": {
+  "de": "Zahlungsfunktionen",
+  "en": "Payment functions",
+  "es": "Funciones de pago",
+  "fr": "Fonctions de paiement",
+  "hi": "भुगतान कार्य",
+  "it": "Funzioni di pagamento",
+  "pt": "Funções de pagamento",
+  "ru": "Платёжные функции",
+  "zh": "付款功能"
+ },
+ "sport_please_enter_the_new_password": {
+  "de": "Bitte geben Sie das neue Passwort ein.",
+  "en": "Please enter the new password.",
+  "es": "Introduce la nueva contraseña.",
+  "fr": "Veuillez saisir le nouveau mot de passe.",
+  "hi": "कृपया नया पासवर्ड दर्ज करें।",
+  "it": "Inserisci la nuova password.",
+  "pt": "Digite a nova senha.",
+  "ru": "Введите новый пароль.",
+  "zh": "请输入新密码。"
+ },
+ "sport_please_enter_the_old_password": {
+  "de": "Bitte geben Sie das alte Passwort ein.",
+  "en": "Please enter the old password.",
+  "es": "Introduce la contraseña anterior.",
+  "fr": "Veuillez saisir l'ancien mot de passe.",
+  "hi": "कृपया पुराना पासवर्ड दर्ज करें।",
+  "it": "Inserisci la vecchia password.",
+  "pt": "Digite a senha antiga.",
+  "ru": "Введите старый пароль.",
+  "zh": "请输入旧密码。"
+ },
+ "sport_preferred_language": {
+  "de": "Bevorzugte Sprache",
+  "en": "Preferred language",
+  "es": "Idioma preferido",
+  "fr": "Langue préférée",
+  "hi": "पसंदीदा भाषा",
+  "it": "Lingua preferita",
+  "pt": "Idioma preferido",
+  "ru": "Предпочитаемый язык",
+  "zh": "首选语言"
+ },
+ "sport_qr_unavailable": {
+  "de": "QR nicht verfügbar",
+  "en": "QR unavailable",
+  "es": "QR no disponible",
+  "fr": "QR indisponible",
+  "hi": "QR उपलब्ध नहीं",
+  "it": "QR non disponibile",
+  "pt": "QR indisponível",
+  "ru": "QR недоступен",
+  "zh": "二维码不可用"
+ },
+ "sport_reading_payments_stats": {
+  "de": "Zahlungen & Statistiken lesen",
+  "en": "Reading payments & stats",
+  "es": "Lectura de pagos y estadísticas",
+  "fr": "Lecture des paiements et statistiques",
+  "hi": "भुगतान और आँकड़े देखना",
+  "it": "Lettura pagamenti e statistiche",
+  "pt": "Leitura de pagamentos e estatísticas",
+  "ru": "Просмотр платежей и статистики",
+  "zh": "查看付款和统计"
+ },
+ "sport_references_of_the_staff": {
+  "de": "Referenzen des Mitarbeiters",
+  "en": "References of the staff",
+  "es": "Referencias del personal",
+  "fr": "Références du personnel",
+  "hi": "स्टाफ के संदर्भ",
+  "it": "Referenze dello staff",
+  "pt": "Referências da equipe",
+  "ru": "Рекомендации сотрудника",
+  "zh": "员工推荐信息"
+ },
+ "sport_save_profile": {
+  "de": "Profil speichern",
+  "en": "Save profile",
+  "es": "Guardar perfil",
+  "fr": "Enregistrer le profil",
+  "hi": "प्रोफ़ाइल सहेजें",
+  "it": "Salva profilo",
+  "pt": "Salvar perfil",
+  "ru": "Сохранить профиль",
+  "zh": "保存资料"
+ },
+ "sport_select_a_type_of_staff": {
+  "de": "Wählen Sie einen Mitarbeitertyp aus.",
+  "en": "Select a type of staff.",
+  "es": "Selecciona un tipo de personal.",
+  "fr": "Sélectionnez un type de personnel.",
+  "hi": "स्टाफ का प्रकार चुनें।",
+  "it": "Seleziona un tipo di staff.",
+  "pt": "Selecione um tipo de equipe.",
+  "ru": "Выберите тип сотрудника.",
+  "zh": "请选择员工类型。"
+ },
+ "sport_set_a_password_with_set_password_at_least_6_characters": {
+  "de": "Legen Sie mit Passwort festlegen ein Passwort fest (mindestens 6 Zeichen).",
+  "en": "Set a password with Set Password (at least 6 characters).",
+  "es": "Establece una contraseña con Establecer contraseña (al menos 6 caracteres).",
+  "fr": "Définissez un mot de passe avec Définir le mot de passe (au moins 6 caractères).",
+  "hi": "पासवर्ड सेट करें बटन से पासवर्ड सेट करें (कम से कम 6 अक्षर)।",
+  "it": "Imposta una password con Imposta password (almeno 6 caratteri).",
+  "pt": "Defina uma senha com Definir senha (pelo menos 6 caracteres).",
+  "ru": "Задайте пароль кнопкой «Задать пароль» (не менее 6 символов).",
+  "zh": "请通过“设置密码”设置密码（至少 6 个字符）。"
+ },
+ "sport_set_password": {
+  "de": "Passwort festlegen",
+  "en": "Set Password",
+  "es": "Establecer contraseña",
+  "fr": "Définir le mot de passe",
+  "hi": "पासवर्ड सेट करें",
+  "it": "Imposta password",
+  "pt": "Definir senha",
+  "ru": "Задать пароль",
+  "zh": "设置密码"
+ },
+ "sport_set_staff_password": {
+  "de": "Mitarbeiterpasswort festlegen",
+  "en": "Set Staff Password",
+  "es": "Establecer contraseña del personal",
+  "fr": "Définir le mot de passe du personnel",
+  "hi": "स्टाफ पासवर्ड सेट करें",
+  "it": "Imposta password dello staff",
+  "pt": "Definir senha da equipe",
+  "ru": "Задать пароль сотрудника",
+  "zh": "设置员工密码"
+ },
+ "sport_settings_functions": {
+  "de": "Einstellungsfunktionen",
+  "en": "Settings Functions",
+  "es": "Funciones de configuración",
+  "fr": "Fonctions de paramétrage",
+  "hi": "सेटिंग कार्य",
+  "it": "Funzioni di impostazione",
+  "pt": "Funções de configuração",
+  "ru": "Функции настроек",
+  "zh": "设置功能"
+ },
+ "sport_social_functions": {
+  "de": "Soziale Funktionen",
+  "en": "Social Functions",
+  "es": "Funciones sociales",
+  "fr": "Fonctions sociales",
+  "hi": "सोशल कार्य",
+  "it": "Funzioni social",
+  "pt": "Funções sociais",
+  "ru": "Социальные функции",
+  "zh": "社交功能"
+ },
+ "sport_staff_login_password_updated": {
+  "de": "Anmeldepasswort des Mitarbeiters aktualisiert.",
+  "en": "Staff login password updated.",
+  "es": "Contraseña de acceso del personal actualizada.",
+  "fr": "Mot de passe de connexion du personnel mis à jour.",
+  "hi": "स्टाफ लॉगिन पासवर्ड अपडेट किया गया।",
+  "it": "Password di accesso dello staff aggiornata.",
+  "pt": "Senha de acesso da equipe atualizada.",
+  "ru": "Пароль для входа сотрудника обновлён.",
+  "zh": "员工登录密码已更新。"
+ },
+ "sport_telegram_account": {
+  "de": "Telegram-Konto",
+  "en": "Telegram account",
+  "es": "Cuenta de Telegram",
+  "fr": "Compte Telegram",
+  "hi": "Telegram खाता",
+  "it": "Account Telegram",
+  "pt": "Conta do Telegram",
+  "ru": "Аккаунт Telegram",
+  "zh": "Telegram 账号"
+ },
+ "sport_this_password_is_used_to_log_in_to_the_club_account_as_staff": {
+  "de": "Mit diesem Passwort meldet sich der Mitarbeiter beim Vereinskonto an.",
+  "en": "This password is used to log in to the club account as staff.",
+  "es": "Esta contraseña se usa para acceder a la cuenta del club como personal.",
+  "fr": "Ce mot de passe sert à se connecter au compte du club en tant que personnel.",
+  "hi": "इस पासवर्ड से स्टाफ के रूप में क्लब खाते में लॉगिन किया जाता है।",
+  "it": "Questa password serve per accedere all'account della società come staff.",
+  "pt": "Esta senha é usada para entrar na conta do clube como equipe.",
+  "ru": "Этот пароль используется для входа в аккаунт клуба в качестве сотрудника.",
+  "zh": "此密码用于以员工身份登录俱乐部账户。"
+ },
+ "sport_training_functions": {
+  "de": "Trainingsfunktionen",
+  "en": "Training Functions",
+  "es": "Funciones de entrenamiento",
+  "fr": "Fonctions d'entraînement",
+  "hi": "प्रशिक्षण कार्य",
+  "it": "Funzioni di allenamento",
+  "pt": "Funções de treino",
+  "ru": "Тренировочные функции",
+  "zh": "训练功能"
+ },
+ "sport_type_of_staff": {
+  "de": "Mitarbeitertyp",
+  "en": "Type of staff",
+  "es": "Tipo de personal",
+  "fr": "Type de personnel",
+  "hi": "स्टाफ का प्रकार",
+  "it": "Tipo di staff",
+  "pt": "Tipo de equipe",
+  "ru": "Тип сотрудника",
+  "zh": "员工类型"
+ },
+ "sport_use_forgot_password_on_the_login_page_with_this_staff_username_or_email": {
+  "de": "Verwenden Sie auf der Anmeldeseite „Passwort vergessen“ mit dem Benutzernamen oder der E-Mail dieses Mitarbeiters.",
+  "en": "Use Forgot password on the login page with this staff username or email.",
+  "es": "Usa ¿Olvidaste tu contraseña? en la página de inicio de sesión con el nombre de usuario o el correo de este miembro del personal.",
+  "fr": "Utilisez Mot de passe oublié sur la page de connexion avec le nom d'utilisateur ou l'e-mail de ce membre du personnel.",
+  "hi": "लॉगिन पेज पर इस स्टाफ के यूज़रनेम या ईमेल के साथ पासवर्ड भूल गए का उपयोग करें।",
+  "it": "Usa Password dimenticata nella pagina di accesso con lo username o l'email di questo membro dello staff.",
+  "pt": "Use Esqueci a senha na página de login com o nome de usuário ou e-mail deste membro da equipe.",
+  "ru": "Воспользуйтесь «Забыли пароль» на странице входа, указав имя пользователя или e-mail этого сотрудника.",
+  "zh": "请在登录页面使用“忘记密码”，并输入该员工的用户名或邮箱。"
+ },
+ "sport_user_level": {
+  "de": "Benutzerebene",
+  "en": "User level",
+  "es": "Nivel de usuario",
+  "fr": "Niveau d'utilisateur",
+  "hi": "उपयोगकर्ता स्तर",
+  "it": "Livello utente",
+  "pt": "Nível de usuário",
+  "ru": "Уровень пользователя",
+  "zh": "用户级别"
+ },
+ "sport_username_already_exists": {
+  "de": "Der Benutzername existiert bereits",
+  "en": "Username already exists",
+  "es": "El nombre de usuario ya existe",
+  "fr": "Ce nom d'utilisateur existe déjà",
+  "hi": "यूज़रनेम पहले से मौजूद है",
+  "it": "Lo username esiste già",
+  "pt": "O nome de usuário já existe",
+  "ru": "Такое имя пользователя уже существует",
+  "zh": "用户名已存在"
+ },
+ "sport_youtube_channel": {
+  "de": "YouTube-Kanal",
+  "en": "YouTube channel",
+  "es": "Canal de YouTube",
+  "fr": "Chaîne YouTube",
+  "hi": "YouTube चैनल",
+  "it": "Canale YouTube",
+  "pt": "Canal do YouTube",
+  "ru": "Канал YouTube",
+  "zh": "YouTube 频道"
+ },
+ "sport_groups_of_work": {
+  "en": "Groups of work",
+  "it": "Gruppi",
+  "es": "Grupos",
+  "fr": "Groupes",
+  "de": "Gruppen",
+  "pt": "Grupos",
+  "ru": "Группы",
+  "zh": "小组",
+  "hi": "समूह"
+ },
+ "sport_list_of_groups": {
+  "en": "List of groups",
+  "it": "Lista gruppi",
+  "es": "Lista de grupos",
+  "fr": "Liste des groupes",
+  "de": "Gruppenliste",
+  "pt": "Lista de grupos",
+  "ru": "Список групп",
+  "zh": "小组列表",
+  "hi": "समूहों की सूची"
+ },
+ "sport_all_the_sport_seasons": {
+  "en": "All the sport seasons",
+  "it": "Tutti gli anni sportivi",
+  "es": "Todas las temporadas",
+  "fr": "Toutes les saisons sportives",
+  "de": "Alle Saisons",
+  "pt": "Todas as temporadas",
+  "ru": "Все спортивные сезоны",
+  "zh": "所有赛季",
+  "hi": "सभी खेल सीज़न"
+ },
+ "sport_search_by_name": {
+  "en": "Search by name",
+  "it": "Ricerca per nome",
+  "es": "Buscar por nombre",
+  "fr": "Rechercher par nom",
+  "de": "Nach Name suchen",
+  "pt": "Pesquisar por nome",
+  "ru": "Поиск по имени",
+  "zh": "按名称搜索",
+  "hi": "नाम से खोजें"
+ },
+ "sport_filter_by_sport": {
+  "en": "Filter by sport",
+  "it": "Filtra per sport",
+  "es": "Filtrar por deporte",
+  "fr": "Filtrer par sport",
+  "de": "Nach Sportart filtern",
+  "pt": "Filtrar por desporto",
+  "ru": "Фильтр по виду спорта",
+  "zh": "按运动筛选",
+  "hi": "खेल के अनुसार फ़िल्टर करें"
+ },
+ "sport_filter_by_category": {
+  "en": "Filter by category",
+  "it": "Filtra per categoria",
+  "es": "Filtrar por categoría",
+  "fr": "Filtrer par catégorie",
+  "de": "Nach Kategorie filtern",
+  "pt": "Filtrar por categoria",
+  "ru": "Фильтр по категории",
+  "zh": "按类别筛选",
+  "hi": "श्रेणी के अनुसार फ़िल्टर करें"
+ },
+ "sport_n_members": {
+  "en": "N° members",
+  "it": "N# Componenti",
+  "es": "N.º miembros",
+  "fr": "Nb membres",
+  "de": "Anz. Mitglieder",
+  "pt": "N.º membros",
+  "ru": "Кол-во участников",
+  "zh": "成员数",
+  "hi": "सदस्य संख्या"
+ },
+ "sport_sport_season": {
+  "en": "Sport season",
+  "it": "Stagione sportiva",
+  "es": "Temporada deportiva",
+  "fr": "Saison sportive",
+  "de": "Saison",
+  "pt": "Temporada desportiva",
+  "ru": "Спортивный сезон",
+  "zh": "赛季",
+  "hi": "खेल सीज़न"
+ },
+ "sport_duration": {
+  "en": "Duration",
+  "it": "Durata",
+  "es": "Duración",
+  "fr": "Durée",
+  "de": "Dauer",
+  "pt": "Duração",
+  "ru": "Продолжительность",
+  "zh": "时长",
+  "hi": "अवधि"
+ },
+ "sport_details": {
+  "en": "Details",
+  "it": "Dettagli",
+  "es": "Detalles",
+  "fr": "Détails",
+  "de": "Details",
+  "pt": "Detalhes",
+  "ru": "Подробнее",
+  "zh": "详情",
+  "hi": "विवरण"
+ },
+ "sport_delete_the_group_0_its_announcements_history_will_be_removed_too_this_cannot_be_undone": {
+  "en": "Delete the group {0}? Its announcements history will be removed too. This cannot be undone.",
+  "it": "Eliminare il gruppo {0}? Verrà eliminato anche lo storico delle comunicazioni. L'operazione non può essere annullata.",
+  "es": "¿Eliminar el grupo {0}? También se eliminará el historial de comunicaciones. Esta acción no se puede deshacer.",
+  "fr": "Supprimer le groupe {0} ? L'historique des annonces sera également supprimé. Cette action est irréversible.",
+  "de": "Gruppe {0} löschen? Der Verlauf der Mitteilungen wird ebenfalls gelöscht. Dies kann nicht rückgängig gemacht werden.",
+  "pt": "Eliminar o grupo {0}? O histórico de comunicações também será eliminado. Esta ação não pode ser anulada.",
+  "ru": "Удалить группу {0}? История объявлений также будет удалена. Это действие нельзя отменить.",
+  "zh": "删除小组 {0}？其公告记录也将被删除。此操作无法撤销。",
+  "hi": "समूह {0} हटाएँ? इसकी घोषणाओं का इतिहास भी हट जाएगा। इसे पूर्ववत नहीं किया जा सकता।"
+ },
+ "sport_no_groups_yet_create_the_first_one_with_plus_create_new": {
+  "en": "No groups yet. Create the first one with + Create new.",
+  "it": "Nessun gruppo. Crea il primo con + Crea nuovo.",
+  "es": "Aún no hay grupos. Crea el primero con + Crear nuevo.",
+  "fr": "Aucun groupe pour le moment. Créez le premier avec + Créer nouveau.",
+  "de": "Noch keine Gruppen. Erstellen Sie die erste mit + Neu erstellen.",
+  "pt": "Ainda não há grupos. Crie o primeiro com + Criar novo.",
+  "ru": "Групп пока нет. Создайте первую кнопкой + Создать.",
+  "zh": "暂无小组。点击 + 新建 创建第一个。",
+  "hi": "अभी कोई समूह नहीं है। + नया बनाएँ से पहला समूह बनाएँ।"
+ },
+ "sport_no_groups_match_the_filters": {
+  "en": "No groups match the filters.",
+  "it": "Nessun gruppo corrisponde ai filtri.",
+  "es": "Ningún grupo coincide con los filtros.",
+  "fr": "Aucun groupe ne correspond aux filtres.",
+  "de": "Keine Gruppe entspricht den Filtern.",
+  "pt": "Nenhum grupo corresponde aos filtros.",
+  "ru": "Нет групп, соответствующих фильтрам.",
+  "zh": "没有符合筛选条件的小组。",
+  "hi": "फ़िल्टर से कोई समूह मेल नहीं खाता।"
+ },
+ "sport_failed_to_load_the_groups": {
+  "en": "Failed to load the groups",
+  "it": "Impossibile caricare i gruppi",
+  "es": "No se pudieron cargar los grupos",
+  "fr": "Impossible de charger les groupes",
+  "de": "Gruppen konnten nicht geladen werden",
+  "pt": "Não foi possível carregar os grupos",
+  "ru": "Не удалось загрузить группы",
+  "zh": "无法加载小组",
+  "hi": "समूह लोड नहीं हो सके"
+ },
+ "sport_create_group": {
+  "en": "Create group",
+  "it": "Crea gruppo",
+  "es": "Crear grupo",
+  "fr": "Créer un groupe",
+  "de": "Gruppe erstellen",
+  "pt": "Criar grupo",
+  "ru": "Создать группу",
+  "zh": "创建小组",
+  "hi": "समूह बनाएँ"
+ },
+ "sport_groups_list": {
+  "en": "Groups list",
+  "it": "Lista gruppi",
+  "es": "Lista de grupos",
+  "fr": "Liste des groupes",
+  "de": "Gruppenliste",
+  "pt": "Lista de grupos",
+  "ru": "Список групп",
+  "zh": "小组列表",
+  "hi": "समूह सूची"
+ },
+ "sport_announcements": {
+  "en": "Announcements",
+  "it": "Comunicazioni",
+  "es": "Comunicaciones",
+  "fr": "Annonces",
+  "de": "Mitteilungen",
+  "pt": "Comunicações",
+  "ru": "Объявления",
+  "zh": "公告",
+  "hi": "घोषणाएँ"
+ },
+ "sport_manage_subscriptions": {
+  "en": "Manage subscriptions",
+  "it": "Gestione iscrizioni",
+  "es": "Gestión de inscripciones",
+  "fr": "Gestion des inscriptions",
+  "de": "Anmeldungen verwalten",
+  "pt": "Gestão de inscrições",
+  "ru": "Управление записями",
+  "zh": "报名管理",
+  "hi": "सदस्यता प्रबंधन"
+ },
+ "sport_save_the_group_first": {
+  "en": "Save the group first",
+  "it": "Salva prima il gruppo",
+  "es": "Guarda primero el grupo",
+  "fr": "Enregistrez d'abord le groupe",
+  "de": "Speichern Sie zuerst die Gruppe",
+  "pt": "Guarde primeiro o grupo",
+  "ru": "Сначала сохраните группу",
+  "zh": "请先保存小组",
+  "hi": "पहले समूह सहेजें"
+ },
+ "sport_group_saved": {
+  "en": "Group saved.",
+  "it": "Gruppo salvato.",
+  "es": "Grupo guardado.",
+  "fr": "Groupe enregistré.",
+  "de": "Gruppe gespeichert.",
+  "pt": "Grupo guardado.",
+  "ru": "Группа сохранена.",
+  "zh": "小组已保存。",
+  "hi": "समूह सहेजा गया।"
+ },
+ "sport_failed_to_load_the_group": {
+  "en": "Failed to load the group",
+  "it": "Impossibile caricare il gruppo",
+  "es": "No se pudo cargar el grupo",
+  "fr": "Impossible de charger le groupe",
+  "de": "Gruppe konnte nicht geladen werden",
+  "pt": "Não foi possível carregar o grupo",
+  "ru": "Не удалось загрузить группу",
+  "zh": "无法加载小组",
+  "hi": "समूह लोड नहीं हो सका"
+ },
+ "sport_group_data": {
+  "en": "Group data",
+  "it": "Dati gruppo",
+  "es": "Datos del grupo",
+  "fr": "Données du groupe",
+  "de": "Gruppendaten",
+  "pt": "Dados do grupo",
+  "ru": "Данные группы",
+  "zh": "小组信息",
+  "hi": "समूह विवरण"
+ },
+ "sport_duration_from": {
+  "en": "Duration from",
+  "it": "Durata dal",
+  "es": "Duración desde",
+  "fr": "Durée du",
+  "de": "Dauer vom",
+  "pt": "Duração de",
+  "ru": "Период с",
+  "zh": "开始日期",
+  "hi": "अवधि से"
+ },
+ "sport_duration_to": {
+  "en": "Duration to",
+  "it": "Durata al",
+  "es": "Duración hasta",
+  "fr": "Durée au",
+  "de": "Dauer bis",
+  "pt": "Duração até",
+  "ru": "Период по",
+  "zh": "结束日期",
+  "hi": "अवधि तक"
+ },
+ "sport_registration_form": {
+  "en": "Registration form",
+  "it": "Modulo iscrizione",
+  "es": "Formulario de inscripción",
+  "fr": "Formulaire d'inscription",
+  "de": "Anmeldeformular",
+  "pt": "Formulário de inscrição",
+  "ru": "Форма записи",
+  "zh": "报名表",
+  "hi": "पंजीकरण फ़ॉर्म"
+ },
+ "sport_decide_whether_to_show_the_group_and_the_note_in_the_registration_form": {
+  "en": "Decide whether to show the group and the note in the registration form.",
+  "it": "Decidi se mostrare il gruppo e la nota nel modulo d'iscrizione.",
+  "es": "Decide si mostrar el grupo y la nota en el formulario de inscripción.",
+  "fr": "Choisissez d'afficher ou non le groupe et la note dans le formulaire d'inscription.",
+  "de": "Legen Sie fest, ob die Gruppe und die Notiz im Anmeldeformular angezeigt werden.",
+  "pt": "Decida se pretende mostrar o grupo e a nota no formulário de inscrição.",
+  "ru": "Решите, показывать ли группу и примечание в форме записи.",
+  "zh": "选择是否在报名表中显示该小组及备注。",
+  "hi": "तय करें कि पंजीकरण फ़ॉर्म में समूह और नोट दिखाना है या नहीं।"
+ },
+ "sport_show_in_the_selection_of_the_groups": {
+  "en": "Show in the selection of the groups",
+  "it": "Mostra nella selezione dei gruppi",
+  "es": "Mostrar en la selección de grupos",
+  "fr": "Afficher dans la sélection des groupes",
+  "de": "In der Gruppenauswahl anzeigen",
+  "pt": "Mostrar na seleção de grupos",
+  "ru": "Показывать в выборе групп",
+  "zh": "在小组选择中显示",
+  "hi": "समूहों के चयन में दिखाएँ"
+ },
+ "sport_note_to_show_after_the_selection": {
+  "en": "Note to show after the selection",
+  "it": "Note da mostrare dopo la selezione",
+  "es": "Nota a mostrar tras la selección",
+  "fr": "Note à afficher après la sélection",
+  "de": "Nach der Auswahl anzuzeigende Notiz",
+  "pt": "Nota a mostrar após a seleção",
+  "ru": "Примечание после выбора",
+  "zh": "选择后显示的备注",
+  "hi": "चयन के बाद दिखाने वाला नोट"
+ },
+ "sport_useful_to_show_fees_training_sessions_or_other_information_about_the_group_during_the_registration_of_the_members": {
+  "en": "Useful to show fees, training sessions or other information about the group during the registration of the members.",
+  "it": "Campo utile per mostrare eventuali quote iscrizione, allenamenti o altre informazioni relative al gruppo durante l'iscrizione dei tesserati.",
+  "es": "Útil para mostrar cuotas, entrenamientos u otra información del grupo durante la inscripción de los miembros.",
+  "fr": "Utile pour afficher les frais, les entraînements ou d'autres informations sur le groupe lors de l'inscription des membres.",
+  "de": "Nützlich, um Gebühren, Trainingseinheiten oder andere Informationen zur Gruppe bei der Anmeldung der Mitglieder anzuzeigen.",
+  "pt": "Útil para mostrar quotas, treinos ou outras informações do grupo durante a inscrição dos membros.",
+  "ru": "Удобно для указания взносов, тренировок или другой информации о группе при записи участников.",
+  "zh": "用于在成员报名时显示费用、训练安排或该小组的其他信息。",
+  "hi": "सदस्यों के पंजीकरण के दौरान शुल्क, प्रशिक्षण सत्र या समूह की अन्य जानकारी दिखाने के लिए उपयोगी।"
+ },
+ "sport_periodic_training_sessions": {
+  "en": "Periodic training sessions",
+  "it": "Allenamenti periodici",
+  "es": "Entrenamientos periódicos",
+  "fr": "Entraînements périodiques",
+  "de": "Regelmäßige Trainingseinheiten",
+  "pt": "Treinos periódicos",
+  "ru": "Регулярные тренировки",
+  "zh": "定期训练",
+  "hi": "नियमित प्रशिक्षण सत्र"
+ },
+ "sport_select_a_coach": {
+  "en": "Select a coach…",
+  "it": "Cerca allenatore…",
+  "es": "Selecciona un entrenador…",
+  "fr": "Sélectionnez un entraîneur…",
+  "de": "Trainer auswählen…",
+  "pt": "Selecione um treinador…",
+  "ru": "Выберите тренера…",
+  "zh": "选择教练…",
+  "hi": "कोच चुनें…"
+ },
+ "sport_add_to_the_list": {
+  "en": "Add to the list",
+  "it": "Aggiungi alla lista",
+  "es": "Añadir a la lista",
+  "fr": "Ajouter à la liste",
+  "de": "Zur Liste hinzufügen",
+  "pt": "Adicionar à lista",
+  "ru": "Добавить в список",
+  "zh": "添加到列表",
+  "hi": "सूची में जोड़ें"
+ },
+ "sport_coach_not_in_the_list_click_here_to_create_it": {
+  "en": "Coach not in the list? Click here to create it",
+  "it": "Allenatore non esistente? Clicca qui per crearlo",
+  "es": "¿El entrenador no está en la lista? Haz clic aquí para crearlo",
+  "fr": "Entraîneur absent de la liste ? Cliquez ici pour le créer",
+  "de": "Trainer nicht in der Liste? Hier klicken, um ihn anzulegen",
+  "pt": "O treinador não está na lista? Clique aqui para o criar",
+  "ru": "Тренера нет в списке? Нажмите здесь, чтобы создать",
+  "zh": "列表中没有该教练？点击此处创建",
+  "hi": "कोच सूची में नहीं है? बनाने के लिए यहाँ क्लिक करें"
+ },
+ "sport_there_are_no_coaches_yet_create_them_in_coaches": {
+  "en": "There are no coaches yet. Create them in Coaches.",
+  "it": "Non ci sono ancora allenatori. Creali in Allenatori.",
+  "es": "Aún no hay entrenadores. Créalos en Entrenadores.",
+  "fr": "Aucun entraîneur pour le moment. Créez-les dans Entraîneurs.",
+  "de": "Noch keine Trainer. Legen Sie sie unter Trainer an.",
+  "pt": "Ainda não há treinadores. Crie-os em Treinadores.",
+  "ru": "Тренеров пока нет. Создайте их в разделе «Тренеры».",
+  "zh": "暂无教练。请在“教练”中创建。",
+  "hi": "अभी कोई कोच नहीं है। उन्हें कोच अनुभाग में बनाएँ।"
+ },
+ "sport_no_coaches_selected": {
+  "en": "No coaches selected.",
+  "it": "Nessun allenatore selezionato.",
+  "es": "Ningún entrenador seleccionado.",
+  "fr": "Aucun entraîneur sélectionné.",
+  "de": "Kein Trainer ausgewählt.",
+  "pt": "Nenhum treinador selecionado.",
+  "ru": "Тренеры не выбраны.",
+  "zh": "未选择教练。",
+  "hi": "कोई कोच चयनित नहीं।"
+ },
+ "sport_athletes": {
+  "en": "Athletes",
+  "it": "Atleti",
+  "es": "Atletas",
+  "fr": "Athlètes",
+  "de": "Athleten",
+  "pt": "Atletas",
+  "ru": "Спортсмены",
+  "zh": "运动员",
+  "hi": "एथलीट"
+ },
+ "sport_search_athlete": {
+  "en": "Search athlete…",
+  "it": "Cerca atleta…",
+  "es": "Buscar atleta…",
+  "fr": "Rechercher un athlète…",
+  "de": "Athlet suchen…",
+  "pt": "Pesquisar atleta…",
+  "ru": "Найти спортсмена…",
+  "zh": "搜索运动员…",
+  "hi": "एथलीट खोजें…"
+ },
+ "sport_no_members_of_this_club_match": {
+  "en": "No members of this club match.",
+  "it": "Nessun tesserato del club corrisponde.",
+  "es": "Ningún miembro de este club coincide.",
+  "fr": "Aucun membre de ce club ne correspond.",
+  "de": "Kein Mitglied dieses Clubs passt.",
+  "pt": "Nenhum membro deste clube corresponde.",
+  "ru": "Нет подходящих участников клуба.",
+  "zh": "没有匹配的俱乐部成员。",
+  "hi": "इस क्लब का कोई सदस्य मेल नहीं खाता।"
+ },
+ "sport_no_members_of_this_team_match": {
+  "en": "No members of this team match.",
+  "it": "Nessun tesserato della squadra corrisponde.",
+  "es": "Ningún miembro de este equipo coincide.",
+  "fr": "Aucun membre de cette équipe ne correspond.",
+  "de": "Kein Mitglied dieses Teams passt.",
+  "pt": "Nenhum membro desta equipa corresponde.",
+  "ru": "Нет подходящих участников команды.",
+  "zh": "没有匹配的球队成员。",
+  "hi": "इस टीम का कोई सदस्य मेल नहीं खाता।"
+ },
+ "sport_athlete_not_yet_a_member_click_here_to_create_it": {
+  "en": "Athlete not yet a member? Click here to create it",
+  "it": "Atleta non ancora esistente? Clicca qui per crearlo",
+  "es": "¿El atleta aún no es miembro? Haz clic aquí para crearlo",
+  "fr": "Athlète pas encore membre ? Cliquez ici pour le créer",
+  "de": "Athlet noch kein Mitglied? Hier klicken, um ihn anzulegen",
+  "pt": "O atleta ainda não é membro? Clique aqui para o criar",
+  "ru": "Спортсмен ещё не участник? Нажмите здесь, чтобы создать",
+  "zh": "运动员还不是成员？点击此处创建",
+  "hi": "एथलीट अभी सदस्य नहीं है? बनाने के लिए यहाँ क्लिक करें"
+ },
+ "sport_only_members_of_the_club_can_be_added": {
+  "en": "Only members of the club can be added.",
+  "it": "Si possono aggiungere solo i tesserati del club.",
+  "es": "Solo se pueden añadir miembros del club.",
+  "fr": "Seuls les membres du club peuvent être ajoutés.",
+  "de": "Nur Mitglieder des Clubs können hinzugefügt werden.",
+  "pt": "Só é possível adicionar membros do clube.",
+  "ru": "Можно добавлять только участников клуба.",
+  "zh": "只能添加俱乐部成员。",
+  "hi": "केवल क्लब के सदस्य जोड़े जा सकते हैं।"
+ },
+ "sport_only_members_of_the_team_can_be_added": {
+  "en": "Only members of the team can be added.",
+  "it": "Si possono aggiungere solo i tesserati della squadra.",
+  "es": "Solo se pueden añadir miembros del equipo.",
+  "fr": "Seuls les membres de l'équipe peuvent être ajoutés.",
+  "de": "Nur Mitglieder des Teams können hinzugefügt werden.",
+  "pt": "Só é possível adicionar membros da equipa.",
+  "ru": "Можно добавлять только участников команды.",
+  "zh": "只能添加球队成员。",
+  "hi": "केवल टीम के सदस्य जोड़े जा सकते हैं।"
+ },
+ "sport_no_athletes_in_the_group": {
+  "en": "No athletes in the group.",
+  "it": "Nessun atleta nel gruppo.",
+  "es": "No hay atletas en el grupo.",
+  "fr": "Aucun athlète dans le groupe.",
+  "de": "Keine Athleten in der Gruppe.",
+  "pt": "Não há atletas no grupo.",
+  "ru": "В группе нет спортсменов.",
+  "zh": "小组中没有运动员。",
+  "hi": "समूह में कोई एथलीट नहीं।"
+ },
+ "sport_price_and_deadlines": {
+  "en": "Price and deadlines",
+  "it": "Prezzo e scadenze",
+  "es": "Precio y vencimientos",
+  "fr": "Prix et échéances",
+  "de": "Preis und Fälligkeiten",
+  "pt": "Preço e prazos",
+  "ru": "Цена и сроки оплаты",
+  "zh": "价格与缴费期限",
+  "hi": "मूल्य और भुगतान तिथियाँ"
+ },
+ "sport_rooms": {
+  "en": "Rooms",
+  "it": "Sale",
+  "es": "Salas",
+  "fr": "Salles",
+  "de": "Räume",
+  "pt": "Salas",
+  "ru": "Залы",
+  "zh": "场地",
+  "hi": "कक्ष"
+ },
+ "sport_no_rooms_yet": {
+  "en": "No rooms yet.",
+  "it": "Nessuna sala.",
+  "es": "Aún no hay salas.",
+  "fr": "Aucune salle pour le moment.",
+  "de": "Noch keine Räume.",
+  "pt": "Ainda não há salas.",
+  "ru": "Залов пока нет.",
+  "zh": "暂无场地。",
+  "hi": "अभी कोई कक्ष नहीं।"
+ },
+ "sport_room_name": {
+  "en": "Room name",
+  "it": "Nome sala",
+  "es": "Nombre de la sala",
+  "fr": "Nom de la salle",
+  "de": "Raumname",
+  "pt": "Nome da sala",
+  "ru": "Название зала",
+  "zh": "场地名称",
+  "hi": "कक्ष का नाम"
+ },
+ "sport_add_room": {
+  "en": "Add room",
+  "it": "Aggiungi sala",
+  "es": "Añadir sala",
+  "fr": "Ajouter une salle",
+  "de": "Raum hinzufügen",
+  "pt": "Adicionar sala",
+  "ru": "Добавить зал",
+  "zh": "添加场地",
+  "hi": "कक्ष जोड़ें"
+ },
+ "sport_room": {
+  "en": "Room",
+  "it": "Sala",
+  "es": "Sala",
+  "fr": "Salle",
+  "de": "Raum",
+  "pt": "Sala",
+  "ru": "Зал",
+  "zh": "场地",
+  "hi": "कक्ष"
+ },
+ "sport_tick_a_day_select_it_with_the_round_button_on_the_right_then_drag_the_sliders_to_set_start_and_end_use_plus_for_mo": {
+  "en": "Tick a day, select it with the round button on the right, then drag the sliders to set start and end. Use + for more sessions on the same day.",
+  "it": "Spunta un giorno, selezionalo con il pulsante tondo a destra, poi trascina i cursori per impostare inizio e fine. Usa + per più allenamenti nello stesso giorno.",
+  "es": "Marca un día, selecciónalo con el botón redondo de la derecha y arrastra los controles para fijar inicio y fin. Usa + para más sesiones el mismo día.",
+  "fr": "Cochez un jour, sélectionnez-le avec le bouton rond à droite, puis faites glisser les curseurs pour définir le début et la fin. Utilisez + pour plusieurs séances le même jour.",
+  "de": "Haken Sie einen Tag an, wählen Sie ihn mit dem runden Knopf rechts und ziehen Sie die Regler für Beginn und Ende. Mit + fügen Sie weitere Einheiten am selben Tag hinzu.",
+  "pt": "Marque um dia, selecione-o com o botão redondo à direita e arraste os cursores para definir início e fim. Use + para mais sessões no mesmo dia.",
+  "ru": "Отметьте день, выберите его круглой кнопкой справа и передвиньте ползунки, чтобы задать начало и конец. Кнопка + добавляет занятия в тот же день.",
+  "zh": "勾选某一天，用右侧的圆形按钮选中它，然后拖动滑块设置开始和结束时间。同一天有多次训练请点击 +。",
+  "hi": "एक दिन चुनें, दाईं ओर के गोल बटन से उसे चुनें, फिर शुरुआत और अंत तय करने के लिए स्लाइडर खिसकाएँ। उसी दिन और सत्रों के लिए + का उपयोग करें।"
+ },
+ "sport_summary": {
+  "en": "Summary",
+  "it": "Riepilogo",
+  "es": "Resumen",
+  "fr": "Récapitulatif",
+  "de": "Übersicht",
+  "pt": "Resumo",
+  "ru": "Сводка",
+  "zh": "汇总",
+  "hi": "सारांश"
+ },
+ "sport_no_training_sessions_yet": {
+  "en": "No training sessions yet.",
+  "it": "Nessun allenamento inserito.",
+  "es": "Aún no hay entrenamientos.",
+  "fr": "Aucun entraînement pour le moment.",
+  "de": "Noch keine Trainingseinheiten.",
+  "pt": "Ainda não há treinos.",
+  "ru": "Тренировок пока нет.",
+  "zh": "暂无训练。",
+  "hi": "अभी कोई प्रशिक्षण सत्र नहीं।"
+ },
+ "sport_course": {
+  "en": "Course",
+  "it": "Corso",
+  "es": "Curso",
+  "fr": "Cours",
+  "de": "Kurs",
+  "pt": "Curso",
+  "ru": "Курс",
+  "zh": "课程",
+  "hi": "कोर्स"
+ },
+ "sport_disabled": {
+  "en": "Disabled",
+  "it": "Disattivato",
+  "es": "Desactivado",
+  "fr": "Désactivé",
+  "de": "Deaktiviert",
+  "pt": "Desativado",
+  "ru": "Отключено",
+  "zh": "已停用",
+  "hi": "निष्क्रिय"
+ },
+ "sport_add_time_slot": {
+  "en": "Add time slot",
+  "it": "Aggiungi fascia oraria",
+  "es": "Añadir franja horaria",
+  "fr": "Ajouter un créneau",
+  "de": "Zeitfenster hinzufügen",
+  "pt": "Adicionar horário",
+  "ru": "Добавить интервал",
+  "zh": "添加时段",
+  "hi": "समय स्लॉट जोड़ें"
+ },
+ "sport_remove_this_slot": {
+  "en": "Remove this slot",
+  "it": "Rimuovi questa fascia",
+  "es": "Quitar esta franja",
+  "fr": "Retirer ce créneau",
+  "de": "Dieses Zeitfenster entfernen",
+  "pt": "Remover este horário",
+  "ru": "Удалить этот интервал",
+  "zh": "移除此时段",
+  "hi": "यह स्लॉट हटाएँ"
+ },
+ "sport_maximum_6_slots_per_day": {
+  "en": "Maximum 6 slots per day",
+  "it": "Massimo 6 fasce al giorno",
+  "es": "Máximo 6 franjas por día",
+  "fr": "6 créneaux maximum par jour",
+  "de": "Maximal 6 Zeitfenster pro Tag",
+  "pt": "Máximo de 6 horários por dia",
+  "ru": "Не более 6 интервалов в день",
+  "zh": "每天最多 6 个时段",
+  "hi": "प्रति दिन अधिकतम 6 स्लॉट"
+ },
+ "sport_unable_to_add_slot": {
+  "en": "Unable to add slot.",
+  "it": "Impossibile aggiungere la fascia.",
+  "es": "No se puede añadir la franja.",
+  "fr": "Impossible d'ajouter le créneau.",
+  "de": "Zeitfenster kann nicht hinzugefügt werden.",
+  "pt": "Não é possível adicionar o horário.",
+  "ru": "Не удалось добавить интервал.",
+  "zh": "无法添加时段。",
+  "hi": "स्लॉट नहीं जोड़ा जा सका।"
+ },
+ "sport_no_room_for_another_slot_shorten_or_remove_the_last_slot_first": {
+  "en": "No room for another slot — shorten or remove the last slot first",
+  "it": "Non c'è spazio per un'altra fascia: accorcia o rimuovi prima l'ultima",
+  "es": "No hay espacio para otra franja: acorta o quita antes la última",
+  "fr": "Pas de place pour un autre créneau : raccourcissez ou retirez d'abord le dernier",
+  "de": "Kein Platz für ein weiteres Zeitfenster – kürzen oder entfernen Sie zuerst das letzte",
+  "pt": "Não há espaço para outro horário: encurte ou remova primeiro o último",
+  "ru": "Нет места для ещё одного интервала — сначала сократите или удалите последний",
+  "zh": "没有空间再添加时段——请先缩短或移除最后一个时段",
+  "hi": "एक और स्लॉट के लिए जगह नहीं है — पहले अंतिम स्लॉट छोटा करें या हटाएँ"
+ },
+ "sport_price_single_payment": {
+  "en": "Price (single payment)",
+  "it": "Prezzo (pagamento unico)",
+  "es": "Precio (pago único)",
+  "fr": "Prix (paiement unique)",
+  "de": "Preis (Einmalzahlung)",
+  "pt": "Preço (pagamento único)",
+  "ru": "Цена (единовременно)",
+  "zh": "价格（一次性付款）",
+  "hi": "मूल्य (एकमुश्त भुगतान)"
+ },
+ "sport_deadlines_of_payment": {
+  "en": "Deadlines of payment",
+  "it": "Scadenze di pagamento",
+  "es": "Vencimientos de pago",
+  "fr": "Échéances de paiement",
+  "de": "Zahlungsfälligkeiten",
+  "pt": "Prazos de pagamento",
+  "ru": "Сроки оплаты",
+  "zh": "缴费期限",
+  "hi": "भुगतान की नियत तिथियाँ"
+ },
+ "sport_add_deadlines_of_payment": {
+  "en": "Add deadlines of payment",
+  "it": "Aggiungi scadenze di pagamento",
+  "es": "Añadir vencimientos de pago",
+  "fr": "Ajouter des échéances de paiement",
+  "de": "Zahlungsfälligkeiten hinzufügen",
+  "pt": "Adicionar prazos de pagamento",
+  "ru": "Добавить сроки оплаты",
+  "zh": "添加缴费期限",
+  "hi": "भुगतान तिथियाँ जोड़ें"
+ },
+ "sport_no_deadlines_of_payment_yet": {
+  "en": "No deadlines of payment yet.",
+  "it": "Nessuna scadenza di pagamento.",
+  "es": "Aún no hay vencimientos de pago.",
+  "fr": "Aucune échéance de paiement pour le moment.",
+  "de": "Noch keine Zahlungsfälligkeiten.",
+  "pt": "Ainda não há prazos de pagamento.",
+  "ru": "Сроков оплаты пока нет.",
+  "zh": "暂无缴费期限。",
+  "hi": "अभी कोई भुगतान तिथि नहीं।"
+ },
+ "sport_recurrence": {
+  "en": "Recurrence",
+  "it": "Ricorrenza",
+  "es": "Periodicidad",
+  "fr": "Récurrence",
+  "de": "Wiederholung",
+  "pt": "Periodicidade",
+  "ru": "Периодичность",
+  "zh": "周期",
+  "hi": "आवृत्ति"
+ },
+ "sport_deadlines": {
+  "en": "Deadlines",
+  "it": "Scadenze",
+  "es": "Vencimientos",
+  "fr": "Échéances",
+  "de": "Fälligkeiten",
+  "pt": "Prazos",
+  "ru": "Сроки",
+  "zh": "期限",
+  "hi": "नियत तिथियाँ"
+ },
+ "sport_cost_of_each_deadline": {
+  "en": "Cost of each deadline",
+  "it": "Costo di ogni scadenza",
+  "es": "Importe de cada vencimiento",
+  "fr": "Montant de chaque échéance",
+  "de": "Betrag je Fälligkeit",
+  "pt": "Valor de cada prazo",
+  "ru": "Сумма каждого платежа",
+  "zh": "每期费用",
+  "hi": "प्रत्येक किस्त की राशि"
+ },
+ "sport_payment_status_at_the_call_for_athletes": {
+  "en": "Payment status at the Call for athletes",
+  "it": "Stato pagamento nella Convocazione atleti",
+  "es": "Estado del pago en la Convocatoria de atletas",
+  "fr": "Statut du paiement dans la Convocation des athlètes",
+  "de": "Zahlungsstatus bei der Athleteneinberufung",
+  "pt": "Estado do pagamento na Convocatória de atletas",
+  "ru": "Статус оплаты в вызове спортсменов",
+  "zh": "运动员召集中的缴费状态",
+  "hi": "एथलीट बुलावे में भुगतान स्थिति"
+ },
+ "sport_the_discount_compares_the_total_of_the_deadlines_with_the_single_payment_price_the_deadlines_will_be_used_for_the_": {
+  "en": "The discount compares the total of the deadlines with the single payment price. The deadlines will be used for the subscription of the athletes.",
+  "it": "Lo sconto confronta il totale delle scadenze con il prezzo del pagamento unico. Le scadenze verranno usate per l'iscrizione degli atleti.",
+  "es": "El descuento compara el total de los vencimientos con el precio del pago único. Los vencimientos se usarán para la inscripción de los atletas.",
+  "fr": "La remise compare le total des échéances au prix du paiement unique. Les échéances serviront à l'inscription des athlètes.",
+  "de": "Der Rabatt vergleicht die Summe der Fälligkeiten mit dem Preis der Einmalzahlung. Die Fälligkeiten werden für die Anmeldung der Athleten verwendet.",
+  "pt": "O desconto compara o total dos prazos com o preço do pagamento único. Os prazos serão usados para a inscrição dos atletas.",
+  "ru": "Скидка сравнивает сумму всех платежей с ценой единовременной оплаты. Сроки оплаты будут использоваться при записи спортсменов.",
+  "zh": "折扣是将各期总额与一次性付款价格进行比较。缴费期限将用于运动员报名。",
+  "hi": "छूट सभी किस्तों के कुल योग की तुलना एकमुश्त भुगतान मूल्य से करती है। ये तिथियाँ एथलीटों के पंजीकरण में उपयोग होंगी।"
+ },
+ "sport_recurrence_of_the_deadlines": {
+  "en": "Recurrence of the deadlines",
+  "it": "Ricorrenza delle scadenze",
+  "es": "Periodicidad de los vencimientos",
+  "fr": "Récurrence des échéances",
+  "de": "Wiederholung der Fälligkeiten",
+  "pt": "Periodicidade dos prazos",
+  "ru": "Периодичность платежей",
+  "zh": "期限周期",
+  "hi": "नियत तिथियों की आवृत्ति"
+ },
+ "sport_every_month": {
+  "en": "Every month",
+  "it": "Ogni mese",
+  "es": "Cada mes",
+  "fr": "Chaque mois",
+  "de": "Jeden Monat",
+  "pt": "Todos os meses",
+  "ru": "Каждый месяц",
+  "zh": "每月",
+  "hi": "हर महीने"
+ },
+ "sport_every_2_months": {
+  "en": "Every 2 months",
+  "it": "Ogni 2 mesi",
+  "es": "Cada 2 meses",
+  "fr": "Tous les 2 mois",
+  "de": "Alle 2 Monate",
+  "pt": "A cada 2 meses",
+  "ru": "Каждые 2 месяца",
+  "zh": "每 2 个月",
+  "hi": "हर 2 महीने"
+ },
+ "sport_every_3_months": {
+  "en": "Every 3 months",
+  "it": "Ogni 3 mesi",
+  "es": "Cada 3 meses",
+  "fr": "Tous les 3 mois",
+  "de": "Alle 3 Monate",
+  "pt": "A cada 3 meses",
+  "ru": "Каждые 3 месяца",
+  "zh": "每 3 个月",
+  "hi": "हर 3 महीने"
+ },
+ "sport_number_of_deadlines": {
+  "en": "Number of deadlines",
+  "it": "Numero di scadenze",
+  "es": "Número de vencimientos",
+  "fr": "Nombre d'échéances",
+  "de": "Anzahl der Fälligkeiten",
+  "pt": "Número de prazos",
+  "ru": "Количество платежей",
+  "zh": "期数",
+  "hi": "किस्तों की संख्या"
+ },
+ "sport_first_deadline": {
+  "en": "First deadline",
+  "it": "Prima scadenza",
+  "es": "Primer vencimiento",
+  "fr": "Première échéance",
+  "de": "Erste Fälligkeit",
+  "pt": "Primeiro prazo",
+  "ru": "Первый платёж",
+  "zh": "首期日期",
+  "hi": "पहली नियत तिथि"
+ },
+ "sport_display_the_payment_status_at_the_call_for_athletes": {
+  "en": "Display the payment status at the Call for athletes",
+  "it": "Mostra lo stato del pagamento nella Convocazione atleti",
+  "es": "Mostrar el estado del pago en la Convocatoria de atletas",
+  "fr": "Afficher le statut du paiement dans la Convocation des athlètes",
+  "de": "Zahlungsstatus bei der Athleteneinberufung anzeigen",
+  "pt": "Mostrar o estado do pagamento na Convocatória de atletas",
+  "ru": "Показывать статус оплаты в вызове спортсменов",
+  "zh": "在运动员召集中显示缴费状态",
+  "hi": "एथलीट बुलावे में भुगतान स्थिति दिखाएँ"
+ },
+ "sport_send_an_announcement_to_all_the_athletes_of_the_group_and_to_their_parents_by_mail_and_or_post_it_in_their_account": {
+  "en": "Send an announcement to all the athletes of the group and to their parents by mail, and/or post it in their account.",
+  "it": "Invia per mail una comunicazione a tutti gli atleti e ad eventuali genitori, e/o pubblicala nel loro account.",
+  "es": "Envía una comunicación por correo a todos los atletas del grupo y a sus padres, y/o publícala en su cuenta.",
+  "fr": "Envoyez une annonce par e-mail à tous les athlètes du groupe et à leurs parents, et/ou publiez-la dans leur compte.",
+  "de": "Senden Sie eine Mitteilung per E-Mail an alle Athleten der Gruppe und deren Eltern und/oder veröffentlichen Sie sie in deren Konto.",
+  "pt": "Envie uma comunicação por e-mail a todos os atletas do grupo e aos pais, e/ou publique-a na conta deles.",
+  "ru": "Отправьте объявление по почте всем спортсменам группы и их родителям и/или опубликуйте его в их аккаунте.",
+  "zh": "通过邮件向小组所有运动员及其家长发送公告，和/或将其发布到他们的账户中。",
+  "hi": "समूह के सभी एथलीटों और उनके माता-पिता को ईमेल से घोषणा भेजें, और/या उनके खाते में पोस्ट करें।"
+ },
+ "sport_announcement_title": {
+  "en": "Announcement title",
+  "it": "Titolo comunicazione",
+  "es": "Título de la comunicación",
+  "fr": "Titre de l'annonce",
+  "de": "Titel der Mitteilung",
+  "pt": "Título da comunicação",
+  "ru": "Заголовок объявления",
+  "zh": "公告标题",
+  "hi": "घोषणा का शीर्षक"
+ },
+ "sport_attachment_max_2mb": {
+  "en": "Attachment (max 2MB)",
+  "it": "Allegato eventuale (max 2MB)",
+  "es": "Adjunto (máx. 2 MB)",
+  "fr": "Pièce jointe (max 2 Mo)",
+  "de": "Anhang (max. 2 MB)",
+  "pt": "Anexo (máx. 2 MB)",
+  "ru": "Вложение (макс. 2 МБ)",
+  "zh": "附件（最大 2MB）",
+  "hi": "अनुलग्नक (अधिकतम 2MB)"
+ },
+ "sport_send_by_mail_athletes_and_parents": {
+  "en": "Send by mail (athletes and parents)",
+  "it": "Invia per mail (atleti e genitori)",
+  "es": "Enviar por correo (atletas y padres)",
+  "fr": "Envoyer par e-mail (athlètes et parents)",
+  "de": "Per E-Mail senden (Athleten und Eltern)",
+  "pt": "Enviar por e-mail (atletas e pais)",
+  "ru": "Отправить по почте (спортсменам и родителям)",
+  "zh": "通过邮件发送（运动员和家长）",
+  "hi": "ईमेल से भेजें (एथलीट और माता-पिता)"
+ },
+ "sport_post_in_the_member_account_alert_posted": {
+  "en": "Post in the member account (Alert posted)",
+  "it": "Pubblica nell'account del tesserato (Avviso pubblicato)",
+  "es": "Publicar en la cuenta del miembro (Alerta publicada)",
+  "fr": "Publier dans le compte du membre (Alerte publiée)",
+  "de": "Im Mitgliedskonto veröffentlichen (Warnung gepostet)",
+  "pt": "Publicar na conta do membro (Alerta publicado)",
+  "ru": "Опубликовать в аккаунте участника (Оповещение опубликовано)",
+  "zh": "发布到成员账户（已发布警报）",
+  "hi": "सदस्य के खाते में पोस्ट करें (अलर्ट पोस्ट किया गया)"
+ },
+ "sport_display_at_login": {
+  "en": "Display at login",
+  "it": "Mostra al login",
+  "es": "Mostrar al iniciar sesión",
+  "fr": "Afficher à la connexion",
+  "de": "Beim Login anzeigen",
+  "pt": "Mostrar no início de sessão",
+  "ru": "Показывать при входе",
+  "zh": "登录时显示",
+  "hi": "लॉगिन पर दिखाएँ"
+ },
+ "sport_display_from": {
+  "en": "Display from",
+  "it": "Mostra dal",
+  "es": "Mostrar desde",
+  "fr": "Afficher du",
+  "de": "Anzeigen ab",
+  "pt": "Mostrar de",
+  "ru": "Показывать с",
+  "zh": "显示开始日期",
+  "hi": "से दिखाएँ"
+ },
+ "sport_display_to": {
+  "en": "Display to",
+  "it": "Mostra fino al",
+  "es": "Mostrar hasta",
+  "fr": "Afficher jusqu'au",
+  "de": "Anzeigen bis",
+  "pt": "Mostrar até",
+  "ru": "Показывать по",
+  "zh": "显示结束日期",
+  "hi": "तक दिखाएँ"
+ },
+ "sport_send_the_announcement": {
+  "en": "Send the announcement",
+  "it": "Invia la comunicazione",
+  "es": "Enviar la comunicación",
+  "fr": "Envoyer l'annonce",
+  "de": "Mitteilung senden",
+  "pt": "Enviar a comunicação",
+  "ru": "Отправить объявление",
+  "zh": "发送公告",
+  "hi": "घोषणा भेजें"
+ },
+ "sport_announcements_sent": {
+  "en": "Announcements sent",
+  "it": "Comunicazioni inviate",
+  "es": "Comunicaciones enviadas",
+  "fr": "Annonces envoyées",
+  "de": "Gesendete Mitteilungen",
+  "pt": "Comunicações enviadas",
+  "ru": "Отправленные объявления",
+  "zh": "已发送的公告",
+  "hi": "भेजी गई घोषणाएँ"
+ },
+ "sport_no_announcements_sent_yet": {
+  "en": "No announcements sent yet.",
+  "it": "Nessuna comunicazione inviata.",
+  "es": "Aún no se ha enviado ninguna comunicación.",
+  "fr": "Aucune annonce envoyée pour le moment.",
+  "de": "Noch keine Mitteilungen gesendet.",
+  "pt": "Ainda não foi enviada nenhuma comunicação.",
+  "ru": "Объявления ещё не отправлялись.",
+  "zh": "尚未发送公告。",
+  "hi": "अभी कोई घोषणा नहीं भेजी गई।"
+ },
+ "sport_emails_sent_0": {
+  "en": "Emails sent: {0}",
+  "it": "Email inviate: {0}",
+  "es": "Correos enviados: {0}",
+  "fr": "E-mails envoyés : {0}",
+  "de": "Gesendete E-Mails: {0}",
+  "pt": "E-mails enviados: {0}",
+  "ru": "Отправлено писем: {0}",
+  "zh": "已发送邮件：{0}",
+  "hi": "भेजे गए ईमेल: {0}"
+ },
+ "sport_emails_not_delivered_0": {
+  "en": "Emails not delivered: {0}",
+  "it": "Email non consegnate: {0}",
+  "es": "Correos no entregados: {0}",
+  "fr": "E-mails non remis : {0}",
+  "de": "Nicht zugestellte E-Mails: {0}",
+  "pt": "E-mails não entregues: {0}",
+  "ru": "Не доставлено писем: {0}",
+  "zh": "未送达邮件：{0}",
+  "hi": "न पहुँचे ईमेल: {0}"
+ },
+ "sport_posted_in_0_member_accounts": {
+  "en": "Posted in {0} member accounts",
+  "it": "Pubblicata in {0} account di tesserati",
+  "es": "Publicada en {0} cuentas de miembros",
+  "fr": "Publiée dans {0} comptes de membres",
+  "de": "In {0} Mitgliedskonten veröffentlicht",
+  "pt": "Publicada em {0} contas de membros",
+  "ru": "Опубликовано в аккаунтах участников: {0}",
+  "zh": "已发布到 {0} 个成员账户",
+  "hi": "{0} सदस्य खातों में पोस्ट किया गया"
+ },
+ "sport_at_login_from_0_to_1": {
+  "en": "At login from {0} to {1}",
+  "it": "Al login dal {0} al {1}",
+  "es": "Al iniciar sesión del {0} al {1}",
+  "fr": "À la connexion du {0} au {1}",
+  "de": "Beim Login vom {0} bis {1}",
+  "pt": "No início de sessão de {0} a {1}",
+  "ru": "При входе с {0} по {1}",
+  "zh": "登录时显示：{0} 至 {1}",
+  "hi": "लॉगिन पर {0} से {1} तक"
+ },
+ "sport_enter_the_title_and_the_message": {
+  "en": "Enter the title and the message",
+  "it": "Inserisci il titolo e il messaggio",
+  "es": "Introduce el título y el mensaje",
+  "fr": "Saisissez le titre et le message",
+  "de": "Geben Sie Titel und Nachricht ein",
+  "pt": "Introduza o título e a mensagem",
+  "ru": "Введите заголовок и сообщение",
+  "zh": "请输入标题和消息",
+  "hi": "शीर्षक और संदेश दर्ज करें"
+ },
+ "sport_add_at_least_one_athlete_to_the_group_first": {
+  "en": "Add at least one athlete to the group first.",
+  "it": "Aggiungi prima almeno un atleta al gruppo.",
+  "es": "Añade primero al menos un atleta al grupo.",
+  "fr": "Ajoutez d'abord au moins un athlète au groupe.",
+  "de": "Fügen Sie zuerst mindestens einen Athleten zur Gruppe hinzu.",
+  "pt": "Adicione primeiro pelo menos um atleta ao grupo.",
+  "ru": "Сначала добавьте в группу хотя бы одного спортсмена.",
+  "zh": "请先向小组添加至少一名运动员。",
+  "hi": "पहले समूह में कम से कम एक एथलीट जोड़ें।"
+ },
+ "sport_failed_to_send": {
+  "en": "Failed to send",
+  "it": "Invio non riuscito",
+  "es": "No se pudo enviar",
+  "fr": "Échec de l'envoi",
+  "de": "Senden fehlgeschlagen",
+  "pt": "Falha no envio",
+  "ru": "Не удалось отправить",
+  "zh": "发送失败",
+  "hi": "भेजना विफल रहा"
+ },
+ "sport_filter_manage_subscriptions": {
+  "en": "Filter · Manage subscriptions",
+  "it": "Filtro · Gestione iscrizioni",
+  "es": "Filtro · Gestión de inscripciones",
+  "fr": "Filtre · Gestion des inscriptions",
+  "de": "Filter · Anmeldungen verwalten",
+  "pt": "Filtro · Gestão de inscrições",
+  "ru": "Фильтр · Управление записями",
+  "zh": "筛选 · 报名管理",
+  "hi": "फ़िल्टर · सदस्यता प्रबंधन"
+ },
+ "sport_name_subscription_notes": {
+  "en": "Name, subscription, notes...",
+  "it": "Nome, iscrizione, note...",
+  "es": "Nombre, inscripción, notas...",
+  "fr": "Nom, inscription, notes...",
+  "de": "Name, Anmeldung, Notizen...",
+  "pt": "Nome, inscrição, notas...",
+  "ru": "Имя, запись, заметки...",
+  "zh": "姓名、报名、备注...",
+  "hi": "नाम, सदस्यता, नोट्स..."
+ },
+ "sport_totals": {
+  "en": "Totals",
+  "it": "Totali",
+  "es": "Totales",
+  "fr": "Totaux",
+  "de": "Summen",
+  "pt": "Totais",
+  "ru": "Итоги",
+  "zh": "合计",
+  "hi": "कुल योग"
+ },
+ "sport_subscription": {
+  "en": "Subscription",
+  "it": "Iscrizione",
+  "es": "Inscripción",
+  "fr": "Inscription",
+  "de": "Anmeldung",
+  "pt": "Inscrição",
+  "ru": "Запись",
+  "zh": "报名",
+  "hi": "सदस्यता"
+ },
+ "sport_start": {
+  "en": "Start",
+  "it": "Inizio",
+  "es": "Inicio",
+  "fr": "Début",
+  "de": "Beginn",
+  "pt": "Início",
+  "ru": "Начало",
+  "zh": "开始",
+  "hi": "शुरुआत"
+ },
+ "sport_end": {
+  "en": "End",
+  "it": "Fine",
+  "es": "Fin",
+  "fr": "Fin",
+  "de": "Ende",
+  "pt": "Fim",
+  "ru": "Конец",
+  "zh": "结束",
+  "hi": "अंत"
+ },
+ "sport_amount": {
+  "en": "Amount",
+  "it": "Importo",
+  "es": "Importe",
+  "fr": "Montant",
+  "de": "Betrag",
+  "pt": "Valor",
+  "ru": "Сумма",
+  "zh": "金额",
+  "hi": "राशि"
+ },
+ "sport_installments": {
+  "en": "Installments",
+  "it": "Rate",
+  "es": "Plazos",
+  "fr": "Versements",
+  "de": "Raten",
+  "pt": "Prestações",
+  "ru": "Платежи",
+  "zh": "分期",
+  "hi": "किस्तें"
+ },
+ "sport_there_are_no_subscriptions_at_the_moment": {
+  "en": "There are no subscriptions at the moment",
+  "it": "Al momento non ci sono iscrizioni presenti",
+  "es": "Por el momento no hay inscripciones",
+  "fr": "Aucune inscription pour le moment",
+  "de": "Derzeit gibt es keine Anmeldungen",
+  "pt": "De momento não há inscrições",
+  "ru": "Записей пока нет",
+  "zh": "目前没有报名",
+  "hi": "फ़िलहाल कोई सदस्यता नहीं है"
+ },
+ "sport_subscriptions_to_this_group_will_appear_here_once_the_subscription_form_for_groups_is_available": {
+  "en": "Subscriptions to this group will appear here once the subscription form for groups is available.",
+  "it": "Le iscrizioni a questo gruppo appariranno qui quando sarà disponibile il modulo d'iscrizione ai gruppi.",
+  "es": "Las inscripciones a este grupo aparecerán aquí cuando esté disponible el formulario de inscripción a grupos.",
+  "fr": "Les inscriptions à ce groupe apparaîtront ici dès que le formulaire d'inscription aux groupes sera disponible.",
+  "de": "Anmeldungen zu dieser Gruppe erscheinen hier, sobald das Anmeldeformular für Gruppen verfügbar ist.",
+  "pt": "As inscrições neste grupo aparecerão aqui quando o formulário de inscrição em grupos estiver disponível.",
+  "ru": "Записи в эту группу появятся здесь, когда станет доступна форма записи в группы.",
+  "zh": "小组报名表上线后，此小组的报名将显示在这里。",
+  "hi": "समूहों के लिए सदस्यता फ़ॉर्म उपलब्ध होने पर इस समूह की सदस्यताएँ यहाँ दिखेंगी।"
+ },
+ "sport_group_name_is_required": {
+  "en": "Group name is required",
+  "it": "Il nome del gruppo è obbligatorio",
+  "es": "El nombre del grupo es obligatorio",
+  "fr": "Le nom du groupe est obligatoire",
+  "de": "Der Gruppenname ist erforderlich",
+  "pt": "O nome do grupo é obrigatório",
+  "ru": "Укажите название группы",
+  "zh": "小组名称为必填项",
+  "hi": "समूह का नाम आवश्यक है"
+ },
+ "sport_group_not_found": {
+  "en": "Group not found",
+  "it": "Gruppo non trovato",
+  "es": "Grupo no encontrado",
+  "fr": "Groupe introuvable",
+  "de": "Gruppe nicht gefunden",
+  "pt": "Grupo não encontrado",
+  "ru": "Группа не найдена",
+  "zh": "未找到小组",
+  "hi": "समूह नहीं मिला"
+ },
+ "sport_the_end_date_must_be_after_the_start_date": {
+  "en": "The end date must be after the start date",
+  "it": "La data di fine deve essere successiva alla data di inizio",
+  "es": "La fecha de fin debe ser posterior a la de inicio",
+  "fr": "La date de fin doit être postérieure à la date de début",
+  "de": "Das Enddatum muss nach dem Startdatum liegen",
+  "pt": "A data de fim deve ser posterior à data de início",
+  "ru": "Дата окончания должна быть позже даты начала",
+  "zh": "结束日期必须晚于开始日期",
+  "hi": "समाप्ति तिथि आरंभ तिथि के बाद होनी चाहिए"
+ },
+ "sport_enter_a_valid_price": {
+  "en": "Enter a valid price",
+  "it": "Inserisci un prezzo valido",
+  "es": "Introduce un precio válido",
+  "fr": "Saisissez un prix valide",
+  "de": "Geben Sie einen gültigen Preis ein",
+  "pt": "Introduza um preço válido",
+  "ru": "Введите корректную цену",
+  "zh": "请输入有效价格",
+  "hi": "मान्य मूल्य दर्ज करें"
+ },
+ "sport_training_sessions_on_the_same_day_cannot_overlap": {
+  "en": "Training sessions on the same day cannot overlap",
+  "it": "Gli allenamenti dello stesso giorno non possono sovrapporsi",
+  "es": "Los entrenamientos del mismo día no pueden solaparse",
+  "fr": "Les entraînements d'un même jour ne peuvent pas se chevaucher",
+  "de": "Trainingseinheiten am selben Tag dürfen sich nicht überschneiden",
+  "pt": "Os treinos do mesmo dia não podem sobrepor-se",
+  "ru": "Тренировки в один день не могут пересекаться",
+  "zh": "同一天的训练时间不能重叠",
+  "hi": "एक ही दिन के प्रशिक्षण सत्र आपस में नहीं टकरा सकते"
+ },
+ "sport_select_how_often_the_deadlines_repeat": {
+  "en": "Select how often the deadlines repeat",
+  "it": "Seleziona ogni quanto si ripetono le scadenze",
+  "es": "Selecciona cada cuánto se repiten los vencimientos",
+  "fr": "Sélectionnez la fréquence des échéances",
+  "de": "Wählen Sie, wie oft sich die Fälligkeiten wiederholen",
+  "pt": "Selecione a periodicidade dos prazos",
+  "ru": "Выберите периодичность платежей",
+  "zh": "请选择期限的重复周期",
+  "hi": "चुनें कि नियत तिथियाँ कितनी बार दोहराई जाएँ"
+ },
+ "sport_the_number_of_deadlines_must_be_between_1_and_36": {
+  "en": "The number of deadlines must be between 1 and 36",
+  "it": "Il numero di scadenze deve essere tra 1 e 36",
+  "es": "El número de vencimientos debe estar entre 1 y 36",
+  "fr": "Le nombre d'échéances doit être compris entre 1 et 36",
+  "de": "Die Anzahl der Fälligkeiten muss zwischen 1 und 36 liegen",
+  "pt": "O número de prazos deve estar entre 1 e 36",
+  "ru": "Количество платежей должно быть от 1 до 36",
+  "zh": "期数必须在 1 到 36 之间",
+  "hi": "किस्तों की संख्या 1 से 36 के बीच होनी चाहिए"
+ },
+ "sport_enter_the_cost_of_each_deadline": {
+  "en": "Enter the cost of each deadline",
+  "it": "Inserisci il costo di ogni scadenza",
+  "es": "Introduce el importe de cada vencimiento",
+  "fr": "Saisissez le montant de chaque échéance",
+  "de": "Geben Sie den Betrag je Fälligkeit ein",
+  "pt": "Introduza o valor de cada prazo",
+  "ru": "Введите сумму каждого платежа",
+  "zh": "请输入每期费用",
+  "hi": "प्रत्येक किस्त की राशि दर्ज करें"
+ },
+ "sport_enter_the_date_of_the_first_deadline": {
+  "en": "Enter the date of the first deadline",
+  "it": "Inserisci la data della prima scadenza",
+  "es": "Introduce la fecha del primer vencimiento",
+  "fr": "Saisissez la date de la première échéance",
+  "de": "Geben Sie das Datum der ersten Fälligkeit ein",
+  "pt": "Introduza a data do primeiro prazo",
+  "ru": "Введите дату первого платежа",
+  "zh": "请输入首期日期",
+  "hi": "पहली नियत तिथि दर्ज करें"
+ },
+ "sport_room_name_is_required": {
+  "en": "Room name is required",
+  "it": "Il nome della sala è obbligatorio",
+  "es": "El nombre de la sala es obligatorio",
+  "fr": "Le nom de la salle est obligatoire",
+  "de": "Der Raumname ist erforderlich",
+  "pt": "O nome da sala é obrigatório",
+  "ru": "Укажите название зала",
+  "zh": "场地名称为必填项",
+  "hi": "कक्ष का नाम आवश्यक है"
+ },
+ "sport_select_a_valid_room": {
+  "en": "Select a valid room",
+  "it": "Seleziona una sala valida",
+  "es": "Selecciona una sala válida",
+  "fr": "Sélectionnez une salle valide",
+  "de": "Wählen Sie einen gültigen Raum",
+  "pt": "Selecione uma sala válida",
+  "ru": "Выберите существующий зал",
+  "zh": "请选择有效的场地",
+  "hi": "मान्य कक्ष चुनें"
+ },
+ "sport_select_coaches_from_the_list_of_coaches": {
+  "en": "Select coaches from the list of coaches",
+  "it": "Seleziona gli allenatori dalla lista degli allenatori",
+  "es": "Selecciona entrenadores de la lista de entrenadores",
+  "fr": "Sélectionnez les entraîneurs dans la liste des entraîneurs",
+  "de": "Wählen Sie Trainer aus der Trainerliste",
+  "pt": "Selecione treinadores da lista de treinadores",
+  "ru": "Выберите тренеров из списка тренеров",
+  "zh": "请从教练列表中选择教练",
+  "hi": "कोच सूची से कोच चुनें"
+ },
+ "sport_select_athletes_among_the_members_of_the_club": {
+  "en": "Select athletes among the members of the club",
+  "it": "Seleziona gli atleti tra i tesserati del club",
+  "es": "Selecciona atletas entre los miembros del club",
+  "fr": "Sélectionnez des athlètes parmi les membres du club",
+  "de": "Wählen Sie Athleten unter den Mitgliedern des Clubs",
+  "pt": "Selecione atletas entre os membros do clube",
+  "ru": "Выберите спортсменов среди участников клуба",
+  "zh": "请从俱乐部成员中选择运动员",
+  "hi": "क्लब के सदस्यों में से एथलीट चुनें"
+ },
+ "sport_select_athletes_among_the_members_of_the_team": {
+  "en": "Select athletes among the members of the team",
+  "it": "Seleziona gli atleti tra i tesserati della squadra",
+  "es": "Selecciona atletas entre los miembros del equipo",
+  "fr": "Sélectionnez des athlètes parmi les membres de l'équipe",
+  "de": "Wählen Sie Athleten unter den Mitgliedern des Teams",
+  "pt": "Selecione atletas entre os membros da equipa",
+  "ru": "Выберите спортсменов среди участников команды",
+  "zh": "请从球队成员中选择运动员",
+  "hi": "टीम के सदस्यों में से एथलीट चुनें"
+ },
+ "sport_select_at_least_one_group": {
+  "en": "Select at least one group",
+  "it": "Seleziona almeno un gruppo",
+  "es": "Selecciona al menos un grupo",
+  "fr": "Sélectionnez au moins un groupe",
+  "de": "Wählen Sie mindestens eine Gruppe",
+  "pt": "Selecione pelo menos um grupo",
+  "ru": "Выберите хотя бы одну группу",
+  "zh": "请至少选择一个小组",
+  "hi": "कम से कम एक समूह चुनें"
+ },
+ "sport_announcement_title_is_required": {
+  "en": "Announcement title is required",
+  "it": "Il titolo della comunicazione è obbligatorio",
+  "es": "El título de la comunicación es obligatorio",
+  "fr": "Le titre de l'annonce est obligatoire",
+  "de": "Der Titel der Mitteilung ist erforderlich",
+  "pt": "O título da comunicação é obrigatório",
+  "ru": "Укажите заголовок объявления",
+  "zh": "公告标题为必填项",
+  "hi": "घोषणा का शीर्षक आवश्यक है"
+ },
+ "sport_message_is_required": {
+  "en": "Message is required",
+  "it": "Il messaggio è obbligatorio",
+  "es": "El mensaje es obligatorio",
+  "fr": "Le message est obligatoire",
+  "de": "Die Nachricht ist erforderlich",
+  "pt": "A mensagem é obrigatória",
+  "ru": "Введите сообщение",
+  "zh": "消息为必填项",
+  "hi": "संदेश आवश्यक है"
+ },
+ "sport_choose_to_send_the_announcement_by_mail_post_it_in_the_member_account_or_both": {
+  "en": "Choose to send the announcement by mail, post it in the member account, or both",
+  "it": "Scegli se inviare la comunicazione per mail, pubblicarla nell'account del tesserato o entrambe",
+  "es": "Elige enviar la comunicación por correo, publicarla en la cuenta del miembro o ambas",
+  "fr": "Choisissez d'envoyer l'annonce par e-mail, de la publier dans le compte du membre, ou les deux",
+  "de": "Wählen Sie, ob die Mitteilung per E-Mail gesendet, im Mitgliedskonto veröffentlicht oder beides erfolgen soll",
+  "pt": "Escolha enviar a comunicação por e-mail, publicá-la na conta do membro ou ambos",
+  "ru": "Выберите отправку по почте, публикацию в аккаунте участника или оба варианта",
+  "zh": "请选择通过邮件发送公告、发布到成员账户，或两者兼有",
+  "hi": "चुनें कि घोषणा ईमेल से भेजनी है, सदस्य के खाते में पोस्ट करनी है, या दोनों"
+ },
+ "sport_enter_the_dates_from_and_to_for_displaying_the_announcement_at_login": {
+  "en": "Enter the dates from and to for displaying the announcement at login",
+  "it": "Inserisci le date dal e al per mostrare la comunicazione al login",
+  "es": "Introduce las fechas desde y hasta para mostrar la comunicación al iniciar sesión",
+  "fr": "Saisissez les dates de début et de fin d'affichage de l'annonce à la connexion",
+  "de": "Geben Sie die Daten von und bis für die Anzeige der Mitteilung beim Login ein",
+  "pt": "Introduza as datas de início e fim para mostrar a comunicação no início de sessão",
+  "ru": "Введите даты начала и окончания показа объявления при входе",
+  "zh": "请输入登录时显示公告的开始和结束日期",
+  "hi": "लॉगिन पर घोषणा दिखाने की आरंभ और समाप्ति तिथियाँ दर्ज करें"
+ },
+ "sport_the_attachment_cannot_be_larger_than_2mb": {
+  "en": "The attachment cannot be larger than 2MB",
+  "it": "L'allegato non può superare i 2MB",
+  "es": "El adjunto no puede superar los 2 MB",
+  "fr": "La pièce jointe ne peut pas dépasser 2 Mo",
+  "de": "Der Anhang darf nicht größer als 2 MB sein",
+  "pt": "O anexo não pode exceder 2 MB",
+  "ru": "Вложение не может быть больше 2 МБ",
+  "zh": "附件不能超过 2MB",
+  "hi": "अनुलग्नक 2MB से बड़ा नहीं हो सकता"
+ },
+ "sport_slot_0": {
+  "en": "Slot {0}",
+  "it": "Fascia {0}",
+  "es": "Franja {0}",
+  "fr": "Créneau {0}",
+  "de": "Zeitfenster {0}",
+  "pt": "Horário {0}",
+  "ru": "Интервал {0}",
+  "zh": "时段 {0}",
+  "hi": "स्लॉट {0}"
+ },
+ "sport_tues": {
+  "en": "Tues",
+  "it": "Mar",
+  "es": "Mar",
+  "fr": "Mar",
+  "de": "Di",
+  "pt": "Ter",
+  "ru": "Вт",
+  "zh": "周二",
+  "hi": "मंगल"
+ },
+ "sport_thurs": {
+  "en": "Thurs",
+  "it": "Gio",
+  "es": "Jue",
+  "fr": "Jeu",
+  "de": "Do",
+  "pt": "Qui",
+  "ru": "Чт",
+  "zh": "周四",
+  "hi": "गुरु"
+ },
+ "sport_monday": {
+  "en": "Monday",
+  "it": "Lunedì",
+  "es": "Lunes",
+  "fr": "Lundi",
+  "de": "Montag",
+  "pt": "Segunda-feira",
+  "ru": "Понедельник",
+  "zh": "星期一",
+  "hi": "सोमवार"
+ },
+ "sport_tuesday": {
+  "en": "Tuesday",
+  "it": "Martedì",
+  "es": "Martes",
+  "fr": "Mardi",
+  "de": "Dienstag",
+  "pt": "Terça-feira",
+  "ru": "Вторник",
+  "zh": "星期二",
+  "hi": "मंगलवार"
+ },
+ "sport_wednesday": {
+  "en": "Wednesday",
+  "it": "Mercoledì",
+  "es": "Miércoles",
+  "fr": "Mercredi",
+  "de": "Mittwoch",
+  "pt": "Quarta-feira",
+  "ru": "Среда",
+  "zh": "星期三",
+  "hi": "बुधवार"
+ },
+ "sport_thursday": {
+  "en": "Thursday",
+  "it": "Giovedì",
+  "es": "Jueves",
+  "fr": "Jeudi",
+  "de": "Donnerstag",
+  "pt": "Quinta-feira",
+  "ru": "Четверг",
+  "zh": "星期四",
+  "hi": "गुरुवार"
+ },
+ "sport_friday": {
+  "en": "Friday",
+  "it": "Venerdì",
+  "es": "Viernes",
+  "fr": "Vendredi",
+  "de": "Freitag",
+  "pt": "Sexta-feira",
+  "ru": "Пятница",
+  "zh": "星期五",
+  "hi": "शुक्रवार"
+ },
+ "sport_saturday": {
+  "en": "Saturday",
+  "it": "Sabato",
+  "es": "Sábado",
+  "fr": "Samedi",
+  "de": "Samstag",
+  "pt": "Sábado",
+  "ru": "Суббота",
+  "zh": "星期六",
+  "hi": "शनिवार"
+ },
+ "sport_sunday": {
+  "en": "Sunday",
+  "it": "Domenica",
+  "es": "Domingo",
+  "fr": "Dimanche",
+  "de": "Sonntag",
+  "pt": "Domingo",
+  "ru": "Воскресенье",
+  "zh": "星期日",
+  "hi": "रविवार"
  }
 }

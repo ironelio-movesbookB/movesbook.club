@@ -168,6 +168,7 @@ import {
 import {
   CLUB_ADMIN_ARCHIVE_GROUPS,
   CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS,
+  COACH_ADMIN_ARCHIVE_GROUPS,
   type ClubAdminArchiveItem,
   type ClubAdminInsertItem,
 } from '@/lib/club/clubAdminMenus';
@@ -5414,7 +5415,7 @@ export default function DarkSidebar({
                             </button>
                             {clubArchivesOpen && (
                               <div className="bg-[#1e272a] text-white">
-                                {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
+                                {COACH_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
                                   <div
                                     key={gi}
                                     className={gi > 0 ? 'border-t border-gray-600/70' : ''}

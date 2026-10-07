@@ -149,6 +149,16 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     },
   ],
   [
+    { kind: 'group', Icon: UserCog, label: 'Coaches' },
+    { kind: 'child', label: '+ Create new', path: '/club/coaches/new' },
+    { kind: 'child', label: 'Full list', path: '/club/coaches' },
+  ],
+  [
+    { kind: 'group', Icon: Users, label: 'Groups of work' },
+    { kind: 'child', label: '+ Create new', path: '/club/work-groups/new' },
+    { kind: 'child', label: 'Full list', path: '/club/work-groups' },
+  ],
+  [
     { kind: 'icon', Icon: Building2, label: 'Customers', path: '/clubs/archive_customers' },
     { kind: 'icon', Icon: Briefcase, label: 'Suppliers', path: '/clubs/archive_suppliers' },
   ],
@@ -238,6 +248,12 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     },
   ],
 ];
+
+/** Coaches and Groups of work are managed by clubs and teams only, so the coach workspace menu omits them. */
+const CLUB_TEAM_ONLY_GROUPS = new Set(['Coaches', 'Groups of work']);
+export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
+  (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),
+);
 
 /** Mngmnt sub-buttons → existing archives (scoped with ?memberId=). */
 export const MEMBER_OVERVIEW_MNGMNT_LINKS: { label: string; path: string }[] = [
