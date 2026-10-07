@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
 import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
@@ -12,6 +12,7 @@ import {
 } from '@/components/procedures/ArchiveRowActions';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
+import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import { buildProcedureColumns } from '@/components/procedures/configs/buildColumns';
 import EditRecordModal from '@/components/club/archives/EditRecordModal';
 import {
@@ -58,13 +59,14 @@ function toTableRow(
   };
 }
 
-export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Props) {
+function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
   const router = useRouter();
   const def = getProcedureDefinition(procedureCode)!;
   const client = useMemo(() => createProcedureClient(procedureCode), [procedureCode]);
   const columns = useMemo(() => buildProcedureColumns(def), [def]);
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
   const filters = useArchiveListFilters();
+  const scope = useArchiveScope();
 
   const [data, setData] = useState<Member[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Pr
         page,
         pageSize,
         ...filters.applied,
+        ...scope.filters,
       });
       setTotal(res.total);
       setData(
@@ -110,7 +113,7 @@ export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Pr
     } finally {
       setLoading(false);
     }
-  }, [client, page, pageSize, requestPassword, filters.applied]);
+  }, [client, page, pageSize, requestPassword, filters.applied, scope.filters]);
 
   useEffect(() => {
     load();
@@ -118,11 +121,13 @@ export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Pr
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied, pageSize]);
+  }, [filters.applied, pageSize, scope.filters]);
 
   const selectedMemberId = useMemo(
-    () => (selectedId ? data.find((r) => r.id === selectedId)?.userId ?? null : null),
-    [data, selectedId]
+    () =>
+      scope.memberId ||
+      (selectedId ? data.find((r) => r.id === selectedId)?.userId ?? null : null),
+    [data, selectedId, scope.memberId]
   );
 
   function handleDeleteSelected() {
@@ -158,6 +163,9 @@ export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Pr
       error={error}
       footerHint="Check rows to delete selected · Click to select · Double-click to open payment form · Edit and Delete ask for your password"
     >
+      <div className="mb-2 px-1">
+        <ArchiveScopeRadios state={scope} name={`${procedureCode}-recordsScope`} onChange={() => setPage(1)} />
+      </div>
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.records}`}
         values={filters.draft}
@@ -232,5 +240,13 @@ export default function ProcedureRecordsArchive({ procedureCode, activeTab }: Pr
         />
       )}
     </ProcedureArchiveShell>
+  );
+}
+
+export default function ProcedureRecordsArchive(props: Props) {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading…</div>}>
+      <ProcedureRecordsArchiveInner {...props} />
+    </Suspense>
   );
 }

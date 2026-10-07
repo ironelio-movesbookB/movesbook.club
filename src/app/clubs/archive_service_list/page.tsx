@@ -100,9 +100,13 @@ function ArchiveServiceListInner() {
   const [showDeletePasswordModal, setShowDeletePasswordModal] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
 
+  const memberIdFromUrl = searchParams?.get('memberId') || null;
+
   const selectedMemberId = useMemo(
-    () => (selectedId ? data.find((r) => r.id === selectedId)?.userId ?? null : null),
-    [data, selectedId]
+    () =>
+      memberIdFromUrl ||
+      (selectedId ? data.find((r) => r.id === selectedId)?.userId ?? null : null),
+    [data, selectedId, memberIdFromUrl]
   );
 
   const load = useCallback(async () => {
@@ -113,6 +117,7 @@ function ArchiveServiceListInner() {
         page,
         pageSize,
         recordIds: effectiveIds.length > 0 ? effectiveIds : undefined,
+        memberId: memberIdFromUrl || undefined,
         ...filters.applied,
       });
       setTotal(res.total);
@@ -138,7 +143,7 @@ function ArchiveServiceListInner() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, effectiveIds, filters.applied]);
+  }, [page, pageSize, effectiveIds, filters.applied, memberIdFromUrl]);
 
   const performDelete = useCallback(
     async (ids: string[]) => {

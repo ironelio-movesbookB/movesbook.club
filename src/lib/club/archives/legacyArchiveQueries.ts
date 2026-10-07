@@ -84,9 +84,18 @@ function applyFilters(
       (row) => String(row.groupTrained ?? row.groupTrainedId ?? '').toLowerCase() === group,
     );
   }
+  if (params.memberId) {
+    const mid = String(params.memberId);
+    result = result.filter(
+      (row) =>
+        String(row.memberId ?? '') === mid ||
+        String(row.userId ?? '') === mid ||
+        String(row.user_id ?? '') === mid,
+    );
+  }
   if (params.memberIdsIn) {
     const allowed = new Set(params.memberIdsIn);
-    result = result.filter((row) => allowed.has(String(row.memberId ?? row.id ?? '')));
+    result = result.filter((row) => allowed.has(String(row.memberId ?? row.userId ?? row.id ?? '')));
   }
   if (params.membershipStatus && params.membershipStatus !== 'all') {
     result = result.filter(
