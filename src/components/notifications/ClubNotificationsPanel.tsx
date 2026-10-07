@@ -103,7 +103,7 @@ export default function ClubNotificationsPanel({
     } finally {
       setLoading(false);
     }
-  }, [clubId, page, statusFilter, memberAudienceOnly, recipientFilter, clubFilter]);
+  }, [clubId, page, statusFilter, recipientFilter, clubFilter, memberAudienceOnly]);
 
   useEffect(() => {
     setRecipientFilter(view);
