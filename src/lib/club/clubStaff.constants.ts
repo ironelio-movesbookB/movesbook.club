@@ -1,4 +1,5 @@
 import type { ClubAdminInfo } from '@/lib/club/clubAdminInfo';
+import type { StaffDetails } from '@/lib/club/clubStaffAdmin.constants';
 
 export const CLUB_STAFF_CHANGED_EVENT = 'club-staff-changed';
 
@@ -66,6 +67,8 @@ export const CLUB_STAFF_TABS = [
   { id: 'instructors', label: 'Instructors', role: 'Instructor' },
   { id: 'personal-trainers', label: 'Personal Trainers', role: 'Personal trainer' },
   { id: 'customer-care', label: 'Customer Care', role: 'Customers Care' },
+  { id: 'board-members', label: 'Board members' },
+  { id: 'groups-roles', label: 'Groups & roles' },
 ] as const;
 
 export type ClubStaffTabId = (typeof CLUB_STAFF_TABS)[number]['id'];
@@ -83,6 +86,10 @@ export type ClubStaffListItem = {
   operativeLevel: string;
   userLevels: ClubStaffUserLevel[];
   isClubAdmin: boolean;
+  companyRole: string;
+  boardMember: boolean;
+  volunteer: boolean;
+  memberNumber: string;
 };
 
 export type ClubStaffProfile = ClubStaffListItem & {
@@ -99,6 +106,7 @@ export type ClubStaffProfile = ClubStaffListItem & {
   referencesLevel: string;
   createdAt: string;
   adminInfo: ClubAdminInfo;
+  details: StaffDetails;
 };
 
 export function isClubStaffType(value: string): value is ClubStaffType {

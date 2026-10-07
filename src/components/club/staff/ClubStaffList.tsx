@@ -6,6 +6,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import ClubCoachArchive from '@/components/club/coaches/ClubCoachArchive';
+import StaffGroupRolesGrid from '@/components/club/staff/StaffGroupRolesGrid';
 import { canAccessClubWorkspace, isTeamAccountUserType } from '@/utils/dashboardRouting';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { formatSportText, translateSportLabel } from '@/lib/sport/sportI18n';
@@ -22,6 +23,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
 function matchesTab(item: ClubStaffListItem, tab: ClubStaffTabId): boolean {
   if (tab === 'all') return true;
+  if (tab === 'board-members') return item.boardMember;
   const tabMeta = CLUB_STAFF_TABS.find((entry) => entry.id === tab);
   const role = tabMeta && 'role' in tabMeta ? tabMeta.role : null;
   return Boolean(role && item.role === role);
@@ -32,9 +34,11 @@ export default function ClubStaffList() {
   const searchParams = useSearchParams();
   const { t } = useLanguage();
   const preset = searchParams?.get('preset') ?? '';
-  const [tab, setTab] = useState<ClubStaffTabId | 'coaches'>(
-    searchParams?.get('tab') === 'coaches' ? 'coaches' : 'all',
-  );
+  const [tab, setTab] = useState<ClubStaffTabId | 'coaches'>(() => {
+    const requested = searchParams?.get('tab') ?? '';
+    if (requested === 'coaches') return 'coaches';
+    return CLUB_STAFF_TABS.find((entry) => entry.id === requested)?.id ?? 'all';
+  });
   const [items, setItems] = useState<ClubStaffListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -82,7 +86,7 @@ export default function ClubStaffList() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (tab === 'coaches') return [];
+    if (tab === 'coaches' || tab === 'groups-roles') return [];
     let rows = items.filter((item) => matchesTab(item, tab));
     if (staffTypeFilter !== 'all') {
       rows = rows.filter((item) => item.staffType === staffTypeFilter);
@@ -182,6 +186,8 @@ export default function ClubStaffList() {
         <div className="border border-gray-200 bg-gray-50 p-3">
           <ClubCoachArchive embedded />
         </div>
+      ) : tab === 'groups-roles' ? (
+        <StaffGroupRolesGrid />
       ) : (
       <>
       <div className="bg-[#c4b5e0] px-4 py-2.5 text-base font-semibold text-gray-900">
@@ -313,6 +319,7 @@ export default function ClubStaffList() {
               <th className="px-3 py-2 font-semibold">Operator Name</th>
               <th className="px-3 py-2 font-semibold">Staff Type</th>
               <th className="px-3 py-2 font-semibold">Employment Area</th>
+              <th className="px-3 py-2 font-semibold">Company role</th>
               <th className="px-3 py-2 font-semibold">Operative Level</th>
               <th className="px-3 py-2 font-semibold">Action</th>
             </tr>
@@ -374,6 +381,11 @@ export default function ClubStaffList() {
                     </td>
                     <td className={`px-3 py-2 ${textClass}`}>{row.staffTypeLabel}</td>
                     <td className={`px-3 py-2 ${textClass}`}>{row.role}</td>
+                    <td className={`px-3 py-2 ${textClass}`}>
+                      {row.companyRole}
+                      {row.boardMember ? <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800">Board</span> : null}
+                      {row.volunteer ? <span className="ml-1 rounded bg-green-100 px-1.5 text-xs text-green-800">Volunteer</span> : null}
+                    </td>
                     <td className={`px-3 py-2 ${textClass}`}>{row.operativeLevel}</td>
                     <td className="px-3 py-2">
                       {row.isClubAdmin ? null : (

@@ -29,6 +29,17 @@ import {
   type ClubStaffUserLevel,
 } from '@/lib/club/clubStaff.constants';
 import type { ClubAuthContext } from '@/lib/procedures/types';
+import type { CoachWorkspace } from '@/lib/club/clubCoachService';
+import {
+  assertStaffDetailsSavable,
+  deleteStaffAdminData,
+  getStaffDetails,
+  listStaffDetails,
+  parseStaffDetails,
+  saveStaffDetails,
+  staffWorkspace,
+} from '@/lib/club/clubStaffAdminService';
+import { EMPTY_STAFF_DETAILS, type StaffDetails } from '@/lib/club/clubStaffAdmin.constants';
 
 export type { ClubStaffListItem, ClubStaffProfile };
 
@@ -59,7 +70,24 @@ export type ClubStaffWriteInput = {
   referencesLevel?: string;
   image?: string | null;
   adminInfo?: unknown;
+  details?: unknown;
 };
+
+/** Staff administration data belongs to clubs and teams; the coach workspace keeps the plain staff account. */
+function detailsWorkspace(ctx: ClubAuthContext): CoachWorkspace | null {
+  return ctx.workspaceKind === 'club' || ctx.workspaceKind === 'team' ? staffWorkspace(ctx) : null;
+}
+
+async function getStaffDetailsFor(ctx: ClubAuthContext, staffId: string): Promise<StaffDetails> {
+  const ws = detailsWorkspace(ctx);
+  return ws ? getStaffDetails(ws, staffId) : { ...EMPTY_STAFF_DETAILS };
+}
+
+function assertPersonalData(firstName: string, surname: string, birthdate: unknown) {
+  if (!surname) throw new Error('Surname is required.');
+  if (!firstName) throw new Error('Name is required.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(birthdate ?? '').trim())) throw new Error('Date of birth is required.');
+}
 
 function formatDisplayName(user: {
   firstName: string | null;
@@ -147,7 +175,7 @@ function toListItem(row: {
     surname: string | null;
     image: string | null;
   };
-}): ClubStaffListItem {
+}, details: StaffDetails = EMPTY_STAFF_DETAILS): ClubStaffListItem {
   const staffType = isClubStaffType(row.staffType) ? row.staffType : 'operator';
   return {
     id: row.id,
@@ -162,6 +190,10 @@ function toListItem(row: {
     operativeLevel: operativeLevelForStaffType(staffType),
     userLevels: parseUserLevels(row.userLevels),
     isClubAdmin: false,
+    companyRole: details.companyRole,
+    boardMember: details.boardMember,
+    volunteer: details.volunteer,
+    memberNumber: details.memberNumber,
   };
 }
 
@@ -193,7 +225,7 @@ function youtubeUrlFromAdminInfo(adminInfo: ClubAdminInfo, fallback?: string | n
   return fromFallback || null;
 }
 
-function toProfile(item: ClubStaffListItem, user: {
+function toProfile(item: ClubStaffListItem, details: StaffDetails, user: {
   firstName: string | null;
   surname: string | null;
   country: string | null;
@@ -224,6 +256,7 @@ function toProfile(item: ClubStaffListItem, user: {
     referencesLevel: refs.referencesLevel,
     createdAt: user.createdAt.toISOString(),
     adminInfo,
+    details,
   };
 }
 
@@ -299,7 +332,9 @@ export async function listClubStaff(ctx: ClubAuthContext): Promise<ClubStaffList
         },
       });
 
-  const items = staffRows.map(toListItem);
+  const detailsWs = detailsWorkspace(ctx);
+  const detailsById = detailsWs ? await listStaffDetails(detailsWs) : new Map<string, StaffDetails>();
+  const items = staffRows.map((row) => toListItem(row, detailsById.get(row.id)));
   items.sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: 'base' }));
 
   if (adminOwner?.admin) {
@@ -316,6 +351,10 @@ export async function listClubStaff(ctx: ClubAuthContext): Promise<ClubStaffList
       operativeLevel: 'Supervisor',
       userLevels: [],
       isClubAdmin: true,
+      companyRole: '',
+      boardMember: false,
+      volunteer: false,
+      memberNumber: '',
     });
   }
 
@@ -333,14 +372,16 @@ export async function getClubStaffById(
       include: { user: { select: userSelect } },
     });
     if (!row) return null;
-    return toProfile(toListItem(row), row.user);
+    const details = await getStaffDetailsFor(ctx, row.id);
+    return toProfile(toListItem(row, details), details, row.user);
   }
   const row = await prisma.clubStaff.findFirst({
     where: { id: staffId, clubId: ctx.club.id },
     include: { user: { select: userSelect } },
   });
   if (!row) return null;
-  return toProfile(toListItem(row), row.user);
+  const details = await getStaffDetailsFor(ctx, row.id);
+  return toProfile(toListItem(row, details), details, row.user);
 }
 
 async function assertUniqueCredentials(username: string, email: string, excludeUserId?: string) {
@@ -371,6 +412,10 @@ export async function createClubStaff(ctx: ClubAuthContext, input: ClubStaffWrit
     [firstName, surname].filter(Boolean).join(' ').trim();
   const language = String(input.preferredLanguage ?? 'en').trim().toLowerCase() || 'en';
 
+  assertPersonalData(firstName, surname, input.birthdate);
+  const ws = detailsWorkspace(ctx);
+  const details = parseStaffDetails(input.details);
+  if (ws) await assertStaffDetailsSavable(ws, null, details);
   if (!name) throw new Error('Display name is required.');
   if (!username) throw new Error('Username is required.');
   if (!email) throw new Error('Email is required.');
@@ -463,7 +508,8 @@ export async function createClubStaff(ctx: ClubAuthContext, input: ClubStaffWrit
     return staff;
   });
 
-  return toProfile(toListItem(created), created.user);
+  if (ws) await saveStaffDetails(ws, created.id, details);
+  return toProfile(toListItem(created, details), details, created.user);
 }
 
 export async function updateClubStaff(
@@ -497,6 +543,10 @@ export async function updateClubStaff(
     String(input.name ?? '').trim() ||
     [firstName, surname].filter(Boolean).join(' ').trim();
   if (!name) throw new Error('Display name is required.');
+  assertPersonalData(firstName, surname, input.birthdate);
+  const ws = detailsWorkspace(ctx);
+  const details = parseStaffDetails(input.details);
+  if (ws) await assertStaffDetailsSavable(ws, existing.id, details);
 
   const language = String(input.preferredLanguage ?? 'en').trim().toLowerCase() || 'en';
   const sports = normalizeSports(input.mainSports);
@@ -587,7 +637,8 @@ export async function updateClubStaff(
         });
   });
 
-  return toProfile(toListItem(updated), updated.user);
+  if (ws) await saveStaffDetails(ws, existing.id, details);
+  return toProfile(toListItem(updated, details), details, updated.user);
 }
 
 export async function deleteClubStaff(ctx: ClubAuthContext, staffIds: string[]) {
@@ -625,6 +676,8 @@ export async function deleteClubStaff(ctx: ClubAuthContext, staffIds: string[]) 
       },
     });
   });
+  const detailsWs = detailsWorkspace(ctx);
+  if (detailsWs) await deleteStaffAdminData(detailsWs, rows.map((row) => row.id));
 
   return { deleted: rows.length };
 }

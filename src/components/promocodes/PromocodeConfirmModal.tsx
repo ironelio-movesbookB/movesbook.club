@@ -12,6 +12,8 @@ type PromocodeConfirmModalProps = {
   loading?: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** Raise when the modal opens on top of another overlay. */
+  zIndexClass?: string;
 };
 
 export default function PromocodeConfirmModal({
@@ -24,6 +26,7 @@ export default function PromocodeConfirmModal({
   loading = false,
   onClose,
   onConfirm,
+  zIndexClass = 'z-[110]',
 }: PromocodeConfirmModalProps) {
   if (!open) return null;
 
@@ -32,7 +35,7 @@ export default function PromocodeConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/55 p-4"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/55 p-4`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="promocode-confirm-title"

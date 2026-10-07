@@ -63,6 +63,8 @@
         "date-fns": "^2.30.0",
         "framer-motion": "^10.18.0",
         "jsonwebtoken": "^9.0.2",
+        "jspdf": "^2.5.2",
+        "jspdf-autotable": "^3.8.4",
         "lucide-react": "^0.288.0",
         "mysql2": "^3.15.3",
         "next": "^14.2.33",

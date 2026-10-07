@@ -90,7 +90,9 @@ export function canAccessManagedArchiveShell(
     pathname.startsWith('/club/legal-documents') ||
     (isTeamAccountUserType(userType) && pathname.startsWith('/club/settings/tables/member_type')) ||
     (isTeamAccountUserType(userType) && pathname.startsWith('/club/coaches')) ||
-    (isTeamAccountUserType(userType) && pathname.startsWith('/club/work-groups'))
+    (isTeamAccountUserType(userType) && pathname.startsWith('/club/work-groups')) ||
+    (isTeamAccountUserType(userType) && pathname.startsWith('/club/register-members')) ||
+    (isTeamAccountUserType(userType) && pathname.startsWith('/club/meetings'))
   );
 }
 
