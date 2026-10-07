@@ -330,7 +330,7 @@ export async function listSupportFeed(
       ? (buildStatusWhere(filters.status) as Prisma.UserMessageThreadWhereInput)
       : {}),
     AND: [
-      { NOT: { supportCategory: 'club_message' } },
+      { OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }] },
       ...(searchWhere.OR ? [searchWhere] : []),
       ...(pathWhere ? [pathWhere] : []),
     ],
@@ -790,7 +790,11 @@ export async function listInappropriateFeed(filters?: {
 
 export async function listThreadsForUser(userId: string, kind: UserThreadKind) {
   const threads = await prisma.userMessageThread.findMany({
-    where: { userId, kind },
+    where: {
+      userId,
+      kind,
+      OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }],
+    },
     orderBy: { updatedAt: 'desc' },
     include: {
       user: {
@@ -1061,6 +1065,7 @@ export async function bulkDeleteSupportThreadsByDate(params: {
   const where: Prisma.UserMessageThreadWhereInput = {
     kind: 'SUPPORT',
     createdAt: { gte: range.from, lte: range.to },
+    AND: [{ OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }] }],
     ...(params.bugsOnly
       ? {
           supportCategory: 'problem',

@@ -98,7 +98,7 @@ export async function DELETE(
 
   try {
     const clubDeleted = await deleteClubStaffMessage(id, auth.userId);
-    if (clubDeleted) return NextResponse.json({ ok: true });
+    if (clubDeleted) return NextResponse.json({ ok: true, result: clubDeleted });
 
     if (!auth.isStaff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -133,16 +133,14 @@ export async function POST(
       ? await canReplyToClubStaffMessage(thread, auth.userId)
       : false;
 
-    if (!clubReplyOk && !canReplyToThread(thread, auth.userId, auth.isStaff)) {
+    if (isClubMessage ? !clubReplyOk : !canReplyToThread(thread, auth.userId, auth.isStaff)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
-    const replyAsClubStaff = isClubMessage && clubReplyOk && thread.userId !== auth.userId;
 
     await addReplyToThread({
       threadId: id,
       senderId: auth.userId,
-      isStaff: auth.isStaff || replyAsClubStaff,
+      isStaff: isClubMessage ? false : auth.isStaff,
       body: text,
     });
 

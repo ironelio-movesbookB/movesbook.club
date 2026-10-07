@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { isClubAccountUserType } from "@/utils/dashboardRouting";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
@@ -56,7 +58,7 @@ interface ProfileDropdownMenuProps {
   onLogout?: () => void;
 }
 
-const menuSections: MenuSection[] = [
+const baseMenuSections: MenuSection[] = [
   {
     id: "profile",
     title: "Your profile & account",
@@ -202,11 +204,11 @@ const menuSections: MenuSection[] = [
       },
       {
         label: "Notifications for the Club Staff",
-        href: "/users/clubnotification?audience=staff",
+        href: "/users/clubnotification?view=staff",
         icon: Mail,
       },
       {
-        label: "Post messages for the Club Staff",
+        label: "Post messages among Club and members",
         href: "/clubs/messages",
         icon: Mail,
       },
@@ -402,10 +404,61 @@ const menuSections: MenuSection[] = [
   },
 ];
 
+/** Club notification links depend on account type and MY CLUB context (?clubId= in the current URL). */
+function resolveMessagesSectionItems(
+  items: MenuItem[],
+  isClubAdmin: boolean,
+  clubId: string | null,
+): MenuItem[] {
+  const clubQs = clubId ? `&clubId=${encodeURIComponent(clubId)}` : "";
+  return items.flatMap((item) => {
+    if (item.label === "Notifications of the Club") {
+      return [
+        {
+          ...item,
+          href: isClubAdmin
+            ? `/users/clubnotification?view=members${clubQs}`
+            : clubId
+              ? `${item.href}?clubId=${encodeURIComponent(clubId)}`
+              : item.href,
+        },
+      ];
+    }
+    if (item.label === "Notifications for the Club Staff") {
+      return isClubAdmin
+        ? [{ ...item, href: `/users/clubnotification?view=staff${clubQs}` }]
+        : [];
+    }
+    if (item.href === "/clubs/messages" && clubId) {
+      return [{ ...item, href: `/clubs/messages?clubId=${encodeURIComponent(clubId)}` }];
+    }
+    return [item];
+  });
+}
+
 export default function ProfileDropdownMenu({
   onClose,
   onLogout,
 }: ProfileDropdownMenuProps) {
+  const { user } = useAuth();
+  const isClubAdmin = user ? isClubAccountUserType(user.userType) : false;
+  const [clubIdFromUrl] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("clubId"),
+  );
+  const menuSections = useMemo(
+    () =>
+      baseMenuSections.map((section) =>
+        section.id === "messages"
+          ? {
+              ...section,
+              items: resolveMessagesSectionItems(section.items, isClubAdmin, clubIdFromUrl),
+            }
+          : section,
+      ),
+    [isClubAdmin, clubIdFromUrl],
+  );
   const [expandedSections, setExpandedSections] = useState<string[]>([
     "profile",
   ]);

@@ -14,6 +14,14 @@ import SubscriptionSystemDashboardHeader from './SubscriptionSystemDashboardHead
 import SubscriptionGeneralForm from './SubscriptionGeneralForm';
 import SubscriptionEditSettingsForm from './SubscriptionEditSettingsForm';
 import SubscriptionExpirationSections from './SubscriptionExpirationSections';
+import SpecialOfferSettingsPanel from './SpecialOfferSettingsPanel';
+
+type EditTab = 'general' | 'special_offer';
+
+const EDIT_TABS: { key: EditTab; label: string }[] = [
+  { key: 'general', label: 'General' },
+  { key: 'special_offer', label: 'Special offer' },
+];
 
 type EditSubscriptionPanelProps = {
   subscriptionId: number;
@@ -31,6 +39,7 @@ export default function EditSubscriptionPanel({
   const [data, setData] = useState(initialData);
   const [activeLang, setActiveLang] = useState(lang || 'en');
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<EditTab>('general');
 
   useEffect(() => {
     syncSubscriptionEditDataFromStorage();
@@ -79,7 +88,27 @@ export default function EditSubscriptionPanel({
   return (
     <div className="h-full flex flex-col bg-gray-100">
       <SubscriptionSystemDashboardHeader />
+      <div className="flex flex-wrap gap-2 bg-gray-100 px-4 pt-3 lg:px-6">
+        {EDIT_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`min-w-[150px] border-2 px-4 py-1 text-base font-semibold transition-colors ${
+              activeTab === tab.key
+                ? 'border-red-600 bg-red-600 text-white'
+                : 'border-red-600 bg-white text-red-600 hover:bg-red-50'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       <div className="flex-1 overflow-y-auto p-4 lg:p-6 max-w-5xl">
+        {activeTab === 'special_offer' ? (
+          <SpecialOfferSettingsPanel versionId={subscriptionId} versionName={row.name} />
+        ) : (
+        <>
         <SubscriptionGeneralForm
           subscriptionId={subscriptionId}
           general={data.general}
@@ -122,6 +151,8 @@ export default function EditSubscriptionPanel({
             Cancel
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

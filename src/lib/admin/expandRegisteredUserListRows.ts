@@ -37,6 +37,9 @@ export type RegisteredUserListRow = {
   accountUsername?: string;
   /** Admin account profile photo (`users_new.image`). */
   imageUrl?: string | null;
+  /** Membership purchased in "Special offer" mode. */
+  specialOffer?: boolean;
+  specialOfferTitle?: string;
 };
 
 type ClubEntity = {

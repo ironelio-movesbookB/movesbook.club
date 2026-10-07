@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
       typeKind,
       topCountriesN: Number.isFinite(topCountriesN) ? topCountriesN : 8,
       typeCountriesN: Number.isFinite(typeCountriesN) ? typeCountriesN : 15,
+      specialOffersOnly: url.searchParams.get('offers') === 'special',
     });
     return NextResponse.json(payload);
   } catch (err) {
