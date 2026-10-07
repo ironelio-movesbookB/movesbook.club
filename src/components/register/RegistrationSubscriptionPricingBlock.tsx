@@ -2,26 +2,46 @@
 
 import type { SubscriptionGeneralSettings } from '@/types/adminSubscriptionSettings';
 import {
-  formatSubscriptionPrice,
   getScenarioPricing,
   getTripleSubscriptionPricing,
   type SubscriptionPricingScenario,
 } from '@/lib/admin/subscriptionPricingPresentation';
+import {
+  formatCountryPrice,
+  priceForCountry,
+  type CountryPriceInfo,
+} from '@/lib/countries/countryPriceFormula';
 import RegistrationMonthlyCostLine from './RegistrationMonthlyCostLine';
 
 type RegistrationSubscriptionPricingBlockProps = {
   general: SubscriptionGeneralSettings;
   scenario?: SubscriptionPricingScenario;
   showTripleOption?: boolean;
+  countryPrice?: CountryPriceInfo | null;
 };
 
 export default function RegistrationSubscriptionPricingBlock({
   general,
   scenario = 'first',
   showTripleOption = true,
+  countryPrice = null,
 }: RegistrationSubscriptionPricingBlockProps) {
-  const standard = getScenarioPricing(general, scenario);
-  const triple = getTripleSubscriptionPricing(general, scenario);
+  const factor = countryPrice?.factor ?? 1;
+  const scale = (price: number) => priceForCountry(price, factor);
+  const formatSubscriptionPrice = (price: number) => formatCountryPrice(price, countryPrice);
+  const baseStandard = getScenarioPricing(general, scenario);
+  const baseTriple = getTripleSubscriptionPricing(general, scenario);
+  const standard = {
+    ...baseStandard,
+    price: scale(baseStandard.price),
+    priceAfterPromo: scale(baseStandard.priceAfterPromo),
+  };
+  const triple = {
+    ...baseTriple,
+    price: scale(baseTriple.price),
+    priceAfterPromo: scale(baseTriple.priceAfterPromo),
+    standardTriplePrice: scale(baseTriple.standardTriplePrice),
+  };
 
   return (
     <div className="rounded-md border border-[#7a1f2e]/30 bg-white p-3 space-y-3">

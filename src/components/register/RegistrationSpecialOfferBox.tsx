@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MousePointerClick, X } from 'lucide-react';
+import {
+  formatCountryPrice,
+  priceForCountry,
+  type CountryPriceInfo,
+} from '@/lib/countries/countryPriceFormula';
 
 export type PublicSpecialOffer = {
   versionId: number;
@@ -23,15 +28,12 @@ type Props = {
   lang: string;
   confirmed: boolean;
   onConfirmChange: (confirmed: boolean) => void;
+  countryPrice?: CountryPriceInfo | null;
 };
 
 function formatDmy(ymd: string): string {
   const [y, m, d] = ymd.split('-');
   return y && m && d ? `${d}-${m}-${y}` : ymd;
-}
-
-function formatEuro(value: number): string {
-  return `€ ${Number.isInteger(value) ? value : value.toFixed(2)}`;
 }
 
 function CounterDigits({ value }: { value: number }) {
@@ -73,7 +75,10 @@ export default function RegistrationSpecialOfferBox({
   lang,
   confirmed,
   onConfirmChange,
+  countryPrice = null,
 }: Props) {
+  const formatEuro = (costEuro: number) =>
+    formatCountryPrice(priceForCountry(costEuro, countryPrice?.factor ?? 1), countryPrice);
   const [offer, setOffer] = useState<PublicSpecialOffer | null>(null);
   const [popupOpen, setPopupOpen] = useState(false);
 

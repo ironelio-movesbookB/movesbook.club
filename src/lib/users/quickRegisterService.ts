@@ -477,7 +477,7 @@ export async function getQuickRegisterSubscriptionData(params: {
 
   const country = params.country?.trim() ?? '';
   if (country) {
-    const coeff = getCountryPriceCoefficient(country);
+    const coeff = await getCountryPriceCoefficient(country);
     subscriptionData.price_coefficient = coeff;
     const rawPrice = Number(subscriptionData.price);
     if (Number.isFinite(rawPrice) && coeff > 0 && coeff !== 1) {
