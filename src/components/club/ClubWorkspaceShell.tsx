@@ -46,6 +46,11 @@ import {
   ClubWorkspaceContext,
   type ClubMyPageNewsPanel,
 } from '@/contexts/ClubWorkspaceContext';
+import {
+  readSelectedClubMember,
+  writeSelectedClubMember,
+  type SelectedClubMember,
+} from '@/lib/club/selectedClubMember';
 import { clubProfilePayloadForApi } from '@/lib/club/clubProfilePayload';
 import { type CreatableCompaniesQuota } from '@/lib/club/creatableCompaniesQuota.shared';
 import {
@@ -117,6 +122,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [chatAudience, setChatAudience] = useState<ChatAudience | null>(null);
   const [showChatPanel, setShowChatPanel] = useState(false);
   const [myPageNewsPanel, setMyPageNewsPanel] = useState<ClubMyPageNewsPanel>(null);
+  const [selectedMember, setSelectedMemberState] = useState<SelectedClubMember | null>(null);
+
+  const setSelectedMember = useCallback(
+    (member: SelectedClubMember | null) => {
+      setSelectedMemberState(member);
+      writeSelectedClubMember(selectedClubId, member);
+    },
+    [selectedClubId],
+  );
+
+  useEffect(() => {
+    setSelectedMemberState(readSelectedClubMember(selectedClubId));
+  }, [selectedClubId]);
 
   const showMyClubTab = useCallback(() => {
     setMyClubTabVisible(true);
@@ -766,6 +784,8 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         selectedClubId,
         myPageNewsPanel,
         setMyPageNewsPanel,
+        selectedMember,
+        setSelectedMember,
       }}
     >
     <div className="bg-gray-50 flex flex-col min-h-screen">

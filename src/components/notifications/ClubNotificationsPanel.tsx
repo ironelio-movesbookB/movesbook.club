@@ -22,6 +22,13 @@ type RecipientFilter = 'all' | 'members' | 'staff';
 type Props = {
   /** When set = MY CLUB (one club). When omitted = MY PAGE (all owned clubs). */
   clubId?: string | null;
+  /** Prefill For Club Staff when opened from Quick menu */
+  initialAudienceKind?: 'members' | 'staff';
+  /**
+   * Member Overview: only show notifies whose audience is club members
+   * (broadcasts that apply to the selected member).
+   */
+  memberAudienceOnly?: boolean;
   /**
    * members = notifications for Members only; staff = for Club Staff only;
    * all = every recipient type with Type of recipient / Club\Team filters.
@@ -29,7 +36,11 @@ type Props = {
   view?: RecipientFilter;
 };
 
-export default function ClubNotificationsPanel({ clubId, view = 'all' }: Props) {
+export default function ClubNotificationsPanel({
+  clubId,
+  view = 'all',
+  memberAudienceOnly = false,
+}: Props) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -81,14 +92,18 @@ export default function ClubNotificationsPanel({ clubId, view = 'all' }: Props) 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setItems(data.items || []);
-      setTotal(data.total || 0);
+      const rawItems = (data.items || []) as NotificationDto[];
+      const filtered = memberAudienceOnly
+        ? rawItems.filter((item) => item.audienceKind === 'members')
+        : rawItems;
+      setItems(filtered);
+      setTotal(memberAudienceOnly ? filtered.length : data.total || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [clubId, page, statusFilter, recipientFilter, clubFilter]);
+  }, [clubId, page, statusFilter, recipientFilter, clubFilter, memberAudienceOnly]);
 
   useEffect(() => {
     setRecipientFilter(view);
