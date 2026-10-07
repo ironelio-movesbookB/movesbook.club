@@ -59,6 +59,8 @@ const publicApiRoutes = [
   '/api/translations',
   /** Global sport dropdown catalog — GET is public; PUT still requires Super Admin in the route */
   '/api/admin/sport-dropdown-parameters',
+  /** Registration page: active special offer of a version (guests have no token) */
+  '/api/subscriptions/special-offer',
 ];
 
 /** Public share links (read-only workout day / session). */

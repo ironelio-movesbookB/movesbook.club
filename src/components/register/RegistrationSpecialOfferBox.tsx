@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, MousePointerClick, X } from 'lucide-react';
 
 export type PublicSpecialOffer = {
@@ -163,7 +164,8 @@ export default function RegistrationSpecialOfferBox({
         ) : null}
       </div>
 
-      {popupOpen ? (
+      {popupOpen && typeof document !== 'undefined'
+        ? createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
           role="dialog"
@@ -216,8 +218,10 @@ export default function RegistrationSpecialOfferBox({
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }
