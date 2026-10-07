@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
+import ClubCoachArchive from '@/components/club/coaches/ClubCoachArchive';
+import { canAccessClubWorkspace, isTeamAccountUserType } from '@/utils/dashboardRouting';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { formatSportText, translateSportLabel } from '@/lib/sport/sportI18n';
 import {
   CLUB_STAFF_TABS,
   CLUB_STAFF_TYPES,
@@ -26,8 +30,11 @@ function matchesTab(item: ClubStaffListItem, tab: ClubStaffTabId): boolean {
 export default function ClubStaffList() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preset = searchParams.get('preset') ?? '';
-  const [tab, setTab] = useState<ClubStaffTabId>('all');
+  const { t } = useLanguage();
+  const preset = searchParams?.get('preset') ?? '';
+  const [tab, setTab] = useState<ClubStaffTabId | 'coaches'>(
+    searchParams?.get('tab') === 'coaches' ? 'coaches' : 'all',
+  );
   const [items, setItems] = useState<ClubStaffListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,6 +45,18 @@ export default function ClubStaffList() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [canManageCoaches, setCanManageCoaches] = useState(false);
+
+  useEffect(() => {
+    try {
+      const userType = String(JSON.parse(localStorage.getItem('user') || '{}')?.userType ?? '');
+      const allowed = canAccessClubWorkspace(userType) || isTeamAccountUserType(userType);
+      setCanManageCoaches(allowed);
+      if (!allowed) setTab((current) => (current === 'coaches' ? 'all' : current));
+    } catch {
+      setCanManageCoaches(false);
+    }
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -63,6 +82,7 @@ export default function ClubStaffList() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    if (tab === 'coaches') return [];
     let rows = items.filter((item) => matchesTab(item, tab));
     if (staffTypeFilter !== 'all') {
       rows = rows.filter((item) => item.staffType === staffTypeFilter);
@@ -101,7 +121,11 @@ export default function ClubStaffList() {
   const deleteIds = async (ids: string[]) => {
     const valid = ids.filter((id) => !id.startsWith('admin:'));
     if (valid.length === 0) return;
-    if (!window.confirm(valid.length === 1 ? 'Delete this club staff member?' : `Delete ${valid.length} club staff members?`)) {
+    const question =
+      valid.length === 1
+        ? translateSportLabel(t, 'Delete this club staff member?')
+        : formatSportText(t, 'Delete {0} club staff members?', String(valid.length));
+    if (!window.confirm(question)) {
       return;
     }
     setBusy(true);
@@ -141,8 +165,25 @@ export default function ClubStaffList() {
             {entry.label}
           </button>
         ))}
+        {canManageCoaches && (
+        <button
+          type="button"
+          onClick={() => setTab('coaches')}
+          className={`px-4 py-2.5 text-sm font-medium transition ${
+            tab === 'coaches' ? 'bg-[#4f4f4f] text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Coaches
+        </button>
+        )}
       </div>
 
+      {tab === 'coaches' ? (
+        <div className="border border-gray-200 bg-gray-50 p-3">
+          <ClubCoachArchive embedded />
+        </div>
+      ) : (
+      <>
       <div className="bg-[#c4b5e0] px-4 py-2.5 text-base font-semibold text-gray-900">
         Operator List
       </div>
@@ -201,6 +242,15 @@ export default function ClubStaffList() {
           >
             Add new
           </button>
+          {canManageCoaches && (
+            <button
+              type="button"
+              onClick={() => router.push('/club/coaches/new')}
+              className="rounded bg-violet-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-violet-800"
+            >
+              Add a coach
+            </button>
+          )}
         </div>
       </div>
 
@@ -236,7 +286,7 @@ export default function ClubStaffList() {
           </button>
         </div>
         <span className="text-gray-500">
-          {filtered.length} staff
+          {formatSportText(t, '{0} staff', String(filtered.length))}
         </span>
       </div>
 
@@ -300,11 +350,11 @@ export default function ClubStaffList() {
                             else next.delete(row.id);
                             setSelectedIds(next);
                           }}
-                          aria-label={`Select ${row.username}`}
+                          aria-label={formatSportText(t, 'Select {0}', row.username)}
                         />
                       )}
                     </td>
-                    <td className={`px-3 py-2 ${textClass}`}>{row.username}</td>
+                    <td className={`px-3 py-2 ${textClass}`} translate="no">{row.username}</td>
                     <td className={`px-3 py-2 ${textClass}`}>
                       <div className="flex items-center gap-2">
                         {imageSrc ? (
@@ -319,7 +369,7 @@ export default function ClubStaffList() {
                             NO IMAGE
                           </span>
                         )}
-                        <span>{row.name}</span>
+                        <span translate="no">{row.name}</span>
                       </div>
                     </td>
                     <td className={`px-3 py-2 ${textClass}`}>{row.staffTypeLabel}</td>
@@ -332,7 +382,7 @@ export default function ClubStaffList() {
                             type="button"
                             onClick={() => router.push(`/club/staff/${row.id}`)}
                             className="rounded p-1 text-gray-700 hover:bg-white/70"
-                            aria-label={`Edit ${row.username}`}
+                            aria-label={formatSportText(t, 'Edit {0}', row.username)}
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -341,7 +391,7 @@ export default function ClubStaffList() {
                             disabled={busy}
                             onClick={() => void deleteIds([row.id])}
                             className="rounded p-1 text-red-700 hover:bg-white/70"
-                            aria-label={`Delete ${row.username}`}
+                            aria-label={formatSportText(t, 'Delete {0}', row.username)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -355,6 +405,8 @@ export default function ClubStaffList() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }

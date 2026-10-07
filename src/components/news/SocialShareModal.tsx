@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Link2, MessageCircle, Send, Facebook } from 'lucide-react';
+import { X, Link2, MessageCircle, Send, Facebook, Mail } from 'lucide-react';
 import {
   buildTelegramSharePickerUrl,
   buildWhatsAppShareUrl,
@@ -22,6 +22,10 @@ interface SocialShareModalProps {
   /** Raise z-index above workout plan overlays */
   elevated?: boolean;
   onPostToMovesbook?: () => void;
+  /** Hide the Facebook tile (e.g. invitation links). */
+  showFacebook?: boolean;
+  /** Show a Mail tile that opens the mail client with this subject. */
+  mailSubject?: string;
 }
 
 export default function SocialShareModal({
@@ -33,6 +37,8 @@ export default function SocialShareModal({
   heading = 'Share this article',
   elevated = false,
   onPostToMovesbook,
+  showFacebook = true,
+  mailSubject,
 }: SocialShareModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -79,6 +85,11 @@ export default function SocialShareModal({
     if (fb.copiedToClipboard) {
       alert(FACEBOOK_SHARE_NOTICE);
     }
+  };
+
+  const handleMail = () => {
+    if (!articleUrl) return;
+    window.location.href = `mailto:?subject=${encodeURIComponent(mailSubject ?? articleTitle)}&body=${encodeURIComponent(shareText)}`;
   };
 
   const handleCopyLink = async () => {
@@ -137,15 +148,29 @@ export default function SocialShareModal({
                 </span>
               </button>
 
-              <button
-                onClick={handleFacebook}
-                className="flex flex-col items-center justify-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-700 hover:bg-blue-50 transition-all group"
-              >
-                <Facebook className="w-8 h-8 text-blue-700 mb-2" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-800">
-                  Facebook
-                </span>
-              </button>
+              {mailSubject !== undefined && (
+                <button
+                  onClick={handleMail}
+                  className="flex flex-col items-center justify-center p-4 border-2 border-gray-200 rounded-lg hover:border-amber-500 hover:bg-amber-50 transition-all group"
+                >
+                  <Mail className="w-8 h-8 text-amber-600 mb-2" />
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-amber-700">
+                    Mail
+                  </span>
+                </button>
+              )}
+
+              {showFacebook && (
+                <button
+                  onClick={handleFacebook}
+                  className="flex flex-col items-center justify-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-700 hover:bg-blue-50 transition-all group"
+                >
+                  <Facebook className="w-8 h-8 text-blue-700 mb-2" />
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-blue-800">
+                    Facebook
+                  </span>
+                </button>
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-2">

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import {
   MAX_SLOTS_PER_DAY,
@@ -24,6 +25,10 @@ type TimetableDayRowProps = {
   active: boolean;
   onSelect: () => void;
   onChange: (day: TimetableDaySchedule) => void;
+  /** Extra control shown at the end of each slot editor row (e.g. a room picker). */
+  renderSlotExtra?: (slot: TimetableSlot, index: number, update: (patch: Partial<TimetableSlot>) => void) => ReactNode;
+  /** Radio group name; give each timetable on the page its own. */
+  radioName?: string;
 };
 
 function updateSlot(slots: TimetableSlot[], index: number, patch: Partial<TimetableSlot>): TimetableSlot[] {
@@ -47,7 +52,9 @@ export default function TimetableDayRow({
   day,
   active,
   onSelect,
-  onChange
+  onChange,
+  renderSlotExtra,
+  radioName = 'timetable-active-day'
 }: TimetableDayRowProps) {
   const handleToggleEnabled = (enabled: boolean) => {
     onChange({
@@ -142,7 +149,7 @@ export default function TimetableDayRow({
         </button>
         <input
           type="radio"
-          name="timetable-active-day"
+          name={radioName}
           checked={active}
           onChange={onSelect}
           className="h-4 w-4 accent-gray-900"
@@ -152,8 +159,13 @@ export default function TimetableDayRow({
       {active && day.enabled && (
         <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
           {day.slots.map((slot, index) => (
-            <div key={`editor-${index}`} className="grid gap-2 md:grid-cols-[72px_1fr_120px_120px] md:items-center">
-              <span className="text-xs font-semibold uppercase text-gray-500">Slot {index + 1}</span>
+            <div
+              key={`editor-${index}`}
+              className={`grid gap-2 md:items-center ${
+                renderSlotExtra ? 'md:grid-cols-[72px_1fr_90px_120px_200px]' : 'md:grid-cols-[72px_1fr_120px_120px]'
+              }`}
+            >
+              <span className="text-xs font-semibold uppercase text-gray-500">{`Slot ${index + 1}`}</span>
               <div className="space-y-1">
                 <input
                   type="range"
@@ -191,6 +203,11 @@ export default function TimetableDayRow({
                   <Minus className="h-4 w-4" />
                 </button>
               </div>
+              {renderSlotExtra
+                ? renderSlotExtra(slot, index, (patch) =>
+                    onChange({ ...day, slots: updateSlot(day.slots, index, patch) })
+                  )
+                : null}
             </div>
           ))}
         </div>
