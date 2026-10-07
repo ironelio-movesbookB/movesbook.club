@@ -14,6 +14,8 @@ import { parseClubAdminInfo } from '@/lib/club/clubAdminInfo';
 import type { ClubAdminInfo } from '@/lib/club/clubAdminInfo';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { translateSportLabel } from '@/lib/sport/sportI18n';
 import {
   CLUB_STAFF_ROLES,
   CLUB_STAFF_TYPES,
@@ -86,6 +88,7 @@ type Props = {
 
 export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }: Props) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [form, setForm] = useState<FormState>({
     ...EMPTY_FORM,
     staffType: isClubStaffType(defaultStaffType ?? '') ? defaultStaffType : '',
@@ -293,7 +296,8 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
     }
   };
 
-  const displayName = form.name.trim() || [form.firstName, form.surname].filter(Boolean).join(' ') || 'New club staff';
+  const enteredName = form.name.trim() || [form.firstName, form.surname].filter(Boolean).join(' ');
+  const displayName = enteredName || 'New club staff';
   const avatarSrc = pendingPreview || resolvePublicImageUrl(imagePath);
   const typeLabel = form.staffType
     ? CLUB_STAFF_TYPES.find((item) => item.value === form.staffType)?.label
@@ -373,13 +377,16 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
             )}
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-800">{displayName}</h1>
+            <h1 className="text-3xl font-bold text-gray-800" translate={enteredName ? 'no' : undefined}>
+              {displayName}
+            </h1>
             <p className="mt-1 flex items-center gap-2 text-gray-600">
               <Mail className="h-4 w-4" />
-              {form.email || '—'}
+              <span translate="no">{form.email || '—'}</span>
             </p>
             <p className="mt-1 flex items-center gap-2 text-gray-600">
-              <User className="h-4 w-4" />@{form.username || 'username'}
+              <User className="h-4 w-4" />
+              {form.username ? <span translate="no">@{form.username}</span> : <span>@username</span>}
             </p>
             <div className="mt-2">
               <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-800">
@@ -513,7 +520,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               className={inputClass}
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
+                <option key={lang.code} value={lang.code} translate="no">
                   {lang.name} ({lang.code.toUpperCase()})
                 </option>
               ))}
@@ -560,6 +567,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               value={form.telegramAccount}
               onChange={(e) => setForm((f) => ({ ...f, telegramAccount: e.target.value }))}
               placeholder="@username"
+              translate="no"
               className={inputClass}
             />
           </Field>
@@ -570,11 +578,18 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               value={form.youtubeChannelUrl}
               onChange={(e) => setForm((f) => ({ ...f, youtubeChannelUrl: e.target.value }))}
               placeholder="https://youtube.com/@channel"
+              translate="no"
               className={inputClass}
             />
           </Field>
           <Field label="Account type" htmlFor="staff-account-type">
-            <input id="staff-account-type" type="text" value="Club staff" readOnly className={readOnlyClass} />
+            <input
+              id="staff-account-type"
+              type="text"
+              value={translateSportLabel(t, 'Club staff')}
+              readOnly
+              className={readOnlyClass}
+            />
           </Field>
           <Field label="Member since" htmlFor="staff-since">
             <input

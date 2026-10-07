@@ -16,6 +16,11 @@ export function translateSportLabel(t: (key: string) => string, text: string): s
   return value && value !== key ? value : text;
 }
 
+/** Translates a `{0}` template (registered as a label) and fills in the values: `Delete {0}?`. */
+export function formatSportText(t: (key: string) => string, template: string, ...values: string[]): string {
+  return translateSportLabel(t, template).replace(/\{(\d)\}/g, (_, i: string) => values[Number(i)] ?? '');
+}
+
 /** "Position roles (Goalie, Defenseman…)" → label "Position roles", examples as placeholder. */
 export function splitFieldLabel(full: string): { label: string; examples?: string } {
   const m = /^([^()]+?)\s*\(([^()]+)\)$/.exec(full);
