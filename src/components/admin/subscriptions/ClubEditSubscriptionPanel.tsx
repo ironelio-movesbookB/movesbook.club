@@ -18,6 +18,7 @@ import ClubSubscriptionEditTabs, {
   type ClubSubscriptionEditTab,
 } from './ClubSubscriptionEditTabs';
 import ClubIdentificationCardsPricelistPanel from './ClubIdentificationCardsPricelistPanel';
+import SpecialOfferSettingsPanel from './SpecialOfferSettingsPanel';
 
 type ClubEditSubscriptionPanelProps = {
   id: number;
@@ -29,6 +30,7 @@ function parseTab(param: string | null): ClubSubscriptionEditTab {
   if (param === 'identification' || param === 'identification_cards') {
     return 'identification_cards';
   }
+  if (param === 'special_offer') return 'special_offer';
   return 'setting_subscriptions';
 }
 
@@ -86,7 +88,12 @@ export default function ClubEditSubscriptionPanel({
       return;
     }
     setActiveTab(tab);
-    const tabParam = tab === 'identification_cards' ? 'identification' : null;
+    const tabParam =
+      tab === 'identification_cards'
+        ? 'identification'
+        : tab === 'special_offer'
+          ? 'special_offer'
+          : null;
     const base = `/subscriptions/club_edit_subscription/${id}/club`;
     router.replace(tabParam ? `${base}?tab=${tabParam}` : base, { scroll: false });
   };
@@ -173,6 +180,10 @@ export default function ClubEditSubscriptionPanel({
 
         {activeTab === 'identification_cards' ? (
           <ClubIdentificationCardsPricelistPanel />
+        ) : null}
+
+        {activeTab === 'special_offer' ? (
+          <SpecialOfferSettingsPanel versionId={id} versionName={row.name} />
         ) : null}
       </div>
     </div>

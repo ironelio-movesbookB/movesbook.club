@@ -53,9 +53,13 @@ export async function GET(request: NextRequest) {
       statusParam === 'active' || statusParam === 'expired' || statusParam === 'all'
         ? statusParam
         : 'all';
+    const audienceParam = searchParams.get('audience');
     const result = await listClubAdminSentNotifications({
       userId: auth.userId,
       clubId: searchParams.get('clubId'),
+      filterClubId: searchParams.get('filterClubId'),
+      audienceKind:
+        audienceParam === 'staff' ? 'staff' : audienceParam === 'members' ? 'members' : null,
       search: searchParams.get('q') || '',
       status,
       page: Number(searchParams.get('page') || '1'),

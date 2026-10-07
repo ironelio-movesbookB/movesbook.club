@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { NotificationDto } from '@/lib/notifications/notificationService';
+import NotificationRecipients from '@/components/notifications/NotificationRecipients';
 import type { OrgEntityKind } from '@/lib/notifications/notificationService';
 
 const CKEditor = dynamic(() => import('@/components/news/CKEditor'), { ssr: false });
@@ -291,26 +292,7 @@ export default function OrgNotificationsPanel({ kind, entityId }: Props) {
                     {labels.entity}
                   </p>
                 </button>
-                <div className="min-w-[7rem] max-w-[10rem] shrink-0 text-right">
-                  <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
-                    {item.senderOfficialName || item.submittedByName || 'Org'}
-                  </p>
-                  {item.submittedByUsername ? (
-                    <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
-                  ) : null}
-                </div>
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
-                  {item.senderLogoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.senderLogoUrl}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-[9px] text-gray-500">N/A</span>
-                  )}
-                </div>
+                <NotificationRecipients item={item} fallbackName="Org" />
                 <button type="button" onClick={() => void toggleShow(item)}>
                   {item.isShow ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
                 </button>

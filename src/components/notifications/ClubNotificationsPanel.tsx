@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { NotificationDto } from '@/lib/notifications/notificationService';
+import NotificationRecipients from '@/components/notifications/NotificationRecipients';
 
 const CKEditor = dynamic(() => import('@/components/news/CKEditor'), { ssr: false });
 
@@ -16,6 +17,7 @@ function userToken(): string | null {
 const today = () => new Date().toISOString().slice(0, 10);
 
 type StatusFilter = 'all' | 'active' | 'expired';
+type RecipientFilter = 'all' | 'members' | 'staff';
 
 type Props = {
   /** When set = MY CLUB (one club). When omitted = MY PAGE (all owned clubs). */
@@ -27,17 +29,25 @@ type Props = {
    * (broadcasts that apply to the selected member).
    */
   memberAudienceOnly?: boolean;
+  /**
+   * members = notifications for Members only; staff = for Club Staff only;
+   * all = every recipient type with Type of recipient / Club\Team filters.
+   */
+  view?: RecipientFilter;
 };
 
 export default function ClubNotificationsPanel({
   clubId,
-  initialAudienceKind = 'members',
+  view = 'all',
   memberAudienceOnly = false,
 }: Props) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>(view);
+  const [clubFilter, setClubFilter] = useState('');
+  const initialAudienceKind: 'members' | 'staff' = view === 'staff' ? 'staff' : 'members';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -74,6 +84,8 @@ export default function ClubNotificationsPanel({
         status: statusFilter,
       });
       if (clubId) qs.set('clubId', clubId);
+      else if (clubFilter) qs.set('filterClubId', clubFilter);
+      if (recipientFilter !== 'all') qs.set('audience', recipientFilter);
       const res = await fetch(`/api/notifications/club?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
@@ -91,7 +103,12 @@ export default function ClubNotificationsPanel({
     } finally {
       setLoading(false);
     }
-  }, [clubId, page, statusFilter, memberAudienceOnly]);
+  }, [clubId, page, statusFilter, memberAudienceOnly, recipientFilter, clubFilter]);
+
+  useEffect(() => {
+    setRecipientFilter(view);
+    setPage(1);
+  }, [view]);
 
   const loadOwnedClubs = useCallback(async () => {
     const token = userToken();
@@ -134,13 +151,6 @@ export default function ClubNotificationsPanel({
     resetForm();
     setModalOpen(true);
   }
-
-  useEffect(() => {
-    if (initialAudienceKind === 'staff') {
-      openCreate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when landing with ?audience=staff
-  }, []);
 
   function openEdit(item: NotificationDto) {
     setEditId(item.id);
@@ -247,9 +257,17 @@ export default function ClubNotificationsPanel({
     }
   }
 
+  const recipientsWord =
+    view === 'members' ? 'Members' : view === 'staff' ? 'Club Staff' : 'Members and Club Staff';
   const scopeLabel = clubId
-    ? 'Members of the selected club (MY CLUB)'
-    : 'Members of all clubs you own (MY PAGE)';
+    ? `${recipientsWord} of the selected club (MY CLUB)`
+    : `${recipientsWord} of all clubs you own (MY PAGE)`;
+  const pageTitle =
+    view === 'members'
+      ? 'Notifications for the Members'
+      : view === 'staff'
+        ? 'Notifications for the Club Staff'
+        : 'Notifications for the Club Staff & Members';
 
   const statusTabs: { id: StatusFilter; label: string }[] = [
     { id: 'all', label: 'All' },
@@ -261,11 +279,11 @@ export default function ClubNotificationsPanel({
     <div className="w-full p-4 md:p-6 text-gray-900">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Notifications for the Club Staff</h1>
+          <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
           <p className="text-sm text-gray-600 mt-1">{scopeLabel}</p>
           <p className="text-xs text-gray-500 mt-1">
-            Broadcast notifies among club admin and staff (no reply). Use “Post messages for the Club Staff” for
-            conversations with replies.
+            Broadcast notifies (no reply). Use “Post messages among Club and members” for conversations with
+            replies.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -293,21 +311,62 @@ export default function ClubNotificationsPanel({
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1 border-b border-gray-300 pb-0">
-        {statusTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => changeStatus(tab.id)}
-            className={`px-4 py-1.5 text-sm border border-b-0 rounded-t ${
-              statusFilter === tab.id
-                ? 'bg-gray-800 text-white border-gray-800'
-                : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-gray-300">
+        <div className="flex flex-wrap gap-1">
+          {statusTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => changeStatus(tab.id)}
+              className={`px-4 py-1.5 text-sm border border-b-0 rounded-t ${
+                statusFilter === tab.id
+                  ? 'bg-gray-800 text-white border-gray-800'
+                  : 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {view === 'all' ? (
+          <div className="flex flex-wrap gap-3 pb-2 text-sm">
+            <label className="flex flex-col">
+              <span className="text-xs text-gray-600">Type of recipient</span>
+              <select
+                value={recipientFilter}
+                onChange={(e) => {
+                  setRecipientFilter(e.target.value as RecipientFilter);
+                  setPage(1);
+                }}
+                className="mt-0.5 min-w-[140px] border border-gray-300 rounded px-2 py-1 bg-white text-gray-900"
+              >
+                <option value="all">All</option>
+                <option value="members">Members</option>
+                <option value="staff">Staff</option>
+              </select>
+            </label>
+            {!clubId ? (
+              <label className="flex flex-col">
+                <span className="text-xs text-gray-600">Club\Team</span>
+                <select
+                  value={clubFilter}
+                  onChange={(e) => {
+                    setClubFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-0.5 min-w-[160px] border border-gray-300 rounded px-2 py-1 bg-white text-gray-900"
+                >
+                  <option value="">All Clubs\Teams</option>
+                  {ownedClubs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {loading ? (
@@ -338,26 +397,7 @@ export default function ClubNotificationsPanel({
                     {item.clubIds.length} club(s)
                   </p>
                 </button>
-                <div className="min-w-[7rem] max-w-[10rem] shrink-0 text-right">
-                  <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
-                    {item.senderOfficialName || item.submittedByName || 'Club'}
-                  </p>
-                  {item.submittedByUsername ? (
-                    <p className="text-[11px] text-gray-500 truncate">@{item.submittedByUsername}</p>
-                  ) : null}
-                </div>
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-gray-300 bg-gray-100 flex items-center justify-center">
-                  {item.senderLogoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.senderLogoUrl}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-[9px] text-gray-500">N/A</span>
-                  )}
-                </div>
+                <NotificationRecipients item={item} showAudienceIcon fallbackName="Club" />
                 <button type="button" onClick={() => void toggleShow(item)} title="Toggle visibility">
                   {item.isShow ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
                 </button>

@@ -120,7 +120,9 @@ export default function AdminRegisteredUserGridCard({
           <div className={membershipDateClassName(admin.statusTone)}>
             {formatMembershipDateRange(admin.dateStart, admin.dateEnd)}
           </div>
-          <div className="text-gray-700">{admin.version}</div>
+          <div className={admin.specialOffer ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+            {admin.version}
+          </div>
         </div>
         <div className="w-[4.5rem] h-[4.5rem] shrink-0 border-2 border-red-600 bg-gray-50 flex items-center justify-center overflow-hidden">
           {avatarDisplaySrc ? (
