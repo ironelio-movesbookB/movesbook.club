@@ -21,6 +21,7 @@ import {
   FolderOpen,
   HelpCircle,
   Hourglass,
+  Landmark,
   Megaphone,
   Paperclip,
   Phone,
@@ -159,6 +160,12 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'child', label: 'Full list', path: '/club/work-groups' },
   ],
   [
+    { kind: 'group', Icon: Landmark, label: 'Administration' },
+    { kind: 'child', label: 'Staff, board and members', path: '/club/staff' },
+    { kind: 'child', label: 'Register of members and volunteers', path: '/club/register-members' },
+    { kind: 'child', label: 'Meetings and minutes', path: '/club/meetings' },
+  ],
+  [
     { kind: 'icon', Icon: Building2, label: 'Customers', path: '/clubs/archive_customers' },
     { kind: 'icon', Icon: Briefcase, label: 'Suppliers', path: '/clubs/archive_suppliers' },
   ],
@@ -249,8 +256,8 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
   ],
 ];
 
-/** Coaches and Groups of work are managed by clubs and teams only, so the coach workspace menu omits them. */
-const CLUB_TEAM_ONLY_GROUPS = new Set(['Coaches', 'Groups of work']);
+/** Coaches, Groups of work and Administration are managed by clubs and teams only, so the coach workspace menu omits them. */
+const CLUB_TEAM_ONLY_GROUPS = new Set(['Coaches', 'Groups of work', 'Administration']);
 export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
   (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),
 );

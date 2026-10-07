@@ -2249,6 +2249,88 @@ model ClubWorkGroupAnnouncementRow {
   @@ignore
 }
 
+/// src/lib/club/clubStaffAdminService.ts
+model ClubStaffDetailsRow {
+  staffId       String   @id @db.VarChar(191) @map("staff_id")
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  detailsJson   String   @db.Text @map("details_json")
+  memberNumber  String?  @db.VarChar(40) @map("member_number")
+  updatedAt     DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId], map: "club_staff_details_workspace_idx")
+  @@map("club_staff_details")
+  @@ignore
+}
+
+/// src/lib/club/clubStaffAdminService.ts
+model ClubMemberNumberCounterRow {
+  workspaceKind String @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String @db.VarChar(191) @map("workspace_id")
+  lastNumber    Int    @default(0) @map("last_number")
+
+  @@id([workspaceKind, workspaceId])
+  @@map("club_member_number_counters")
+  @@ignore
+}
+
+/// src/lib/club/clubStaffAdminService.ts
+model ClubStaffGroupRoleRow {
+  id            String   @id @db.VarChar(191)
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  staffId       String   @db.VarChar(191) @map("staff_id")
+  groupId       String   @db.VarChar(191) @map("group_id")
+  role          String   @default("") @db.VarChar(80)
+  notes         String?  @db.Text
+  assignedAt    DateTime @db.Date @map("assigned_at")
+  createdAt     DateTime @default(now()) @db.DateTime(3) @map("created_at")
+
+  @@unique([staffId, groupId], map: "club_staff_group_roles_staff_group_key")
+  @@index([workspaceKind, workspaceId], map: "club_staff_group_roles_workspace_idx")
+  @@map("club_staff_group_roles")
+  @@ignore
+}
+
+/// src/lib/club/clubStaffAdminService.ts
+model ClubStaffRemunerationRow {
+  id            String   @id @db.VarChar(191)
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  staffId       String   @db.VarChar(191) @map("staff_id")
+  paidOn        DateTime @db.Date @map("paid_on")
+  amount        Decimal  @db.Decimal(10, 2)
+  kind          String   @db.VarChar(20)
+  paymentType   String   @default("") @db.VarChar(40) @map("payment_type")
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @db.DateTime(3) @map("created_at")
+
+  @@index([staffId, paidOn], map: "club_staff_remunerations_staff_idx")
+  @@map("club_staff_remunerations")
+  @@ignore
+}
+
+/// src/lib/club/clubMeetingService.ts
+model ClubMeetingRow {
+  id            String   @id @db.VarChar(191)
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  meetingDate   DateTime @db.Date @map("meeting_date")
+  subject       String   @db.VarChar(255)
+  secretary     String   @default("") @db.VarChar(191)
+  documentName  String   @default("") @db.VarChar(191) @map("document_name")
+  documentHtml  String?  @db.MediumText @map("document_html")
+  fileName      String?  @db.VarChar(191) @map("file_name")
+  filePath      String?  @db.VarChar(255) @map("file_path")
+  authorId      String?  @db.VarChar(191) @map("author_id")
+  createdAt     DateTime @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt     DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId, meetingDate], map: "club_meetings_workspace_idx")
+  @@map("club_meetings")
+  @@ignore
+}
+
 /// src/lib/promocodes/ensureMetaTables.ts
 model PromocodeAppSettingRow {
   settingKey   String  @id @db.VarChar(64) @map("setting_key")

@@ -1,10 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Calendar, Mail, User } from 'lucide-react';
+import { Calendar, Mail, Search, User } from 'lucide-react';
+import {
+  StaffCertificationsFields,
+  StaffCompanyRoleFields,
+  StaffContractSection,
+  StaffGroupRoles,
+  StaffPersonalFields,
+} from '@/components/club/staff/StaffAdminSections';
+import { EMPTY_STAFF_DETAILS, type StaffDetails } from '@/lib/club/clubStaffAdmin.constants';
+import type { ClubCoachProfileMatch } from '@/lib/club/clubCoach.constants';
 import { ALL_COUNTRIES } from '@/constants/countries.constants';
 import { SUPPORTED_LANGUAGES } from '@/constants/tools.constants';
 import ProfileSportsMultiSelect from '@/components/profile/ProfileSportsMultiSelect';
@@ -106,6 +115,50 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
   );
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [origin, setOrigin] = useState('');
+  const [details, setDetails] = useState<StaffDetails>(EMPTY_STAFF_DETAILS);
+  const [query, setQuery] = useState('');
+  const [matches, setMatches] = useState<ClubCoachProfileMatch[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+
+  const patchDetails = (patch: Partial<StaffDetails>) => setDetails((prev) => ({ ...prev, ...patch }));
+
+  useEffect(() => {
+    const q = query.trim();
+    if (mode !== 'create' || q.length < 2) {
+      setMatches([]);
+      return;
+    }
+    const seq = ++searchSeq.current;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      clubApiFetch<{ items: ClubCoachProfileMatch[] }>(`/api/club/coaches/lookup?q=${encodeURIComponent(q)}`)
+        .then(({ items }) => {
+          if (seq === searchSeq.current) setMatches(items);
+        })
+        .catch(() => {
+          if (seq === searchSeq.current) setMatches([]);
+        })
+        .finally(() => {
+          if (seq === searchSeq.current) setSearching(false);
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, mode]);
+
+  /** Email and username are unique per account, so only the personal data is copied. */
+  const applyMatch = (match: ClubCoachProfileMatch) => {
+    setForm((f) => ({
+      ...f,
+      firstName: match.firstName || f.firstName,
+      surname: match.surname || f.surname,
+      birthdate: match.birthDate || f.birthdate,
+      country: match.country || f.country,
+    }));
+    if (match.country) patchDetails({ birthCountry: match.country });
+    setQuery('');
+    setMatches([]);
+  };
 
   useEffect(() => {
     setOrigin(typeof window !== 'undefined' ? window.location.origin : '');
@@ -151,6 +204,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
         referencesHtml: staff.referencesHtml ?? '',
         referencesLevel: staff.referencesLevel || '1',
       });
+      setDetails({ ...EMPTY_STAFF_DETAILS, ...(staff.details ?? {}) });
       setAdminInfo(() => {
         const parsed = staff.adminInfo
           ? parseClubAdminInfo(staff.adminInfo)
@@ -201,12 +255,28 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
       setError('Display name is required.');
       return;
     }
+    if (!form.surname.trim() || !form.firstName.trim()) {
+      setError('Surname and name are required.');
+      return;
+    }
+    if (!form.birthdate) {
+      setError('Date of birth is required.');
+      return;
+    }
+    if (!details.taxCode.trim()) {
+      setError('Tax code is required.');
+      return;
+    }
+    if (details.isMember && !details.memberNumber.trim()) {
+      setError('Enter the member number or click "+ Add no. automatically".');
+      return;
+    }
     if (!form.staffType) {
       setError('Select a type of staff.');
       return;
     }
     if (!form.role) {
-      setError('Select a role.');
+      setError('Select an employment area.');
       return;
     }
     if (mode === 'create') {
@@ -259,6 +329,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
         referencesHtml: form.referencesHtml,
         referencesLevel: form.referencesLevel,
         adminInfo,
+        details,
       };
 
       let savedId = staffId;
@@ -275,6 +346,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
           body: JSON.stringify(payload),
         });
         setProfile(updated.staff);
+        if (updated.staff.details) setDetails({ ...EMPTY_STAFF_DETAILS, ...updated.staff.details });
       }
 
       if (savedId && pendingPhoto) {
@@ -460,6 +532,50 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
         </div>
 
         <form onSubmit={save} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {mode === 'create' ? (
+            <div className="md:col-span-2">
+              <h3 className="text-sm font-bold text-slate-800">Do you want to duplicate an existing profile?</h3>
+              <div className="relative mt-2 max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault();
+                  }}
+                  placeholder="Search member…"
+                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                />
+                {query.trim().length >= 2 ? (
+                  <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+                    {searching && matches.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-500">Searching…</p>
+                    ) : matches.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-500">No members or staff match.</p>
+                    ) : (
+                      matches.map((m) => (
+                        <button
+                          key={m.userId}
+                          type="button"
+                          onClick={() => applyMatch(m)}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
+                        >
+                          <span className="font-medium text-gray-900" translate="no">
+                            {[m.surname, m.firstName].filter(Boolean).join(' ') || m.username}
+                          </span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            <span translate="no">@{m.username}</span> · <span>{m.relation}</span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <h3 className="mt-5 text-sm font-bold text-slate-800">or enter the data manually</h3>
+            </div>
+          ) : null}
           <Field label="Display name" htmlFor="staff-name">
             <input
               id="staff-name"
@@ -479,7 +595,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               className={mode === 'edit' ? readOnlyClass : inputClass}
             />
           </Field>
-          <Field label="First name" htmlFor="staff-first">
+          <Field label="Name" htmlFor="staff-first" required>
             <input
               id="staff-first"
               type="text"
@@ -488,7 +604,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               className={inputClass}
             />
           </Field>
-          <Field label="Surname" htmlFor="staff-surname">
+          <Field label="Surname" htmlFor="staff-surname" required>
             <input
               id="staff-surname"
               type="text"
@@ -539,7 +655,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               <option value="Other">Other</option>
             </select>
           </Field>
-          <Field label="Birthdate" htmlFor="staff-birthdate">
+          <Field label="Date of birth" htmlFor="staff-birthdate" required>
             <input
               id="staff-birthdate"
               type="date"
@@ -560,6 +676,13 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               />
             </Field>
           </div>
+          <StaffPersonalFields
+            value={details}
+            onChange={patchDetails}
+            phone={adminInfo.phoneNumber}
+            onPhoneChange={(phoneNumber) => setAdminInfo((prev) => ({ ...prev, phoneNumber }))}
+            disabled={saving}
+          />
           <Field label="Telegram account" htmlFor="staff-telegram">
             <input
               id="staff-telegram"
@@ -612,7 +735,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
             />
           </div>
 
-          <Field label="Type of staff" htmlFor="staff-type">
+          <Field label="Type of staff" htmlFor="staff-type" required>
             <select
               id="staff-type"
               value={form.staffType}
@@ -630,7 +753,7 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
               ))}
             </select>
           </Field>
-          <Field label="Role" htmlFor="staff-role">
+          <Field label="Employment area" htmlFor="staff-role" required>
             <select
               id="staff-role"
               value={form.role}
@@ -702,6 +825,16 @@ export default function ClubStaffProfileForm({ mode, staffId, defaultStaffType }
             />
           </div>
 
+          <StaffCertificationsFields value={details} onChange={patchDetails} disabled={saving} />
+          <StaffCompanyRoleFields value={details} onChange={patchDetails} disabled={saving} />
+          <StaffGroupRoles staffId={mode === 'edit' ? staffId : undefined} disabled={saving} />
+          <StaffContractSection
+            value={details}
+            onChange={patchDetails}
+            staffId={mode === 'edit' ? staffId : undefined}
+            disabled={saving}
+          />
+
           {(error || message) && (
             <div className="md:col-span-2">
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -742,16 +875,19 @@ const readOnlyClass =
 function Field({
   label,
   htmlFor,
+  required,
   children,
 }: {
   label: string;
   htmlFor: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-gray-700">
         {label}
+        {required ? <span> *</span> : null}
       </label>
       {children}
     </div>
