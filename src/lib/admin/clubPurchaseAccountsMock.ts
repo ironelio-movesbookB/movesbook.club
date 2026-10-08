@@ -59,6 +59,11 @@ export function getClubPurchaseAccountsSettings(): ClubPurchaseAccountsSettings 
   return structuredClone(cachedSettings);
 }
 
+/** Async alias used by club settings / registration purchase UI. */
+export async function fetchClubPurchaseAccountsSettings(): Promise<ClubPurchaseAccountsSettings> {
+  return getClubPurchaseAccountsSettings();
+}
+
 export function saveClubPurchaseAccountsSettings(
   settings: ClubPurchaseAccountsSettings,
 ): ClubPurchaseAccountsSettings {
