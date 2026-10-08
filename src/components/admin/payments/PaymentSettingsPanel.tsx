@@ -337,8 +337,7 @@ export default function PaymentSettingsPanel() {
       </section>
 
       <p className="text-xs text-gray-500">
-        Secret keys are stored encrypted and are never shown again. All domains (movesbook.eu, movesbook.it, …)
-        must use the same <code>PAYMENT_KEYS_SECRET</code> (or <code>JWT_SECRET</code>) to read them.
+        Secret keys are stored encrypted and are never shown again.
       </p>
 
       <div className="flex items-center gap-3">
