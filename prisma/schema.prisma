@@ -2331,6 +2331,45 @@ model ClubMeetingRow {
   @@ignore
 }
 
+/// src/lib/subscriptions/specialOffers.ts
+model SubscriptionSpecialOfferRow {
+  id               Int      @id @default(autoincrement())
+  versionId        Int      @unique(map: "uq_special_offer_version")
+  enabled          Boolean  @default(false)
+  titlesJson       String?  @db.Text
+  descriptionsJson String?  @db.MediumText
+  counterLangsJson String?  @db.Text
+  validFrom        DateTime? @db.Date
+  validTo          DateTime? @db.Date
+  costEuro         Decimal  @default(0) @db.Decimal(10, 2)
+  maxSubscriptions Int      @default(0)
+  counterStart     Int      @default(0)
+  logoUrl          String?  @db.VarChar(512)
+  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("subscription_special_offers")
+  @@ignore
+}
+
+/// src/lib/subscriptions/specialOffers.ts
+model SubscriptionSpecialOfferRegistrationRow {
+  id          Int       @id @default(autoincrement())
+  offerId     Int
+  versionId   Int
+  versionName String    @db.VarChar(255)
+  offerTitle  String?   @db.VarChar(255)
+  userId      String    @db.VarChar(191)
+  costEuro    Decimal   @default(0) @db.Decimal(10, 2)
+  dateStart   DateTime  @db.Date
+  dateEnd     DateTime? @db.Date
+  createdAt   DateTime  @default(now()) @db.DateTime(0)
+
+  @@index([offerId], map: "idx_sor_offer")
+  @@index([userId], map: "idx_sor_user")
+  @@map("subscription_special_offer_registrations")
+  @@ignore
+}
+
 /// src/lib/promocodes/ensureMetaTables.ts
 model PromocodeAppSettingRow {
   settingKey   String  @id @db.VarChar(64) @map("setting_key")
