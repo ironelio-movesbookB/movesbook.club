@@ -17,6 +17,11 @@ import RegistrationPackageEntityDetailPanel, {
   type RegistrationEntityDetailTab,
 } from './RegistrationPackageEntityDetailPanel';
 import type { ClubPricelistTab } from './RegistrationClubPricelistsPanel';
+import {
+  formatCountryPrice,
+  priceForCountry,
+  type CountryPriceInfo,
+} from '@/lib/countries/countryPriceFormula';
 
 type RegistrationPackageInfoModalProps = {
   isOpen: boolean;
@@ -24,6 +29,7 @@ type RegistrationPackageInfoModalProps = {
   userType: RegistrationUserType;
   lang: string;
   onPurchaseVersion?: (subscriptionId: number) => void;
+  countryPrice?: CountryPriceInfo | null;
 };
 
 export default function RegistrationPackageInfoModal({
@@ -32,7 +38,12 @@ export default function RegistrationPackageInfoModal({
   userType,
   lang,
   onPurchaseVersion,
+  countryPrice = null,
 }: RegistrationPackageInfoModalProps) {
+  const formatVersionPrice = (price: number) =>
+    countryPrice
+      ? formatCountryPrice(priceForCountry(price, countryPrice.factor), countryPrice)
+      : formatRegistrationPrice(price);
   const [category, setCategory] = useState<RegistrationPackageCategory>('social_training');
   const [selectedEntity, setSelectedEntity] = useState<RegistrationSelectedEntity | null>(null);
   const [purchasePanelTab, setPurchasePanelTab] = useState<
@@ -177,7 +188,7 @@ export default function RegistrationPackageInfoModal({
                         {version.label}
                       </div>
                       <div className="mt-1 text-[11px] sm:text-xs font-semibold text-[#dbeafe]">
-                        {formatRegistrationPrice(version.price)}
+                        {formatVersionPrice(version.price)}
                       </div>
                       <div className="mt-0.5 text-[10px] sm:text-xs text-white/90">
                         Duration: {version.durationDays} days
@@ -225,7 +236,7 @@ export default function RegistrationPackageInfoModal({
                         Purchase
                       </button>
                       <div className="mt-1 text-[10px] sm:text-xs font-semibold text-[#dbeafe]">
-                        {formatRegistrationPrice(version.price)}
+                        {formatVersionPrice(version.price)}
                       </div>
                     </td>
                   ))}

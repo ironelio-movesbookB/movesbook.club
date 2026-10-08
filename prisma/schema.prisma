@@ -2379,6 +2379,65 @@ model PromocodeAppSettingRow {
   @@ignore
 }
 
+/// src/lib/countries/countryPricingDb.ts
+model CountryPricingRow {
+  countryName         String   @id @db.VarChar(100) @map("country_name")
+  annualIncome        Decimal? @db.Decimal(14, 2) @map("annual_income")
+  incomeCurrency      String   @default("EUR") @db.VarChar(3) @map("income_currency")
+  sliderPercent       Decimal  @default(0) @db.Decimal(6, 2) @map("slider_percent")
+  currencyCode        String?  @db.VarChar(10) @map("currency_code")
+  currencyDescription String?  @db.VarChar(100) @map("currency_description")
+  eurToLocal          Decimal? @db.Decimal(20, 6) @map("eur_to_local")
+  usdToLocal          Decimal? @db.Decimal(20, 6) @map("usd_to_local")
+  updatedAt           DateTime @default(now()) @db.Timestamp(0) @map("updated_at")
+
+  @@map("country_pricing")
+  @@ignore
+}
+
+/// src/lib/registration/registrationPayments.ts
+model RegistrationPaymentRow {
+  id           String    @id @db.VarChar(36)
+  userId       String    @db.VarChar(191) @map("user_id")
+  status       String    @db.VarChar(16)
+  provider     String?   @db.VarChar(16)
+  providerMode String?   @db.VarChar(16) @map("provider_mode")
+  providerRef  String?   @db.VarChar(255) @map("provider_ref")
+  providerTxn  String?   @db.VarChar(255) @map("provider_txn")
+  versionId    Int?      @map("version_id")
+  versionName  String    @default("") @db.VarChar(255) @map("version_name")
+  specialOffer Boolean   @default(false) @map("special_offer")
+  basePriceEur Decimal   @default(0) @db.Decimal(10, 2) @map("base_price_eur")
+  amountEur    Decimal   @default(0) @db.Decimal(10, 2) @map("amount_eur")
+  country      String    @default("") @db.VarChar(100)
+  currencyCode String    @default("EUR") @db.VarChar(10) @map("currency_code")
+  eurToLocal   Decimal?  @db.Decimal(18, 6) @map("eur_to_local")
+  amountLocal  Decimal?  @db.Decimal(18, 2) @map("amount_local")
+  language     String    @default("en") @db.VarChar(10)
+  periodId     String?   @db.VarChar(64) @map("period_id")
+  createdAt    DateTime  @default(now()) @db.DateTime(0) @map("created_at")
+  paidAt       DateTime? @db.DateTime(0) @map("paid_at")
+
+  @@index([userId], map: "idx_rp_user")
+  @@map("registration_payments")
+  @@ignore
+}
+
+/// src/lib/registration/registrationPayments.ts
+model UserAccountActivationRow {
+  userId       String    @id @db.VarChar(191) @map("user_id")
+  status       String    @db.VarChar(24)
+  tokenHash    String?   @db.VarChar(64) @map("token_hash")
+  tokenExpires DateTime? @db.DateTime(0) @map("token_expires")
+  emailSentAt  DateTime? @db.DateTime(0) @map("email_sent_at")
+  activatedAt  DateTime? @db.DateTime(0) @map("activated_at")
+  createdAt    DateTime  @default(now()) @db.DateTime(0) @map("created_at")
+
+  @@index([tokenHash], map: "idx_uaa_token")
+  @@map("user_account_activations")
+  @@ignore
+}
+
 /// src/lib/messages/versionHistory.ts
 model WhyMovesbookSectionRow {
   id           Int       @id @default(autoincrement())

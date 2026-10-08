@@ -1,38 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/adminAuth';
 import {
-  loadCountryPricingStore,
-  saveCountryPricingStore,
-  upsertCountryPricing,
-} from '@/lib/countries/countryPricingServer';
+  getCountryPricingHeader,
+  listCountryPricing,
+  saveCountryPricingHeader,
+  saveCountryPricingSettings,
+} from '@/lib/countries/countryPricingDb';
+import type { CountryPricingSettings } from '@/lib/countries/countryPriceFormula';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  return NextResponse.json(loadCountryPricingStore());
+/** Countries page: header values + pricing of every country (saved or imported from PHP). */
+export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  try {
+    const [header, countries] = await Promise.all([getCountryPricingHeader(), listCountryPricing()]);
+    return NextResponse.json({ header, countries: Object.fromEntries(countries) });
+  } catch (e) {
+    console.error('country-pricing GET:', e);
+    return NextResponse.json({ error: 'Failed to load country pricing' }, { status: 500 });
+  }
 }
 
+/** Body `{ header }` saves the header fields; `{ country }` saves one country. */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     const body = await request.json().catch(() => ({}));
-    const countryName = typeof body.countryName === 'string' ? body.countryName : '';
-    const annualIncome = typeof body.annualIncome === 'string' ? body.annualIncome : undefined;
-    const ratioWithUs = typeof body.ratioWithUs === 'string' ? body.ratioWithUs : undefined;
-    const ourAnnualIncomeEur =
-      typeof body.ourAnnualIncomeEur === 'string' ? body.ourAnnualIncomeEur : undefined;
-
-    if (ourAnnualIncomeEur != null && !countryName) {
-      const store = loadCountryPricingStore();
-      store.ourAnnualIncomeEur = ourAnnualIncomeEur;
-      saveCountryPricingStore(store);
-      return NextResponse.json({ ok: true, store });
+    if (body.header && typeof body.header === 'object') {
+      return NextResponse.json({ header: await saveCountryPricingHeader(body.header) });
     }
-
-    const store = upsertCountryPricing(
-      countryName,
-      { annualIncome, ratioWithUs },
-      ourAnnualIncomeEur
-    );
-    return NextResponse.json({ ok: true, store });
+    const country = body.country as Partial<CountryPricingSettings> | undefined;
+    if (!country || typeof country.countryName !== 'string' || !country.countryName.trim()) {
+      return NextResponse.json({ error: 'Country name is required' }, { status: 400 });
+    }
+    const saved = await saveCountryPricingSettings({
+      countryName: country.countryName,
+      annualIncome: Number(country.annualIncome) || null,
+      incomeCurrency: country.incomeCurrency === 'USD' ? 'USD' : 'EUR',
+      sliderPercent: Number(country.sliderPercent) || 0,
+      currencyCode: String(country.currencyCode ?? ''),
+      currencyDescription: String(country.currencyDescription ?? ''),
+      eurToLocal: Number(country.eurToLocal) || null,
+      usdToLocal: Number(country.usdToLocal) || null,
+    });
+    return NextResponse.json({ country: saved });
   } catch (e) {
     console.error('country-pricing POST:', e);
     return NextResponse.json({ error: 'Failed to save country pricing' }, { status: 500 });

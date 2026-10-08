@@ -646,7 +646,7 @@ export async function GET(request: NextRequest) {
         return {
           ...row,
           version: reg.versionName,
-          amount: `€ ${reg.costEuro}`,
+          amount: row.amount && row.amount !== '—' ? row.amount : `€ ${reg.costEuro}`,
           specialOffer: true,
           specialOfferTitle: reg.offerTitle,
         };

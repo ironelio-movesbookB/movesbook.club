@@ -181,6 +181,7 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
         { label: 'Versions', icon: Layers, href: '/subscriptions/subscription_settings' },
         { label: 'Functions enabled', icon: CheckSquare, href: '/subscriptions/function_settings/1' },
         { label: 'Packages infos', icon: Package, href: '/subscriptions/package/5/en' },
+        { label: 'Payment settings', icon: CreditCard, href: '/admin/global-settings/payments' },
         { label: 'Other Settings', icon: Settings }
       ]
     },

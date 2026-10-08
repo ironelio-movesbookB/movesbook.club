@@ -16,10 +16,30 @@ import {
   COUNTRIES_PAGE_SIZE,
 } from '@/constants/countriesDashboard.constants';
 import { countryFlagSrc } from '@/lib/countries/countryFlag';
-import {
-  loadCountriesPageGlobalSettings,
-  saveCountriesPageGlobalSettings,
-} from '@/lib/countries/countrySettingsStorage';
+import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
+import type {
+  CountryPricingHeader,
+  CountryPricingSettings,
+} from '@/lib/countries/countryPriceFormula';
+
+function applyPricingToRow(row: CountryRow, pricing: CountryPricingSettings | undefined): CountryRow {
+  if (!pricing) return row;
+  return {
+    ...row,
+    currencyCode: pricing.currencyCode || row.currencyCode,
+    eurRate: pricing.eurToLocal ?? row.eurRate,
+    usdRate: pricing.usdToLocal ?? row.usdRate,
+  };
+}
+
+function amountText(value: number): string {
+  return value > 0 ? String(value) : '';
+}
+
+function parseHeaderAmount(value: string): number {
+  const n = Number.parseFloat(value.replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 function rowMatchesCountriesFilter(row: CountryRow, f: CountriesFilterState): boolean {
   if (f.continent !== 'All' && row.continent !== f.continent) return false;
@@ -134,9 +154,16 @@ export default function CountriesPage() {
   const [orderingSelect, setOrderingSelect] = useState<OrderMode>('reset');
   const [appliedOrderMode, setAppliedOrderMode] = useState<OrderMode>('reset');
   const [currentPage, setCurrentPage] = useState(1);
-  const [annualIncomeEur, setAnnualIncomeEur] = useState('0.00');
-  const [costVirtualProduct, setCostVirtualProduct] = useState('0.00');
+  const [annualIncomeEur, setAnnualIncomeEur] = useState('');
+  const [costVirtualProduct, setCostVirtualProduct] = useState('');
   const [usdEurField, setUsdEurField] = useState('');
+  const [pricingHeader, setPricingHeader] = useState<CountryPricingHeader>({
+    ourAnnualIncomeEur: 0,
+    costVirtualProduct: 0,
+    usdToEur: 0,
+  });
+  const [pricingByCountry, setPricingByCountry] = useState<Record<string, CountryPricingSettings>>({});
+  const [headerStatus, setHeaderStatus] = useState<string | null>(null);
 
   const displayedCountries = useMemo(
     () => sortCountries(filteredCountries, appliedOrderMode),
@@ -166,10 +193,6 @@ export default function CountriesPage() {
     }
     try {
       JSON.parse(adminData);
-      const global = loadCountriesPageGlobalSettings();
-      setAnnualIncomeEur(global.annualIncomeEur);
-      setCostVirtualProduct(global.costVirtualProduct);
-      setUsdEurField(global.usdEur);
       setLoading(false);
     } catch {
       localStorage.removeItem('token');
@@ -180,7 +203,38 @@ export default function CountriesPage() {
     }
   }, [router]);
 
-  const handleCountrySave = (countryId: number, payload: CountryEditSavePayload) => {
+  useEffect(() => {
+    const token = getAdminBearerToken();
+    if (!token) return;
+    let cancelled = false;
+    void fetch('/api/admin/country-pricing', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { header: CountryPricingHeader; countries: Record<string, CountryPricingSettings> } | null) => {
+        if (cancelled || !data) return;
+        setPricingHeader(data.header);
+        setAnnualIncomeEur(amountText(data.header.ourAnnualIncomeEur));
+        setCostVirtualProduct(amountText(data.header.costVirtualProduct));
+        setUsdEurField(amountText(data.header.usdToEur));
+        setPricingByCountry(data.countries ?? {});
+        setCountries((prev) =>
+          prev.map((row) => applyPricingToRow(row, data.countries?.[row.name.toLowerCase()])),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCountrySave = (
+    countryId: number,
+    payload: CountryEditSavePayload,
+    pricing: CountryPricingSettings,
+  ) => {
+    setPricingByCountry((prev) => ({ ...prev, [pricing.countryName.toLowerCase()]: pricing }));
     setCountries((prev) =>
       prev.map((row) =>
         row.id === countryId
@@ -209,17 +263,32 @@ export default function CountriesPage() {
     );
   };
 
-  const handleSaveGlobalSettings = () => {
-    saveCountriesPageGlobalSettings({
-      annualIncomeEur,
-      costVirtualProduct,
-      usdEur: usdEurField,
-    });
-    void fetch('/api/admin/country-pricing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ourAnnualIncomeEur: annualIncomeEur }),
-    }).catch(() => undefined);
+  const handleSaveGlobalSettings = async () => {
+    const token = getAdminBearerToken();
+    if (!token) {
+      setHeaderStatus('Not authenticated');
+      return;
+    }
+    setHeaderStatus('Saving…');
+    try {
+      const res = await fetch('/api/admin/country-pricing', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          header: {
+            ourAnnualIncomeEur: parseHeaderAmount(annualIncomeEur),
+            costVirtualProduct: parseHeaderAmount(costVirtualProduct),
+            usdToEur: parseHeaderAmount(usdEurField),
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      setPricingHeader(data.header);
+      setHeaderStatus('Saved');
+    } catch (e) {
+      setHeaderStatus(e instanceof Error ? e.message : 'Save failed');
+    }
   };
 
   if (loading) return null;
@@ -308,10 +377,11 @@ export default function CountriesPage() {
               <button
                 type="button"
                 className="bg-[#222] hover:bg-black text-white px-3 py-1 text-xs font-bold rounded-md border border-black/20"
-                onClick={handleSaveGlobalSettings}
+                onClick={() => void handleSaveGlobalSettings()}
               >
                 Save
               </button>
+              {headerStatus ? <span className="text-xs text-gray-600">{headerStatus}</span> : null}
               <Link
                 href="/operators"
                 className="inline-flex items-center justify-center bg-[#222] hover:bg-black text-white px-3 py-2 text-xs font-bold rounded-md border border-black/20 text-center max-w-[220px] leading-tight self-end mt-0.5 sm:mt-0"
@@ -495,6 +565,8 @@ export default function CountriesPage() {
 
       <CountryEditModal
         row={editingCountry}
+        header={pricingHeader}
+        pricing={editingCountry ? pricingByCountry[editingCountry.name.toLowerCase()] ?? null : null}
         onClose={() => setEditingCountry(null)}
         onSave={handleCountrySave}
         onRegionsCountChange={handleRegionsCountChange}

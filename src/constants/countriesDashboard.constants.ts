@@ -1040,4 +1040,19 @@ export const COUNTRIES_DASHBOARD_ROWS: CountryRow[] = COUNTRIES.map((name, index
   buildCountryRow(name, index + 1),
 );
 
+/** Built-in currency of a country and its 1 EUR rate when known (placeholder rates excluded). */
+export function builtInCountryCurrency(
+  name: string,
+): { currencyCode: string; eurToLocal: number | null; usdToLocal: number | null } | null {
+  const key = name.trim().toLowerCase();
+  const row = COUNTRIES_DASHBOARD_ROWS.find((r) => r.name.toLowerCase() === key);
+  if (!row) return null;
+  const hasRealRates = Boolean(COUNTRY_ROW_OVERRIDES[row.name]) || row.currencyCode === 'EUR';
+  return {
+    currencyCode: row.currencyCode,
+    eurToLocal: hasRealRates ? row.eurRate : null,
+    usdToLocal: hasRealRates ? row.usdRate : null,
+  };
+}
+
 export const COUNTRIES_PAGE_SIZE = 20;

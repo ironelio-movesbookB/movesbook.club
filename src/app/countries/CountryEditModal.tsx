@@ -10,6 +10,17 @@ import {
   saveCountryExtendedSettings,
 } from '@/lib/countries/countrySettingsStorage';
 import { countryFlagSrc } from '@/lib/countries/countryFlag';
+import {
+  COUNTRY_SLIDER_MAX,
+  COUNTRY_SLIDER_MIN,
+  clampSliderPercent,
+  computeCountryPrice,
+  localAmount,
+  sliderForFinalCost,
+  type CountryPricingHeader,
+  type CountryPricingSettings,
+} from '@/lib/countries/countryPriceFormula';
+import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
 
 export type CountryRow = {
   id: number;
@@ -60,7 +71,7 @@ const LANGUAGE_OPTIONS = [
   '—',
 ];
 
-const INCOME_CURRENCIES = ['EUR', 'USD', 'GBP'];
+const INCOME_CURRENCIES = ['EUR', 'USD'] as const;
 
 const CURRENCY_NAMES: Record<string, string> = {
   AFN: 'Afghani',
@@ -82,28 +93,37 @@ function describeCurrency(code: string) {
   return CURRENCY_NAMES[code] ?? code;
 }
 
-function rowToForm(row: CountryRow, extended: CountryExtendedSettings) {
-  const safeEur = row.eurRate || 1;
-  const safeUsd = row.usdRate || 1;
+function rateText(value: number | null | undefined, digits: number): string {
+  return value && value > 0 ? String(Number(value.toFixed(digits))) : '';
+}
+
+function inverseText(value: string, digits: number): string {
+  const n = Number.parseFloat(value.replace(',', '.'));
+  return n > 0 ? String(Number((1 / n).toFixed(digits))) : '';
+}
+
+function rowToForm(row: CountryRow, extended: CountryExtendedSettings, pricing: CountryPricingSettings | null) {
+  const eurToLocal = pricing?.eurToLocal ?? (row.eurRate > 0 ? row.eurRate : null);
+  const usdToLocal = pricing?.usdToLocal ?? (row.usdRate > 0 ? row.usdRate : null);
+  const currencyCode = pricing?.currencyCode || row.currencyCode;
   return {
     completed: row.settingCompleted ?? false,
     abbreviation: row.iso2.toUpperCase(),
     population: String(row.population),
-    annualIncome: extended.annualIncome,
-    incomeCurrency: extended.incomeCurrency,
-    ratioWithUs: extended.ratioWithUs,
-    percentageOr: extended.percentageOr,
-    virtualCost: extended.virtualCost,
+    annualIncome: pricing?.annualIncome != null ? String(pricing.annualIncome) : '',
+    incomeCurrency: (pricing?.incomeCurrency ?? 'EUR') as (typeof INCOME_CURRENCIES)[number],
+    sliderPercent: clampSliderPercent(pricing?.sliderPercent ?? 0),
     continent: row.continent,
     officialLanguage: row.officialLanguage,
     primaryLanguage: row.primaryLanguage,
     secondaryLanguage: row.secondaryLanguage === '—' ? '—' : row.secondaryLanguage,
-    currencyCode: row.currencyCode,
-    currencyDescription: extended.currencyDescription || describeCurrency(row.currencyCode),
-    exchangeEurPerAfn: extended.exchangeEurPerUnit || (1 / safeEur).toFixed(4),
-    exchange1EurAfn: extended.exchange1Eur || safeEur.toFixed(3),
-    exchangeUsdPerAfn: extended.exchangeUsdPerUnit || (1 / safeUsd).toFixed(4),
-    exchange1UsdAfn: extended.exchange1Usd || safeUsd.toFixed(3),
+    currencyCode,
+    currencyDescription:
+      pricing?.currencyDescription || extended.currencyDescription || describeCurrency(currencyCode),
+    exchangeEurPerAfn: eurToLocal ? String(Number((1 / eurToLocal).toFixed(6))) : '',
+    exchange1EurAfn: rateText(eurToLocal, 3),
+    exchangeUsdPerAfn: usdToLocal ? String(Number((1 / usdToLocal).toFixed(6))) : '',
+    exchange1UsdAfn: rateText(usdToLocal, 3),
     flagSrc: countryFlagSrc(row.iso2),
     countryPictureName: extended.countryPictureName,
     countryPictureDataUrl: extended.countryPictureDataUrl ?? '',
@@ -111,9 +131,27 @@ function rowToForm(row: CountryRow, extended: CountryExtendedSettings) {
   };
 }
 
+function parseAmount(value: string): number | null {
+  const n = Number.parseFloat(value.replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formToPricing(countryName: string, form: FormState): CountryPricingSettings {
+  return {
+    countryName,
+    annualIncome: parseAmount(form.annualIncome),
+    incomeCurrency: form.incomeCurrency,
+    sliderPercent: form.sliderPercent,
+    currencyCode: form.currencyCode,
+    currencyDescription: form.currencyDescription,
+    eurToLocal: parseAmount(form.exchange1EurAfn),
+    usdToLocal: parseAmount(form.exchange1UsdAfn),
+  };
+}
+
 function formToSavePayload(form: FormState, extended: CountryExtendedSettings): CountryEditSavePayload {
-  const eurRate = Number.parseFloat(form.exchange1EurAfn) || 1;
-  const usdRate = Number.parseFloat(form.exchange1UsdAfn) || 1;
+  const eurRate = parseAmount(form.exchange1EurAfn) ?? 0;
+  const usdRate = parseAmount(form.exchange1UsdAfn) ?? 0;
 
   return {
     settingCompleted: form.completed,
@@ -131,9 +169,7 @@ function formToSavePayload(form: FormState, extended: CountryExtendedSettings): 
       ...extended,
       annualIncome: form.annualIncome,
       incomeCurrency: form.incomeCurrency,
-      ratioWithUs: form.ratioWithUs,
-      percentageOr: form.percentageOr,
-      virtualCost: form.virtualCost,
+      percentageOr: form.sliderPercent,
       currencyDescription: form.currencyDescription,
       exchangeEurPerUnit: form.exchangeEurPerAfn,
       exchange1Eur: form.exchange1EurAfn,
@@ -164,32 +200,57 @@ function FormRow({
 
 type Props = {
   row: CountryRow | null;
+  /** Header values of the Countries page (our income, reference cost, USD-€). */
+  header: CountryPricingHeader;
+  pricing: CountryPricingSettings | null;
   onClose: () => void;
-  onSave: (countryId: number, payload: CountryEditSavePayload) => void;
+  onSave: (countryId: number, payload: CountryEditSavePayload, pricing: CountryPricingSettings) => void;
   onRegionsCountChange?: (countryId: number, regionsCount: number) => void;
 };
 
+function formatMoney(value: number | null): string {
+  return value == null ? '—' : `€ ${value.toFixed(2)}`;
+}
+
 type SubModal = 'regions' | 'distributors' | 'dealers' | null;
 
-export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }: Props) {
+export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegionsCountChange }: Props) {
   const titleId = useId();
   const flagInputId = useId();
   const [form, setForm] = useState<FormState | null>(null);
   const [extended, setExtended] = useState<CountryExtendedSettings | null>(null);
   const [subModal, setSubModal] = useState<SubModal>(null);
+  const [finalCostDraft, setFinalCostDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (row) {
       const loaded = loadCountryExtendedSettings(row.id, row.name);
       setExtended(loaded);
-      setForm(rowToForm(row, loaded));
+      setForm(rowToForm(row, loaded, pricing));
       setSubModal(null);
     } else {
       setExtended(null);
       setForm(null);
       setSubModal(null);
     }
+    setFinalCostDraft(null);
+    setSaveError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when another country opens
   }, [row]);
+
+  const breakdown = useMemo(
+    () =>
+      form
+        ? computeCountryPrice(header, {
+            annualIncome: parseAmount(form.annualIncome),
+            incomeCurrency: form.incomeCurrency,
+            sliderPercent: form.sliderPercent,
+          })
+        : null,
+    [form, header],
+  );
 
   useEffect(() => {
     if (!row) return;
@@ -210,21 +271,60 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
     if (row) saveCountryExtendedSettings(row.id, next);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!row || !form || !extended) return;
     const payload = formToSavePayload(form, extended);
-    saveCountryExtendedSettings(row.id, payload.extended);
-    void fetch('/api/admin/country-pricing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        countryName: row.name,
-        annualIncome: payload.extended.annualIncome,
-        ratioWithUs: payload.extended.ratioWithUs,
-      }),
-    }).catch(() => undefined);
-    onSave(row.id, payload);
-    onClose();
+    const token = getAdminBearerToken();
+    if (!token) {
+      setSaveError('Not authenticated');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch('/api/admin/country-pricing', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country: formToPricing(row.name, form) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      saveCountryExtendedSettings(row.id, payload.extended);
+      onSave(row.id, payload, data.country as CountryPricingSettings);
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setSlider = (value: number) => {
+    setFinalCostDraft(null);
+    setForm((f) => (f ? { ...f, sliderPercent: clampSliderPercent(value) } : f));
+  };
+
+  const setFinalCost = (text: string) => {
+    setFinalCostDraft(text);
+    const final = parseAmount(text);
+    if (final != null && breakdown?.suggestedCost) {
+      const slider = sliderForFinalCost(breakdown.suggestedCost, final);
+      setForm((f) => (f ? { ...f, sliderPercent: slider } : f));
+    }
+  };
+
+  const setExchangePair = (
+    key: 'exchange1EurAfn' | 'exchangeEurPerAfn' | 'exchange1UsdAfn' | 'exchangeUsdPerAfn',
+    value: string,
+  ) => {
+    const partner = {
+      exchange1EurAfn: 'exchangeEurPerAfn',
+      exchangeEurPerAfn: 'exchange1EurAfn',
+      exchange1UsdAfn: 'exchangeUsdPerAfn',
+      exchangeUsdPerAfn: 'exchange1UsdAfn',
+    } as const;
+    const digits = key === 'exchange1EurAfn' || key === 'exchange1UsdAfn' ? 6 : 3;
+    setForm((f) => (f ? { ...f, [key]: value, [partner[key]]: inverseText(value, digits) } : f));
   };
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -429,7 +529,7 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
           <FormRow label="Currency">
             <select
               value={form.incomeCurrency}
-              onChange={(e) => update('incomeCurrency', e.target.value)}
+              onChange={(e) => update('incomeCurrency', e.target.value as FormState['incomeCurrency'])}
               className="border border-gray-300 px-2 py-1 text-sm max-w-[200px]"
             >
               {INCOME_CURRENCIES.map((c) => (
@@ -441,53 +541,94 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
           </FormRow>
 
           <FormRow label="Ratio with us">
-            <input
-              type="text"
-              value={form.ratioWithUs}
-              onChange={(e) => update('ratioWithUs', e.target.value)}
-              className="w-full max-w-[200px] border border-gray-300 px-2 py-1 text-sm"
-            />
+            <span className="text-sm tabular-nums text-gray-900">
+              {breakdown?.ratio != null ? breakdown.ratio.toFixed(2) : '—'}
+              <span className="ml-2 text-xs text-gray-500">
+                (our income € {header.ourAnnualIncomeEur || 0} : income of {row.name})
+              </span>
+            </span>
           </FormRow>
 
-          <FormRow label=" ">
+          <FormRow label="Suggested cost">
+            <span className="text-sm tabular-nums text-gray-900">
+              {formatMoney(breakdown?.suggestedCost ?? null)}
+              <span className="ml-2 text-xs text-gray-500">
+                (virtual product € {header.costVirtualProduct || 0} : ratio)
+              </span>
+            </span>
+          </FormRow>
+
+          <FormRow label="Adjust cost">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-red-600 font-bold text-sm">OR</span>
               <button
                 type="button"
                 className="border border-gray-400 w-7 h-7 text-sm font-bold bg-white hover:bg-gray-100"
-                onClick={() => update('percentageOr', Math.max(0, form.percentageOr - 1))}
+                onClick={() => setSlider(form.sliderPercent - 1)}
               >
                 −
               </button>
-              <div className="flex-1 min-w-[120px] max-w-[200px] flex items-center gap-2">
-                <span className="text-xs text-gray-500 w-4">0</span>
+              <div className="flex-1 min-w-[120px] max-w-[220px] flex items-center gap-2">
+                <span className="text-xs text-gray-500">{COUNTRY_SLIDER_MIN}%</span>
                 <input
                   type="range"
-                  min={0}
-                  max={100}
-                  value={form.percentageOr}
-                  onChange={(e) => update('percentageOr', Number(e.target.value))}
+                  min={COUNTRY_SLIDER_MIN}
+                  max={COUNTRY_SLIDER_MAX}
+                  step={1}
+                  value={form.sliderPercent}
+                  onChange={(e) => setSlider(Number(e.target.value))}
                   className="flex-1 accent-blue-600"
                 />
-                <span className="text-xs text-gray-500 whitespace-nowrap">100%</span>
+                <span className="text-xs text-gray-500 whitespace-nowrap">+{COUNTRY_SLIDER_MAX}%</span>
               </div>
               <button
                 type="button"
                 className="border border-gray-400 w-7 h-7 text-sm font-bold bg-white hover:bg-gray-100"
-                onClick={() => update('percentageOr', Math.min(100, form.percentageOr + 1))}
+                onClick={() => setSlider(form.sliderPercent + 1)}
               >
                 +
               </button>
+              <span className="w-12 text-right text-sm font-semibold tabular-nums">
+                {form.sliderPercent > 0 ? '+' : ''}
+                {form.sliderPercent}%
+              </span>
             </div>
           </FormRow>
 
-          <FormRow label="Virtual cost">
-            <input
-              type="text"
-              value={form.virtualCost}
-              onChange={(e) => update('virtualCost', e.target.value)}
-              className="w-full max-w-[200px] border border-gray-300 px-2 py-1 text-sm"
-            />
+          <FormRow label="Virtual cost (final)">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">€</span>
+              <input
+                type="text"
+                value={
+                  finalCostDraft ??
+                  (breakdown?.finalCost != null ? breakdown.finalCost.toFixed(2) : '')
+                }
+                disabled={!breakdown?.suggestedCost}
+                onChange={(e) => setFinalCost(e.target.value)}
+                onBlur={() => setFinalCostDraft(null)}
+                className="w-28 border border-gray-300 px-2 py-1 text-sm font-semibold disabled:bg-gray-100"
+              />
+              {breakdown?.finalCost != null && header.costVirtualProduct > 0 ? (
+                <span className="text-xs text-gray-500">
+                  {(() => {
+                    const local = localAmount(
+                      breakdown.finalCost,
+                      parseAmount(form.exchange1EurAfn),
+                    );
+                    return local != null && form.currencyCode && form.currencyCode !== 'EUR'
+                      ? `= ${local.toLocaleString('en-US')} ${form.currencyCode} · `
+                      : '';
+                  })()}
+                  prices × {breakdown.factor.toFixed(3)}
+                </span>
+              ) : null}
+            </div>
+            {!breakdown?.suggestedCost ? (
+              <p className="mt-1 text-xs text-amber-700">
+                Set “Our annual income EUR” and “Cost virtual product” at the top of the page, and the annual
+                income of this country, to calculate the cost.
+              </p>
+            ) : null}
           </FormRow>
 
           <FormRow label="Continent">
@@ -568,7 +709,7 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
                 <input
                   type="text"
                   value={form.exchangeEurPerAfn}
-                  onChange={(e) => update('exchangeEurPerAfn', e.target.value)}
+                  onChange={(e) => setExchangePair('exchangeEurPerAfn', e.target.value)}
                   className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
                 />
                 <span className="text-gray-600">For 1 {form.currencyCode}</span>
@@ -578,7 +719,7 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
                 <input
                   type="text"
                   value={form.exchange1EurAfn}
-                  onChange={(e) => update('exchange1EurAfn', e.target.value)}
+                  onChange={(e) => setExchangePair('exchange1EurAfn', e.target.value)}
                   className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
                 />
                 <span className="text-red-600 font-semibold">{form.currencyCode}</span>
@@ -591,7 +732,7 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
                 <input
                   type="text"
                   value={form.exchangeUsdPerAfn}
-                  onChange={(e) => update('exchangeUsdPerAfn', e.target.value)}
+                  onChange={(e) => setExchangePair('exchangeUsdPerAfn', e.target.value)}
                   className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
                 />
                 <span className="text-gray-600">For 1 {form.currencyCode}</span>
@@ -601,7 +742,7 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
                 <input
                   type="text"
                   value={form.exchange1UsdAfn}
-                  onChange={(e) => update('exchange1UsdAfn', e.target.value)}
+                  onChange={(e) => setExchangePair('exchange1UsdAfn', e.target.value)}
                   className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
                 />
                 <span className="text-red-600 font-semibold">{form.currencyCode}</span>
@@ -609,13 +750,15 @@ export function CountryEditModal({ row, onClose, onSave, onRegionsCountChange }:
             </div>
           </div>
 
+          {saveError ? <p className="mt-4 text-sm text-red-700">{saveError}</p> : null}
           <div className="flex gap-2 mt-6">
             <button
               type="button"
-              className="bg-gradient-to-b from-[#444] to-[#222] text-white px-6 py-2 text-sm font-bold rounded-sm border border-black hover:from-[#555] hover:to-[#333]"
-              onClick={handleSave}
+              disabled={saving}
+              className="bg-gradient-to-b from-[#444] to-[#222] text-white px-6 py-2 text-sm font-bold rounded-sm border border-black hover:from-[#555] hover:to-[#333] disabled:opacity-50"
+              onClick={() => void handleSave()}
             >
-              Save
+              {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"

@@ -61,6 +61,8 @@ const publicApiRoutes = [
   '/api/admin/sport-dropdown-parameters',
   /** Registration page: active special offer of a version (guests have no token) */
   '/api/subscriptions/special-offer',
+  /** Registration payment page / success page (account not active yet, no token) */
+  '/api/registration-payments',
 ];
 
 /** Public share links (read-only workout day / session). */
