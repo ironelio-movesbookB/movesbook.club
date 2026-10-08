@@ -56,6 +56,7 @@ export const STAFF_UI_LABELS = [
   'Team Admin',
   'Supervisor',
   'Staff user',
+  'Delete staff member',
   'Delete this club staff member?',
   'Delete {0} club staff members?',
   'Failed to load club staff',
