@@ -837,17 +837,32 @@ export function periodsForRow(
   });
 
   const live = rowToPeriod(row, pcuAccess);
-  const sameAsCurrent = (p: NetworkSubscriptionPeriod) =>
-    p.dateStart === live.dateStart && (p.dateEnd ?? '') === (live.dateEnd ?? '');
-  const stored = matching.find(sameAsCurrent);
+  const sameDates = (a: NetworkSubscriptionPeriod, b: NetworkSubscriptionPeriod) =>
+    a.dateStart === b.dateStart && (a.dateEnd ?? '') === (b.dateEnd ?? '');
+  const exact = matching.find((p) => sameDates(p, live));
+  // The live row of a new account assumes 365 days from sign-up; the period saved at
+  // registration (creation date in UTC vs server-local day) has the version's real length.
+  const registration =
+    exact || entityId || rowUsesPcuAccessDates(row, pcuAccess)
+      ? undefined
+      : matching.find(
+          (p) =>
+            p.id.startsWith('register-') &&
+            Math.abs(parseYmdMs(p.dateStart) - parseYmdMs(live.dateStart)) <= 24 * 60 * 60 * 1000,
+        );
+  const stored = exact ?? registration;
   const current: NetworkSubscriptionPeriod = stored
     ? {
         ...live,
+        dateStart: stored.dateStart,
+        dateEnd: stored.dateEnd,
+        version: registration?.version || live.version,
         paymentMethod: stored.paymentMethod,
         amountPaid: stored.amountPaid,
         amountLocal: stored.amountLocal,
       }
     : live;
+  const sameAsCurrent = (p: NetworkSubscriptionPeriod) => sameDates(p, current);
 
   const merged = [...matching.filter((p) => !sameAsCurrent(p)), current].filter(
     (p) => !isSubscriptionPeriodDeleted(p, deleted, row.rowKey),

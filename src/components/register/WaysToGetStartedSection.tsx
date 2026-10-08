@@ -229,6 +229,7 @@ export default function WaysToGetStartedSection({
         userType={userType}
         lang={lang}
         onPurchaseVersion={onVersionSelect}
+        countryPrice={countryPrice}
       />
 
       <RegistrationVersionNewsModal

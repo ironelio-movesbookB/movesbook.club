@@ -29,10 +29,16 @@ type PaypalOrder = {
   status?: string;
   links?: { href: string; rel: string }[];
   purchase_units?: {
+    reference_id?: string;
     custom_id?: string;
     amount?: { value?: string; currency_code?: string };
     payments?: {
-      captures?: { id: string; status?: string; amount?: { value?: string; currency_code?: string } }[];
+      captures?: {
+        id: string;
+        status?: string;
+        custom_id?: string;
+        amount?: { value?: string; currency_code?: string };
+      }[];
     };
   }[];
   details?: { issue?: string; description?: string }[];
@@ -111,6 +117,13 @@ export type PaypalCaptureResult = {
   captureId: string | null;
 };
 
+function orderReference(order: PaypalOrder): string | null {
+  const unit = order.purchase_units?.[0];
+  return (
+    unit?.custom_id ?? unit?.payments?.captures?.[0]?.custom_id ?? unit?.reference_id ?? null
+  );
+}
+
 function captureResult(order: PaypalOrder): PaypalCaptureResult {
   const unit = order.purchase_units?.[0];
   const capture = unit?.payments?.captures?.find((c) => c.status === 'COMPLETED');
@@ -118,22 +131,36 @@ function captureResult(order: PaypalOrder): PaypalCaptureResult {
     completed: order.status === 'COMPLETED' && Boolean(capture),
     amountValue: capture?.amount?.value ?? unit?.amount?.value ?? '',
     currency: (capture?.amount?.currency_code ?? unit?.amount?.currency_code ?? '').toUpperCase(),
-    reference: unit?.custom_id ?? null,
+    reference: orderReference(order),
     captureId: capture?.id ?? null,
   };
 }
 
-/** Captures an approved order; an order captured earlier is read back instead. */
+/**
+ * Captures an approved order that belongs to `expectedReference`; an order captured earlier
+ * is read back instead. Orders of another reference are never captured.
+ */
 export async function capturePaypalOrder(
   creds: ActivePaypalCredentials,
   orderId: string,
+  expectedReference: string,
 ): Promise<PaypalCaptureResult> {
   const id = encodeURIComponent(orderId);
-  const captured = await paypalRequest(creds, 'POST', `/v2/checkout/orders/${id}/capture`, {});
-  if (captured.ok) return captureResult(captured.data);
-  const alreadyCaptured = captured.data.details?.some((d) => d.issue === 'ORDER_ALREADY_CAPTURED');
-  if (!alreadyCaptured) throw paypalError(captured.data, captured.status);
   const order = await paypalRequest(creds, 'GET', `/v2/checkout/orders/${id}`);
   if (!order.ok) throw paypalError(order.data, order.status);
-  return captureResult(order.data);
+  if (orderReference(order.data) !== expectedReference) {
+    return { ...captureResult(order.data), completed: false };
+  }
+  if (order.data.status === 'COMPLETED') return captureResult(order.data);
+
+  const captured = await paypalRequest(creds, 'POST', `/v2/checkout/orders/${id}/capture`, {});
+  if (captured.ok) {
+    const result = captureResult(captured.data);
+    return { ...result, reference: result.reference ?? expectedReference };
+  }
+  const alreadyCaptured = captured.data.details?.some((d) => d.issue === 'ORDER_ALREADY_CAPTURED');
+  if (!alreadyCaptured) throw paypalError(captured.data, captured.status);
+  const reread = await paypalRequest(creds, 'GET', `/v2/checkout/orders/${id}`);
+  if (!reread.ok) throw paypalError(reread.data, reread.status);
+  return captureResult(reread.data);
 }

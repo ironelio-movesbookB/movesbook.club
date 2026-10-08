@@ -19,18 +19,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (payment.status !== 'pending') {
       return NextResponse.json({ paid: true, next: successUrl });
     }
-    if (!payment.provider || !payment.providerRef) {
+
+    // The provider id from the return URL: an older checkout tab can still be confirmed,
+    // because the provider must report this payment's id as its reference.
+    const body = (await request.json().catch(() => ({}))) as { provider?: string; ref?: string };
+    const returnedRef = typeof body.ref === 'string' ? body.ref.trim().slice(0, 255) : '';
+    const provider =
+      body.provider === 'stripe' || body.provider === 'paypal' ? body.provider : payment.provider;
+    const providerRef = returnedRef || payment.providerRef;
+    if (!provider || !providerRef) {
       return NextResponse.json({ error: 'The payment was not started' }, { status: 400 });
     }
 
     const credentials = await getActivePaymentCredentials();
     const origin = registrationOrigin(request);
 
-    if (payment.provider === 'stripe') {
+    if (provider === 'stripe') {
       if (!credentials.stripe) {
         return NextResponse.json({ error: 'Card payment is not available' }, { status: 400 });
       }
-      const session = await retrieveStripeCheckoutSession(credentials.stripe, payment.providerRef);
+      const session = await retrieveStripeCheckoutSession(credentials.stripe, providerRef);
       const valid =
         session.paid &&
         session.currency === 'eur' &&
@@ -39,23 +47,31 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
-      await finalizePaidRegistration(payment, session.paymentIntent || payment.providerRef, origin);
+      await finalizePaidRegistration(
+        { ...payment, provider: 'stripe' },
+        session.paymentIntent || providerRef,
+        origin,
+      );
       return NextResponse.json({ paid: true, next: successUrl });
     }
 
     if (!credentials.paypal) {
       return NextResponse.json({ error: 'PayPal is not available' }, { status: 400 });
     }
-    const capture = await capturePaypalOrder(credentials.paypal, payment.providerRef);
+    const capture = await capturePaypalOrder(credentials.paypal, providerRef, payment.id);
     const valid =
       capture.completed &&
       capture.currency === 'EUR' &&
       capture.amountValue === euroValue(payment.amountEur) &&
-      (capture.reference == null || capture.reference === payment.id);
+      capture.reference === payment.id;
     if (!valid) {
       return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
     }
-    await finalizePaidRegistration(payment, capture.captureId || payment.providerRef, origin);
+    await finalizePaidRegistration(
+      { ...payment, provider: 'paypal' },
+      capture.captureId || providerRef,
+      origin,
+    );
     return NextResponse.json({ paid: true, next: successUrl });
   } catch (e) {
     console.error('registration-payments confirm:', e);

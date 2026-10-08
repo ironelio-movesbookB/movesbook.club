@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MousePointerClick, X } from 'lucide-react';
+import SpecialOfferLogoImage from '@/components/subscriptions/SpecialOfferLogoImage';
 import {
   formatCountryPrice,
   priceForCountry,
@@ -114,12 +115,12 @@ export default function RegistrationSpecialOfferBox({
     <>
       <div className="w-full rounded border border-green-200 bg-[#eef7ec] p-3 text-center">
         <div className="mb-1 text-xs font-bold uppercase tracking-wide text-[#7a1f2e]">{offer.title}</div>
-        {offer.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={offer.logoUrl} alt={offer.title} className="mx-auto h-24 w-24 object-contain" />
-        ) : (
-          <DefaultOfferBadge />
-        )}
+        <SpecialOfferLogoImage
+          logoUrl={offer.logoUrl}
+          alt={offer.title}
+          className="mx-auto h-24 w-24 object-contain"
+          fallback={<DefaultOfferBadge />}
+        />
         <div className="mt-2 text-lg font-semibold text-gray-900">
           {formatEuro(offer.costEuro)}
           {durationDays ? <span className="block text-xs font-normal text-gray-600">{durationDays} days</span> : null}
@@ -189,10 +190,7 @@ export default function RegistrationSpecialOfferBox({
             </div>
             <div className="space-y-3 p-4 text-sm text-gray-800">
               <div className="flex items-center gap-3">
-                {offer.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={offer.logoUrl} alt="" className="h-16 w-16 object-contain" />
-                ) : null}
+                <SpecialOfferLogoImage logoUrl={offer.logoUrl} className="h-16 w-16 object-contain" />
                 <div>
                   <div className="font-semibold">{offer.versionName}</div>
                   <div className="text-lg font-bold text-[#8b2942]">{formatEuro(offer.costEuro)}</div>

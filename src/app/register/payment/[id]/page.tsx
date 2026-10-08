@@ -68,7 +68,14 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
           setNotice('Checking your payment…');
           const confirmRes = await fetch(
             `/api/registration-payments/${encodeURIComponent(params.id)}/confirm`,
-            { method: 'POST' },
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: returningFrom,
+                ref: returningFrom === 'stripe' ? searchParams.session_id : searchParams.token,
+              }),
+            },
           );
           const confirm = await confirmRes.json().catch(() => ({}));
           if (cancelled) return;

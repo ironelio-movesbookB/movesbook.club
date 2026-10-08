@@ -201,10 +201,16 @@ export async function setRegistrationPaymentCheckout(
 }
 
 /** Moves a pending payment to paid exactly once; false when another request already did it. */
-export async function markRegistrationPaymentPaid(id: string, txn: string): Promise<boolean> {
+export async function markRegistrationPaymentPaid(
+  id: string,
+  txn: string,
+  provider: RegistrationPaymentProvider | null,
+): Promise<boolean> {
   const affected = await prisma.$executeRawUnsafe(
-    `UPDATE registration_payments SET status = 'paid', provider_txn = ?, paid_at = NOW()
+    `UPDATE registration_payments
+     SET status = 'paid', provider = COALESCE(?, provider), provider_txn = ?, paid_at = NOW()
      WHERE id = ? AND status = 'pending'`,
+    provider,
     txn.slice(0, 255),
     id,
   );

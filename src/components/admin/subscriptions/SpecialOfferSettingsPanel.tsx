@@ -5,6 +5,7 @@ import { SUPPORTED_LANGUAGES } from '@/constants/tools.constants';
 import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
 import { getTranslateFetchHeaders } from '@/utils/richTextTranslation';
 import AdminRegisteredUsersList from '@/components/admin/AdminRegisteredUsersList';
+import SpecialOfferLogoImage from '@/components/subscriptions/SpecialOfferLogoImage';
 
 const TITLE_MAX = 30;
 const DESCRIPTION_MAX = 255;
@@ -407,12 +408,11 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
           <div className="text-sm">
             <span className="block font-semibold text-gray-800 mb-1">Offer logo icon</span>
             <div className="flex items-center gap-3">
-              {form.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.logoUrl} alt="" className="h-20 w-20 object-contain border border-gray-200 bg-white" />
-              ) : (
-                <div className="h-20 w-20 border border-dashed border-gray-300 bg-gray-50" />
-              )}
+              <SpecialOfferLogoImage
+                logoUrl={form.logoUrl}
+                className="h-20 w-20 object-contain border border-gray-200 bg-white"
+                fallback={<div className="h-20 w-20 border border-dashed border-gray-300 bg-gray-50" />}
+              />
               <input
                 ref={fileRef}
                 type="file"

@@ -108,7 +108,10 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
   });
 }
 
-/** Activation mail failures must not undo a registration or a payment. */
+/**
+ * Activation mail failures must not undo a registration or a payment. Callers do not wait for
+ * it (SMTP can take up to 30 s); this needs a long-running server (`next start`), not serverless.
+ */
 export async function sendActivationEmailSafely(userId: string, origin: string): Promise<boolean> {
   try {
     await sendActivationEmail(userId, origin);
@@ -133,7 +136,7 @@ export async function finalizePaidRegistration(
   providerTxn: string,
   origin: string,
 ): Promise<void> {
-  const first = await markRegistrationPaymentPaid(payment.id, providerTxn);
+  const first = await markRegistrationPaymentPaid(payment.id, providerTxn, payment.provider);
   if (!first) return;
 
   const settings = await prisma.userSettings.findUnique({
@@ -159,5 +162,5 @@ export async function finalizePaidRegistration(
   }
 
   await setAccountActivationStatus(prisma, payment.userId, 'pending_activation');
-  await sendActivationEmailSafely(payment.userId, origin);
+  void sendActivationEmailSafely(payment.userId, origin);
 }

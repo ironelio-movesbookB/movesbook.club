@@ -364,7 +364,7 @@ export async function POST(request: NextRequest) {
           next: `/register/payment/${paymentId}`,
         });
       }
-      await sendActivationEmailSafely(user.id, registrationOrigin(request));
+      void sendActivationEmailSafely(user.id, registrationOrigin(request));
       return NextResponse.json({
         success: true,
         user,
