@@ -25273,6 +25273,17 @@
   "zh": "返回",
   "hi": "वापस"
  },
+ "sport_delete_staff_member": {
+  "en": "Delete staff member",
+  "it": "Elimina membro dello staff",
+  "es": "Eliminar miembro del personal",
+  "fr": "Supprimer le membre du personnel",
+  "de": "Mitarbeiter löschen",
+  "pt": "Eliminar membro da equipa",
+  "ru": "Удалить сотрудника",
+  "zh": "删除员工",
+  "hi": "स्टाफ सदस्य हटाएँ"
+ },
  "sport_delete_remuneration": {
   "en": "Delete remuneration",
   "it": "Elimina compenso",

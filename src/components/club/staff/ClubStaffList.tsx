@@ -7,6 +7,7 @@ import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/ser
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import ClubCoachArchive from '@/components/club/coaches/ClubCoachArchive';
 import StaffGroupRolesGrid from '@/components/club/staff/StaffGroupRolesGrid';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import { canAccessClubWorkspace, isTeamAccountUserType } from '@/utils/dashboardRouting';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { formatSportText, translateSportLabel } from '@/lib/sport/sportI18n';
@@ -49,6 +50,7 @@ export default function ClubStaffList() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
   const [canManageCoaches, setCanManageCoaches] = useState(false);
 
   useEffect(() => {
@@ -122,16 +124,14 @@ export default function ClubStaffList() {
     router.push(type ? `/club/staff/new?type=${encodeURIComponent(type)}` : '/club/staff/new');
   };
 
-  const deleteIds = async (ids: string[]) => {
+  const deleteIds = (ids: string[]) => {
     const valid = ids.filter((id) => !id.startsWith('admin:'));
-    if (valid.length === 0) return;
-    const question =
-      valid.length === 1
-        ? translateSportLabel(t, 'Delete this club staff member?')
-        : formatSportText(t, 'Delete {0} club staff members?', String(valid.length));
-    if (!window.confirm(question)) {
-      return;
-    }
+    if (valid.length > 0) setPendingDeleteIds(valid);
+  };
+
+  const confirmDelete = async () => {
+    const valid = pendingDeleteIds;
+    if (!valid) return;
     setBusy(true);
     setError('');
     try {
@@ -148,6 +148,7 @@ export default function ClubStaffList() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     } finally {
+      setPendingDeleteIds(null);
       setBusy(false);
     }
   };
@@ -236,7 +237,7 @@ export default function ClubStaffList() {
           <button
             type="button"
             disabled={busy || selectedIds.size === 0}
-            onClick={() => void deleteIds([...selectedIds])}
+            onClick={() => deleteIds([...selectedIds])}
             className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
           >
             Delete
@@ -401,7 +402,7 @@ export default function ClubStaffList() {
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => void deleteIds([row.id])}
+                            onClick={() => deleteIds([row.id])}
                             className="rounded p-1 text-red-700 hover:bg-white/70"
                             aria-label={formatSportText(t, 'Delete {0}', row.username)}
                           >
@@ -419,6 +420,22 @@ export default function ClubStaffList() {
       </div>
       </>
       )}
+
+      <PromocodeConfirmModal
+        open={pendingDeleteIds !== null}
+        title={translateSportLabel(t, 'Delete staff member')}
+        message={
+          pendingDeleteIds && pendingDeleteIds.length > 1
+            ? formatSportText(t, 'Delete {0} club staff members?', String(pendingDeleteIds.length))
+            : translateSportLabel(t, 'Delete this club staff member?')
+        }
+        confirmLabel={translateSportLabel(t, 'Delete')}
+        cancelLabel={translateSportLabel(t, 'Cancel')}
+        destructive
+        loading={busy}
+        onClose={() => setPendingDeleteIds(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
