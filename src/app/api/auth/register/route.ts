@@ -17,6 +17,24 @@ import {
   versionDurationDays,
   type SpecialOfferRegistration,
 } from '@/lib/subscriptions/specialOffers';
+import { getCountryPriceInfo } from '@/lib/countries/countryPricingDb';
+import {
+  localAmount,
+  priceForCountry,
+  type CountryPriceInfo,
+} from '@/lib/countries/countryPriceFormula';
+import { getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
+import {
+  createRegistrationPayment,
+  ensureRegistrationPaymentTables,
+  findPendingRegistrationPayment,
+  setAccountActivationStatus,
+  type RegistrationPaymentStatus,
+} from '@/lib/registration/registrationPayments';
+import {
+  registrationOrigin,
+  sendActivationEmailSafely,
+} from '@/lib/registration/registrationFlow';
 
 
 export async function POST(request: NextRequest) {
@@ -73,12 +91,30 @@ export async function POST(request: NextRequest) {
     // Check if user already exists (report which field conflicts)
     const existingByEmail = await prisma.user.findFirst({
       where: { email: normalizedEmail },
-      select: { id: true, email: true, username: true },
+      select: { id: true, email: true, username: true, password: true },
     });
     const existingByUsername = await prisma.user.findFirst({
       where: { username: normalizedUsername },
       select: { id: true, email: true, username: true },
     });
+
+    // Same person submitting again before paying: send them back to their payment page.
+    if (existingByEmail && existingByUsername && existingByEmail.id === existingByUsername.id) {
+      const pending = await findPendingRegistrationPayment(existingByEmail.id);
+      if (
+        pending &&
+        existingByEmail.password &&
+        (await bcrypt.compare(String(password ?? ''), existingByEmail.password))
+      ) {
+        return NextResponse.json(
+          {
+            error: 'This account is waiting for payment',
+            resumePaymentId: pending.id,
+          },
+          { status: 409 },
+        );
+      }
+    }
 
     if (existingByEmail || existingByUsername) {
       const conflicts: string[] = [];
@@ -108,6 +144,35 @@ export async function POST(request: NextRequest) {
 
     await ensureUserSettingsColumns();
     if (withSpecialOffer) await ensureSpecialOfferTables();
+
+    // Accounts that pick a version go through payment (or the test/free skip) and activation.
+    const usesPaymentFlow = Boolean(selectedVersion);
+    let countryPrice: CountryPriceInfo = {
+      country: String(country),
+      factor: 1,
+      currencyCode: 'EUR',
+      currencyDescription: '',
+      eurToLocal: 1,
+    };
+    let testMode = true;
+    if (usesPaymentFlow) {
+      await ensureRegistrationPaymentTables();
+      try {
+        countryPrice = await getCountryPriceInfo(String(country));
+      } catch (e) {
+        console.error('Registration: country pricing unavailable, using base prices', e);
+      }
+      const credentials = await getActivePaymentCredentials();
+      testMode = credentials.testMode;
+      const mayNeedPayment =
+        withSpecialOffer || Number(selectedVersion?.price1 ?? 0) > 0;
+      if (mayNeedPayment && !testMode && !credentials.stripe && !credentials.paypal) {
+        return NextResponse.json(
+          { error: 'Online payment is not available at the moment. Please try again later.' },
+          { status: 503 },
+        );
+      }
+    }
 
     const [colorDefaults, toolsDefaults, favouritesDefaults] = await Promise.all([
       prisma.colorDefaults.findUnique({ where: { language: userLanguage } }),
@@ -150,7 +215,7 @@ export async function POST(request: NextRequest) {
     ];
 
     // Atomic create: if settings/sports/etc fail, do not leave a half-registered user
-    const user = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
           name,
@@ -183,21 +248,52 @@ export async function POST(request: NextRequest) {
       }
 
       let adminSettings = '{}';
+      let paymentId: string | null = null;
+      let paymentStatus: RegistrationPaymentStatus | null = null;
       if (selectedVersion) {
         const dateStart = offerRegistration?.dateStart ?? todayYmd();
         const dateEnd =
           offerRegistration?.dateEnd ??
           addDaysYmd(dateStart, versionDurationDays(selectedVersion.id));
+        const basePriceEur = Number(offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0);
+        const amountEur = priceForCountry(basePriceEur, countryPrice.factor);
+        const amountLocalValue =
+          countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR'
+            ? localAmount(amountEur, countryPrice.eurToLocal)
+            : null;
+        paymentStatus = amountEur <= 0 ? 'free' : testMode ? 'test' : 'pending';
+        const periodId = `register-${Date.now()}`;
         adminSettings = mergeNetworkSubscriptionHistory('{}', [
           {
-            id: `register-${Date.now()}`,
+            id: periodId,
             dateStart,
             dateEnd,
             version: selectedVersion.name,
             status: periodDisplayStatus(dateEnd),
-            amountPaid: String(offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0),
+            amountPaid: paymentStatus === 'pending' ? '' : '0',
+            paymentMethod: paymentStatus,
           },
         ]);
+        paymentId = await createRegistrationPayment(tx, {
+          userId: created.id,
+          status: paymentStatus,
+          versionId: selectedVersion.id,
+          versionName: selectedVersion.name,
+          specialOffer: Boolean(offerRegistration),
+          basePriceEur,
+          amountEur,
+          country: String(country),
+          currencyCode: countryPrice.currencyCode || 'EUR',
+          eurToLocal: countryPrice.eurToLocal,
+          amountLocal: amountLocalValue,
+          language: userLanguage,
+          periodId,
+        });
+        await setAccountActivationStatus(
+          tx,
+          created.id,
+          paymentStatus === 'pending' ? 'pending_payment' : 'pending_activation',
+        );
       }
 
       await tx.userSettings.create({
@@ -252,12 +348,33 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      return created;
+      return { ...created, paymentId, paymentStatus };
     });
 
+    const { paymentId, paymentStatus, ...user } = result;
     console.log('User created:', user.id);
 
-    // Generate JWT token with RSA signing
+    if (paymentId && paymentStatus) {
+      if (paymentStatus === 'pending') {
+        return NextResponse.json({
+          success: true,
+          user,
+          paymentRequired: true,
+          paymentId,
+          next: `/register/payment/${paymentId}`,
+        });
+      }
+      void sendActivationEmailSafely(user.id, registrationOrigin(request));
+      return NextResponse.json({
+        success: true,
+        user,
+        paymentRequired: false,
+        paymentId,
+        next: `/register/success?p=${paymentId}`,
+      });
+    }
+
+    // No version chosen (e.g. coach invitation): account is usable right away, as before.
     const token = require('@/lib/auth').generateToken(
       user.id,
       user.email,

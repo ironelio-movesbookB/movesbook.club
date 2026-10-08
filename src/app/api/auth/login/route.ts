@@ -10,6 +10,46 @@ import {
   type EntityDirectAccessKind,
 } from '@/lib/entity/entityDirectAccessMeta';
 import mysql from 'mysql2/promise';
+import {
+  findPendingRegistrationPayment,
+  getAccountActivationStatus,
+} from '@/lib/registration/registrationPayments';
+import { registrationOrigin, sendActivationEmailSafely } from '@/lib/registration/registrationFlow';
+
+const ACTIVATION_RESEND_MS = 60 * 60 * 1000;
+
+/** Accounts registered with the payment flow log in only after payment and email activation. */
+async function registrationActivationBlock(
+  request: NextRequest,
+  userId: string,
+): Promise<NextResponse | null> {
+  const activation = await getAccountActivationStatus(userId);
+  if (!activation || activation.status === 'active') return null;
+  if (activation.status === 'pending_payment') {
+    const pending = await findPendingRegistrationPayment(userId);
+    return NextResponse.json(
+      {
+        error: 'Your registration payment is not completed yet.',
+        reason: 'payment_pending',
+        paymentUrl: pending ? `/register/payment/${pending.id}` : undefined,
+      },
+      { status: 403 },
+    );
+  }
+  const lastSent = activation.emailSentAt ? new Date(activation.emailSentAt).getTime() : 0;
+  const resent =
+    Date.now() - lastSent > ACTIVATION_RESEND_MS &&
+    (await sendActivationEmailSafely(userId, registrationOrigin(request)));
+  return NextResponse.json(
+    {
+      error: resent
+        ? 'Your account is not activated yet. We sent you a new activation email.'
+        : 'Your account is not activated yet. Open your email and click "Activate account".',
+      reason: 'activation_pending',
+    },
+    { status: 403 },
+  );
+}
 
 type LegacyDbConfig = {
   host: string;
@@ -659,6 +699,9 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    const activationBlock = await registrationActivationBlock(request, user.id);
+    if (activationBlock) return activationBlock;
 
     const userSettings = await prisma.userSettings.findUnique({
       where: { userId: user.id },

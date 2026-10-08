@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -14,6 +14,7 @@ import {
   getDefaultVersionId,
   type RegistrationUserType,
 } from '@/lib/registration/waysToGetStarted';
+import type { CountryPriceInfo } from '@/lib/countries/countryPriceFormula';
 
 export default function RegisterPage() {
   const { t } = useLanguage();
@@ -35,7 +36,27 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [specialOfferVersionId, setSpecialOfferVersionId] = useState<number | null>(null);
+  const [countryPrice, setCountryPrice] = useState<CountryPriceInfo | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!formData.country) {
+      setCountryPrice(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/public/country-pricing?country=${encodeURIComponent(formData.country)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: CountryPriceInfo | null) => {
+        if (!cancelled) setCountryPrice(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCountryPrice(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.country]);
 
   const specialOfferConfirmed =
     specialOfferVersionId !== null && specialOfferVersionId === formData.subscriptionVersionId;
@@ -91,16 +112,15 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         if (data.specialOfferUnavailable) setSpecialOfferVersionId(null);
+        if (data.resumePaymentId) {
+          router.push(`/register/payment/${encodeURIComponent(data.resumePaymentId)}`);
+          return;
+        }
         throw new Error(data.error || 'Registration failed');
       }
 
-      // Show success message
       setSuccess(true);
-      
-      // Redirect to login modal after 2 seconds
-      setTimeout(() => {
-        router.push('/?showLogin=true');
-      }, 2000);
+      router.push(typeof data.next === 'string' && data.next ? data.next : '/?showLogin=true');
 
     } catch (error: any) {
       setError(error.message);
@@ -192,6 +212,45 @@ export default function RegisterPage() {
               </select>
             </div>
 
+            {/* Country - prices below depend on it */}
+            <div className="relative">
+              <label htmlFor="country" className="block text-sm font-medium text-white mb-2">
+                Country <span className="text-red-400">*</span>
+              </label>
+              <select
+                id="country"
+                name="country"
+                required
+                size={1}
+                className="w-full px-4 py-2.5 bg-white bg-opacity-10 backdrop-blur-sm border border-cyan-500 border-opacity-30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer"
+                style={{
+                  color: formData.country ? 'white' : '#a0d2eb',
+                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a0d2eb' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                  backgroundPosition: 'right 0.5rem center',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundSize: '1.5em 1.5em',
+                  paddingRight: '2.5rem',
+                  WebkitAppearance: 'menulist',
+                  MozAppearance: 'menulist'
+                }}
+                value={formData.country}
+                onChange={(e) => setFormData({...formData, country: e.target.value})}
+              >
+                <option value="" className="text-gray-400 bg-gray-800">Select country</option>
+                {COUNTRIES.map((country) => (
+                  <option key={country} value={country} className="text-white bg-gray-800">
+                    {country}
+                  </option>
+                ))}
+              </select>
+              {countryPrice && countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR' ? (
+                <p className="mt-1 text-xs text-cyan-100">
+                  Prices for {formData.country} are shown in EUR and {countryPrice.currencyCode}
+                  {countryPrice.currencyDescription ? ` (${countryPrice.currencyDescription})` : ''}.
+                </p>
+              ) : null}
+            </div>
+
             <WaysToGetStartedSection
               userType={formData.userType}
               onUserTypeChange={(userType) =>
@@ -208,6 +267,7 @@ export default function RegisterPage() {
               lang={formData.language}
               specialOfferConfirmed={specialOfferConfirmed}
               onSpecialOfferConfirmChange={handleSpecialOfferConfirmChange}
+              countryPrice={countryPrice}
             />
 
             {/* Name + Surname - 2 Columns */}
@@ -262,56 +322,22 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Email + Country - 2 Columns */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
-                  Email <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="w-full px-4 py-2.5 bg-white bg-opacity-10 backdrop-blur-sm border border-cyan-500 border-opacity-30 rounded-xl text-white placeholder-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-200"
-                  placeholder="Email address"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                />
-              </div>
-
-              <div className="relative">
-                <label htmlFor="country" className="block text-sm font-medium text-white mb-2">
-                  Country <span className="text-red-400">*</span>
-                </label>
-                <select
-                  id="country"
-                  name="country"
-                  required
-                  size={1}
-                  className="w-full px-4 py-2.5 bg-white bg-opacity-10 backdrop-blur-sm border border-cyan-500 border-opacity-30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer"
-                  style={{ 
-                    color: formData.country ? 'white' : '#a0d2eb',
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a0d2eb' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: '1.5em 1.5em',
-                    paddingRight: '2.5rem',
-                    WebkitAppearance: 'menulist',
-                    MozAppearance: 'menulist'
-                  }}
-                  value={formData.country}
-                  onChange={(e) => setFormData({...formData, country: e.target.value})}
-                >
-                  <option value="" className="text-gray-400 bg-gray-800">Select country</option>
-                  {COUNTRIES.map((country) => (
-                    <option key={country} value={country} className="text-white bg-gray-800">
-                      {country}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Email - Full Width */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                Email <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="w-full px-4 py-2.5 bg-white bg-opacity-10 backdrop-blur-sm border border-cyan-500 border-opacity-30 rounded-xl text-white placeholder-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-200"
+                placeholder="Email address"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+              />
             </div>
 
             {/* Preferred language + Gender - 2 Columns */}

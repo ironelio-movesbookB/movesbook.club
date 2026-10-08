@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import {
-  formatRegistrationPrice,
+  formatCountryPrice,
+  priceForCountry,
+  type CountryPriceInfo,
+} from '@/lib/countries/countryPriceFormula';
+import {
   getDefaultVersionId,
   getRegistrationVersions,
   REGISTRATION_USER_TYPE_TABS,
@@ -30,6 +34,8 @@ type WaysToGetStartedSectionProps = {
   lang: string;
   specialOfferConfirmed?: boolean;
   onSpecialOfferConfirmChange?: (confirmed: boolean) => void;
+  /** Pricing of the selected country: prices are scaled and shown in local currency too. */
+  countryPrice?: CountryPriceInfo | null;
 };
 
 export default function WaysToGetStartedSection({
@@ -40,7 +46,9 @@ export default function WaysToGetStartedSection({
   lang,
   specialOfferConfirmed = false,
   onSpecialOfferConfirmChange,
+  countryPrice = null,
 }: WaysToGetStartedSectionProps) {
+  const priceFactor = countryPrice?.factor ?? 1;
   const [expanded, setExpanded] = useState(true);
   const [showPackageInfo, setShowPackageInfo] = useState(false);
   const [showNews, setShowNews] = useState(false);
@@ -127,6 +135,7 @@ export default function WaysToGetStartedSection({
               <div className="flex-1 min-w-0 space-y-1">
                 {versions.map((version) => {
                   const isSelected = selectedVersionId === version.id;
+                  const countryVersionPrice = priceForCountry(version.price, priceFactor);
                   return (
                     <label
                       key={version.id}
@@ -145,13 +154,13 @@ export default function WaysToGetStartedSection({
                         {version.name}
                       </span>
                       <span className="text-sm font-semibold text-[#8b2942] whitespace-nowrap">
-                        : {formatRegistrationPrice(version.price)}
+                        : {formatCountryPrice(countryVersionPrice, countryPrice)}
                       </span>
                       <span className="text-sm text-gray-700 whitespace-nowrap ml-auto sm:ml-0">
                         Duration : <span className="font-medium">{version.durationDays} days</span>
                       </span>
                       <RegistrationMonthlyCostLine
-                        price={version.price}
+                        price={countryVersionPrice}
                         durationDays={version.durationDays}
                         className="w-full sm:w-auto basis-full sm:basis-auto"
                       />
@@ -171,6 +180,7 @@ export default function WaysToGetStartedSection({
                     <RegistrationSubscriptionPricingBlock
                       general={selectedEditData.general}
                       scenario="first"
+                      countryPrice={countryPrice}
                     />
                     <RegistrationVersionLastNewsBlock
                       lastNewsByLang={selectedEditData.settings.lastNewsByLang}
@@ -204,6 +214,7 @@ export default function WaysToGetStartedSection({
                     lang={lang}
                     confirmed={specialOfferConfirmed}
                     onConfirmChange={onSpecialOfferConfirmChange}
+                    countryPrice={countryPrice}
                   />
                 ) : null}
               </div>
@@ -218,6 +229,7 @@ export default function WaysToGetStartedSection({
         userType={userType}
         lang={lang}
         onPurchaseVersion={onVersionSelect}
+        countryPrice={countryPrice}
       />
 
       <RegistrationVersionNewsModal

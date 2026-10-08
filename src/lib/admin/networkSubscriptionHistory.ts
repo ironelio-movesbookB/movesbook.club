@@ -27,6 +27,8 @@ export type NetworkSubscriptionPeriod = {
   archivedAt?: string;
   paymentMethod?: string;
   amountPaid?: string;
+  /** Same payment in the user's local currency, e.g. "3,818 ALL". */
+  amountLocal?: string;
   discountPercent?: string;
   /** Club whose admin purchased this account for one of his members (Club accounts). */
   purchasedByClubId?: string | null;
@@ -644,6 +646,7 @@ export function readNetworkSubscriptionHistory(
       archivedAt: typeof p.archivedAt === 'string' ? p.archivedAt : undefined,
       paymentMethod: typeof p.paymentMethod === 'string' ? p.paymentMethod : undefined,
       amountPaid: typeof p.amountPaid === 'string' ? p.amountPaid : undefined,
+      amountLocal: typeof p.amountLocal === 'string' ? p.amountLocal : undefined,
       discountPercent: typeof p.discountPercent === 'string' ? p.discountPercent : undefined,
       purchasedByClubId:
         typeof p.purchasedByClubId === 'string' && p.purchasedByClubId.trim()
@@ -833,9 +836,33 @@ export function periodsForRow(
     return entityId ? pEntity === entityId : !pEntity;
   });
 
-  const current = rowToPeriod(row, pcuAccess);
-  const sameAsCurrent = (p: NetworkSubscriptionPeriod) =>
-    p.dateStart === current.dateStart && (p.dateEnd ?? '') === (current.dateEnd ?? '');
+  const live = rowToPeriod(row, pcuAccess);
+  const sameDates = (a: NetworkSubscriptionPeriod, b: NetworkSubscriptionPeriod) =>
+    a.dateStart === b.dateStart && (a.dateEnd ?? '') === (b.dateEnd ?? '');
+  const exact = matching.find((p) => sameDates(p, live));
+  // The live row of a new account assumes 365 days from sign-up; the period saved at
+  // registration (creation date in UTC vs server-local day) has the version's real length.
+  const registration =
+    exact || entityId || rowUsesPcuAccessDates(row, pcuAccess)
+      ? undefined
+      : matching.find(
+          (p) =>
+            p.id.startsWith('register-') &&
+            Math.abs(parseYmdMs(p.dateStart) - parseYmdMs(live.dateStart)) <= 24 * 60 * 60 * 1000,
+        );
+  const stored = exact ?? registration;
+  const current: NetworkSubscriptionPeriod = stored
+    ? {
+        ...live,
+        dateStart: stored.dateStart,
+        dateEnd: stored.dateEnd,
+        version: registration?.version || live.version,
+        paymentMethod: stored.paymentMethod,
+        amountPaid: stored.amountPaid,
+        amountLocal: stored.amountLocal,
+      }
+    : live;
+  const sameAsCurrent = (p: NetworkSubscriptionPeriod) => sameDates(p, current);
 
   const merged = [...matching.filter((p) => !sameAsCurrent(p)), current].filter(
     (p) => !isSubscriptionPeriodDeleted(p, deleted, row.rowKey),
@@ -1041,9 +1068,26 @@ function periodToListRow(
     version: period.version?.trim() || row.version,
     companyName: period.companyName?.trim() || row.companyName,
     username: period.username?.trim() || row.username,
+    amount: formatMembershipAmount(period) ?? row.amount,
     status,
     statusTone: membershipStatusToneFromLabel(status),
   };
+}
+
+/** Admin list "amount" cell: "€ 42 (3,818 ALL)", "Test", "Free", "Unpaid"; null when nothing recorded. */
+export function formatMembershipAmount(
+  period: Pick<NetworkSubscriptionPeriod, 'paymentMethod' | 'amountPaid' | 'amountLocal'>,
+): string | null {
+  const method = period.paymentMethod?.trim().toLowerCase();
+  if (method === 'test') return 'Test';
+  if (method === 'free') return 'Free';
+  if (method === 'pending') return 'Unpaid';
+  const raw = period.amountPaid?.trim();
+  if (!raw) return null;
+  const euros = parseAmountPaid(raw);
+  if (euros <= 0) return raw === '0' ? '€ 0' : raw;
+  const eur = `€ ${Number.isInteger(euros) ? euros : euros.toFixed(2)}`;
+  return period.amountLocal?.trim() ? `${eur} (${period.amountLocal.trim()})` : eur;
 }
 
 /** The chronologically last membership period (latest start date). */

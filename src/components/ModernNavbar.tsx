@@ -634,6 +634,15 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
 
       data = await response.json();
 
+      if (data?.reason === 'payment_pending' && typeof data.paymentUrl === 'string') {
+        router.push(data.paymentUrl);
+        return;
+      }
+      if (data?.reason === 'activation_pending') {
+        setLoginError(data.error || 'Your account is not activated yet.');
+        return;
+      }
+
       // If regular login fails and we haven't tried admin yet, try admin login
       if (!response.ok && !isLikelyAdmin) {
         response = await fetch('/api/auth/admin/login', {
