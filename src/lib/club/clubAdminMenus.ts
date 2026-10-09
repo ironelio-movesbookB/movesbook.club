@@ -22,6 +22,7 @@ import {
   HelpCircle,
   Hourglass,
   Landmark,
+  Calculator,
   Megaphone,
   Paperclip,
   Phone,
@@ -166,8 +167,18 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'child', label: 'Meetings and minutes', path: '/club/meetings' },
   ],
   [
-    { kind: 'icon', Icon: Building2, label: 'Customers', path: '/clubs/archive_customers' },
-    { kind: 'icon', Icon: Briefcase, label: 'Suppliers', path: '/clubs/archive_suppliers' },
+    { kind: 'group', Icon: Receipt, label: 'Billing' },
+    { kind: 'child', label: 'Invoices', path: '/club/billing/invoices' },
+    { kind: 'child', label: 'Credit notes', path: '/club/billing/credit-notes' },
+    { kind: 'child', label: 'Customers and suppliers', path: '/club/billing/parties' },
+  ],
+  [
+    { kind: 'group', Icon: Calculator, label: 'Accounting' },
+    { kind: 'child', label: 'Customers and suppliers', path: '/club/billing/parties' },
+  ],
+  [
+    { kind: 'icon', Icon: Building2, label: 'Customers', path: '/club/billing/parties?kind=customer' },
+    { kind: 'icon', Icon: Briefcase, label: 'Suppliers', path: '/club/billing/parties?kind=supplier' },
   ],
   [
     { kind: 'group', Icon: ClipboardCheck, label: 'Checkings documents' },
@@ -256,7 +267,7 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
   ],
 ];
 
-/** Coaches, Groups of work and Administration are managed by clubs and teams only, so the coach workspace menu omits them. */
+/** Coaches and Groups of work are managed by clubs and teams only. Billing is available to Club, Team and Coach. */
 const CLUB_TEAM_ONLY_GROUPS = new Set(['Coaches', 'Groups of work', 'Administration']);
 export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
   (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),

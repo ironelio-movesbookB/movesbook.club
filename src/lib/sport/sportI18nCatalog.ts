@@ -9,6 +9,7 @@ import {
 import { teamSportProfileTexts } from '@/lib/sport/teamSportProfiles';
 import { COACH_UI_LABELS } from '@/lib/club/clubCoachI18n';
 import { STAFF_UI_LABELS } from '@/lib/club/clubStaffI18n';
+import { BILLING_UI_LABELS } from '@/lib/club/clubBillingI18n';
 import { WORK_GROUP_UI_LABELS } from '@/lib/club/clubWorkGroupI18n';
 import autoTranslateTexts from '@/lib/sport/autoTranslateTexts.json';
 import autoTranslatePatterns from '@/lib/sport/autoTranslatePatterns.json';
@@ -20,6 +21,7 @@ export function sportI18nCatalog(): Record<string, string> {
     ...MEMBER_PROFILE_UI_LABELS,
     ...COACH_UI_LABELS,
     ...STAFF_UI_LABELS,
+    ...BILLING_UI_LABELS,
     ...WORK_GROUP_UI_LABELS,
     ...autoTranslateTexts,
     ...autoTranslatePatterns,
