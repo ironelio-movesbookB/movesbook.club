@@ -104,3 +104,4 @@ package-lock.json
 .png
 branch_structure.json
 *.bak
+data/long-text-keys.json
