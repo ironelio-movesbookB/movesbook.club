@@ -2396,6 +2396,7 @@ model ClubBillingCreditNoteRow {
   id                String    @id @db.VarChar(191)
   workspaceKind     String    @db.VarChar(10) @map("workspace_kind")
   workspaceId       String    @db.VarChar(191) @map("workspace_id")
+  direction         String    @default("incoming") @db.VarChar(20)
   partyId           String    @db.VarChar(191) @map("party_id")
   registrationDate  DateTime  @db.Date @map("registration_date")
   creditNoteDate    DateTime  @db.Date @map("credit_note_date")
