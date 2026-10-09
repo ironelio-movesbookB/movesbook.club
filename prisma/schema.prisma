@@ -4251,6 +4251,8 @@ model LegacyExpenses {
   userId String @db.VarChar(191) @map("user_id")
   name String @db.VarChar(250)
   parentId BigInt @map("parent_id")
+  icon String? @db.VarChar(50)
+  imageUrl String? @db.VarChar(255) @map("image_url")
   created DateTime?
   modified DateTime?
   @@index([name], map: "idx_expenses_name")

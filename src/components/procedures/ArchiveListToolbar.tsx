@@ -136,8 +136,8 @@ export default function ArchiveListToolbar({
   );
 }
 
-export function emptyArchiveFilterValues(): ArchiveListFilterValues {
-  return { search: '', fromDate: '', toDate: '', orderBy: 'recent' };
+export function emptyArchiveFilterValues(orderBy: ArchiveOrderBy = 'recent'): ArchiveListFilterValues {
+  return { search: '', fromDate: '', toDate: '', orderBy };
 }
 
 export function toArchiveFilterParams(

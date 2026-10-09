@@ -29,6 +29,7 @@ export type ProcedureRecordView = {
   value: number;
   pay: number;
   rest: number;
+  expenseId?: string | null;
   notes: string;
   operatorId: string | null;
   operatorName: string;
@@ -52,6 +53,9 @@ export type ProcedurePaymentView = {
   payMode: string | null;
 };
 
+/** Payment/receipt lists also carry the club name (payer on OUT receipts). */
+export type ClubPaginatedResult<T> = PaginatedResult<T> & { clubName?: string };
+
 export type ProcedureReceiptView = {
   id: string;
   recordId: string;
@@ -63,6 +67,8 @@ export type ProcedureReceiptView = {
   documentNumber: string;
   cost: number;
   paymentIn: number;
+  /** Balance still open on the record after this receipt's payment. */
+  residual: number | null;
   annotations: string;
   operatorName: string;
 };
@@ -118,6 +124,7 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
     value: record.totalAmount,
     pay: record.paidAmount,
     rest: record.balanceAmount,
+    expenseId: metaString(metadata, 'expenseId') || null,
     notes: record.notes ?? '',
     operatorId: record.operatorId,
     operatorName: record.operatorName,
@@ -156,6 +163,7 @@ function mapReceipt(def: ProcedureDefinition, receipt: ProcedureReceiptDto): Pro
     documentNumber: receipt.documentNumber ?? '',
     cost: receipt.amount,
     paymentIn: receipt.paymentAmount,
+    residual: receipt.residualDebt ?? null,
     annotations: receipt.annotations ?? '',
     operatorName: receipt.operatorName,
   };
@@ -300,8 +308,8 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       });
     },
 
-    async fetchPayments(params?: ListParams): Promise<PaginatedResult<ProcedurePaymentView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedurePaymentDto>>(
+    async fetchPayments(params?: ListParams): Promise<ClubPaginatedResult<ProcedurePaymentView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedurePaymentDto>>(
         `${base}/payments?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
       );
       return {
@@ -309,6 +317,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 
@@ -326,8 +335,8 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       await clubApiFetch(`${base}/payments/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
 
-    async fetchReceipts(params?: ListParams): Promise<PaginatedResult<ProcedureReceiptView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedureReceiptDto>>(
+    async fetchReceipts(params?: ListParams): Promise<ClubPaginatedResult<ProcedureReceiptView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedureReceiptDto>>(
         `${base}/receipts?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
       );
       return {
@@ -335,6 +344,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 

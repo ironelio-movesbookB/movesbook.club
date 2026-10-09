@@ -113,7 +113,7 @@ export default function ProcedureArchiveTable({
                   disabled={loading || selectableRows.length === 0}
                   onChange={(e) => onToggleSelectAll?.(e.target.checked)}
                   aria-label={
-                    !selectableAll && selectOnlyOpenRest
+                    selectOnlyOpenRest && !selectableAll
                       ? 'Select all with Rest > 0'
                       : 'Select all'
                   }

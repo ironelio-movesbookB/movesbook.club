@@ -23,7 +23,7 @@ import {
   getProcedureTabs,
   type ProcedureArchiveTabId,
 } from '@/lib/procedures/registry';
-import type { ProcedureTypeCode } from '@/lib/procedures/types';
+import { PROCEDURE_TYPE_CODES, type ProcedureTypeCode } from '@/lib/procedures/types';
 import type { Member } from '@/types/clubTable';
 
 type Props = {
@@ -245,7 +245,9 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
     </label>
   );
 
-  const typologyButtons = <DeadlineTypologyNav activeHref={def.routes.deadlines} />;
+  const typologyButtons = procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
+    ? null
+    : <DeadlineTypologyNav activeHref={def.routes.deadlines} />;
 
   return (
     <ProcedureArchiveShell

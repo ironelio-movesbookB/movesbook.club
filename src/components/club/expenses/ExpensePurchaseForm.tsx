@@ -10,7 +10,6 @@ import ProcedureFormSection, {
   procedureInputClass,
   procedureReadonlyInputClass,
 } from '@/components/procedures/ProcedureFormLayout';
-import TaxDocumentModal, { type TaxDocumentFormValues } from '@/components/procedures/TaxDocumentModal';
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import { fetchCompanies } from '@/lib/club/archives/clubArchiveClient';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
@@ -23,6 +22,8 @@ type ExpenseFormOptions = {
   members: { id: string; name: string }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
+  clubName: string;
+  clubMemberId: string;
   currentOperatorId: string | null;
 };
 
@@ -38,9 +39,6 @@ export default function ExpensePurchaseForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [taxModalOpen, setTaxModalOpen] = useState(false);
-
-  const [memberId, setMemberId] = useState('');
   const [expenseId, setExpenseId] = useState('');
   const [expenseName, setExpenseName] = useState('');
   const [companyId, setCompanyId] = useState('');
@@ -53,11 +51,10 @@ export default function ExpensePurchaseForm() {
     const d = new Date();
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   });
-  const [paydate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Planned expense: when the rest is due. The deadline shows up in Expense Deadlines until paid.
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [causal, setCausal] = useState('');
   const [payMode, setPayMode] = useState('cash');
-  const [taxDoc, setTaxDoc] = useState(false);
-  const [taxDocument, setTaxDocument] = useState<TaxDocumentFormValues | null>(null);
 
   useEffect(() => {
     Promise.all([client.fetchFormOptions<ExpenseFormOptions>(), fetchCompanies()])
@@ -66,13 +63,13 @@ export default function ExpensePurchaseForm() {
         setCompanies(co.length ? co : opts.companies);
         if (opts.currentOperatorId) setOperatorId(opts.currentOperatorId);
         else if (opts.operators[0]?.id) setOperatorId(opts.operators[0].id);
-        if (co[0]?.id) setCompanyId(co[0].id);
+        const companyList = co.length ? co : opts.companies;
+        if (companyList[0]?.id) setCompanyId(companyList[0].id);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Load failed'))
       .finally(() => setLoading(false));
   }, [client]);
 
-  const selectedMember = options?.members.find((m) => m.id === memberId);
   const selectedExpense = options?.expenses.find((e) => e.id === expenseId);
   const selectedCompany = companies.find((c) => c.id === companyId);
   const total = Number(value) || 0;
@@ -86,21 +83,28 @@ export default function ExpensePurchaseForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!memberId) return setError('Please select a user.');
+    if (!options?.clubMemberId) return setError('The club account could not be identified.');
     if (!expenseName.trim()) return setError('Please select or enter an expense.');
     if (total <= 0) return setError('Amount must be greater than zero.');
     if (!operatorId) return setError('Please select an operator.');
     if (!operatorPassword.trim()) return setError('Operator password is required.');
+    if (paid < 0) return setError('Payment cannot be negative.');
     if (paid > total) return setError('Payment cannot exceed total.');
+    if (rest > 0 && !dueDate) return setError('Please set the planned payment date for the rest.');
+    if (rest > 0 && dueDate < movementDate) {
+      return setError('The planned payment date cannot be before the expense date.');
+    }
 
     setSaving(true);
     try {
       await client.createRecord({
-        memberId,
+        memberId: options.clubMemberId,
         totalAmount: total,
         initialPayment: paid,
         recordDate: movementDate,
-        paymentDate: paydate,
+        // An initial payment is made on the expense date; a fully paid expense has nothing planned.
+        paymentDate: movementDate,
+        dueDate: rest > 0 ? dueDate : movementDate,
         causal,
         notes: causal,
         expenseId: expenseId || null,
@@ -109,13 +113,8 @@ export default function ExpensePurchaseForm() {
         operatorPassword,
         payMode,
         movementTime,
-        taxDoc,
-        taxDocument: taxDocument ?? undefined,
         companyId,
         companyName: selectedCompany?.name,
-        createReceipt: Boolean(taxDoc && taxDocument && paid > 0),
-        receiptNumber: taxDocument?.documentNumber,
-        receiptAnnotations: taxDocument?.causal || undefined,
       });
       router.push(def.routes.records);
     } catch (err) {
@@ -132,13 +131,14 @@ export default function ExpensePurchaseForm() {
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
         <ProcedureFormSection title="Movement data">
           <ProcedureFormGrid>
-            <ProcedureFormCell label="User Selected">
-              <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-                <option value="">Select user</option>
-                {options?.members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+            <ProcedureFormCell label="Club">
+              <input
+                type="text"
+                value={options?.clubName ?? ''}
+                readOnly
+                disabled
+                className={procedureReadonlyInputClass}
+              />
             </ProcedureFormCell>
             <ProcedureFormCell label="Date">
               <input type="date" className={procedureInputClass} value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
@@ -165,8 +165,18 @@ export default function ExpensePurchaseForm() {
             <ProcedureFormCell label="Value">
               <input type="number" min="0" step="0.01" className={procedureInputClass} value={value} onChange={(e) => setValue(e.target.value)} />
             </ProcedureFormCell>
-            <ProcedureFormCell label="Pay">
-              <input type="number" min="0" step="0.01" className={procedureHighlightInputClass} value={pay} onChange={(e) => setPay(e.target.value)} />
+            <ProcedureFormCell label="Pay now">
+              <input type="number" min="0" step="0.01" placeholder="0 = planned, pay later" className={procedureHighlightInputClass} value={pay} onChange={(e) => setPay(e.target.value)} />
+            </ProcedureFormCell>
+            <ProcedureFormCell label="Planned payment date">
+              <input
+                type="date"
+                className={rest > 0 ? procedureInputClass : procedureReadonlyInputClass}
+                value={rest > 0 ? dueDate : movementDate}
+                min={movementDate}
+                disabled={rest <= 0}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
             </ProcedureFormCell>
             <ProcedureFormCell label="Causal">
               <input type="text" className={procedureInputClass} value={causal} onChange={(e) => setCausal(e.target.value)} />
@@ -177,6 +187,15 @@ export default function ExpensePurchaseForm() {
             <div>Paid: <strong>€{paid.toFixed(2)}</strong></div>
             <div>Rest: <strong className="text-red-600">€{rest.toFixed(2)}</strong></div>
           </div>
+          {total > 0 && (
+            <p className="mt-2 text-xs text-gray-600">
+              {rest <= 0
+                ? 'Fully paid now: the payment is recorded as OUT in the Archive of Payments.'
+                : paid > 0
+                  ? `€${paid.toFixed(2)} is paid now (OUT); the rest of €${rest.toFixed(2)} is planned for ${dueDate}.`
+                  : `Planned expense: nothing is paid now; €${rest.toFixed(2)} is planned for ${dueDate}. Pay it later from Expense Deadlines.`}
+            </p>
+          )}
         </ProcedureFormSection>
 
         <ProcedureFormSection title="Type of payment">
@@ -189,12 +208,6 @@ export default function ExpensePurchaseForm() {
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowEmpty={false}
               />
-            </ProcedureFormCell>
-            <ProcedureFormCell label="Tax document">
-              <div className="flex items-center gap-3 mt-1">
-                <input type="checkbox" checked={taxDoc} onChange={(e) => setTaxDoc(e.target.checked)} />
-                <button type="button" onClick={() => setTaxModalOpen(true)} className="px-3 py-1.5 text-sm bg-gray-200 rounded">Open form</button>
-              </div>
             </ProcedureFormCell>
             <ProcedureFormCell label="Operator">
               <select className={procedureInputClass} value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
@@ -236,16 +249,6 @@ export default function ExpensePurchaseForm() {
         </div>
       </form>
 
-      <TaxDocumentModal
-        open={taxModalOpen}
-        memberName={selectedMember?.name ?? ''}
-        defaultCausal={causal}
-        defaultTotal={total}
-        defaultResidual={rest}
-        initial={taxDocument ?? undefined}
-        onClose={() => setTaxModalOpen(false)}
-        onSave={(v) => { setTaxDocument(v); setTaxDoc(true); }}
-      />
     </>
   );
 }

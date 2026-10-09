@@ -38,6 +38,10 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     ? { key: secondaryKey, header: def.columnHeaders.secondary }
     : null;
 
+  // OUT payments (expenses, member credits) get a receipt the recipient signs for acceptance.
+  const printCol: Column[] =
+    def.metadataKeys.direction === 'OUT' ? [{ key: 'print', header: 'Receipt', sortable: false }] : [];
+
   const recordColumns: Column[] = [
     { key: 'number', header: 'N' },
     { key: 'name', header: 'Full Name' },
@@ -87,17 +91,22 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     {
       key: 'paid',
       header: def.metadataKeys.direction === 'OUT' ? 'Value OUT' : 'Payment IN',
-      render: (v) => formatEuro(v),
+      render: (v) => (
+        <span className={`font-bold ${def.metadataKeys.direction === 'OUT' ? 'text-red-700' : 'text-green-800'}`}>
+          {formatEuro(v)}
+        </span>
+      ),
     },
     {
       key: 'originalDebt',
       header: 'OF..',
       render: (_, row) =>
-        `${Number(row.residualDebt ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
+        `${Number(row.rest ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
     },
     { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
     { key: 'casual', header: 'Notes' },
     { key: 'operator', header: 'Operator' },
+    ...printCol,
     { key: 'edit', header: 'Edit', sortable: false },
     { key: 'delete', header: 'Delete', sortable: false },
   ];
@@ -117,6 +126,7 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     },
     { key: 'casual', header: 'Annotations' },
     { key: 'operator', header: 'Operator' },
+    ...printCol,
     { key: 'edit', header: 'Edit', sortable: false },
     { key: 'delete', header: 'Delete', sortable: false },
   ];

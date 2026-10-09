@@ -7,8 +7,10 @@ import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import {
   DeleteRowButton,
   EditRowButton,
+  PrintRowButton,
   usePasswordGate,
 } from '@/components/procedures/ArchiveRowActions';
+import { printAcceptanceReceipt } from '@/components/procedures/printAcceptanceReceipt';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
@@ -31,7 +33,8 @@ type Props = {
 function toPaymentRow(
   payment: ProcedurePaymentView,
   onEdit: (payment: ProcedurePaymentView) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onPrint?: (payment: ProcedurePaymentView) => void
 ): Member {
   return {
     id: payment.id,
@@ -45,6 +48,7 @@ function toPaymentRow(
     rest: payment.balance,
     casual: payment.description,
     operator: payment.operatorName,
+    print: onPrint ? <PrintRowButton onClick={() => onPrint(payment)} /> : undefined,
     edit: <EditRowButton onClick={() => onEdit(payment)} />,
     delete: <DeleteRowButton onClick={() => onDelete(payment.id)} />,
   };
@@ -55,8 +59,9 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
   const client = useMemo(() => createProcedureClient(procedureCode), [procedureCode]);
   const columns = useMemo(() => buildProcedureColumns(def), [def]);
   const scope = useArchiveScope();
-  const filters = useArchiveListFilters();
+  const filters = useArchiveListFilters(def.metadataKeys.direction === 'OUT' ? 'recent' : 'old');
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
+  const isOut = def.metadataKeys.direction === 'OUT';
 
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -78,6 +83,24 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
         ...filters.applied,
       });
       setTotal(res.total);
+      const printReceipt = isOut
+        ? (payment: ProcedurePaymentView) => {
+            const opened = printAcceptanceReceipt({
+              clubName: res.clubName,
+              recipientName: payment.memberName,
+              amount: payment.paid,
+              paymentDate: payment.paymentDate,
+              detail: payment.primaryLabel,
+              notes: payment.description,
+              payMode: payment.payMode,
+              operatorName: payment.operatorName,
+              typology: payment.typology,
+              totalAmount: payment.originalDebt,
+              residualAmount: payment.balance,
+            });
+            if (!opened) setError('Allow pop-ups for this site to print the receipt.');
+          }
+        : undefined;
       setData(
         res.items.map((payment) =>
           toPaymentRow(
@@ -91,7 +114,8 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
                 }
-              })
+              }),
+            printReceipt
           )
         )
       );
@@ -101,7 +125,7 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [client, page, pageSize, scope.filters, filters.applied, requestPassword]);
+  }, [client, isOut, page, pageSize, scope.filters, filters.applied, requestPassword]);
 
   useEffect(() => {
     load();
@@ -136,7 +160,11 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
         <ArchiveScopeRadios state={scope} name="paymentsScope" onChange={() => setPage(1)} />
       }
       error={error}
-      footerHint="Check rows to delete selected · Edit and Delete ask for your password."
+      footerHint={
+        isOut
+          ? 'Outgoing payments (OUT) · Print the receipt for the recipient to sign for acceptance · Edit and Delete ask for your password.'
+          : 'Check rows to delete selected · Edit and Delete ask for your password.'
+      }
     >
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.payments}`}

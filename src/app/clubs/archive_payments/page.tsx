@@ -29,7 +29,13 @@ const columns: Column[] = [
   { key: 'typology', header: 'Typology' },
   { key: 'service', header: 'Detail' },
   { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
-  { key: 'paid', header: 'Payment IN', render: (v) => formatEuro(v) },
+  // Expenses/credits are paid by the club (OUT); sales/debts are cashed in (IN).
+  { key: 'paymentIn', header: 'Payment IN', render: (v) => (v == null ? '' : formatEuro(v)) },
+  {
+    key: 'paymentOut',
+    header: 'Payment OUT',
+    render: (v) => (v == null ? '' : <span className="text-red-700">{formatEuro(v)}</span>),
+  },
   {
     key: 'originalDebt',
     header: 'OF..',

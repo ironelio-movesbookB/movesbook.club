@@ -6,7 +6,7 @@ import {
   projectInstallmentsOnBalance,
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
-import { getProcedureTypology } from '@/lib/procedures/registry';
+import { getProcedureDirection, getProcedureTypology } from '@/lib/procedures/registry';
 import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
@@ -1394,6 +1394,7 @@ export async function listUnifiedPayments(
       })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
 
+    const direction = getProcedureDirection(procedureType);
     for (const p of res.items) {
       items.push({
         id: p.id,
@@ -1406,6 +1407,9 @@ export async function listUnifiedPayments(
         service: p.serviceName ?? '-',
         insertDate: p.paymentDate,
         paid: p.amount,
+        direction,
+        paymentIn: direction === 'IN' ? p.amount : null,
+        paymentOut: direction === 'OUT' ? p.amount : null,
         originalDebt: p.originalDebt,
         residualDebt: p.residualDebt,
         rest: p.balanceAfter ?? p.residualDebt,
@@ -1444,6 +1448,7 @@ export async function listUnifiedReceipts(
       })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listReceipts>>['items'] }));
 
+    const direction = getProcedureDirection(procedureType);
     for (const r of res.items) {
       items.push({
         id: r.id,
@@ -1459,6 +1464,9 @@ export async function listUnifiedReceipts(
         contract: r.documentNumber,
         value: r.amount,
         paid: r.paymentAmount,
+        direction,
+        paymentIn: direction === 'IN' ? r.paymentAmount : null,
+        paymentOut: direction === 'OUT' ? r.paymentAmount : null,
         residualDebt: r.residualDebt ?? Math.max(0, r.amount - r.paymentAmount),
         casual: r.annotations ?? '',
         operator: r.operatorName,
