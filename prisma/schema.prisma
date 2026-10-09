@@ -2331,6 +2331,94 @@ model ClubMeetingRow {
   @@ignore
 }
 
+/// src/lib/club/clubBillingService.ts
+model ClubBillingPartyRow {
+  id            String   @id @db.VarChar(191)
+  workspaceKind String   @db.VarChar(10) @map("workspace_kind")
+  workspaceId   String   @db.VarChar(191) @map("workspace_id")
+  kind          String   @db.VarChar(20)
+  name          String   @db.VarChar(255)
+  partyType     String   @default("") @db.VarChar(80) @map("party_type")
+  vatNumber     String   @default("") @db.VarChar(40) @map("vat_number")
+  fiscalCode    String   @default("") @db.VarChar(40) @map("fiscal_code")
+  address       String   @default("") @db.VarChar(255)
+  city          String   @default("") @db.VarChar(120)
+  zip           String   @default("") @db.VarChar(20)
+  province      String   @default("") @db.VarChar(60)
+  contactPerson String   @default("") @db.VarChar(191) @map("contact_person")
+  email         String   @default("") @db.VarChar(191)
+  pec           String   @default("") @db.VarChar(191)
+  phone         String   @default("") @db.VarChar(60)
+  sdiCode       String   @default("") @db.VarChar(20) @map("sdi_code")
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt     DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId, kind], map: "club_billing_parties_ws_idx")
+  @@index([workspaceKind, workspaceId, name], map: "club_billing_parties_name_idx")
+  @@map("club_billing_parties")
+  @@ignore
+}
+
+/// src/lib/club/clubBillingService.ts
+model ClubBillingInvoiceRow {
+  id             String    @id @db.VarChar(191)
+  workspaceKind  String    @db.VarChar(10) @map("workspace_kind")
+  workspaceId    String    @db.VarChar(191) @map("workspace_id")
+  direction      String    @db.VarChar(20)
+  partyId        String    @db.VarChar(191) @map("party_id")
+  documentNumber String    @default("") @db.VarChar(80) @map("document_number")
+  invoiceDate    DateTime  @db.Date @map("invoice_date")
+  paymentDueDate DateTime? @db.Date @map("payment_due_date")
+  paymentMethod  String    @default("") @db.VarChar(80) @map("payment_method")
+  productName    String    @default("") @db.VarChar(255) @map("product_name")
+  description    String?   @db.Text
+  netAmount      Decimal   @default(0) @db.Decimal(12, 2) @map("net_amount")
+  vatRate        Decimal   @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatExempt      Boolean   @default(false) @map("vat_exempt")
+  totalAmount    Decimal   @default(0) @db.Decimal(12, 2) @map("total_amount")
+  budgetCategory String    @default("") @db.VarChar(191) @map("budget_category")
+  forPublicAdmin Boolean   @default(false) @map("for_public_admin")
+  paid           Boolean   @default(false)
+  paidOn         DateTime? @db.Date @map("paid_on")
+  authorId       String?   @db.VarChar(191) @map("author_id")
+  createdAt      DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt      DateTime  @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId, invoiceDate], map: "club_billing_invoices_ws_idx")
+  @@index([partyId], map: "club_billing_invoices_party_idx")
+  @@map("club_billing_invoices")
+  @@ignore
+}
+
+/// src/lib/club/clubBillingService.ts
+model ClubBillingCreditNoteRow {
+  id                String    @id @db.VarChar(191)
+  workspaceKind     String    @db.VarChar(10) @map("workspace_kind")
+  workspaceId       String    @db.VarChar(191) @map("workspace_id")
+  partyId           String    @db.VarChar(191) @map("party_id")
+  registrationDate  DateTime  @db.Date @map("registration_date")
+  creditNoteDate    DateTime  @db.Date @map("credit_note_date")
+  documentNumber    String    @default("") @db.VarChar(80) @map("document_number")
+  invoiceReference  String    @default("") @db.VarChar(80) @map("invoice_reference")
+  invoiceDate       DateTime? @db.Date @map("invoice_date")
+  causal            String    @default("") @db.VarChar(500)
+  netAmount         Decimal   @default(0) @db.Decimal(12, 2) @map("net_amount")
+  vatRate           Decimal   @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount         Decimal   @default(0) @db.Decimal(12, 2) @map("vat_amount")
+  totalAmount       Decimal   @default(0) @db.Decimal(12, 2) @map("total_amount")
+  budgetCategory    String    @default("") @db.VarChar(191) @map("budget_category")
+  reimbursementMode String    @default("") @db.VarChar(80) @map("reimbursement_mode")
+  authorId          String?   @db.VarChar(191) @map("author_id")
+  createdAt         DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt         DateTime  @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([workspaceKind, workspaceId, creditNoteDate], map: "club_billing_cn_ws_idx")
+  @@index([partyId], map: "club_billing_cn_party_idx")
+  @@map("club_billing_credit_notes")
+  @@ignore
+}
+
 /// src/lib/subscriptions/specialOffers.ts
 model SubscriptionSpecialOfferRow {
   id               Int      @id @default(autoincrement())
