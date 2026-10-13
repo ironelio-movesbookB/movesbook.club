@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
+import { QUICK_REGISTER_SUCCESS_MESSAGE } from '@/lib/users/quickRegisterShared';
 import { longTextDisplayHtml } from '@/utils/richTextTranslation';
 import { getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
 import { getRegistrationPayment } from '@/lib/registration/registrationPayments';
@@ -8,6 +8,7 @@ import {
   PAYMENT_SUCCESS_FALLBACK_EN,
   PAYMENT_SUCCESS_TEXT_KEY,
   registrationLongText,
+  registrationPaymentBuyer,
 } from '@/lib/registration/registrationFlow';
 
 export const dynamic = 'force-dynamic';
@@ -19,25 +20,20 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     if (!payment) {
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
     }
-    const [user, credentials] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: payment.userId },
-        select: { name: true, firstName: true, surname: true, username: true },
-      }),
+    const [buyer, credentials] = await Promise.all([
+      registrationPaymentBuyer(payment),
       getActivePaymentCredentials(),
     ]);
-    const successHtml =
-      payment.status === 'pending'
-        ? null
-        : sanitizeRichHtml(
-            longTextDisplayHtml(
-              await registrationLongText(
-                PAYMENT_SUCCESS_TEXT_KEY,
-                payment.language,
-                PAYMENT_SUCCESS_FALLBACK_EN,
-              ),
-            ),
+    const successText =
+      payment.kind === 'quick_register'
+        ? QUICK_REGISTER_SUCCESS_MESSAGE
+        : await registrationLongText(
+            PAYMENT_SUCCESS_TEXT_KEY,
+            payment.language,
+            PAYMENT_SUCCESS_FALLBACK_EN,
           );
+    const successHtml =
+      payment.status === 'pending' ? null : sanitizeRichHtml(longTextDisplayHtml(successText));
 
     return NextResponse.json({
       id: payment.id,
@@ -49,12 +45,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       currencyCode: payment.currencyCode,
       country: payment.country,
       language: payment.language,
-      name:
-        [user?.firstName, user?.surname].filter(Boolean).join(' ').trim() ||
-        user?.name ||
-        user?.username ||
-        '',
-      username: user?.username ?? '',
+      name: buyer.name || buyer.username,
+      username: buyer.username,
       testMode: credentials.testMode,
       providers: { stripe: Boolean(credentials.stripe), paypal: Boolean(credentials.paypal) },
       successHtml,

@@ -243,7 +243,10 @@ export default function RegisterPage() {
                   </option>
                 ))}
               </select>
-              {countryPrice && countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR' ? (
+              {countryPrice &&
+              countryPrice.currencyCode &&
+              countryPrice.currencyCode !== 'EUR' &&
+              countryPrice.eurToLocal ? (
                 <p className="mt-1 text-xs text-cyan-100">
                   Prices for {formData.country} are shown in EUR and {countryPrice.currencyCode}
                   {countryPrice.currencyDescription ? ` (${countryPrice.currencyDescription})` : ''}.

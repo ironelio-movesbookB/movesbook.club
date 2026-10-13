@@ -2504,6 +2504,8 @@ model RegistrationPaymentRow {
   amountLocal  Decimal?  @db.Decimal(18, 2) @map("amount_local")
   language     String    @default("en") @db.VarChar(10)
   periodId     String?   @db.VarChar(64) @map("period_id")
+  kind         String    @default("register") @db.VarChar(24)
+  pendingData  String?   @db.MediumText @map("pending_data")
   createdAt    DateTime  @default(now()) @db.DateTime(0) @map("created_at")
   paidAt       DateTime? @db.DateTime(0) @map("paid_at")
 

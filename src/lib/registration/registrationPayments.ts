@@ -6,10 +6,14 @@ type Db = Prisma.TransactionClient | typeof prisma;
 
 export type RegistrationPaymentStatus = 'pending' | 'paid' | 'test' | 'free';
 export type RegistrationPaymentProvider = 'stripe' | 'paypal';
+/** `quick_register`: promocode registration; the account is created only after payment. */
+export type RegistrationPaymentKind = 'register' | 'quick_register';
 export type AccountActivationStatus = 'pending_payment' | 'pending_activation' | 'active';
 
 export type RegistrationPayment = {
   id: string;
+  kind: RegistrationPaymentKind;
+  /** For a quick register still waiting for payment: `quick:<email>` until the account exists. */
   userId: string;
   status: RegistrationPaymentStatus;
   provider: RegistrationPaymentProvider | null;
@@ -33,7 +37,7 @@ export type RegistrationPayment = {
 
 export type NewRegistrationPayment = Omit<
   RegistrationPayment,
-  'id' | 'provider' | 'providerMode' | 'providerRef' | 'providerTxn' | 'createdAt' | 'paidAt'
+  'id' | 'kind' | 'provider' | 'providerMode' | 'providerRef' | 'providerTxn' | 'createdAt' | 'paidAt'
 >;
 
 let tablesEnsured = false;
@@ -61,11 +65,28 @@ export async function ensureRegistrationPaymentTables(): Promise<void> {
       amount_local DECIMAL(18,2) NULL,
       language VARCHAR(10) NOT NULL DEFAULT 'en',
       period_id VARCHAR(64) NULL,
+      kind VARCHAR(24) NOT NULL DEFAULT 'register',
+      pending_data MEDIUMTEXT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       paid_at DATETIME NULL,
       KEY idx_rp_user (user_id)
     )
   `);
+  const existing = await prisma.$queryRawUnsafe<{ column_name: string }[]>(
+    `SELECT COLUMN_NAME AS column_name FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'registration_payments'`,
+  );
+  const columns = new Set(existing.map((c) => String(c.column_name).toLowerCase()));
+  if (!columns.has('kind')) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE registration_payments ADD COLUMN kind VARCHAR(24) NOT NULL DEFAULT 'register'`,
+    );
+  }
+  if (!columns.has('pending_data')) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE registration_payments ADD COLUMN pending_data MEDIUMTEXT NULL`,
+    );
+  }
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS user_account_activations (
       user_id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -83,6 +104,7 @@ export async function ensureRegistrationPaymentTables(): Promise<void> {
 
 type PaymentRow = {
   id: string;
+  kind: string | null;
   user_id: string;
   status: string;
   provider: string | null;
@@ -113,6 +135,7 @@ function num(value: Prisma.Decimal | number | string | null): number | null {
 function mapRow(row: PaymentRow): RegistrationPayment {
   return {
     id: row.id,
+    kind: row.kind === 'quick_register' ? 'quick_register' : 'register',
     userId: row.user_id,
     status: row.status as RegistrationPaymentStatus,
     provider: (row.provider as RegistrationPaymentProvider | null) ?? null,
@@ -138,13 +161,15 @@ function mapRow(row: PaymentRow): RegistrationPayment {
 export async function createRegistrationPayment(
   db: Db,
   data: NewRegistrationPayment,
+  extra: { kind?: RegistrationPaymentKind; pendingData?: string } = {},
 ): Promise<string> {
   const id = crypto.randomUUID();
   await db.$executeRawUnsafe(
     `INSERT INTO registration_payments
        (id, user_id, status, version_id, version_name, special_offer, base_price_eur, amount_eur,
-        country, currency_code, eur_to_local, amount_local, language, period_id, paid_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        country, currency_code, eur_to_local, amount_local, language, period_id, paid_at,
+        kind, pending_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     data.userId,
     data.status,
@@ -160,8 +185,29 @@ export async function createRegistrationPayment(
     data.language.slice(0, 10),
     data.periodId,
     data.status === 'pending' ? null : new Date(),
+    extra.kind ?? 'register',
+    extra.pendingData ?? null,
   );
   return id;
+}
+
+/** Encrypted form data of a quick register waiting for payment; null once the account exists. */
+export async function getQuickRegisterPendingData(id: string): Promise<string | null> {
+  await ensureRegistrationPaymentTables();
+  const rows = await prisma.$queryRawUnsafe<{ pending_data: string | null }[]>(
+    `SELECT pending_data FROM registration_payments WHERE id = ? AND kind = 'quick_register' LIMIT 1`,
+    id,
+  );
+  return rows[0]?.pending_data ?? null;
+}
+
+/** The paid quick register now has an account: link it and drop the stored form data. */
+export async function linkQuickRegisterPaymentUser(id: string, userId: string): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `UPDATE registration_payments SET user_id = ?, pending_data = NULL WHERE id = ?`,
+    userId,
+    id,
+  );
 }
 
 export async function getRegistrationPayment(id: string): Promise<RegistrationPayment | null> {

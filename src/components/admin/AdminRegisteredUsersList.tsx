@@ -23,6 +23,13 @@ import AdminClubUserPanelModal, {
 } from '@/components/admin/AdminClubUserPanelModal';
 import AdminRegisteredUserGridCard from '@/components/admin/AdminRegisteredUserGridCard';
 import AdminUserPanelButton from '@/components/admin/AdminUserPanelButton';
+import { useSuperAdminPassword } from '@/components/admin/SuperAdminPasswordModal';
+import {
+  LIST_PAYMENT_MODE_OPTIONS,
+  LIST_PAYMENT_STATUS_OPTIONS,
+  type ListPaymentMode,
+  type ListPaymentStatus,
+} from '@/lib/admin/listPaymentFilters';
 import { groupRowsForAdminGrid } from '@/lib/admin/groupRegisteredUserGridCards';
 import { buildPcuHistoryUserUrl } from '@/lib/admin/pcuHistoryUserUrl';
 import { getDefaultMembershipSortOrder } from '@/lib/admin/networkSubscriptionHistory';
@@ -95,6 +102,13 @@ interface ProfilePayload {
 }
 
 type ActionTarget = { id: string; email: string; username: string; label: string };
+
+type SubscriptionDeletionPayload = {
+  userId: string;
+  periodId: string;
+  dateStart: string;
+  dateEnd: string | null;
+};
 
 interface RowUser {
   rowKey: string;
@@ -172,9 +186,8 @@ interface FilterState {
   version: string;
   userTypeCategory: string;
   login: LoginFilter;
-  subDay: string;
-  subMonth: string;
-  subYear: string;
+  paymentMode: ListPaymentMode | '';
+  subDateField: 'dateStart' | 'dateEnd';
   rangeFrom: string;
   rangeTo: string;
 }
@@ -185,9 +198,8 @@ const EMPTY_FILTERS: FilterState = {
   version: '',
   userTypeCategory: '',
   login: 'all',
-  subDay: '',
-  subMonth: '',
-  subYear: '',
+  paymentMode: '',
+  subDateField: 'dateStart',
   rangeFrom: '',
   rangeTo: '',
 };
@@ -216,39 +228,16 @@ const LOGIN_OPTIONS: { value: LoginFilter; label: string }[] = [
   { value: 'never', label: 'Never logged in' },
 ];
 
-const MONTH_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'select' },
-  ...[
-    'jan',
-    'feb',
-    'mar',
-    'apr',
-    'may',
-    'jun',
-    'jul',
-    'aug',
-    'sep',
-    'oct',
-    'nov',
-    'dec',
-  ].map((label, i) => ({ value: String(i + 1), label })),
+const SUB_DATE_FIELD_OPTIONS: { value: FilterState['subDateField']; label: string }[] = [
+  { value: 'dateStart', label: 'Date start' },
+  { value: 'dateEnd', label: 'Date end' },
 ];
 
-const DAY_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'select' },
-  ...Array.from({ length: 31 }, (_, i) => ({
-    value: String(i + 1),
-    label: String(i + 1),
-  })),
-];
+const FILTER_CONTROL_CLASS = 'w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm';
 
-const YEAR_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'select' },
-  ...Array.from({ length: 2026 - 1990 + 1 }, (_, i) => {
-    const y = 1990 + i;
-    return { value: String(y), label: String(y) };
-  }),
-];
+function formatEuroTotal(value: number): string {
+  return `€ ${value.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 const VERSION_BY_SEGMENT: Record<AdminUserSegment, string[]> = {
   all: [
@@ -402,9 +391,12 @@ export default function AdminRegisteredUsersList({
   const [pageSize] = useState(25);
   const [rows, setRows] = useState<RowUser[]>([]);
   const [total, setTotal] = useState(0);
+  const [payments, setPayments] = useState({ count: 0, totalEur: 0 });
+  const [paymentStatus, setPaymentStatus] = useState<ListPaymentStatus | ''>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { requestPassword, passwordModal } = useSuperAdminPassword();
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(segment === 'all' ? 'grid' : 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -569,11 +561,13 @@ export default function AdminRegisteredUsersList({
         params.set('userTypeCategory', appliedFilters.userTypeCategory);
       }
       if (appliedFilters.login !== 'all') params.set('login', appliedFilters.login);
-      if (appliedFilters.subDay) params.set('subDay', appliedFilters.subDay);
-      if (appliedFilters.subMonth) params.set('subMonth', appliedFilters.subMonth);
-      if (appliedFilters.subYear) params.set('subYear', appliedFilters.subYear);
-      if (appliedFilters.rangeFrom) params.set('createdFrom', appliedFilters.rangeFrom);
-      if (appliedFilters.rangeTo) params.set('createdTo', appliedFilters.rangeTo);
+      if (appliedFilters.paymentMode) params.set('paymentMode', appliedFilters.paymentMode);
+      if (paymentStatus) params.set('paymentStatus', paymentStatus);
+      if (appliedFilters.rangeFrom || appliedFilters.rangeTo) {
+        params.set('subDateField', appliedFilters.subDateField);
+        if (appliedFilters.rangeFrom) params.set('subRangeFrom', appliedFilters.rangeFrom);
+        if (appliedFilters.rangeTo) params.set('subRangeTo', appliedFilters.rangeTo);
+      }
       params.set('membership', membershipTab);
       if (specialOfferVersionId) params.set('specialOfferVersionId', String(specialOfferVersionId));
       if (statsBarActive) {
@@ -591,9 +585,14 @@ export default function AdminRegisteredUsersList({
       if (!res.ok) throw new Error(data?.error || 'Failed to load users');
       setRows(Array.isArray(data?.users) ? data.users : []);
       setTotal(typeof data?.total === 'number' ? data.total : 0);
+      setPayments({
+        count: Number(data?.payments?.count) || 0,
+        totalEur: Number(data?.payments?.totalEur) || 0,
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load');
       setRows([]);
+      setPayments({ count: 0, totalEur: 0 });
     } finally {
       setLoading(false);
     }
@@ -604,6 +603,7 @@ export default function AdminRegisteredUsersList({
     segment,
     orderBy,
     appliedFilters,
+    paymentStatus,
     membershipTab,
     statsBarActive,
     statsBarCountry,
@@ -629,6 +629,7 @@ export default function AdminRegisteredUsersList({
   useEffect(() => {
     setAppliedFilters(EMPTY_FILTERS);
     setDraftFilters(EMPTY_FILTERS);
+    setPaymentStatus('');
     setOrderBy(getDefaultMembershipSortOrder(membershipTab));
     setPage(1);
     setSelected(new Set());
@@ -920,66 +921,76 @@ export default function AdminRegisteredUsersList({
     [profileData?.id, profileTagged, profileFavouritePriority],
   );
 
-  const deleteSubscriptionsForTargets = useCallback(
-    async (targets: ActionTarget[], closeProfileIfDeleted: boolean) => {
-      const names = targets.map((t) => t.label).slice(0, 5).join(', ');
-      const more = targets.length > 5 ? ` and ${targets.length - 5} more` : '';
-      const ok = window.confirm(
-        `Delete ${targets.length} subscription(s)?\n\n${names}${more}\n\nThis permanently removes the user account(s) from Movesbook. This cannot be undone.`,
-      );
-      if (!ok) return;
-
-      const token = localStorage.getItem('adminToken');
-      if (!token) {
-        window.alert('Admin session not found. Please log in again.');
-        return;
-      }
-      setActionBusy(true);
-      try {
-        const res = await fetch('/api/admin/registered-users/actions', {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            segment,
-            userIds: targets.map((t) => t.id),
-          }),
+  const resolveSubscriptionDeletions = useCallback((): SubscriptionDeletionPayload[] => {
+    if (selected.size > 0) {
+      return rows
+        .filter((r) => selected.has(rowListKey(r)))
+        .map((r) => {
+          const periodMarker = r.rowKey.indexOf('-period-');
+          return {
+            userId: r.id,
+            periodId:
+              periodMarker >= 0 ? r.rowKey.slice(periodMarker + '-period-'.length) : `account-${r.id}`,
+            dateStart: r.dateStart,
+            dateEnd: r.dateEnd,
+          };
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || 'Failed to delete subscriptions');
-
-        const deleted = typeof data.deleted === 'number' ? data.deleted : 0;
-        setSelected(new Set());
-        setProfileRowSelected(new Set());
-        if (closeProfileIfDeleted && profileData && targets.some((t) => t.id === profileData.id)) {
-          closeUserProfile();
-        }
-        await load();
-        window.alert(`Deleted ${deleted} user subscription(s).`);
-      } catch (e: unknown) {
-        window.alert(e instanceof Error ? e.message : 'Failed to delete subscriptions');
-      } finally {
-        setActionBusy(false);
-      }
-    },
-    [segment, profileData, closeUserProfile, load],
-  );
-
-  const handleDeleteSubscriptions = useCallback(async () => {
-    const targets = requireActionTargets();
-    if (!targets) return;
-    await deleteSubscriptionsForTargets(targets, true);
-  }, [requireActionTargets, deleteSubscriptionsForTargets]);
+    }
+    if (profileState === 'ready' && profileData && profileRowSelected.size > 0) {
+      return profileData.subscriptionRows
+        .filter((r) => profileRowSelected.has(r.id))
+        .map((r) => ({
+          userId: r.id.startsWith('account-') ? r.id.slice('account-'.length) : profileData.id,
+          periodId: r.id,
+          dateStart: r.dateStart,
+          dateEnd: r.dateEnd,
+        }));
+    }
+    return [];
+  }, [selected, rows, profileState, profileData, profileRowSelected]);
 
   const handleDeleteProfileAccount = useCallback(async () => {
     if (!profileActionTarget) {
       window.alert('No user is open.');
       return;
     }
-    await deleteSubscriptionsForTargets([profileActionTarget], true);
-  }, [profileActionTarget, deleteSubscriptionsForTargets]);
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      window.alert('Admin session not found. Please log in again.');
+      return;
+    }
+    const superAdminPassword = await requestPassword({
+      title: 'Delete account',
+      message: `Delete account for ${profileActionTarget.label}?\n\nThis permanently removes the user from Movesbook. This cannot be undone.`,
+    });
+    if (!superAdminPassword) return;
+
+    setActionBusy(true);
+    try {
+      const res = await fetch('/api/admin/registered-users/delete-account', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userIds: [profileActionTarget.id], superAdminPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete account');
+      const failed: { error: string }[] = Array.isArray(data.failed) ? data.failed : [];
+      if (failed.length > 0) throw new Error(failed.map((f) => f.error).join('\n'));
+
+      setSelected(new Set());
+      setProfileRowSelected(new Set());
+      closeUserProfile();
+      await load();
+      window.alert('User account deleted.');
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Failed to delete account');
+    } finally {
+      setActionBusy(false);
+    }
+  }, [profileActionTarget, requestPassword, closeUserProfile, load]);
 
   const openProfileSendMsgModal = useCallback(() => {
     if (!profileActionTarget) return;
@@ -1095,6 +1106,57 @@ export default function AdminRegisteredUsersList({
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname || '/admin/all', { scroll: false });
   }, [searchParams, openUserProfile, router, pathname]);
+
+  const handleDeleteSubscriptions = useCallback(async () => {
+    const subscriptions = resolveSubscriptionDeletions();
+    if (subscriptions.length === 0) {
+      window.alert('Select at least one subscription (checkbox in the list or subscription row in the profile panel).');
+      return;
+    }
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      window.alert('Admin session not found. Please log in again.');
+      return;
+    }
+    const superAdminPassword = await requestPassword({
+      title: 'Delete subscriptions',
+      message: `Delete ${subscriptions.length} selected subscription(s)?\n\nThe user accounts are kept. This cannot be undone.`,
+    });
+    if (!superAdminPassword) return;
+
+    setActionBusy(true);
+    try {
+      const res = await fetch('/api/admin/registered-users/actions', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ segment, subscriptions, superAdminPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete subscriptions');
+
+      const deleted = typeof data.deleted === 'number' ? data.deleted : 0;
+      setSelected(new Set());
+      setProfileRowSelected(new Set());
+      await load();
+      if (profileData) void openUserProfile(profileData.id, profileEntityId);
+      window.alert(`Deleted ${deleted} subscription(s).`);
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Failed to delete subscriptions');
+    } finally {
+      setActionBusy(false);
+    }
+  }, [
+    resolveSubscriptionDeletions,
+    requestPassword,
+    segment,
+    load,
+    profileData,
+    profileEntityId,
+    openUserProfile,
+  ]);
 
   const closeClubUserPanel = useCallback(() => {
     setClubPanelOpen(false);
@@ -1252,6 +1314,7 @@ export default function AdminRegisteredUsersList({
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 text-gray-900">
+      {passwordModal}
       {statsBarActive ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-[#058592] bg-[#e8f4f5] px-3 py-2 text-sm text-[#222]">
           <div>
@@ -1513,7 +1576,7 @@ export default function AdminRegisteredUsersList({
                             onChange={(e) =>
                               setProfileSubFilterDraft((f) => ({ ...f, version: e.target.value }))
                             }
-                            className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                            className={FILTER_CONTROL_CLASS}
                           >
                             <option value="">All</option>
                             {PROFILE_SUBSCRIPTION_VERSION_OPTIONS.filter((v) => v !== 'All').map((v) => (
@@ -1532,7 +1595,7 @@ export default function AdminRegisteredUsersList({
                                 filterIn: e.target.value as ProfileSubFilterIn,
                               }))
                             }
-                            className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                            className={FILTER_CONTROL_CLASS}
                           >
                             <option value="dateStart">Date Start</option>
                             <option value="dateEnd">Date End</option>
@@ -1545,7 +1608,7 @@ export default function AdminRegisteredUsersList({
                             onChange={(e) =>
                               setProfileSubFilterDraft((f) => ({ ...f, dateFrom: e.target.value }))
                             }
-                            className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                            className={FILTER_CONTROL_CLASS}
                           />
                         </FilterRow>
                         <FilterRow label="To">
@@ -1555,7 +1618,7 @@ export default function AdminRegisteredUsersList({
                             onChange={(e) =>
                               setProfileSubFilterDraft((f) => ({ ...f, dateTo: e.target.value }))
                             }
-                            className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                            className={FILTER_CONTROL_CLASS}
                           />
                         </FilterRow>
                         <FilterRow label="Ordering">
@@ -1567,7 +1630,7 @@ export default function AdminRegisteredUsersList({
                                 ordering: e.target.value as ProfileSubOrdering,
                               }))
                             }
-                            className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                            className={FILTER_CONTROL_CLASS}
                           >
                             <option value="">Select</option>
                             <option value="dateStart">Date Start</option>
@@ -1736,7 +1799,7 @@ export default function AdminRegisteredUsersList({
                     <select
                       value={draftFilters.country}
                       onChange={(e) => setDraftFilters((f) => ({ ...f, country: e.target.value }))}
-                      className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                      className={FILTER_CONTROL_CLASS}
                     >
                       <option value="">All</option>
                       {metaCountries.map((c) => (
@@ -1751,7 +1814,7 @@ export default function AdminRegisteredUsersList({
                     <select
                       value={draftFilters.mainSport}
                       onChange={(e) => setDraftFilters((f) => ({ ...f, mainSport: e.target.value }))}
-                      className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                      className={FILTER_CONTROL_CLASS}
                     >
                       <option value="">All</option>
                       {metaSports.map((s) => (
@@ -1766,7 +1829,7 @@ export default function AdminRegisteredUsersList({
                     <select
                       value={draftFilters.version}
                       onChange={(e) => setDraftFilters((f) => ({ ...f, version: e.target.value }))}
-                      className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                      className={FILTER_CONTROL_CLASS}
                     >
                       <option value="">All</option>
                       {versionOptions.map((v) => (
@@ -1784,7 +1847,7 @@ export default function AdminRegisteredUsersList({
                         onChange={(e) =>
                           setDraftFilters((f) => ({ ...f, userTypeCategory: e.target.value }))
                         }
-                        className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                        className={FILTER_CONTROL_CLASS}
                       >
                         {USER_TYPE_CATEGORY_OPTIONS.map((o) => (
                           <option key={o.value || 'all-types'} value={o.value}>
@@ -1795,63 +1858,63 @@ export default function AdminRegisteredUsersList({
                     </FilterRow>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-2 justify-between">
-                    <span className="font-medium text-gray-900 shrink-0">Subscription</span>
-                    <div className="flex flex-wrap gap-1 justify-end">
-                      <select
-                        value={draftFilters.subDay}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, subDay: e.target.value }))}
-                        className="border border-gray-500 bg-white px-1 py-1 text-xs sm:text-sm"
-                      >
-                        {DAY_OPTIONS.map((d) => (
-                          <option key={d.value || 'd0'} value={d.value}>
-                            {d.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={draftFilters.subMonth}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, subMonth: e.target.value }))}
-                        className="border border-gray-500 bg-white px-1 py-1 text-xs sm:text-sm"
-                      >
-                        {MONTH_OPTIONS.map((m) => (
-                          <option key={m.value || 'm0'} value={m.value}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={draftFilters.subYear}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, subYear: e.target.value }))}
-                        className="border border-gray-500 bg-white px-1 py-1 text-xs sm:text-sm"
-                      >
-                        {YEAR_OPTIONS.map((y) => (
-                          <option key={y.value || 'y0'} value={y.value}>
-                            {y.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                  <FilterRow label="Payment mode">
+                    <select
+                      value={draftFilters.paymentMode}
+                      onChange={(e) =>
+                        setDraftFilters((f) => ({
+                          ...f,
+                          paymentMode: e.target.value as FilterState['paymentMode'],
+                        }))
+                      }
+                      className={FILTER_CONTROL_CLASS}
+                    >
+                      <option value="">All</option>
+                      {LIST_PAYMENT_MODE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FilterRow>
 
-                  <div className="space-y-1">
-                    <span className="font-medium text-gray-900">Datarange</span>
-                    <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-2">
-                      <input
-                        type="date"
-                        value={draftFilters.rangeFrom}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, rangeFrom: e.target.value }))}
-                        className="border border-gray-500 bg-white px-2 py-1 text-sm flex-1 min-w-[140px]"
-                      />
-                      <span className="text-gray-500">—</span>
-                      <input
-                        type="date"
-                        value={draftFilters.rangeTo}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, rangeTo: e.target.value }))}
-                        className="border border-gray-500 bg-white px-2 py-1 text-sm flex-1 min-w-[140px]"
-                      />
-                    </div>
-                  </div>
+                  <FilterRow label="Subscription">
+                    <select
+                      value={draftFilters.subDateField}
+                      onChange={(e) =>
+                        setDraftFilters((f) => ({
+                          ...f,
+                          subDateField: e.target.value as FilterState['subDateField'],
+                        }))
+                      }
+                      className={FILTER_CONTROL_CLASS}
+                      title="Date the date range applies to"
+                    >
+                      {SUB_DATE_FIELD_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FilterRow>
+
+                  <FilterRow label="Datarange from">
+                    <input
+                      type="date"
+                      value={draftFilters.rangeFrom}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, rangeFrom: e.target.value }))}
+                      className={FILTER_CONTROL_CLASS}
+                    />
+                  </FilterRow>
+
+                  <FilterRow label="Datarange to">
+                    <input
+                      type="date"
+                      value={draftFilters.rangeTo}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, rangeTo: e.target.value }))}
+                      className={FILTER_CONTROL_CLASS}
+                    />
+                  </FilterRow>
 
                   <FilterRow label="Login">
                     <select
@@ -1859,7 +1922,7 @@ export default function AdminRegisteredUsersList({
                       onChange={(e) =>
                         setDraftFilters((f) => ({ ...f, login: e.target.value as LoginFilter }))
                       }
-                      className="w-full max-w-[220px] border border-gray-500 bg-white px-2 py-1.5 text-sm ml-auto"
+                      className={FILTER_CONTROL_CLASS}
                     >
                       {LOGIN_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
@@ -1890,14 +1953,14 @@ export default function AdminRegisteredUsersList({
             )}
           </div>
 
-          <form onSubmit={applySearch} className="flex flex-1 flex-wrap items-center gap-2 min-w-[240px]">
+          <form onSubmit={applySearch} className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Search user</span>
             <input
               type="text"
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
               placeholder="Fullname, Username"
-              className="flex-1 min-w-[160px] h-9 border border-gray-500 px-3 text-sm rounded bg-white"
+              className="w-[200px] h-9 border border-gray-500 px-3 text-sm rounded bg-white"
             />
             <button
               type="submit"
@@ -1906,6 +1969,41 @@ export default function AdminRegisteredUsersList({
               Search
             </button>
           </form>
+
+          <select
+            value={paymentStatus}
+            onChange={(e) => {
+              setPaymentStatus(e.target.value as ListPaymentStatus | '');
+              setPage(1);
+              setSelected(new Set());
+            }}
+            className="h-9 border border-black bg-white px-3 text-sm rounded min-w-[150px] text-gray-800"
+            title="Payment status"
+          >
+            <option value="">Payment status</option>
+            {LIST_PAYMENT_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+
+          <div
+            className="h-9 flex items-center gap-1 border border-gray-500 bg-white px-3 text-sm rounded whitespace-nowrap"
+            title="Paid memberships in the current grid (all pages)"
+          >
+            <span className="text-gray-600">Payments:</span>
+            <span className="font-semibold tabular-nums">{loading ? '…' : payments.count}</span>
+          </div>
+          <div
+            className="h-9 flex items-center gap-1 border border-gray-500 bg-white px-3 text-sm rounded whitespace-nowrap"
+            title="Total paid in Euro for the current grid (all pages)"
+          >
+            <span className="text-gray-600">Total:</span>
+            <span className="font-semibold tabular-nums text-green-800">
+              {loading ? '…' : formatEuroTotal(payments.totalEur)}
+            </span>
+          </div>
 
           <div className="flex items-center gap-1 ml-auto">
             <button
@@ -2249,9 +2347,9 @@ export default function AdminRegisteredUsersList({
 
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 justify-between">
-      <span className="font-medium text-gray-900 shrink-0">{label}</span>
-      {children}
+    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+      <span className="font-medium text-gray-900">{label}</span>
+      <div className="flex justify-end min-w-0">{children}</div>
     </div>
   );
 }

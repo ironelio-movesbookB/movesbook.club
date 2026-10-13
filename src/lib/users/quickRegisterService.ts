@@ -37,6 +37,13 @@ import {
 } from '@/lib/promocodes/legacyDb';
 import { QUICK_REGISTER_SUCCESS_MESSAGE, type RegistrationStatus } from '@/lib/users/quickRegisterShared';
 import { getCountryPriceCoefficient } from '@/lib/countries/countryPricingServer';
+import { getCountryPriceInfo } from '@/lib/countries/countryPricingDb';
+import { localAmount } from '@/lib/countries/countryPriceFormula';
+import { encryptPrivateData, getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
+import {
+  createRegistrationPayment,
+  ensureRegistrationPaymentTables,
+} from '@/lib/registration/registrationPayments';
 import { incrementRegistrationStat } from '@/lib/promocodes/promocodeMonthlyStatsService';
 
 export { QUICK_REGISTER_SUCCESS_MESSAGE, type RegistrationStatus };
@@ -479,9 +486,11 @@ export async function getQuickRegisterSubscriptionData(params: {
   if (country) {
     const coeff = await getCountryPriceCoefficient(country);
     subscriptionData.price_coefficient = coeff;
-    const rawPrice = Number(subscriptionData.price);
-    if (Number.isFinite(rawPrice) && coeff > 0 && coeff !== 1) {
-      subscriptionData.price = Number((rawPrice * coeff).toFixed(2));
+    if (coeff > 0 && coeff !== 1) {
+      for (const key of ['price', 'triple_duration_price'] as const) {
+        const raw = Number(subscriptionData[key]);
+        if (Number.isFinite(raw) && raw > 0) subscriptionData[key] = Number((raw * coeff).toFixed(2));
+      }
     }
   }
 
@@ -695,6 +704,7 @@ async function upsertQuickRegisterSubscriptionVersion(params: {
   dateEnd: string;
   paymentMethod?: string;
   amountPaid?: string;
+  amountLocal?: string;
   discountPercent?: string;
 }) {
   const versionName = params.versionName.trim();
@@ -716,6 +726,7 @@ async function upsertQuickRegisterSubscriptionVersion(params: {
     status: periodDisplayStatus(params.dateEnd),
     paymentMethod: params.paymentMethod,
     amountPaid: params.amountPaid,
+    amountLocal: params.amountLocal || undefined,
     discountPercent: params.discountPercent,
   };
 
@@ -771,8 +782,9 @@ async function syncQuickRegisterUserNew(params: {
   subscriptionEnd?: string;
   paymentMethod?: string;
   amountPaid?: string;
+  amountLocal?: string;
   discountPercent?: string;
-}) {
+}): Promise<string> {
   const username = params.username.trim();
   const email = params.email.trim();
   const existing = await prisma.user.findFirst({
@@ -833,9 +845,11 @@ async function syncQuickRegisterUserNew(params: {
       dateEnd: params.subscriptionEnd,
       paymentMethod: params.paymentMethod,
       amountPaid: params.amountPaid,
+      amountLocal: params.amountLocal,
       discountPercent: params.discountPercent,
     });
   }
+  return userId;
 }
 
 export type QuickRegisterPayload = {
@@ -858,7 +872,97 @@ export type QuickRegisterPayload = {
   origin?: string;
   payment_method?: string;
   total_payment?: string;
+  /** Triple-duration subscription chosen in the form. */
+  use_triple?: boolean;
+  language?: string;
 };
+
+export type QuickRegisterResult = {
+  success: boolean;
+  message: string;
+  /** Set when the user must pay first: the account is created after payment. */
+  paymentId?: string;
+  userId?: string;
+};
+
+/** Verified online payment that completes a pending quick register. */
+export type QuickRegisterPaidInfo = {
+  provider: string;
+  amountEur: number;
+  amountLocal: string;
+};
+
+type QuickRegisterQuote = {
+  basePriceEur: number;
+  amountEur: number;
+  currencyCode: string;
+  eurToLocal: number | null;
+  amountLocal: number | null;
+  tripleDays: number;
+};
+
+/** Price computed on the server (country, promocode discount, triple option); the form value is display only. */
+async function quoteQuickRegisterPrice(
+  payload: QuickRegisterPayload,
+  renewal: boolean,
+): Promise<QuickRegisterQuote> {
+  const data = await getQuickRegisterSubscriptionData({
+    userType: payload.usertype,
+    versionId: payload.version_id,
+    promocode: payload.promocode,
+    country: payload.country,
+    registrationType: renewal ? 'renewal' : 'first',
+  });
+  const useTriple = Boolean(payload.use_triple) && Number(data.triple_duration_price) > 0;
+  const basePriceEur = Number(useTriple ? data.triple_duration_price : data.price) || 0;
+  const discount = Number(data.discount_with_promocode) || 0;
+  const amountEur = Math.max(0, Number((basePriceEur * (1 - discount / 100)).toFixed(2)));
+
+  let currencyCode = 'EUR';
+  let eurToLocal: number | null = null;
+  try {
+    const info = await getCountryPriceInfo(payload.country);
+    currencyCode = info.currencyCode || 'EUR';
+    eurToLocal = info.eurToLocal;
+  } catch (e) {
+    console.error('Quick register: country pricing unavailable', e);
+  }
+  return {
+    basePriceEur,
+    amountEur,
+    currencyCode,
+    eurToLocal,
+    amountLocal: currencyCode !== 'EUR' ? localAmount(amountEur, eurToLocal) : null,
+    tripleDays: useTriple ? Number(data.triple_duration_days) || 0 : 0,
+  };
+}
+
+async function createQuickRegisterPayment(
+  payload: QuickRegisterPayload,
+  quote: QuickRegisterQuote,
+  versionName: string,
+): Promise<string> {
+  await ensureRegistrationPaymentTables();
+  return createRegistrationPayment(
+    prisma,
+    {
+      userId: `quick:${payload.email.trim().toLowerCase()}`.slice(0, 191),
+      status: 'pending',
+      versionId: Number(payload.version_id) || null,
+      versionName,
+      specialOffer: false,
+      basePriceEur: quote.basePriceEur,
+      amountEur: quote.amountEur,
+      country: payload.country,
+      currencyCode: quote.currencyCode,
+      eurToLocal: quote.eurToLocal,
+      amountLocal: quote.amountLocal,
+      language: payload.language?.trim() || 'en',
+      periodId: null,
+    },
+    { kind: 'quick_register', pendingData: encryptPrivateData(JSON.stringify(payload)) },
+  );
+}
 
 function buildQuickRegisterConfirmationHtml(params: {
   username: string;
@@ -1019,8 +1123,9 @@ async function completeAlreadyRegisteredPromocodeRetry(params: {
 }
 
 export async function quickRegisterUser(
-  payload: QuickRegisterPayload
-): Promise<{ success: boolean; message: string }> {
+  payload: QuickRegisterPayload,
+  options: { paid?: QuickRegisterPaidInfo } = {}
+): Promise<QuickRegisterResult> {
   const validationError = validateQuickRegisterPayload(payload);
   if (validationError) return { success: false, message: validationError };
 
@@ -1257,6 +1362,37 @@ export async function quickRegisterUser(
     }
   }
 
+  const versionName =
+    rowString(subSettings, 'subscription_name') || rowString(subSettings, 'short_name');
+  const quote = await quoteQuickRegisterPrice(payload, existingUserId !== null);
+  if (quote.tripleDays > 0) endDate = addDays(currentDate, quote.tripleDays);
+
+  let paymentMethod: string;
+  let amountPaid: string;
+  let amountLocal = '';
+  if (options.paid) {
+    paymentMethod = options.paid.provider;
+    amountPaid = String(options.paid.amountEur);
+    amountLocal = options.paid.amountLocal;
+  } else if (quote.amountEur <= 0) {
+    paymentMethod = 'free';
+    amountPaid = '0';
+  } else {
+    const credentials = await getActivePaymentCredentials();
+    if (credentials.testMode) {
+      paymentMethod = 'test';
+      amountPaid = '0';
+    } else if (!credentials.stripe && !credentials.paypal) {
+      return {
+        success: false,
+        message: 'Online payment is not available at the moment. Please try again later.',
+      };
+    } else {
+      const paymentId = await createQuickRegisterPayment(payload, quote, versionName);
+      return { success: true, message: '', paymentId };
+    }
+  }
+
   const countryId = await resolveCountryId(payload.country);
   const sportId = await resolveSportId(payload.sport);
   const userColumns = await getTableColumns(usersTable);
@@ -1328,7 +1464,7 @@ export async function quickRegisterUser(
     return { success: false, message: 'The user could not be saved. Please, try again.' };
   }
 
-  await syncQuickRegisterUserNew({
+  const nextUserId = await syncQuickRegisterUserNew({
     legacyUserId: userId,
     username: payload.username,
     email: payload.email,
@@ -1336,11 +1472,12 @@ export async function quickRegisterUser(
     usertype: payload.usertype,
     country: payload.country,
     gender: payload.gender,
-    versionName: rowString(subSettings, 'subscription_name') || rowString(subSettings, 'short_name'),
+    versionName,
     subscriptionStart: currentDate,
     subscriptionEnd: endDate,
-    paymentMethod: payload.payment_method || 'virtual_card',
-    amountPaid: payload.total_payment,
+    paymentMethod,
+    amountPaid,
+    amountLocal,
     discountPercent: payload.disccount_hidden,
   });
 
@@ -1410,8 +1547,8 @@ export async function quickRegisterUser(
         is_registered: 1,
         modified: registrationDate,
         new_receiver: existingUserId ? 'N' : 'Y',
-        cost_paid: payload.total_payment?.trim() || null,
-        total_payment: payload.total_payment?.trim() || null,
+        cost_paid: amountPaid,
+        total_payment: amountPaid,
       };
 
       if (inviteByMovesbook) {
@@ -1656,10 +1793,11 @@ export async function quickRegisterUser(
       success: true,
       message:
         'You have successfully registered, but the welcome email could not be sent. Please contact support if you do not receive your credentials.',
+      userId: nextUserId,
     };
   }
 
-  return { success: true, message: QUICK_REGISTER_SUCCESS_MESSAGE };
+  return { success: true, message: QUICK_REGISTER_SUCCESS_MESSAGE, userId: nextUserId };
 }
 
 function movesbookFallbackEmail(): string {

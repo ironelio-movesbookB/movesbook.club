@@ -522,7 +522,7 @@ export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegi
               type="text"
               value={form.annualIncome}
               onChange={(e) => update('annualIncome', e.target.value)}
-              className="w-full max-w-[200px] border border-gray-300 px-2 py-1 text-sm"
+              className="w-full max-w-[200px] border border-gray-300 bg-yellow-50 px-2 py-1 text-sm"
             />
           </FormRow>
 
@@ -689,7 +689,7 @@ export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegi
               type="text"
               value={form.currencyCode}
               onChange={(e) => update('currencyCode', e.target.value.toUpperCase())}
-              className="w-full max-w-[120px] border border-gray-300 px-2 py-1 text-sm font-medium"
+              className="w-full max-w-[120px] border border-gray-300 bg-sky-50 px-2 py-1 text-sm font-medium"
             />
           </FormRow>
 
@@ -698,7 +698,7 @@ export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegi
               type="text"
               value={form.currencyDescription}
               onChange={(e) => update('currencyDescription', e.target.value)}
-              className="w-full border border-gray-300 px-2 py-1 text-sm"
+              className="w-full border border-gray-300 bg-sky-50 px-2 py-1 text-sm"
             />
           </FormRow>
 
@@ -720,7 +720,7 @@ export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegi
                   type="text"
                   value={form.exchange1EurAfn}
                   onChange={(e) => setExchangePair('exchange1EurAfn', e.target.value)}
-                  className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
+                  className="w-24 border border-gray-300 px-2 py-1 tabular-nums font-bold text-red-600"
                 />
                 <span className="text-red-600 font-semibold">{form.currencyCode}</span>
               </div>
@@ -743,7 +743,7 @@ export function CountryEditModal({ row, header, pricing, onClose, onSave, onRegi
                   type="text"
                   value={form.exchange1UsdAfn}
                   onChange={(e) => setExchangePair('exchange1UsdAfn', e.target.value)}
-                  className="w-24 border border-gray-300 px-2 py-1 tabular-nums"
+                  className="w-24 border border-gray-300 px-2 py-1 tabular-nums font-bold text-red-600"
                 />
                 <span className="text-red-600 font-semibold">{form.currencyCode}</span>
               </div>

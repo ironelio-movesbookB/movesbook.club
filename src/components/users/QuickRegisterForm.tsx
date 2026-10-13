@@ -705,13 +705,21 @@ export default function QuickRegisterForm() {
           disccount_hidden: discountHidden,
           payment_method: payWithVirtualCard ? 'virtual_card' : 'standard',
           total_payment: totalPayment,
+          use_triple: useTripleSubscription,
+          language: currentLanguage,
         }),
       });
       const raw = await res.text();
-      let data: { success?: boolean; message?: string; error?: string } | null = null;
+      type RegisterResponse = {
+        success?: boolean;
+        message?: string;
+        error?: string;
+        paymentUrl?: string;
+      };
+      let data: RegisterResponse | null = null;
       if (raw.trim()) {
         try {
-          data = JSON.parse(raw) as { success?: boolean; message?: string; error?: string };
+          data = JSON.parse(raw) as RegisterResponse;
         } catch {
           throw new Error('Registration failed: invalid server response.');
         }
@@ -725,6 +733,10 @@ export default function QuickRegisterForm() {
       }
       if (!res.ok || !data.success) {
         throw new Error(data.message || data.error || 'Registration failed');
+      }
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+        return;
       }
       setSuccessMessage(data.message || QUICK_REGISTER_SUCCESS_MESSAGE);
       window.scrollTo({ top: 0, behavior: 'smooth' });

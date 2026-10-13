@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
 import { createStripeCheckoutSession } from '@/lib/payments/stripeRest';
 import { createPaypalOrder } from '@/lib/payments/paypalRest';
@@ -7,7 +6,7 @@ import {
   getRegistrationPayment,
   setRegistrationPaymentCheckout,
 } from '@/lib/registration/registrationPayments';
-import { registrationOrigin } from '@/lib/registration/registrationFlow';
+import { registrationOrigin, registrationPaymentBuyer } from '@/lib/registration/registrationFlow';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +34,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!credentials.stripe) {
         return NextResponse.json({ error: 'Card payment is not available' }, { status: 400 });
       }
-      const user = await prisma.user.findUnique({
-        where: { id: payment.userId },
-        select: { email: true },
-      });
+      const buyer = await registrationPaymentBuyer(payment);
       const session = await createStripeCheckoutSession(credentials.stripe, {
         amountEur: payment.amountEur,
         productName: description,
         reference: payment.id,
-        customerEmail: user?.email || undefined,
+        customerEmail: buyer.email || undefined,
         successUrl: `${pageUrl}?provider=stripe&session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${pageUrl}?cancelled=1`,
       });

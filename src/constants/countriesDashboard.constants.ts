@@ -790,6 +790,40 @@ const POPULATION_BY_ISO: Record<string, number> = {
   ZW: 14862924,
 };
 
+/** 1 EUR in each currency (market rates, Oct 2026). Admins can override per country in /countries. */
+const EUR_RATE_BY_CURRENCY: Record<string, number> = {
+  AED: 4.1, AFN: 72.61, ALL: 91.67, AMD: 405, AOA: 1063, ARS: 1693, AUD: 1.6, AZN: 1.9,
+  BAM: 1.96, BBD: 2.23, BDT: 138, BGN: 1.96, BHD: 0.42, BIF: 3363, BND: 1.43, BOB: 13.25,
+  BRL: 5.58, BSD: 1.12, BTN: 107, BWP: 15.77, BYN: 3.37, BZD: 2.23, CAD: 1.59, CHF: 0.9313,
+  CLP: 1094, CNY: 7.49, COP: 3579, CRC: 510, CUP: 26.81, CVE: 110, CZK: 24.38, DJF: 199,
+  DKK: 7.47, DOP: 68.14, DZD: 151, EGP: 58.86, ERN: 16.76, ETB: 185, EUR: 1, FJD: 2.51,
+  GBP: 0.8451, GEL: 2.91, GHS: 13.18, GMD: 83.45, GNF: 9849, GTQ: 8.56, GYD: 234, HNL: 30.04,
+  HTG: 147, HUF: 365, IDR: 20006, ILS: 3.44, INR: 107, IQD: 1702, IRR: 1989526, ISK: 137,
+  JMD: 179, JOD: 0.792, JPY: 177, KES: 145, KGS: 97.87, KHR: 4546, KMF: 492, KRW: 1492,
+  KWD: 0.347, KZT: 503, LAK: 24865, LBP: 99979, LKR: 370, LRD: 191, LSL: 18.47, LYD: 7.2,
+  MAD: 10.86, MDL: 20, MGA: 5010, MMK: 2349, MNT: 4025, MRU: 45.09, MUR: 53.04, MVR: 17.3,
+  MWK: 1950, MXN: 20.41, MYR: 4.57, MZN: 71.4, NAD: 18.47, NGN: 1489, NIO: 41.18, NOK: 10.69,
+  NPR: 171, NZD: 2, OMR: 0.4295, PAB: 1.12, PEN: 3.84, PGK: 4.93, PHP: 70.12, PKR: 309,
+  PLN: 4.39, PYG: 6394, QAR: 4.07, RON: 5.34, RSD: 117, RUB: 93.87, RWF: 1655, SAR: 4.19,
+  SBD: 8.93, SCR: 16.18, SDG: 501, SEK: 11.2, SGD: 1.43, SLE: 27.47, SOS: 641, SRD: 42.21,
+  SSP: 6428, STN: 24.5, SYP: 136, SZL: 18.47, THB: 37.56, TJS: 10.32, TMT: 3.91, TND: 3.36,
+  TOP: 2.67, TRY: 55.11, TTD: 8.08, TWD: 35.68, TZS: 2930, UAH: 50.32, UGX: 4485, USD: 1.12,
+  UYU: 45.02, UZS: 13302, VES: 982, VND: 28946, VUV: 133, WST: 3.07, XAF: 656, XCD: 3.02,
+  XOF: 656, YER: 264, ZAR: 18.47, ZMW: 22.49, ZWL: 29.85,
+};
+
+function roundRate(value: number): number {
+  if (value >= 100) return Math.round(value);
+  if (value >= 1) return Math.round(value * 100) / 100;
+  return Math.round(value * 10000) / 10000;
+}
+
+function marketRates(currencyCode: string): { eurRate: number; usdRate: number } | null {
+  const eurRate = EUR_RATE_BY_CURRENCY[currencyCode];
+  if (!eurRate) return null;
+  return { eurRate, usdRate: roundRate(eurRate / EUR_RATE_BY_CURRENCY.USD!) };
+}
+
 /** Preserves the original demo rows for countries that had hand-tuned values. */
 const COUNTRY_ROW_OVERRIDES: Partial<Record<string, Omit<CountryRow, 'id' | 'name'>>> = {
   Afghanistan: {
@@ -1009,7 +1043,7 @@ function regionCountFor(name: string): number {
 function buildCountryRow(name: string, id: number): CountryRow {
   const override = COUNTRY_ROW_OVERRIDES[name];
   if (override) {
-    return { id, name, ...override };
+    return { id, name, ...override, ...marketRates(override.currencyCode) };
   }
 
   const iso = COUNTRY_CODE_MAP[name] ?? name.slice(0, 2).toUpperCase();
@@ -1031,6 +1065,7 @@ function buildCountryRow(name: string, id: number): CountryRow {
     secondaryLanguage,
     eurRate: eurUsesEuro ? 1 : 1.08,
     usdRate: currencyCode === 'USD' ? 1 : 1.08,
+    ...marketRates(currencyCode),
     currencyCode,
     regions: regionCountFor(name),
   };
@@ -1047,7 +1082,7 @@ export function builtInCountryCurrency(
   const key = name.trim().toLowerCase();
   const row = COUNTRIES_DASHBOARD_ROWS.find((r) => r.name.toLowerCase() === key);
   if (!row) return null;
-  const hasRealRates = Boolean(COUNTRY_ROW_OVERRIDES[row.name]) || row.currencyCode === 'EUR';
+  const hasRealRates = marketRates(row.currencyCode) !== null;
   return {
     currencyCode: row.currencyCode,
     eurToLocal: hasRealRates ? row.eurRate : null,
