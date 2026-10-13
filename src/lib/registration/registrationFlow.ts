@@ -9,11 +9,15 @@ import {
 } from '@/lib/admin/networkSubscriptionHistory';
 import { formatLocalAmount } from '@/lib/countries/countryPriceFormula';
 import {
+  getQuickRegisterPendingData,
   issueActivationToken,
+  linkQuickRegisterPaymentUser,
   markRegistrationPaymentPaid,
   setAccountActivationStatus,
   type RegistrationPayment,
 } from '@/lib/registration/registrationPayments';
+import { decryptPrivateData } from '@/lib/payments/paymentSettings';
+import { quickRegisterUser, type QuickRegisterPayload } from '@/lib/users/quickRegisterService';
 
 export const PAYMENT_SUCCESS_TEXT_KEY = 'Payment_successfully';
 export const PAYMENT_SUCCESS_FALLBACK_EN =
@@ -139,6 +143,11 @@ export async function finalizePaidRegistration(
   const first = await markRegistrationPaymentPaid(payment.id, providerTxn, payment.provider);
   if (!first) return;
 
+  if (payment.kind === 'quick_register') {
+    await completePaidQuickRegister(payment);
+    return;
+  }
+
   const settings = await prisma.userSettings.findUnique({
     where: { userId: payment.userId },
     select: { adminSettings: true },
@@ -163,4 +172,61 @@ export async function finalizePaidRegistration(
 
   await setAccountActivationStatus(prisma, payment.userId, 'pending_activation');
   void sendActivationEmailSafely(payment.userId, origin);
+}
+
+/**
+ * Paid promocode registration: create the account from the stored form data (credentials email included).
+ * On failure the form data is kept so the account can still be created from the paid row.
+ */
+async function completePaidQuickRegister(payment: RegistrationPayment): Promise<void> {
+  const encrypted = await getQuickRegisterPendingData(payment.id);
+  if (!encrypted) return;
+  let payload: QuickRegisterPayload;
+  try {
+    payload = JSON.parse(decryptPrivateData(encrypted)) as QuickRegisterPayload;
+  } catch (e) {
+    console.error('Quick register payment', payment.id, 'has unreadable form data', e);
+    return;
+  }
+  const result = await quickRegisterUser(payload, {
+    paid: {
+      provider: payment.provider ?? 'online',
+      amountEur: payment.amountEur,
+      amountLocal: localAmountLabel(payment),
+    },
+  });
+  if (!result.success || !result.userId) {
+    console.error('Quick register payment', payment.id, 'is paid but the account failed:', result.message);
+    return;
+  }
+  await linkQuickRegisterPaymentUser(payment.id, result.userId);
+}
+
+/** Display data of the buyer, also before a quick-register account exists. */
+export async function registrationPaymentBuyer(
+  payment: RegistrationPayment,
+): Promise<{ name: string; username: string; email: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: payment.userId },
+    select: { name: true, firstName: true, surname: true, username: true, email: true },
+  });
+  if (user) {
+    return {
+      name: [user.firstName, user.surname].filter(Boolean).join(' ').trim() || user.name || '',
+      username: user.username,
+      email: user.email,
+    };
+  }
+  if (payment.kind !== 'quick_register') return { name: '', username: '', email: '' };
+  const encrypted = await getQuickRegisterPendingData(payment.id);
+  try {
+    const data = encrypted ? (JSON.parse(decryptPrivateData(encrypted)) as QuickRegisterPayload) : null;
+    return {
+      name: '',
+      username: data?.username?.trim() ?? '',
+      email: data?.email?.trim() ?? payment.userId.replace(/^quick:/, ''),
+    };
+  } catch {
+    return { name: '', username: '', email: payment.userId.replace(/^quick:/, '') };
+  }
 }

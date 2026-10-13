@@ -15,6 +15,7 @@ import AdminPcuDatePicker, {
   toIsoDate,
 } from '@/components/admin/AdminPcuDatePicker';
 import NewsCategoriesMultiSelect from '@/components/admin/NewsCategoriesMultiSelect';
+import { useSuperAdminPassword } from '@/components/admin/SuperAdminPasswordModal';
 import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import {
@@ -271,6 +272,7 @@ export default function UserPcuControlPanel({
 }: UserPcuControlPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { requestPassword, passwordModal } = useSuperAdminPassword();
   const segmentForActions = resolveRegisteredUserActionSegment(actionSegment, user.segment);
   const pcuEntityId = user.entityId;
   const loadedPcuSettingsRef = useRef<PcuSettings | null>(null);
@@ -2294,40 +2296,49 @@ export default function UserPcuControlPanel({
 
   const handleDeleteAccount = useCallback(async () => {
     const label = user.fullname || user.username;
-    const ok = window.confirm(
-      `Delete account for ${label}?\n\nThis permanently removes the user from Movesbook. This cannot be undone.`,
-    );
-    if (!ok) return;
-
     const token = getAdminBearerToken();
     if (!token) {
       window.alert('Admin session not found. Please log in again.');
       return;
     }
+    const superAdminPassword = await requestPassword({
+      title: 'Delete account',
+      message: `Delete account for ${label}?\n\nThis permanently removes the user from Movesbook. This cannot be undone.`,
+    });
+    if (!superAdminPassword) return;
+
     setActionBusy(true);
     try {
-      const res = await fetch('/api/admin/registered-users/actions', {
-        method: 'DELETE',
+      const res = await fetch('/api/admin/registered-users/delete-account', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          segment: segmentForActions,
           userIds: resolveActionUserIds(),
+          superAdminPassword,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to delete account');
       const deleted = typeof data.deleted === 'number' ? data.deleted : 0;
-      window.alert(`Deleted ${deleted} user account(s).`);
+      const failed: { error: string }[] = Array.isArray(data.failed) ? data.failed : [];
+      if (failed.length > 0) {
+        window.alert(
+          `Deleted ${deleted} user account(s).\n\nNot deleted:\n${failed.map((f) => f.error).join('\n')}`,
+        );
+        if (deleted === 0) return;
+      } else {
+        window.alert(`Deleted ${deleted} user account(s).`);
+      }
       router.push(backHref);
     } catch (e: unknown) {
       window.alert(e instanceof Error ? e.message : 'Failed to delete account');
     } finally {
       setActionBusy(false);
     }
-  }, [backHref, resolveActionUserIds, router, segmentForActions, user.fullname, user.username]);
+  }, [backHref, requestPassword, resolveActionUserIds, router, user.fullname, user.username]);
 
   const handleAdminSettings = () => {
     // PCU Admin's settings is handled in-panel; keep routing for future deep-links if needed.
@@ -2335,6 +2346,7 @@ export default function UserPcuControlPanel({
 
   return (
     <div className="print-area w-full min-w-0 max-w-5xl mx-auto">
+      {passwordModal}
       <div className="bg-gray-200 border border-gray-300 rounded shadow-sm">
         <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-300">
           <div className="flex items-center gap-3 min-w-0">

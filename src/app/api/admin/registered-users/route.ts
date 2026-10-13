@@ -31,6 +31,12 @@ import {
 } from '@/lib/admin/networkSubscriptionHistory';
 import { readPcuAccessSettings } from '@/lib/admin/userPcuAccessSettings';
 import {
+  filterListRowsByPayment,
+  parseListPaymentMode,
+  parseListPaymentStatus,
+  summarizeListPayments,
+} from '@/lib/admin/listPaymentFilters';
+import {
   buildMovesbookUserTextSearchOr,
   filterListRowsByTextSearch,
   segmentShouldMatchOwnedClubs,
@@ -138,6 +144,8 @@ export async function GET(request: NextRequest) {
   const subRangeFrom = (url.searchParams.get('subRangeFrom') || '').trim();
   const subRangeTo = (url.searchParams.get('subRangeTo') || '').trim();
   const hasSubDateRange = Boolean(subRangeFrom || subRangeTo);
+  const paymentStatus = parseListPaymentStatus(url.searchParams.get('paymentStatus'));
+  const paymentMode = parseListPaymentMode(url.searchParams.get('paymentMode'));
   const needsRowLevelSearchFilter = Boolean(
     search &&
       (segment === 'all' ||
@@ -153,7 +161,12 @@ export async function GET(request: NextRequest) {
       : null;
   const specialOfferOnly =
     url.searchParams.get('specialOffer') === '1' || specialOfferVersionId !== null;
-  const fetchAllMatchingUsers = hasSubDateRange || needsRowLevelSearchFilter || specialOfferOnly;
+  const fetchAllMatchingUsers =
+    hasSubDateRange ||
+    needsRowLevelSearchFilter ||
+    specialOfferOnly ||
+    paymentStatus !== null ||
+    paymentMode !== null;
   const userTypeCategory = (url.searchParams.get('userTypeCategory') || '').trim();
   const membershipMode = parseMembershipViewMode(url.searchParams.get('membership'));
   const membershipSort =
@@ -180,6 +193,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       users: [],
+      payments: { count: 0, totalEur: 0 },
     });
   }
 
@@ -250,17 +264,12 @@ export async function GET(request: NextRequest) {
     updatedAt: true,
   } as const;
 
-  const [dbTotal, rows] = await Promise.all([
-    prisma.user.count({ where }),
-    prisma.user.findMany({
-      where,
-      select: userSelect,
-      orderBy,
-      ...(fetchAllMatchingUsers
-        ? {}
-        : { skip: (page - 1) * pageSize, take: pageSize }),
-    }),
-  ]);
+  // Every matching user is loaded so the payment totals cover the whole grid, not only this page.
+  const rows = await prisma.user.findMany({ where, select: userSelect, orderBy });
+  const dbTotal = rows.length;
+  const pageUserIds = new Set(
+    rows.slice((page - 1) * pageSize, page * pageSize).map((u) => u.id),
+  );
 
   const isClubsSegment = segment === 'clubs';
   const isTeamsSegment = segment === 'teams';
@@ -670,6 +679,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  users = filterListRowsByPayment(users, paymentStatus, paymentMode);
+  const payments = summarizeListPayments(users);
+
   if (fetchAllMatchingUsers) {
     const totalFiltered = users.length;
     users = users.slice((page - 1) * pageSize, page * pageSize);
@@ -678,17 +690,21 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       users,
+      payments,
       membership: membershipMode,
       membershipSort,
       expandedRowCount: users.length,
     });
   }
 
+  users = users.filter((row) => pageUserIds.has(row.id));
+
   return NextResponse.json({
     total: dbTotal,
     page,
     pageSize,
     users,
+    payments,
     membership: membershipMode,
     membershipSort,
     expandedRowCount: users.length,

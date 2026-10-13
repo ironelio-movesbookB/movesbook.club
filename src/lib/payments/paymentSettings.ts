@@ -160,6 +160,15 @@ function decryptSecret(value: string): string {
   }
 }
 
+/** Same AES-GCM key as the payment secrets; for short-lived private data such as pending registrations. */
+export function encryptPrivateData(plain: string): string {
+  return encryptSecret(plain);
+}
+
+export function decryptPrivateData(value: string): string {
+  return decryptSecret(value);
+}
+
 function hint(encrypted: string): string {
   const plain = decryptSecret(encrypted);
   return plain ? `••••${plain.slice(-4)}` : '';
