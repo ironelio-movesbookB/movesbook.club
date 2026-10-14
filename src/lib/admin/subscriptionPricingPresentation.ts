@@ -32,17 +32,12 @@ export function calculateMonthlyCost(price: number, durationDays: number): numbe
   return Math.round((price / durationDays) * 31 * 100) / 100;
 }
 
-function formatPriceForExpression(price: number): string {
-  if (price === 0) return '0';
-  return Number.isInteger(price) ? String(price) : price.toFixed(2);
-}
-
-/** e.g. Monthly cost : (180 : 360) x 31 = € 15.50 */
+/** e.g. Monthly cost : € 15.50 */
 export function formatMonthlyCostExpression(price: number, durationDays: number): string | null {
   const monthly = calculateMonthlyCost(price, durationDays);
   if (monthly === null) return null;
   const result = monthly === 0 ? 'Free' : formatSubscriptionPrice(monthly);
-  return `Monthly cost : (${formatPriceForExpression(price)} : ${durationDays}) x 31 = ${result}`;
+  return `Monthly cost : ${result}`;
 }
 
 export function applyPromoDiscount(price: number, discountPercent: number): number {

@@ -75,6 +75,7 @@ import { usePcuAlert } from '@/contexts/PcuAlertContext';
 import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashboardNav';
 import TopBar from '@/app/club/dashboard/components/topbar/TopBar';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
 import ChatPanel from '@/components/chat/ChatPanel';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
@@ -114,6 +115,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [subscriptionSettingId, setSubscriptionSettingId] = useState<number | null>(null);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
+  const [orgFeedbackScope, setOrgFeedbackScope] = useState<'mine' | 'manage' | null>(null);
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
   const [telegramAccount, setTelegramAccount] = useState('');
   const [isLoadingTelegram, setIsLoadingTelegram] = useState(false);
@@ -342,6 +344,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
   const handleChatPanelClick = useCallback(() => {
     setShowStaffFeedbacks(false);
+    setOrgFeedbackScope(null);
     writeClubWorkspaceTab('my-page');
     setActiveTab('my-page');
     if (userTelegramAccount) {
@@ -355,6 +358,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     setChatAudience(audience);
     setShowChatAudienceModal(false);
     setShowStaffFeedbacks(false);
+    setOrgFeedbackScope(null);
     setShowChatPanel(true);
   }, []);
 
@@ -548,6 +552,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       setShowChatPanel(false);
       setChatAudience(null);
       setShowStaffFeedbacks(false);
+      setOrgFeedbackScope(null);
       setMyPageNewsPanel(null);
     }
     writeClubWorkspaceTab(tab);
@@ -761,6 +766,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const openMyPageNewsPanel = useCallback(
     (panel: Exclude<ClubMyPageNewsPanel, null>) => {
       setShowStaffFeedbacks(false);
+      setOrgFeedbackScope(null);
       setShowChatPanel(false);
       setChatAudience(null);
       writeClubWorkspaceTab('my-page');
@@ -878,7 +884,15 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
                   setActiveTab('my-page');
+                  setOrgFeedbackScope(null);
                   setShowStaffFeedbacks(true);
+                }}
+                onOrgFeedbacksClick={(scope) => {
+                  setShowChatPanel(false);
+                  setChatAudience(null);
+                  setMyPageNewsPanel(null);
+                  setShowStaffFeedbacks(false);
+                  setOrgFeedbackScope(scope);
                 }}
               />
             </aside>
@@ -888,6 +902,12 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             <TopBar onChatPanelClick={handleChatPanelClick} />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
+            ) : orgFeedbackScope ? (
+              <OrgFeedbacksPanel
+                key={orgFeedbackScope}
+                scope={orgFeedbackScope}
+                onClose={() => setOrgFeedbackScope(null)}
+              />
             ) : showChatPanel && chatAudience ? (
               <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
                 <ChatPanel

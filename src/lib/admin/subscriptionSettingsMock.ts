@@ -10,6 +10,7 @@ import {
   usesCoachTeamClubSharingLayout,
 } from '@/lib/admin/subscriptionEditSettingsLayout';
 import { hasRichTextContent } from '@/utils/richTextTranslation';
+import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
 
 export const SUBSCRIPTION_LANGUAGES = [
   { code: 'en', label: 'En' },
@@ -476,14 +477,80 @@ export function getSubscriptionEditData(idOrListOrder: number, byListOrder = fal
   };
 }
 
-export function saveSubscriptionEditData(data: SubscriptionEditData): void {
+/** Apply version settings loaded from the database (server store or public API). */
+export function applySubscriptionEditDataSnapshot(
+  payload: Record<string, SubscriptionEditData>,
+): void {
+  for (const data of Object.values(payload)) {
+    if (!data?.id) continue;
+    editDataCache.set(data.id, data);
+    syncListRowFromEditData(data);
+  }
+  persistEditDataCache();
+}
+
+const VERSION_SETTINGS_PUBLIC_URL = '/api/subscriptions/version-settings';
+
+function adminVersionSettingsUrl(id: number): string {
+  return `/api/admin/subscriptions/version-settings/${id}`;
+}
+
+async function putVersionSettingsToServer(data: SubscriptionEditData, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(adminVersionSettingsUrl(data.id), {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+let serverLoad: Promise<void> | null = null;
+
+/** Browser: load the admin-saved version settings from the database once per page. */
+export function loadSubscriptionEditDataFromServer(force = false): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (serverLoad && !force) return serverLoad;
+  serverLoad = (async () => {
+    try {
+      const res = await fetch(VERSION_SETTINGS_PUBLIC_URL, { cache: 'no-store' });
+      if (!res.ok) return;
+      const body = (await res.json()) as { versions?: Record<string, SubscriptionEditData> };
+      const versions = body.versions ?? {};
+
+      // One-time migration: versions edited before database storage exist only in the admin's browser.
+      const token = getAdminBearerToken();
+      if (token) {
+        for (const [id, data] of editDataCache.entries()) {
+          if (!versions[String(id)]) void putVersionSettingsToServer(data, token);
+        }
+      }
+
+      applySubscriptionEditDataSnapshot(versions);
+      notifySubscriptionSettingsUpdated();
+    } catch {
+      // Keep defaults / local cache when offline.
+    }
+  })();
+  return serverLoad;
+}
+
+/** Save locally and in the database. Resolves false when the database save failed. */
+export async function saveSubscriptionEditData(data: SubscriptionEditData): Promise<boolean> {
   editDataCache.set(data.id, data);
   syncListRowFromEditData(data);
   persistEditDataCache();
   notifySubscriptionSettingsUpdated();
+  const token = getAdminBearerToken();
+  if (!token) return false;
+  return putVersionSettingsToServer(data, token);
 }
 
 hydrateEditDataCacheFromStorage();
+void loadSubscriptionEditDataFromServer();
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {

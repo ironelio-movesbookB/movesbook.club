@@ -30,6 +30,10 @@ const isDataUrl = (src: string) =>
 
 function clubAdminStatusClassName(tone?: ClubSubscriptionStatusTone): string {
   switch (tone) {
+    case 'not-active':
+      return 'text-red-900 font-bold';
+    case 'pending':
+      return 'text-red-600 font-semibold';
     case 'not-yet-active':
       return 'text-sky-400 font-semibold';
     case 'expiring':
@@ -120,7 +124,7 @@ export default function AdminRegisteredUserGridCard({
           <div className={membershipDateClassName(admin.statusTone)}>
             {formatMembershipDateRange(admin.dateStart, admin.dateEnd)}
           </div>
-          <div className={admin.specialOffer ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+          <div className={admin.specialOffer ? 'text-blue-600 font-semibold' : 'text-gray-700'}>
             {admin.version}
           </div>
         </div>

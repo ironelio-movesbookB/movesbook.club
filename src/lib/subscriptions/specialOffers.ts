@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
+import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 
 /** Language codes follow the user's site language (`SUPPORTED_LANGUAGES`). */
 export type SpecialOfferLangMap = Record<string, string>;
@@ -18,6 +19,8 @@ export type SpecialOfferSettings = {
   /** 0 = unlimited */
   maxSubscriptions: number;
   counterStart: number;
+  /** The "Still free" counter flashes when fewer than this many are left (0 = never). */
+  flashBelow: number;
   logoUrl: string;
 };
 
@@ -39,6 +42,7 @@ export type SpecialOfferPublicView = {
   maxSubscriptions: number;
   stillFree: number | null;
   showCounter: boolean;
+  flashBelow: number;
   logoUrl: string;
 };
 
@@ -93,6 +97,15 @@ export async function ensureSpecialOfferTables(): Promise<void> {
       KEY idx_sor_user (userId)
     )
   `);
+  const flashColumn = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
+    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscription_special_offers' AND COLUMN_NAME = 'flashBelow'`,
+  );
+  if (Number(flashColumn[0]?.c ?? 0) === 0) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE subscription_special_offers ADD COLUMN flashBelow INT NOT NULL DEFAULT 0`,
+    );
+  }
   tablesEnsured = true;
 }
 
@@ -108,6 +121,7 @@ type OfferRow = {
   costEuro: Prisma.Decimal | number | string;
   maxSubscriptions: number;
   counterStart: number;
+  flashBelow?: number | null;
   logoUrl: string | null;
 };
 
@@ -165,6 +179,7 @@ function rowToSettings(row: OfferRow): SpecialOfferSettings {
     costEuro: Number(row.costEuro) || 0,
     maxSubscriptions: Number(row.maxSubscriptions) || 0,
     counterStart: Number(row.counterStart) || 0,
+    flashBelow: Number(row.flashBelow) || 0,
     logoUrl: row.logoUrl || '',
   };
 }
@@ -181,6 +196,7 @@ function emptySettings(versionId: number): SpecialOfferSettings {
     costEuro: 0,
     maxSubscriptions: 0,
     counterStart: 0,
+    flashBelow: 0,
     logoUrl: '',
   };
 }
@@ -228,6 +244,7 @@ async function countRegistrations(offerId: number): Promise<number> {
 }
 
 export async function getSpecialOfferAdmin(versionId: number): Promise<SpecialOfferAdminView> {
+  await hydrateVersionSettings();
   const row = await loadOfferRow(versionId);
   const settings = row ? rowToSettings(row) : emptySettings(versionId);
   const registeredCount = row ? await countRegistrations(row.id) : 0;
@@ -256,19 +273,26 @@ export async function saveSpecialOffer(input: Partial<SpecialOfferSettings> & { 
   const costEuro = Math.max(0, Number(input.costEuro) || 0);
   const maxSubscriptions = Math.max(0, Math.floor(Number(input.maxSubscriptions) || 0));
   const counterStart = Math.max(0, Math.floor(Number(input.counterStart) || 0));
+  const flashBelow = Math.max(0, Math.floor(Number(input.flashBelow) || 0));
+  if (flashBelow > 99) {
+    throw new Error('"Counter will flash when less of" can have at most 2 digits');
+  }
+  if (flashBelow > 0 && maxSubscriptions > 0 && flashBelow > maxSubscriptions) {
+    throw new Error('"Counter will flash when less of" cannot be more than the maximum number of allowed subscriptions');
+  }
   const logoUrl = typeof input.logoUrl === 'string' ? input.logoUrl.trim().slice(0, 512) : '';
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO subscription_special_offers
        (versionId, enabled, titlesJson, descriptionsJson, counterLangsJson, validFrom, validTo,
-        costEuro, maxSubscriptions, counterStart, logoUrl)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        costEuro, maxSubscriptions, counterStart, flashBelow, logoUrl)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        enabled = VALUES(enabled), titlesJson = VALUES(titlesJson),
        descriptionsJson = VALUES(descriptionsJson), counterLangsJson = VALUES(counterLangsJson),
        validFrom = VALUES(validFrom), validTo = VALUES(validTo), costEuro = VALUES(costEuro),
        maxSubscriptions = VALUES(maxSubscriptions), counterStart = VALUES(counterStart),
-       logoUrl = VALUES(logoUrl)`,
+       flashBelow = VALUES(flashBelow), logoUrl = VALUES(logoUrl)`,
     input.versionId,
     input.enabled ? 1 : 0,
     JSON.stringify(titleByLang),
@@ -279,6 +303,7 @@ export async function saveSpecialOffer(input: Partial<SpecialOfferSettings> & { 
     costEuro,
     maxSubscriptions,
     counterStart,
+    flashBelow,
     logoUrl || null,
   );
   return getSpecialOfferAdmin(input.versionId);
@@ -289,6 +314,7 @@ export async function getPublicSpecialOffer(
   versionId: number,
   lang: string,
 ): Promise<SpecialOfferPublicView | null> {
+  await hydrateVersionSettings();
   const row = await loadOfferRow(versionId);
   if (!row) return null;
   const settings = rowToSettings(row);
@@ -305,6 +331,7 @@ export async function getPublicSpecialOffer(
     maxSubscriptions: settings.maxSubscriptions,
     stillFree,
     showCounter: settings.counterLangs.includes(lang),
+    flashBelow: settings.flashBelow,
     logoUrl: settings.logoUrl,
   };
 }

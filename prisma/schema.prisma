@@ -2433,10 +2433,21 @@ model SubscriptionSpecialOfferRow {
   costEuro         Decimal  @default(0) @db.Decimal(10, 2)
   maxSubscriptions Int      @default(0)
   counterStart     Int      @default(0)
+  flashBelow       Int      @default(0)
   logoUrl          String?  @db.VarChar(512)
   updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
 
   @@map("subscription_special_offers")
+  @@ignore
+}
+
+/// src/lib/subscriptions/versionSettingsStore.ts
+model SubscriptionVersionSettingsRow {
+  versionId Int      @id
+  dataJson  String   @db.MediumText
+  updatedAt DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("subscription_version_settings")
   @@ignore
 }
 
