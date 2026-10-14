@@ -17,7 +17,11 @@ import {
   MEMBER_OVERVIEW_MNGMNT_LINKS,
 } from '@/lib/club/clubAdminMenus';
 import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
-import type { SelectedClubMember } from '@/lib/club/selectedClubMember';
+import {
+  readSelectedClubMember,
+  writeSelectedClubMember,
+  type SelectedClubMember,
+} from '@/lib/club/selectedClubMember';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import type { Member } from '@/types/clubTable';
 import ClubNotificationsPanel from '@/components/notifications/ClubNotificationsPanel';
@@ -74,9 +78,34 @@ function toSelected(m: Member): SelectedClubMember | null {
   };
 }
 
-export default function MemberOverviewPanel() {
+type Props = {
+  /** Club to show. Outside the club workspace, pass the dashboard club id. */
+  clubId?: string | null;
+};
+
+export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
   const router = useRouter();
-  const { selectedClubId, selectedMember, setSelectedMember } = useClubWorkspace();
+  const workspace = useClubWorkspace();
+  const selectedClubId = clubIdProp || workspace.selectedClubId;
+  const [localMember, setLocalMember] = useState<SelectedClubMember | null>(null);
+
+  useEffect(() => {
+    if (!clubIdProp) return;
+    setLocalMember(readSelectedClubMember(clubIdProp));
+  }, [clubIdProp]);
+
+  const selectedMember = clubIdProp ? localMember : workspace.selectedMember;
+  const setSelectedMember = useCallback(
+    (member: SelectedClubMember | null) => {
+      if (clubIdProp) {
+        setLocalMember(member);
+        writeSelectedClubMember(clubIdProp, member);
+        return;
+      }
+      workspace.setSelectedMember(member);
+    },
+    [clubIdProp, workspace],
+  );
   const [topTab, setTopTab] = useState<TopTab>('overview');
   const [section, setSection] = useState<Section>('home');
   const [members, setMembers] = useState<SelectedClubMember[]>([]);

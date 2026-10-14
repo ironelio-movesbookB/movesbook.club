@@ -653,7 +653,16 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    router.push(`/my-club?clubId=${encodeURIComponent(entityId)}`);
+    // Club Dashboard (the overview page) opens from Monitorings → Dashboard.
+    if (
+      pathname?.startsWith('/clubMembers') ||
+      pathname?.startsWith('/clubs/') ||
+      pathname?.startsWith('/club/staff') ||
+      pathname === '/club/dashboard'
+    ) {
+      return;
+    }
+    router.push('/club/dashboard');
   }, [selectedClubId, formClubs, router, isTeamWorkspaceUser, pathname, showMyClubTab]);
 
   const handleMyTeamClick = useCallback(() => {

@@ -1260,12 +1260,26 @@ export default function DarkSidebar({
       }
       onEntitySelect?.(clubId);
       setCurrentTab('my-entity');
-      if (isClubAccountUserType(userType) || isAthleteUser) {
+      if (isClubAccountUserType(userType)) {
+        router.push('/club/dashboard');
+        return;
+      }
+      if (isAthleteUser) {
         onMyClubClick?.();
       }
     },
-    [onEntitySelect, setCurrentTab, userType, isAthleteUser, onMyClubClick]
+    [onEntitySelect, setCurrentTab, userType, isAthleteUser, onMyClubClick, router]
   );
+
+  const openClubDashboardPage = useCallback(() => {
+    const clubId =
+      selectedEntityId ||
+      (typeof window !== 'undefined' ? localStorage.getItem('selectedClub') : null);
+    if (!clubId) return;
+    writeClubWorkspaceTab('my-entity');
+    setCurrentTab('my-entity');
+    router.push(`/my-club?clubId=${encodeURIComponent(clubId)}`);
+  }, [router, selectedEntityId, setCurrentTab]);
 
   const handleAthleteTeamSelect = useCallback(
     (teamId: string) => {
@@ -4443,6 +4457,7 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
+                                  onClick={openClubDashboardPage}
                                   className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left transition-colors hover:bg-[#333]"
                                 >
                                   <div className="flex min-w-0 items-center gap-2">

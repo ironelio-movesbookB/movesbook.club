@@ -10,7 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Settings,
 } from 'lucide-react';
+import MemberOverviewPanel from '@/components/club/memberOverview/MemberOverviewPanel';
 import UserProfile from '@/components/UserProfile';
 import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
 import ClubInfoContactsForm from '@/components/club/ClubInfoContactsForm';
@@ -78,6 +80,37 @@ type ClubOverviewPanelProps = {
   clubProfileEditHref: string;
   onAddMembers?: () => void;
 };
+
+type DashboardPageSettings = {
+  showStatistics: boolean;
+  showRecentMembers: boolean;
+};
+
+type DashboardLowerPanel = 'profiles' | 'archives' | null;
+
+const DEFAULT_DASHBOARD_SETTINGS: DashboardPageSettings = {
+  showStatistics: true,
+  showRecentMembers: true,
+};
+
+function dashboardSettingsKey(clubId: string) {
+  return `clubDashboardPageSettings:${clubId}`;
+}
+
+function readDashboardSettings(clubId: string | undefined): DashboardPageSettings {
+  if (typeof window === 'undefined' || !clubId) return DEFAULT_DASHBOARD_SETTINGS;
+  try {
+    const raw = localStorage.getItem(dashboardSettingsKey(clubId));
+    if (!raw) return DEFAULT_DASHBOARD_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<DashboardPageSettings>;
+    return {
+      showStatistics: parsed.showStatistics !== false,
+      showRecentMembers: parsed.showRecentMembers !== false,
+    };
+  } catch {
+    return DEFAULT_DASHBOARD_SETTINGS;
+  }
+}
 
 function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
   if (member) {
@@ -343,6 +376,35 @@ export default function ClubOverviewPanel({
   onAddMembers,
 }: ClubOverviewPanelProps) {
   const [activeTab, setActiveTab] = useState<ClubOverviewTabId>('admin-profile');
+  const [lowerPanel, setLowerPanel] = useState<DashboardLowerPanel>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pageSettings, setPageSettings] = useState<DashboardPageSettings>(DEFAULT_DASHBOARD_SETTINGS);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPageSettings(readDashboardSettings(club?.id));
+    setSettingsOpen(false);
+    setLowerPanel(null);
+  }, [club?.id]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDoc = (event: MouseEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [settingsOpen]);
+
+  const updatePageSettings = (patch: Partial<DashboardPageSettings>) => {
+    setPageSettings((prev) => {
+      const next = { ...prev, ...patch };
+      if (club?.id) {
+        localStorage.setItem(dashboardSettingsKey(club.id), JSON.stringify(next));
+      }
+      return next;
+    });
+  };
 
   const profileRows = club ? getClubProfileDisplayRows(club) : [];
   const meta = club ? parseClubDescriptionMeta(club.description) : {};
@@ -351,11 +413,44 @@ export default function ClubOverviewPanel({
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8 flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full overflow-hidden">
       {/* 1. Header */}
-      <header className="mb-6 shrink-0">
-        <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Club Overview</h2>
+      <header className="mb-6 shrink-0 flex items-start justify-between gap-3">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h2>
+        <div className="relative" ref={settingsRef}>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((open) => !open)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            aria-label="Dashboard settings"
+            title="Dashboard settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          {settingsOpen ? (
+            <div className="absolute right-0 top-11 z-20 w-64 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-lg">
+              <p className="mb-2 font-semibold text-gray-900">Page settings</p>
+              <label className="flex items-center gap-2 py-1 text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={pageSettings.showStatistics}
+                  onChange={(event) => updatePageSettings({ showStatistics: event.target.checked })}
+                />
+                Show summary labels
+              </label>
+              <label className="flex items-center gap-2 py-1 text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={pageSettings.showRecentMembers}
+                  onChange={(event) => updatePageSettings({ showRecentMembers: event.target.checked })}
+                />
+                Show recent members
+              </label>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {/* 2. Statistics cards */}
+      {pageSettings.showStatistics ? (
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 shrink-0" aria-label="Club statistics">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-2xl text-white shadow-lg">
           <div className="flex items-center justify-between">
@@ -386,8 +481,10 @@ export default function ClubOverviewPanel({
           <p className="text-3xl md:text-4xl font-bold mt-3">78%</p>
         </div>
       </section>
+      ) : null}
 
-      {/* 3. Recent Members carousel (always visible) */}
+      {/* 3. Recent Members carousel */}
+      {pageSettings.showRecentMembers ? (
       <section className="mb-8 shrink-0" aria-label="Recent members">
         <h3 className="text-lg font-bold text-gray-900 mb-3">Recent Members</h3>
         <HorizontalMemberCarousel
@@ -395,7 +492,39 @@ export default function ClubOverviewPanel({
           slotCount={5}
         />
       </section>
+      ) : null}
 
+      <div className="mb-4 flex flex-wrap gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setLowerPanel((panel) => (panel === 'profiles' ? null : 'profiles'))}
+          className={`rounded-full px-4 py-2 text-sm font-semibold text-white ${
+            lowerPanel === 'profiles'
+              ? 'bg-purple-700'
+              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'
+          }`}
+        >
+          Profiles and Settings
+        </button>
+        <button
+          type="button"
+          onClick={() => setLowerPanel((panel) => (panel === 'archives' ? null : 'archives'))}
+          className={`rounded-full px-4 py-2 text-sm font-semibold text-white ${
+            lowerPanel === 'archives'
+              ? 'bg-purple-700'
+              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'
+          }`}
+        >
+          Overview archives
+        </button>
+      </div>
+
+      {lowerPanel === 'archives' && club ? (
+        <MemberOverviewPanel clubId={club.id} />
+      ) : null}
+
+      {lowerPanel === 'profiles' ? (
+      <>
       {/* 4. Tab navigation — horizontally scrollable */}
       <nav className="shrink-0 w-full min-w-0 max-w-full border-b border-gray-200 bg-white">
         <OverviewTabBar activeTab={activeTab} onTabChange={setActiveTab} />
@@ -545,6 +674,8 @@ export default function ClubOverviewPanel({
             </div>
           )}
       </div>
+      </>
+      ) : null}
     </div>
   );
 }
