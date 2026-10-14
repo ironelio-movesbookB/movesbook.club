@@ -26,6 +26,10 @@ export type RegisteredUserListRow = {
   dateEnd: string | null;
   version: string;
   amount: string;
+  /** Raw payment method of the membership period (stripe, paypal, virtual_card, free, test, pending…). */
+  paymentMethod?: string;
+  /** Euros paid for the membership period (0 when nothing recorded). */
+  amountEur?: number;
   status: string;
   clubsOwnedCount?: number;
   companyName?: string;

@@ -1069,6 +1069,8 @@ function periodToListRow(
     companyName: period.companyName?.trim() || row.companyName,
     username: period.username?.trim() || row.username,
     amount: formatMembershipAmount(period) ?? row.amount,
+    paymentMethod: period.paymentMethod?.trim() || undefined,
+    amountEur: parseAmountPaid(period.amountPaid),
     status,
     statusTone: membershipStatusToneFromLabel(status),
   };

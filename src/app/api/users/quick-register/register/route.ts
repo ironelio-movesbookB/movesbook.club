@@ -27,12 +27,21 @@ export async function POST(req: NextRequest) {
       disccount_hidden: body.disccount_hidden != null ? String(body.disccount_hidden) : undefined,
       payment_method: body.payment_method != null ? String(body.payment_method) : 'virtual_card',
       total_payment: body.total_payment != null ? String(body.total_payment) : undefined,
+      use_triple: Boolean(body.use_triple),
+      language: body.language != null ? String(body.language).slice(0, 10) : undefined,
       origin: resolvePublicOrigin(req),
     };
 
     const result = await quickRegisterUser(payload);
     if (!result.success) {
       return NextResponse.json({ success: false, message: result.message }, { status: 400 });
+    }
+    if (result.paymentId) {
+      return NextResponse.json({
+        success: true,
+        message: result.message,
+        paymentUrl: `/register/payment/${result.paymentId}`,
+      });
     }
     return NextResponse.json({ success: true, message: result.message });
   } catch (err) {
