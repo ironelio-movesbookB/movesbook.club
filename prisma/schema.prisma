@@ -2451,6 +2451,99 @@ model SubscriptionVersionSettingsRow {
   @@ignore
 }
 
+/// Club / team sponsors (Marketing → Sponsor). Raw SQL in `src/lib/club/sponsors/sponsorService.ts`.
+model OrgSponsorRow {
+  id             String   @id @db.VarChar(191)
+  workspace_kind String   @db.VarChar(10)
+  workspace_id   String   @db.VarChar(191)
+  name           String   @db.VarChar(191)
+  visible        Boolean  @default(true)
+  landing_url    String   @default("") @db.VarChar(512)
+  business_name  String   @default("") @db.VarChar(191)
+  vat_code       String   @default("") @db.VarChar(64)
+  contact_name   String   @default("") @db.VarChar(191)
+  email          String   @default("") @db.VarChar(191)
+  phone          String   @default("") @db.VarChar(64)
+  address        String   @default("") @db.VarChar(255)
+  banner_path    String?  @db.VarChar(255)
+  logo_path      String?  @db.VarChar(255)
+  placements_json String? @db.Text
+  report_token   String   @unique(map: "org_sponsors_report_token") @db.VarChar(64)
+  created_at     DateTime @default(now()) @db.DateTime(3)
+  updated_at     DateTime @default(now()) @db.DateTime(3)
+
+  @@index([workspace_kind, workspace_id], map: "org_sponsors_workspace_idx")
+  @@map("org_sponsors")
+  @@ignore
+}
+
+model OrgSponsorContractRow {
+  id               String    @id @db.VarChar(191)
+  sponsor_id       String    @db.VarChar(191)
+  start_date       DateTime  @db.Date
+  end_date         DateTime  @db.Date
+  value            Decimal   @default(0) @db.Decimal(12, 2)
+  reminder_days    Int       @default(30)
+  notes            String?   @db.Text
+  pdf_name         String?   @db.VarChar(191)
+  pdf_path         String?   @db.VarChar(255)
+  reminder_sent_at DateTime? @db.DateTime(0)
+  created_at       DateTime  @default(now()) @db.DateTime(3)
+
+  @@index([sponsor_id], map: "org_sponsor_contracts_sponsor_idx")
+  @@map("org_sponsor_contracts")
+  @@ignore
+}
+
+model OrgSponsorPaymentRow {
+  id               String    @id @db.VarChar(191)
+  sponsor_id       String    @db.VarChar(191)
+  amount           Decimal   @default(0) @db.Decimal(12, 2)
+  due_date         DateTime  @db.Date
+  reminder_days    Int       @default(7)
+  note             String    @default("") @db.VarChar(255)
+  paid_at          DateTime? @db.Date
+  reminder_sent_at DateTime? @db.DateTime(0)
+  created_at       DateTime  @default(now()) @db.DateTime(3)
+
+  @@index([sponsor_id], map: "org_sponsor_payments_sponsor_idx")
+  @@map("org_sponsor_payments")
+  @@ignore
+}
+
+model OrgSponsorEventRow {
+  id         BigInt   @id @default(autoincrement())
+  sponsor_id String   @db.VarChar(191)
+  event      String   @db.VarChar(8)
+  section    String   @default("") @db.VarChar(40)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([sponsor_id, created_at], map: "org_sponsor_events_sponsor_idx")
+  @@map("org_sponsor_events")
+  @@ignore
+}
+
+/// Club / team public website (Marketing → Website). Raw SQL in `src/lib/club/website/websiteService.ts`.
+model OrgWebsiteRow {
+  workspace_kind    String   @db.VarChar(10)
+  workspace_id      String   @db.VarChar(191)
+  enabled           Boolean  @default(false)
+  slug              String?  @unique(map: "org_websites_slug") @db.VarChar(64)
+  cover_path        String?  @db.VarChar(255)
+  about_text        String?  @db.Text
+  sections_json     String?  @db.Text
+  season            String   @default("") @db.VarChar(20)
+  donation_enabled  Boolean  @default(false)
+  donation_text     String?  @db.Text
+  donation_tax_code String   @default("") @db.VarChar(32)
+  socials_json      String?  @db.Text
+  updated_at        DateTime @default(now()) @db.DateTime(3)
+
+  @@id([workspace_kind, workspace_id])
+  @@map("org_websites")
+  @@ignore
+}
+
 /// src/lib/subscriptions/specialOffers.ts
 model SubscriptionSpecialOfferRegistrationRow {
   id          Int       @id @default(autoincrement())

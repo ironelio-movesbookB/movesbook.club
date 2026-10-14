@@ -5026,6 +5026,22 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
+                                <button
+                                  type="button"
                                   className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
@@ -5509,6 +5525,50 @@ export default function DarkSidebar({
                                     })}
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubMarketingOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Monitor className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className="truncate text-sm font-semibold">Marketing</span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubMarketingOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubMarketingOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
                               </div>
                             )}
                           </div>
