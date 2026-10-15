@@ -2,14 +2,14 @@ import {
   getSubscriptionById,
   getSubscriptionEditData,
 } from '@/lib/admin/subscriptionSettingsMock';
-import { usesCoachTeamClubSharingLayout } from '@/lib/admin/subscriptionEditSettingsLayout';
+import { hasCreatableCompaniesSetting } from '@/lib/admin/subscriptionEditSettingsLayout';
 
 /** Companies creatable by admin — from saved version settings (coach / team / club only). */
 export function getCreatableCompaniesLimit(subscriptionSettingId: number | null | undefined): number | null {
   if (subscriptionSettingId == null || !Number.isFinite(subscriptionSettingId)) return null;
 
   const row = getSubscriptionById(subscriptionSettingId);
-  if (!row || !usesCoachTeamClubSharingLayout(row.userType)) return null;
+  if (!row || !hasCreatableCompaniesSetting(row.userType)) return null;
 
   const editData = getSubscriptionEditData(subscriptionSettingId, false);
   const fromSettings = editData?.settings.creatableCompanies;
@@ -35,7 +35,7 @@ export function remainingCreatableCompanies(limit: number, createdCount: number)
 
 function readManageableUsersFromSubscription(subscriptionSettingId: number) {
   const row = getSubscriptionById(subscriptionSettingId);
-  if (!row || !usesCoachTeamClubSharingLayout(row.userType)) return null;
+  if (!row || !hasCreatableCompaniesSetting(row.userType)) return null;
 
   const editData = getSubscriptionEditData(subscriptionSettingId, false);
   return {

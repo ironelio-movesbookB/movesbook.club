@@ -52,15 +52,9 @@ import {
   type SelectedClubMember,
 } from '@/lib/club/selectedClubMember';
 import { clubProfilePayloadForApi } from '@/lib/club/clubProfilePayload';
-import { type CreatableCompaniesQuota } from '@/lib/club/creatableCompaniesQuota.shared';
-import {
-  canCreateAnotherCompany,
-  getCreatableCompaniesLimit,
-  isCreatableCompaniesUnlimited,
-  remainingCreatableCompanies,
-} from '@/lib/admin/subscriptionManageableUsers';
 import { SUBSCRIPTION_SETTINGS_UPDATED_EVENT } from '@/lib/admin/subscriptionSettingsMock';
-import { getDefaultVersionId } from '@/lib/registration/waysToGetStarted';
+import { useSharingSummary } from '@/hooks/useSharingSummary';
+import type { SharingNotificationsScope } from '@/components/sharing/SharingNotifications';
 import {
   applyEntityBannerOnSave,
   applyEntityLogoOnSave,
@@ -112,7 +106,6 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [createClubModalKey, setCreateClubModalKey] = useState(0);
   const [createClubSaving, setCreateClubSaving] = useState(false);
   const [myClubTabVisible, setMyClubTabVisible] = useState(false);
-  const [subscriptionSettingId, setSubscriptionSettingId] = useState<number | null>(null);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
   const [orgFeedbackScope, setOrgFeedbackScope] = useState<'mine' | 'manage' | null>(null);
@@ -187,21 +180,12 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     return getFormCreatedClubsSortedByCreatedAt(clubs);
   }, [clubs, isTeamWorkspaceUser]);
 
-  const creatableCompaniesQuota = useMemo((): CreatableCompaniesQuota | null => {
-    void settingsRevision;
-    const created = formClubs.length;
-    const limit = getCreatableCompaniesLimit(subscriptionSettingId);
-    if (limit == null) return null;
-
-    const unlimited = isCreatableCompaniesUnlimited(limit);
-    return {
-      limit,
-      created,
-      remaining: remainingCreatableCompanies(limit, created),
-      canCreate: canCreateAnotherCompany(limit, created),
-      unlimited,
-    };
-  }, [formClubs.length, subscriptionSettingId, settingsRevision]);
+  /** Max companies creatable — read from the admin's PCU version settings. */
+  const { summary: sharingSummary, reload: reloadSharingSummary } = useSharingSummary(Boolean(user));
+  useEffect(() => {
+    void reloadSharingSummary();
+  }, [formClubs.length, settingsRevision, reloadSharingSummary]);
+  const creatableCompaniesQuota = sharingSummary?.companyQuota ?? null;
 
   const hasFormClub = formClubs.length > 0;
   const activeClub = selectedClubId
@@ -209,6 +193,20 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     : null;
   const bannerClub = activeClub ?? formClubs[0] ?? null;
   const shellActiveTab: ClubWorkspaceTab = activeClub ? activeTab : 'my-page';
+  const sharingScope: SharingNotificationsScope =
+    shellActiveTab === 'my-entity' && activeClub
+      ? {
+          type: 'party',
+          kind: isTeamWorkspaceUser
+            ? 'team'
+            : ownEntityWorkspace?.profileKind === 'coach'
+              ? 'coach'
+              : ownEntityWorkspace?.profileKind === 'group'
+                ? 'group'
+                : 'club',
+          id: activeClub.id,
+        }
+      : { type: 'mypage' };
 
   const loadClubs = useCallback(async () => {
     try {
@@ -278,28 +276,6 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       setClubsLoaded(true);
     }
   }, [user, ownEntityWorkspace]);
-
-  const loadSubscriptionSettingId = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const response = await fetch('/api/user/member-registration-info', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        const fallbackId = getDefaultVersionId('club');
-        if (fallbackId) setSubscriptionSettingId(fallbackId);
-        return;
-      }
-      const data = (await response.json()) as { subscriptionSettingId?: number };
-      if (typeof data.subscriptionSettingId === 'number') {
-        setSubscriptionSettingId(data.subscriptionSettingId);
-      }
-    } catch {
-      /* optional */
-    }
-  }, []);
 
   const loadBannerProfile = useCallback(async () => {
     try {
@@ -413,10 +389,6 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     const savedTab = readClubWorkspaceTab();
     if (savedTab) setActiveTab(savedTab);
   }, []);
-
-  useEffect(() => {
-    void loadSubscriptionSettingId();
-  }, [loadSubscriptionSettingId]);
 
   useEffect(() => {
     const refresh = () => setSettingsRevision((value) => value + 1);
@@ -792,6 +764,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         setMyPageNewsPanel,
         selectedMember,
         setSelectedMember,
+        sharingScope,
       }}
     >
     <div className="bg-gray-50 flex flex-col min-h-screen">

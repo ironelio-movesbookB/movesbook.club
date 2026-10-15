@@ -1,5 +1,6 @@
 'use client';
 
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -258,6 +259,7 @@ function MyTeamContent() {
           </div>
 
           <div className="flex-1 min-w-0 flex flex-col">
+            <SharingNotifications scope={teamId ? { type: 'party', kind: 'team', id: teamId } : null} />
             {loading ? (
               <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />

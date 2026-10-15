@@ -2420,6 +2420,75 @@ model ClubBillingCreditNoteRow {
   @@ignore
 }
 
+/// src/lib/admin/versionSettingsStore.ts — version settings (Subscriptions → edit version)
+model SubscriptionVersionSettingRow {
+  versionId Int      @id @map("version_id")
+  userType  String   @db.VarChar(20) @map("user_type")
+  data      String   @db.LongText
+  updatedBy String?  @db.VarChar(191) @map("updated_by")
+  createdAt DateTime @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@map("subscription_version_settings")
+  @@ignore
+}
+
+/// src/lib/admin/versionSettingsStore.ts — per-user copy shown in PCU → Version settings
+model UserVersionSettingRow {
+  userId    String   @id @db.VarChar(191) @map("user_id")
+  versionId Int?     @map("version_id")
+  userType  String   @db.VarChar(20) @map("user_type")
+  data      String   @db.LongText
+  updatedBy String?  @db.VarChar(191) @map("updated_by")
+  createdAt DateTime @default(now()) @db.DateTime(3) @map("created_at")
+  updatedAt DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([versionId], map: "user_version_settings_version_idx")
+  @@map("user_version_settings")
+  @@ignore
+}
+
+/// src/lib/sharing/sharingService.ts — sharing requests between users and companies
+model CompanyShareRequestRow {
+  id                String    @id @db.VarChar(191)
+  senderKind        String    @db.VarChar(10) @map("sender_kind")
+  senderId          String    @db.VarChar(191) @map("sender_id")
+  senderAdminId     String    @db.VarChar(191) @map("sender_admin_id")
+  recipientKind     String    @db.VarChar(10) @map("recipient_kind")
+  recipientId       String    @db.VarChar(191) @map("recipient_id")
+  recipientAdminId  String    @db.VarChar(191) @map("recipient_admin_id")
+  senderSections    String    @db.Text @map("sender_sections")
+  recipientSections String    @db.Text @map("recipient_sections")
+  status            String    @default("pending") @db.VarChar(12)
+  removedBy         String?   @db.VarChar(10) @map("removed_by")
+  senderHidden      Boolean   @default(false) @map("sender_hidden")
+  recipientHidden   Boolean   @default(false) @map("recipient_hidden")
+  createdAt         DateTime  @default(now()) @db.DateTime(3) @map("created_at")
+  respondedAt       DateTime? @db.DateTime(3) @map("responded_at")
+  removedAt         DateTime? @db.DateTime(3) @map("removed_at")
+  updatedAt         DateTime  @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@index([senderAdminId, recipientKind, status], map: "company_share_requests_sender_admin_idx")
+  @@index([recipientAdminId, status], map: "company_share_requests_recipient_admin_idx")
+  @@index([senderKind, senderId], map: "company_share_requests_sender_idx")
+  @@index([recipientKind, recipientId], map: "company_share_requests_recipient_idx")
+  @@map("company_share_requests")
+  @@ignore
+}
+
+/// src/lib/sharing/sharingService.ts — default sections shared per recipient type
+model CompanyShareDefaultRow {
+  ownerKind     String   @db.VarChar(10) @map("owner_kind")
+  ownerId       String   @db.VarChar(191) @map("owner_id")
+  recipientKind String   @db.VarChar(10) @map("recipient_kind")
+  sections      String   @db.Text
+  updatedAt     DateTime @default(now()) @db.DateTime(3) @map("updated_at")
+
+  @@id([ownerKind, ownerId, recipientKind])
+  @@map("company_share_defaults")
+  @@ignore
+}
+
 /// src/lib/subscriptions/specialOffers.ts
 model SubscriptionSpecialOfferRow {
   id               Int      @id @default(autoincrement())

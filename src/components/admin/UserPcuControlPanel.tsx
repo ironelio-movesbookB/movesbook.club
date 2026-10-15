@@ -77,6 +77,7 @@ import NotYetActivePeriodEditControl, {
   subscriptionPeriodDateClassName,
 } from '@/components/admin/NotYetActivePeriodEditControl';
 import ProfileReferencesReadOnly from '@/components/admin/ProfileReferencesReadOnly';
+import PcuVersionSettingsPanel from '@/components/admin/PcuVersionSettingsPanel';
 import {
   normalizeFavouritePriority,
   type FavouritePriority,
@@ -281,6 +282,7 @@ export default function UserPcuControlPanel({
   const vipBannerBlobRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<TopTabId>(defaultActiveTab);
   const [profileSubTab, setProfileSubTab] = useState<'admin' | 'entity'>(defaultProfileSubTab);
+  const [profileBarSection, setProfileBarSection] = useState<'members' | 'version'>('members');
 
   useEffect(() => {
     setProfileSubTab(defaultProfileSubTab);
@@ -2615,10 +2617,31 @@ export default function UserPcuControlPanel({
 
             <div className="px-4 py-4">
               <div className="bg-purple-700 text-white px-4 py-2 font-semibold flex items-center justify-between">
-                <span>Members Profile</span>
-                <span className="text-xs text-yellow-200">(only view)</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProfileBarSection('members')}
+                    className={profileBarSection === 'members' ? 'underline underline-offset-4' : 'opacity-75 hover:opacity-100'}
+                  >
+                    Members Profile
+                  </button>
+                  <span className="opacity-60">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setProfileBarSection('version')}
+                    className={profileBarSection === 'version' ? 'underline underline-offset-4' : 'opacity-75 hover:opacity-100'}
+                  >
+                    Version settings
+                  </button>
+                </div>
+                {profileBarSection === 'members' ? (
+                  <span className="text-xs text-yellow-200">(only view)</span>
+                ) : null}
               </div>
 
+              {profileBarSection === 'version' ? (
+                <PcuVersionSettingsPanel userId={user.userId} />
+              ) : (
               <div className="border border-gray-300 bg-white p-4">
                 <p className="text-center text-red-600 text-sm font-semibold mb-3">* required fields</p>
 
@@ -2820,6 +2843,7 @@ export default function UserPcuControlPanel({
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </div>
         ) : activeTab === 'purchases' ? (

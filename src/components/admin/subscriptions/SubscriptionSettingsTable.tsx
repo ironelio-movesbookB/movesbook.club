@@ -9,7 +9,7 @@ import {
   getEditHref,
   getUserTypeLabel,
 } from '@/lib/admin/subscriptionSettingsMock';
-import { usesCoachTeamClubSharingLayout } from '@/lib/admin/subscriptionEditSettingsLayout';
+import { hasCreatableCompaniesSetting } from '@/lib/admin/subscriptionEditSettingsLayout';
 
 const TABLE_COLUMN_COUNT = 21;
 
@@ -28,7 +28,7 @@ function formatValue(value: number, showFree: boolean): string {
 }
 
 function formatManageableUsersValue(row: SubscriptionListRow, value: number): string {
-  if (!usesCoachTeamClubSharingLayout(row.userType)) return '—';
+  if (!hasCreatableCompaniesSetting(row.userType)) return '—';
   return String(value);
 }
 

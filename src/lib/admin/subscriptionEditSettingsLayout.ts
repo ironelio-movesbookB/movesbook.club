@@ -59,12 +59,17 @@ export function getMembershipSectionLabel(
   return `${roleLabel} can be member of....`;
 }
 
+/** Company admins (club, team, coach groups trained, group) — single users cannot create companies. */
+export function hasCreatableCompaniesSetting(userType: SubscriptionUserType): boolean {
+  return usesCoachTeamClubSharingLayout(userType) || userType === 'group';
+}
+
 export function getDefaultManageableUsersForUserType(userType: SubscriptionUserType): {
   creatableCompanies: number;
   usersFirstSubscription: number;
   usersRenewal: number;
 } {
-  if (!usesCoachTeamClubSharingLayout(userType)) {
+  if (!hasCreatableCompaniesSetting(userType)) {
     return { creatableCompanies: 0, usersFirstSubscription: 0, usersRenewal: 0 };
   }
   return { creatableCompanies: 1, usersFirstSubscription: 10, usersRenewal: 10 };
