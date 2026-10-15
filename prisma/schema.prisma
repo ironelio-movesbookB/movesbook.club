@@ -2420,19 +2420,6 @@ model ClubBillingCreditNoteRow {
   @@ignore
 }
 
-/// src/lib/admin/versionSettingsStore.ts — version settings (Subscriptions → edit version)
-model SubscriptionVersionSettingRow {
-  versionId Int      @id @map("version_id")
-  userType  String   @db.VarChar(20) @map("user_type")
-  data      String   @db.LongText
-  updatedBy String?  @db.VarChar(191) @map("updated_by")
-  createdAt DateTime @default(now()) @db.DateTime(3) @map("created_at")
-  updatedAt DateTime @default(now()) @db.DateTime(3) @map("updated_at")
-
-  @@map("subscription_version_settings")
-  @@ignore
-}
-
 /// src/lib/admin/versionSettingsStore.ts — per-user copy shown in PCU → Version settings
 model UserVersionSettingRow {
   userId    String   @id @db.VarChar(191) @map("user_id")

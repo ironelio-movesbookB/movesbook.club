@@ -60,7 +60,6 @@ const publicApiRoutes = [
   /** Global sport dropdown catalog — GET is public; PUT still requires Super Admin in the route */
   '/api/admin/sport-dropdown-parameters',
   /** Version settings shown during registration — GET is public; PUT / migrate require staff in the route */
-  '/api/subscription-versions',
   /** Registration page: active special offer of a version (guests have no token) */
   '/api/subscriptions/special-offer',
   /** Registration page: admin-saved version settings (sharing, info text, last news) */

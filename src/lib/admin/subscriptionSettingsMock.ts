@@ -549,80 +549,6 @@ export async function saveSubscriptionEditData(data: SubscriptionEditData): Prom
   return putVersionSettingsToServer(data, token);
 }
 
-/** Apply version settings loaded from the database (server cache or browser hydration). */
-export function applySubscriptionEditDataList(list: SubscriptionEditData[]): void {
-  for (const data of list) {
-    if (!data?.id) continue;
-    editDataCache.set(data.id, data);
-    syncListRowFromEditData(data);
-  }
-  if (typeof window !== 'undefined') {
-    persistEditDataCache();
-    notifySubscriptionSettingsUpdated();
-  }
-}
-
-export const SUBSCRIPTION_VERSIONS_API = '/api/subscription-versions';
-
-/** Save version settings to the database, then update the local cache. */
-export async function saveSubscriptionEditDataToServer(data: SubscriptionEditData): Promise<void> {
-  const { getAdminBearerToken } = await import('@/lib/admin/clientAdminAuth');
-  const token = getAdminBearerToken();
-  const res = await fetch(`${SUBSCRIPTION_VERSIONS_API}/${data.id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ data }),
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error || 'Could not save the version settings');
-  }
-  saveSubscriptionEditData(data);
-}
-
-type SavedVersionsResponse = { versions?: SubscriptionEditData[]; seededIds?: number[] };
-
-async function fetchSavedVersions(): Promise<SavedVersionsResponse | null> {
-  const res = await fetch(SUBSCRIPTION_VERSIONS_API, { cache: 'no-store' });
-  return res.ok ? ((await res.json()) as SavedVersionsResponse) : null;
-}
-
-async function hydrateEditDataFromServer(): Promise<void> {
-  try {
-    let body = await fetchSavedVersions();
-    if (!body) return;
-    const saved = Array.isArray(body.versions) ? body.versions : [];
-    const savedIds = new Set(saved.map((v) => v.id));
-    const seededIds = new Set(Array.isArray(body.seededIds) ? body.seededIds : []);
-
-    // One-time migration of values an admin saved in this browser before the DB storage existed.
-    const localOnly: SubscriptionEditData[] = [];
-    editDataCache.forEach((data, id) => {
-      if (!savedIds.has(id) || seededIds.has(id)) localOnly.push(data);
-    });
-    if (localOnly.length > 0) {
-      const { getAdminBearerToken } = await import('@/lib/admin/clientAdminAuth');
-      const token = getAdminBearerToken();
-      if (token) {
-        const migrated = await fetch(`${SUBSCRIPTION_VERSIONS_API}/migrate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ versions: localOnly }),
-        }).catch(() => null);
-        if (migrated?.ok) body = (await fetchSavedVersions()) ?? body;
-      }
-    }
-
-    const latest = Array.isArray(body.versions) ? body.versions : [];
-    if (latest.length > 0) applySubscriptionEditDataList(latest);
-  } catch {
-    // Offline or API unavailable: keep defaults / local cache.
-  }
-}
-
 hydrateEditDataCacheFromStorage();
 void loadSubscriptionEditDataFromServer();
 
@@ -632,5 +558,4 @@ if (typeof window !== 'undefined') {
       loadEditDataCacheFromStorage();
     }
   });
-  void hydrateEditDataFromServer();
 }

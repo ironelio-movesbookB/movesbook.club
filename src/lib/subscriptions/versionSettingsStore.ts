@@ -13,8 +13,24 @@ let loadedAt = 0;
 let loading: Promise<Record<string, SubscriptionEditData>> | null = null;
 let snapshot: Record<string, SubscriptionEditData> = {};
 
+const LEGACY_TABLE = 'subscription_version_settings_legacy';
+
+/** Databases that got the table with `version_id` / `data` columns are converted to this layout once. */
+async function hasLegacyVersionSettingsLayout(): Promise<boolean> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ n: bigint | number }>>(
+    `SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscription_version_settings'
+       AND COLUMN_NAME = 'version_id'`,
+  );
+  return Number(rows[0]?.n ?? 0) > 0;
+}
+
 async function ensureVersionSettingsTable(): Promise<void> {
   if (tableEnsured) return;
+  const legacy = await hasLegacyVersionSettingsLayout();
+  if (legacy) {
+    await prisma.$executeRawUnsafe(`RENAME TABLE subscription_version_settings TO ${LEGACY_TABLE}`);
+  }
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS subscription_version_settings (
       versionId INT NOT NULL PRIMARY KEY,
@@ -22,6 +38,14 @@ async function ensureVersionSettingsTable(): Promise<void> {
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `);
+  if (legacy) {
+    await prisma.$executeRawUnsafe(
+      `INSERT IGNORE INTO subscription_version_settings (versionId, dataJson)
+       SELECT version_id, data FROM ${LEGACY_TABLE}
+       WHERE updated_by IS NULL OR updated_by <> 'seed'`,
+    );
+    await prisma.$executeRawUnsafe(`DROP TABLE ${LEGACY_TABLE}`);
+  }
   tableEnsured = true;
 }
 
