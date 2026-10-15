@@ -6,7 +6,7 @@ import type { SubscriptionEditData } from '@/types/adminSubscriptionSettings';
 import {
   getSubscriptionById,
   getSubscriptionEditData,
-  saveSubscriptionEditData,
+  saveSubscriptionEditDataToServer,
   SUBSCRIPTION_SETTINGS_UPDATED_EVENT,
   syncSubscriptionEditDataFromStorage,
 } from '@/lib/admin/subscriptionSettingsMock';
@@ -70,8 +70,13 @@ export default function EditSubscriptionPanel({
 
   const handleSave = async () => {
     setSaving(true);
-    saveSubscriptionEditData(data);
-    await new Promise((r) => setTimeout(r, 300));
+    try {
+      await saveSubscriptionEditDataToServer(data);
+    } catch (error) {
+      setSaving(false);
+      window.alert(error instanceof Error ? error.message : 'Could not save the version settings');
+      return;
+    }
     setSaving(false);
     router.push('/subscriptions/subscription_settings');
   };

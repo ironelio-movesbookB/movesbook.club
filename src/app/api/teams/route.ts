@@ -11,6 +11,10 @@ import {
 import type { EntityProfileFormPayload } from '@/lib/entity/entityForm';
 import { isTeamProfilePayload } from '@/lib/team/teamProfilePayload';
 import type { TeamProfileFormPayload } from '@/lib/team/teamProfileTypes';
+import {
+  companyLimitReachedMessage,
+  getCreatableCompaniesQuota,
+} from '@/lib/club/creatableCompaniesQuota';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +52,11 @@ export async function POST(request: NextRequest) {
         { error: 'Use create: true with team profile fields' },
         { status: 400 },
       );
+    }
+
+    const quota = await getCreatableCompaniesQuota(userId, String(decoded.userType));
+    if (quota && !quota.canCreate) {
+      return NextResponse.json({ error: companyLimitReachedMessage(quota) }, { status: 403 });
     }
 
     const existing = await prisma.team.findMany({

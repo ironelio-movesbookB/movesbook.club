@@ -131,6 +131,9 @@ import {
   userHasClubProfile,
 } from '@/lib/club/clubSidebarLabel';
 import { formatCreatableCompaniesSidebarLabel } from '@/lib/club/creatableCompaniesQuota.shared';
+import CommunitiesSharingLists from '@/components/sharing/CommunitiesSharingLists';
+import type { SharePartyKind } from '@/lib/sharing/sharingTypes';
+import { useSharingSummary } from '@/hooks/useSharingSummary';
 import { canManageClubWebsite } from '@/lib/club/clubWebsitePermissions';
 import {
   formatEntitySidebarLabel,
@@ -419,7 +422,6 @@ export default function DarkSidebar({
   const showSuggestMovesbook = showSuggestMovesbookForTab(userType, currentTab);
 
   const [communitiesOpen, setCommunitiesOpen] = useState(false);
-  const [communitiesMyTeamsOpen, setCommunitiesMyTeamsOpen] = useState(false);
   const [selectedAthleteTeamId, setSelectedAthleteTeamId] = useState<string | null>(null);
   const [currentClubMembersOpen, setCurrentClubMembersOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -643,6 +645,15 @@ export default function DarkSidebar({
     isTeamManagerUser ||
     isGroupAdminUser ||
     isCoachUser;
+  const { summary: sharingSummary, reload: reloadSharingSummary } = useSharingSummary(
+    isManagedEntityWorkspaceUser,
+  );
+  useEffect(() => {
+    void reloadSharingSummary();
+  }, [entities.length, reloadSharingSummary]);
+  /** Max companies creatable — from the user's PCU (club, team, coach groups trained, group). */
+  const companyQuota = sharingSummary?.companyQuota ?? creatableCompaniesQuota;
+  const companyLimitReached = companyQuota ? !companyQuota.canCreate : false;
   const clubHasSelectedEntity =
     Boolean(selectedEntityId) || readSelectedClubHint();
   const showMyClubTab = isManagedEntityWorkspaceUser
@@ -1334,6 +1345,32 @@ export default function DarkSidebar({
     setClubTopicsPickerOpen(true);
   }, [clubsForTopicsPicker, handleClubSelectedForTopics]);
 
+  const renderAthleteTeamsExtra = (kind: SharePartyKind) =>
+    kind === 'team' && athleteTeams.length > 0 ? (
+      <ul className="mt-2 space-y-1 border-t border-white/10 pt-2">
+        {athleteTeams.map((team) => {
+          const isSelected = selectedAthleteTeamId === team.id;
+          return (
+            <li key={team.id}>
+              <button
+                type="button"
+                onClick={() => handleAthleteTeamSelect(team.id)}
+                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
+                  isSelected ? 'bg-zinc-700/60' : ''
+                }`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate leading-snug">{team.name?.trim() || 'Team'}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
   const getEntityLabel = () => {
     if (isClubAccountUserType(userType)) return t('sidebar_my_club');
     if (isTeamManagerUser) return t('sidebar_my_team');
@@ -1516,89 +1553,7 @@ export default function DarkSidebar({
 
         {communitiesOpen && (
           <div className="bg-gray-800 text-white">
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">Sharing friends</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
-
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">My Coaches</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
-
-            <div className="border-t border-gray-700">
-              <button
-                type="button"
-                onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
-                aria-expanded={communitiesMyTeamsOpen}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-gray-300" />
-                  <span className="text-sm">My teams</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 opacity-60 transition-transform ${
-                    communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
-                  }`}
-                />
-              </button>
-              {communitiesMyTeamsOpen && (
-                <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
-                  {athleteTeams.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {athleteTeams.map((team) => {
-                        const isSelected = selectedAthleteTeamId === team.id;
-                        return (
-                          <li key={team.id}>
-                            <button
-                              type="button"
-                              onClick={() => handleAthleteTeamSelect(team.id)}
-                              className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                isSelected ? 'bg-zinc-700/60' : ''
-                              }`}
-                            >
-                              <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                aria-hidden
-                              />
-                              <span className="min-w-0 flex-1 truncate leading-snug">
-                                {team.name?.trim() || 'Team'}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">My Groups</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
+            <CommunitiesSharingLists renderListExtra={renderAthleteTeamsExtra} />
 
             <div className="border-t border-gray-700">
               <button
@@ -1891,9 +1846,9 @@ export default function DarkSidebar({
                             ? t('sidebar_my_group')
                             : t('sidebar_my_clubs')}
                     </span>
-                    {isClubAccountUserType(userType) && creatableCompaniesQuota ? (
+                    {isManagedEntityWorkspaceUser && companyQuota ? (
                       <span className="text-[11px] font-semibold normal-case text-yellow-300">
-                        {formatCreatableCompaniesSidebarLabel(creatableCompaniesQuota)}
+                        {formatCreatableCompaniesSidebarLabel(companyQuota)}
                       </span>
                     ) : null}
                   </span>
@@ -1914,7 +1869,7 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateClubClick?.()}
-                    disabled={creatableCompaniesQuota ? !creatableCompaniesQuota.canCreate : false}
+                    disabled={companyLimitReached}
                     className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a club
@@ -2000,7 +1955,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateGroupTrainedClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     {t('create_group_trained')}
                   </button>
@@ -2047,7 +2003,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateTeamClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a team
                   </button>
@@ -2099,7 +2056,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateGroupClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a group
                   </button>
@@ -2806,89 +2764,7 @@ export default function DarkSidebar({
 
               {communitiesOpen && (
                 <div className="bg-gray-800 text-white">
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">Sharing friends</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">My Coaches</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
-
-                  <div className="border-t border-gray-700">
-                    <button
-                      type="button"
-                      onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
-                      aria-expanded={communitiesMyTeamsOpen}
-                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Plus className="w-4 h-4 text-gray-300" />
-                        <span className="text-sm">My teams</span>
-                      </div>
-                      <ChevronDown
-                        className={`w-4 h-4 opacity-60 transition-transform ${
-                          communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
-                        }`}
-                      />
-                    </button>
-                    {communitiesMyTeamsOpen && (
-                      <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
-                        {athleteTeams.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {athleteTeams.map((team) => {
-                              const isSelected = selectedAthleteTeamId === team.id;
-                              return (
-                                <li key={team.id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAthleteTeamSelect(team.id)}
-                                    className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                      isSelected ? 'bg-zinc-700/60' : ''
-                                    }`}
-                                  >
-                                    <span
-                                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                      aria-hidden
-                                    />
-                                    <span className="min-w-0 flex-1 truncate leading-snug">
-                                      {team.name?.trim() || 'Team'}
-                                    </span>
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">My Groups</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
+                  <CommunitiesSharingLists renderListExtra={renderAthleteTeamsExtra} />
 
                   <div className="border-t border-gray-700">
                     <button

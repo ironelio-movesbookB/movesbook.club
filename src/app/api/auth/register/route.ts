@@ -4,6 +4,7 @@ import { SportType, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
 import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
+import { copyVersionSettingsToUser } from '@/lib/admin/versionSettingsStore';
 import {
   mergeNetworkSubscriptionHistory,
   periodDisplayStatus,
@@ -353,6 +354,10 @@ export async function POST(request: NextRequest) {
 
     const { paymentId, paymentStatus, ...user } = result;
     console.log('User created:', user.id);
+
+    await copyVersionSettingsToUser(user.id, selectedVersion?.id ?? null, user.userType).catch(
+      (error) => console.error('PCU version settings copy failed:', error),
+    );
 
     if (paymentId && paymentStatus) {
       if (paymentStatus === 'pending') {

@@ -1,5 +1,6 @@
 'use client';
 
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { 
   Users, 
@@ -314,6 +315,13 @@ function CoachDashboardContent() {
           )}
 
           <div className="flex-1 min-w-0 flex flex-col px-4">
+            <SharingNotifications
+              scope={
+                activeTab === 'my-entity' && selectedGroupId
+                  ? { type: 'party', kind: 'coach', id: selectedGroupId }
+                  : { type: 'mypage' }
+              }
+            />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
             ) : (

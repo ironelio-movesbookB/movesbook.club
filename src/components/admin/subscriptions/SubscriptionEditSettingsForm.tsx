@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Share2 } from 'lucide-react';
 import type {
   SubscriptionEditSettings,
@@ -11,6 +12,7 @@ import SubscriptionMembershipSharingDisplay from './SubscriptionMembershipSharin
 import {
   getCoachVariantIntroText,
   getMembershipSectionLabel,
+  hasCreatableCompaniesSetting,
   usesCoachTeamClubSharingLayout,
 } from '@/lib/admin/subscriptionEditSettingsLayout';
 
@@ -29,6 +31,45 @@ type SubscriptionEditSettingsFormProps = {
   daysValue: number;
 };
 
+const INTEGER_RE = /^-?\d+$/;
+
+/** Integer field that allows "" and "-" while typing (e.g. -1 = Unlimited) without forcing 0. */
+function IntegerInput({
+  value,
+  onValueChange,
+  className,
+}: {
+  value: number | undefined;
+  onValueChange: (value: number) => void;
+  className: string;
+}) {
+  const current = Number.isFinite(value) ? (value as number) : 0;
+  const [text, setText] = useState(String(current));
+
+  useEffect(() => {
+    setText((prev) =>
+      INTEGER_RE.test(prev.trim()) && Number(prev) === current ? prev : String(current),
+    );
+  }, [current]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        if (INTEGER_RE.test(raw.trim())) onValueChange(Number(raw));
+      }}
+      onBlur={() => {
+        if (!INTEGER_RE.test(text.trim())) setText(String(current));
+      }}
+      className={className}
+    />
+  );
+}
+
 function MembershipRow({
   label,
   setting,
@@ -43,10 +84,9 @@ function MembershipRow({
   return (
     <div className="grid grid-cols-[80px_60px_32px_32px_1fr] items-center gap-2 py-1">
       <span className="text-sm text-gray-700 font-medium">{label}</span>
-      <input
-        type="text"
+      <IntegerInput
         value={setting.limit}
-        onChange={(e) => onChange({ limit: Number(e.target.value) || 0 })}
+        onValueChange={(v) => onChange({ limit: v })}
         className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-full"
       />
       <div className="flex justify-center">
@@ -104,10 +144,9 @@ export default function SubscriptionEditSettingsForm({
             </p>
             <div className="flex flex-wrap items-center gap-4">
               <span className="text-sm text-gray-700">Coaches</span>
-              <input
-                type="text"
+              <IntegerInput
                 value={settings.coachesLimit}
-                onChange={(e) => update({ coachesLimit: Number(e.target.value) || 0 })}
+                onValueChange={(v) => update({ coachesLimit: v })}
                 className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-16"
               />
               <div className="flex items-center gap-4 ml-4">
@@ -133,10 +172,9 @@ export default function SubscriptionEditSettingsForm({
             <p className="text-sm text-gray-700 mb-3">{getCoachVariantIntroText(userType)}</p>
             <div className="flex flex-wrap items-center gap-4 mb-4">
               <span className="text-sm text-gray-700">Athletes</span>
-              <input
-                type="text"
+              <IntegerInput
                 value={settings.athletesLimit}
-                onChange={(e) => update({ athletesLimit: Number(e.target.value) || 0 })}
+                onValueChange={(v) => update({ athletesLimit: v })}
                 className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-16"
               />
               <div className="flex items-center gap-4 ml-4">
@@ -158,12 +196,9 @@ export default function SubscriptionEditSettingsForm({
             </div>
             <div className="grid grid-cols-[80px_60px_32px_32px_1fr] items-center gap-2 py-1">
               <span className="text-sm text-gray-700 font-medium">Coaches</span>
-              <input
-                type="text"
+              <IntegerInput
                 value={coachSharing.limit}
-                onChange={(e) =>
-                  updateMembership('coachSharing', { limit: Number(e.target.value) || 0 })
-                }
+                onValueChange={(v) => updateMembership('coachSharing', { limit: v })}
                 className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-full"
               />
               <div className="flex justify-center">
@@ -187,10 +222,9 @@ export default function SubscriptionEditSettingsForm({
             </p>
             <div className="flex flex-wrap items-center gap-4">
               <span className="text-sm text-gray-700">Athletes</span>
-              <input
-                type="text"
+              <IntegerInput
                 value={settings.athletesLimit}
-                onChange={(e) => update({ athletesLimit: Number(e.target.value) || 0 })}
+                onValueChange={(v) => update({ athletesLimit: v })}
                 className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-16"
               />
               <div className="flex items-center gap-4 ml-4">
@@ -213,7 +247,7 @@ export default function SubscriptionEditSettingsForm({
           </div>
         )}
 
-        {coachTeamClubLayout ? (
+        {variant === 'coach' && hasCreatableCompaniesSetting(userType) ? (
           <div>
             <p className="text-sm font-medium text-gray-800 mb-1">Max number of manageable users</p>
             <p className="text-xs text-gray-500 mb-3">
@@ -225,12 +259,9 @@ export default function SubscriptionEditSettingsForm({
                 <label className="text-sm text-gray-700 min-w-[280px]">
                   Companies creable by the admin
                 </label>
-                <input
-                  type="text"
+                <IntegerInput
                   value={settings.creatableCompanies}
-                  onChange={(e) =>
-                    update({ creatableCompanies: Number(e.target.value) || 0 })
-                  }
+                  onValueChange={(v) => update({ creatableCompanies: v })}
                   className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-24"
                 />
               </div>
@@ -238,12 +269,9 @@ export default function SubscriptionEditSettingsForm({
                 <label className="text-sm text-gray-700 min-w-[280px]">
                   Number of users available for the 1th subscription
                 </label>
-                <input
-                  type="text"
+                <IntegerInput
                   value={settings.usersAvailableFirstSubscription}
-                  onChange={(e) =>
-                    update({ usersAvailableFirstSubscription: Number(e.target.value) || 0 })
-                  }
+                  onValueChange={(v) => update({ usersAvailableFirstSubscription: v })}
                   className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-24"
                 />
               </div>
@@ -251,12 +279,9 @@ export default function SubscriptionEditSettingsForm({
                 <label className="text-sm text-gray-700 min-w-[280px]">
                   Number of users available for the renewal
                 </label>
-                <input
-                  type="text"
+                <IntegerInput
                   value={settings.usersAvailableRenewal}
-                  onChange={(e) =>
-                    update({ usersAvailableRenewal: Number(e.target.value) || 0 })
-                  }
+                  onValueChange={(v) => update({ usersAvailableRenewal: v })}
                   className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-24"
                 />
               </div>
@@ -310,17 +335,15 @@ export default function SubscriptionEditSettingsForm({
           <p className="text-sm font-medium text-gray-800 mb-3">Notify at expiration</p>
           <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 mb-3">
             <span>Alert</span>
-            <input
-              type="text"
+            <IntegerInput
               value={settings.alertDaysBefore}
-              onChange={(e) => update({ alertDaysBefore: Number(e.target.value) || 0 })}
+              onValueChange={(v) => update({ alertDaysBefore: v })}
               className="border border-gray-300 bg-[#fffacd] px-2 py-1 w-12 text-center"
             />
             <span>days before and</span>
-            <input
-              type="text"
+            <IntegerInput
               value={settings.alertDaysAfter}
-              onChange={(e) => update({ alertDaysAfter: Number(e.target.value) || 0 })}
+              onValueChange={(v) => update({ alertDaysAfter: v })}
               className="border border-gray-300 bg-[#fffacd] px-2 py-1 w-12 text-center"
             />
             <span>days after the expiration</span>
@@ -379,10 +402,9 @@ export default function SubscriptionEditSettingsForm({
                     onChange={() => update({ inviteEndMode: 'days_after_accept' })}
                   />
                   Untile
-                  <input
-                    type="text"
+                  <IntegerInput
                     value={settings.inviteEndDays}
-                    onChange={(e) => update({ inviteEndDays: Number(e.target.value) || 0 })}
+                    onValueChange={(v) => update({ inviteEndDays: v })}
                     className="border border-gray-300 bg-[#fffacd] px-2 py-1 w-12"
                   />
                   in days after acceptance of the invite

@@ -1,5 +1,6 @@
 'use client';
 
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 import { useState, useEffect, Suspense, useCallback } from 'react';
 
 // Force dynamic rendering for authenticated pages
@@ -973,6 +974,7 @@ function AthleteDashboardContent() {
 
           {/* Main Content Area */}
           <div className={`flex-1 min-w-0 flex flex-col ${activeTab === 'my-page' && activeSection === 'personal-settings' ? '' : 'px-4'}`}>
+            {activeTab === 'my-page' ? <SharingNotifications scope={{ type: 'mypage' }} /> : null}
             {activeTab === 'my-page' && (
               <div className="flex-1 flex flex-col min-h-0">
                 {activeSection === 'overview' && (

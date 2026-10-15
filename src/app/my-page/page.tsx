@@ -1,5 +1,6 @@
 'use client';
 
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 import { useState, useEffect } from 'react';
 import AdvertisementCarousel from '@/components/AdvertisementCarousel';
 import ModernNavbar from '@/components/ModernNavbar';
@@ -294,6 +295,7 @@ export default function MyPage() {
 
           {/* Main Content - Stretched to fill remaining space */}
           <div className="flex-1 min-w-0 flex flex-col px-4">
+            {activeTab === 'my-page' ? <SharingNotifications scope={{ type: 'mypage' }} /> : null}
             {activeSection === 'staff-feedbacks' && (
               <MyStaffFeedbacksPanel onClose={() => setActiveSection('workouts')} />
             )}

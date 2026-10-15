@@ -39,7 +39,8 @@
         "db:seed-payment-info": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json prisma/seed-payment-info.ts",
         "db:migrate-outcomes": "ts-node -r tsconfig-paths/register --transpile-only -P prisma/tsconfig.seed.json scripts/migrate-outcomes-from-legacy.ts",
         "db:ensure-promocode-meta": "npx tsx scripts/ensure-promocode-meta.ts",
-        "db:backfill-versions": "npx tsx scripts/backfill-subscription-versions.ts"
+        "db:backfill-versions": "npx tsx scripts/backfill-subscription-versions.ts",
+        "db:backfill-user-version-settings": "npx tsx scripts/backfill-user-version-settings.ts"
     },
     "dependencies": {
         "@ckeditor/ckeditor5-alignment": "^47.5.0",

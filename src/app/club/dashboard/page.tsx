@@ -27,6 +27,7 @@ import {
   writeClubWorkspaceTab,
 } from '@/lib/club/clubWorkspaceTab';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 
 function ClubDashboardContent() {
   const router = useRouter();
@@ -38,6 +39,7 @@ function ClubDashboardContent() {
     selectedClubId: contextClubId,
     myPageNewsPanel,
     setMyPageNewsPanel,
+    sharingScope,
   } = useClubWorkspace();
 
   const [clubs, setClubs] = useState<any[]>([]);
@@ -491,6 +493,9 @@ function ClubDashboardContent() {
                   </p>
                 )}
               </div>
+              <div className="mt-6">
+                <SharingNotifications scope={sharingScope} />
+              </div>
             </div>
           ) : dashboardShellActiveTab === 'my-entity' && activeClub ? (
             <div>
@@ -535,6 +540,9 @@ function ClubDashboardContent() {
                 <p className="text-sm text-gray-500">
                   Use the left sidebar for club tools, members, music, and management.
                 </p>
+              </div>
+              <div className="mt-6">
+                <SharingNotifications scope={sharingScope} />
               </div>
             </div>
           ) : dashboardShellActiveTab === 'my-entity' ? (
