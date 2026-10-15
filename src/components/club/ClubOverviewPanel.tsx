@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   Calendar,
@@ -12,7 +13,6 @@ import {
   User,
   Settings,
 } from 'lucide-react';
-import MemberOverviewPanel from '@/components/club/memberOverview/MemberOverviewPanel';
 import UserProfile from '@/components/UserProfile';
 import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
 import ClubInfoContactsForm from '@/components/club/ClubInfoContactsForm';
@@ -86,7 +86,7 @@ type DashboardPageSettings = {
   showRecentMembers: boolean;
 };
 
-type DashboardLowerPanel = 'profiles' | 'archives' | null;
+type DashboardLowerPanel = 'profiles' | null;
 
 const DEFAULT_DASHBOARD_SETTINGS: DashboardPageSettings = {
   showStatistics: true,
@@ -375,6 +375,7 @@ export default function ClubOverviewPanel({
   clubProfileEditHref,
   onAddMembers,
 }: ClubOverviewPanelProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ClubOverviewTabId>('admin-profile');
   const [lowerPanel, setLowerPanel] = useState<DashboardLowerPanel>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -508,20 +509,17 @@ export default function ClubOverviewPanel({
         </button>
         <button
           type="button"
-          onClick={() => setLowerPanel((panel) => (panel === 'archives' ? null : 'archives'))}
-          className={`rounded-full px-4 py-2 text-sm font-semibold text-white ${
-            lowerPanel === 'archives'
-              ? 'bg-purple-700'
-              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'
-          }`}
+          onClick={() => {
+            if (club?.id && typeof window !== 'undefined') {
+              localStorage.setItem('selectedClub', club.id);
+            }
+            router.push('/clubMembers/memberList?section=athletes&nav=archive');
+          }}
+          className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
         >
           Overview archives
         </button>
       </div>
-
-      {lowerPanel === 'archives' && club ? (
-        <MemberOverviewPanel clubId={club.id} />
-      ) : null}
 
       {lowerPanel === 'profiles' ? (
       <>
