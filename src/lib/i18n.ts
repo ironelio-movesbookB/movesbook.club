@@ -450,6 +450,8 @@ export interface LanguageStrings {
         'staff_leave_new_feedback': 'Leave a new feedback for Movesbook staff',
         'staff_your_supports': 'Your Supports',
         'sidebar_my_feedbacks_staff': 'Feedbacks for Movesbook Staff',
+        'sidebar_feedbacks_with_club_team': 'Messages-Feedbacks with Club\\Team',
+        'sidebar_feedbacks_with_members': 'Messages-Feedbacks with Members',
         'fast_menu_community_contributions': 'Community contributions',
         'fast_menu_my_contributions': 'My contributions',
         'fast_menu_review_articles': 'Review articles',

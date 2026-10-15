@@ -15,6 +15,9 @@ export type UserThreadKind = 'REVIEW' | 'SUPPORT';
 export type SupportCategory = 'feedback' | 'question' | 'suggestion' | 'problem' | 'bug_fixed';
 export { MAX_SUPPORT_IMAGES, normalizeSupportImageUrls, parseSupportImageUrlsJson } from '@/lib/messages/supportImages';
 
+/** Club/team conversations — never part of the Movesbook staff feedback lists. */
+export const PRIVATE_THREAD_CATEGORIES = ['club_message', 'org_feedback'];
+
 const EXCERPT_LEN = 160;
 
 export function excerptFromBody(text: string): string {
@@ -330,7 +333,7 @@ export async function listSupportFeed(
       ? (buildStatusWhere(filters.status) as Prisma.UserMessageThreadWhereInput)
       : {}),
     AND: [
-      { OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }] },
+      { OR: [{ supportCategory: null }, { supportCategory: { notIn: PRIVATE_THREAD_CATEGORIES } }] },
       ...(searchWhere.OR ? [searchWhere] : []),
       ...(pathWhere ? [pathWhere] : []),
     ],
@@ -467,7 +470,11 @@ export async function listSupportFeed(
 
 export async function countUserSupportThreads(userId: string): Promise<number> {
   return prisma.userMessageThread.count({
-    where: { userId, kind: 'SUPPORT' },
+    where: {
+      userId,
+      kind: 'SUPPORT',
+      OR: [{ supportCategory: null }, { supportCategory: { notIn: PRIVATE_THREAD_CATEGORIES } }],
+    },
   });
 }
 
@@ -793,7 +800,7 @@ export async function listThreadsForUser(userId: string, kind: UserThreadKind) {
     where: {
       userId,
       kind,
-      OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }],
+      OR: [{ supportCategory: null }, { supportCategory: { notIn: PRIVATE_THREAD_CATEGORIES } }],
     },
     orderBy: { updatedAt: 'desc' },
     include: {
@@ -851,7 +858,7 @@ export async function createThreadWithFirstMessage(params: {
       isPublic:
         isSupport &&
         params.supportCategory !== 'bug_fixed' &&
-        params.supportCategory !== 'club_message',
+        !PRIVATE_THREAD_CATEGORIES.includes(params.supportCategory ?? ''),
       messages: {
         create: {
           senderId: params.userId,
@@ -1065,7 +1072,7 @@ export async function bulkDeleteSupportThreadsByDate(params: {
   const where: Prisma.UserMessageThreadWhereInput = {
     kind: 'SUPPORT',
     createdAt: { gte: range.from, lte: range.to },
-    AND: [{ OR: [{ supportCategory: null }, { NOT: { supportCategory: 'club_message' } }] }],
+    AND: [{ OR: [{ supportCategory: null }, { supportCategory: { notIn: PRIVATE_THREAD_CATEGORIES } }] }],
     ...(params.bugsOnly
       ? {
           supportCategory: 'problem',

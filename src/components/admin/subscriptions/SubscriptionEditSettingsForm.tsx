@@ -10,18 +10,14 @@ import type {
 } from '@/types/adminSubscriptionSettings';
 import SubscriptionMembershipSharingDisplay from './SubscriptionMembershipSharingDisplay';
 import {
+  getAthleteTierLimits,
   getCoachVariantIntroText,
   getMembershipSectionLabel,
   hasCreatableCompaniesSetting,
+  SUBSCRIPTION_TIERS as TIERS,
+  totalAthleteTierLimit,
   usesCoachTeamClubSharingLayout,
 } from '@/lib/admin/subscriptionEditSettingsLayout';
-
-const TIERS: { key: SubscriptionTier; label: string }[] = [
-  { key: 'trial', label: 'Trial' },
-  { key: 'base', label: 'Base' },
-  { key: 'premium', label: 'Premium' },
-  { key: 'pro', label: 'Pro' },
-];
 
 type SubscriptionEditSettingsFormProps = {
   settings: SubscriptionEditSettings;
@@ -128,8 +124,25 @@ export default function SubscriptionEditSettingsForm({
         ? 'Coach'
         : getRoleCapitalized(userType);
 
-  const coachTeamClubLayout = variant === 'coach' && usesCoachTeamClubSharingLayout(userType);
+  const coachTeamClubLayout = usesCoachTeamClubSharingLayout(userType);
   const coachSharing = settings.coachSharing ?? { limit: 1, sharingEnabled: true };
+  const athleteTierLimits = getAthleteTierLimits(settings);
+  const athleteTotal = totalAthleteTierLimit(athleteTierLimits);
+
+  const updateAthleteTierLimit = (tier: SubscriptionTier, raw: string) => {
+    const value = raw.trim() === '-' ? -1 : Number(raw) || 0;
+    const nextLimits = { ...athleteTierLimits, [tier]: value };
+    update({
+      athleteTierLimits: nextLimits,
+      athleteTiers: {
+        trial: nextLimits.trial !== 0,
+        base: nextLimits.base !== 0,
+        premium: nextLimits.premium !== 0,
+        pro: nextLimits.pro !== 0,
+      },
+      athletesLimit: totalAthleteTierLimit(nextLimits),
+    });
+  };
 
   return (
     <div className="border border-gray-300 mb-4">
@@ -170,55 +183,29 @@ export default function SubscriptionEditSettingsForm({
         ) : coachTeamClubLayout ? (
           <div>
             <p className="text-sm text-gray-700 mb-3">{getCoachVariantIntroText(userType)}</p>
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <span className="text-sm text-gray-700">Athletes</span>
-              <IntegerInput
-                value={settings.athletesLimit}
-                onValueChange={(v) => update({ athletesLimit: v })}
-                className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-16"
-              />
-              <div className="flex items-center gap-4 ml-4">
-                {TIERS.map((tier) => (
-                  <label key={tier.key} className="flex items-center gap-1 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={settings.athleteTiers[tier.key]}
-                      onChange={(e) =>
-                        update({
-                          athleteTiers: { ...settings.athleteTiers, [tier.key]: e.target.checked },
-                        })
-                      }
-                    />
+            <p className="text-sm font-medium text-gray-800 mb-2">Free accounts athletes</p>
+            <div className="flex flex-wrap items-end gap-3">
+              {TIERS.map((tier) => (
+                <label key={tier.key} className="flex flex-col items-center gap-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
                     {tier.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-[80px_60px_32px_32px_1fr] items-center gap-2 py-1">
-              <span className="text-sm text-gray-700 font-medium">Coaches</span>
-              <IntegerInput
-                value={coachSharing.limit}
-                onValueChange={(v) => updateMembership('coachSharing', { limit: v })}
-                className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-full"
-              />
-              <div className="flex justify-center">
-                <Share2 className="w-5 h-5 text-[#5cb85c]" />
-              </div>
-              <input
-                type="checkbox"
-                checked={coachSharing.sharingEnabled}
-                onChange={(e) =>
-                  updateMembership('coachSharing', { sharingEnabled: e.target.checked })
-                }
-                className="justify-self-center"
-              />
-              <span className="text-sm text-gray-600">Sharing with coaches</span>
+                  </span>
+                  <IntegerInput
+                    value={athleteTierLimits[tier.key]}
+                    onValueChange={(v) => updateAthleteTierLimit(tier.key, String(v))}
+                    className="border border-gray-300 bg-[#fffacd] px-2 py-1 text-sm w-16 text-center"
+                  />
+                </label>
+              ))}
+              <span className="text-xs text-gray-500 pb-1.5">
+                Total: {athleteTotal === -1 ? 'Unlimited' : athleteTotal}
+              </span>
             </div>
           </div>
         ) : (
           <div>
             <p className="text-sm text-gray-700 mb-3">
-              Coach can have one or more athletes and can invite athletes to be trained....
+              {roleLabel} can be member of teams, groups and clubs and can have one or more athletes....
             </p>
             <div className="flex flex-wrap items-center gap-4">
               <span className="text-sm text-gray-700">Athletes</span>
@@ -297,6 +284,14 @@ export default function SubscriptionEditSettingsForm({
             Sharing limits for this version — displayed during registration (Package → Availability
             shares tab and when the user selects this version).
           </p>
+          {coachTeamClubLayout ? (
+            <MembershipRow
+              label="Coaches"
+              setting={coachSharing}
+              sharingLabel="Sharing with coaches"
+              onChange={(patch) => updateMembership('coachSharing', patch)}
+            />
+          ) : null}
           <MembershipRow
             label="Teams"
             setting={settings.teams}

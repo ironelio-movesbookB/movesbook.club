@@ -302,6 +302,8 @@ interface DarkSidebarProps {
   onContactActivitiesClick?: () => void;
   /** Messages → My feedbacks for Staff — swap center section (keep left/right sidebars) */
   onMyFeedbacksStaffClick?: () => void;
+  /** Messages → Feedbacks with Club\Team (mine) / with Members (manage) — swap center section */
+  onOrgFeedbacksClick?: (scope: 'mine' | 'manage') => void;
   /** My Club → Music for the club → Add songs & playlists (same as navbar "Add Songs") */
   onClubAddSongsPlaylistsClick?: () => void;
   /** My Club → Music for the club → Music Panel (same as navbar "Music Panel") */
@@ -375,6 +377,7 @@ export default function DarkSidebar({
   onRegistrationInfoClick,
   onContactActivitiesClick,
   onMyFeedbacksStaffClick,
+  onOrgFeedbacksClick,
   onClubAddSongsPlaylistsClick,
   onClubMusicPanelClick,
   onIdentificationDevicesClick,
@@ -430,6 +433,7 @@ export default function DarkSidebar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationCounts, setNotificationCounts] = useState({ movesbook: 0, clubs: 0, total: 0 });
   const [myFeedbackCount, setMyFeedbackCount] = useState(0);
+  const [orgFeedbackCounts, setOrgFeedbackCounts] = useState({ mine: 0, awaiting: 0 });
   const [myClubsOpen, setMyClubsOpen] = useState(false);
   const [clubAdminInfoOpen, setClubAdminInfoOpen] = useState(false);
   const [memberInfoOpen, setMemberInfoOpen] = useState(false);
@@ -454,7 +458,31 @@ export default function DarkSidebar({
         /* optional */
       }
     })();
+    void (async () => {
+      try {
+        const res = await fetch('/api/messages/org-feedbacks?count=1', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setOrgFeedbackCounts({
+          mine: Number(data.mine) || 0,
+          awaiting: Number(data.awaiting) || 0,
+        });
+      } catch {
+        /* optional */
+      }
+    })();
   }, [user?.id]);
+
+  const openOrgFeedbacks = (scope: 'mine' | 'manage') => {
+    if (onOrgFeedbacksClick) {
+      onOrgFeedbacksClick(scope);
+      return;
+    }
+    router.push(`/clubs/feedbacks?scope=${scope}`);
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -2503,6 +2531,16 @@ export default function DarkSidebar({
                       {t('sidebar_my_feedbacks_staff')} ({myFeedbackCount})
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => openOrgFeedbacks('mine')}
+                    className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
+                    <span className="leading-snug">
+                      {t('sidebar_feedbacks_with_club_team')} ({orgFeedbackCounts.mine})
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
@@ -3114,6 +3152,16 @@ export default function DarkSidebar({
                         <Users2 className="h-4 w-4 shrink-0 opacity-95" />
                         <span className="leading-snug">
                           {t('sidebar_my_feedbacks_staff')} ({myFeedbackCount})
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openOrgFeedbacks('manage')}
+                        className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
+                      >
+                        <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
+                        <span className="leading-snug">
+                          {t('sidebar_feedbacks_with_members')} ({orgFeedbackCounts.awaiting})
                         </span>
                       </button>
                     </div>
@@ -4854,6 +4902,22 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
+                                <button
+                                  type="button"
                                   className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
@@ -5337,6 +5401,50 @@ export default function DarkSidebar({
                                     })}
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubMarketingOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Monitor className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className="truncate text-sm font-semibold">Marketing</span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubMarketingOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubMarketingOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
                               </div>
                             )}
                           </div>

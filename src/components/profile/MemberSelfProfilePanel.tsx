@@ -13,6 +13,8 @@ import { PARENTS_TAB_LABEL } from '@/lib/club/memberProfileTypes';
 import { getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import AutoTranslate, { useAutoTranslateRef } from '@/components/i18n/AutoTranslate';
 import ScrollArrowsRow from '@/components/ui/ScrollArrowsRow';
+import SponsorSlot, { useSectionSponsors } from '@/components/club/sponsors/SponsorSlot';
+import type { SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
 
 type ClubOption = { id: string; name: string };
 
@@ -257,6 +259,12 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
 
   const mode: 'view' | 'edit' = activeMeta?.clubScoped ? 'view' : 'edit';
 
+  const sponsorSections = useMemo<SponsorSectionKey[]>(
+    () => (activeMeta?.clubScoped ? [activeTab === 'pay-for' ? 'fee_payments' : 'members_app'] : []),
+    [activeMeta?.clubScoped, activeTab],
+  );
+  const sponsors = useSectionSponsors(selectedClubId, sponsorSections);
+
   return (
     <div>
       <h2 className="text-xl font-bold text-gray-800 mb-1">{st('Member info')}</h2>
@@ -273,6 +281,13 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
           )}
         </p>
       ) : null}
+
+      <SponsorSlot
+        items={sponsors}
+        title={st('Sponsored by')}
+        compact
+        className="mb-3 rounded-lg border border-gray-200 bg-white px-3 py-2"
+      />
 
       <div className="min-w-0 overflow-visible rounded-lg border border-gray-300 bg-white">
         <nav

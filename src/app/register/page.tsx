@@ -163,7 +163,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Centered Transparent Form */}
-      <div className="relative z-10 w-full max-w-2xl mb-12">
+      <div className="relative z-10 w-full max-w-3xl mb-12">
         <div className="bg-white bg-opacity-10 backdrop-blur-xl rounded-3xl shadow-2xl border border-cyan-500 border-opacity-30 p-6 overflow-visible">
           {/* Logo and Header */}
           <div className="text-center mb-5">

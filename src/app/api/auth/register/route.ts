@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
 import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
 import { copyVersionSettingsToUser } from '@/lib/admin/versionSettingsStore';
+import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 import {
   mergeNetworkSubscriptionHistory,
   periodDisplayStatus,
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       useSpecialOffer,
     } = await request.json();
 
+    await hydrateVersionSettings();
     const requestedVersion =
       subscriptionVersionId != null ? getSubscriptionById(Number(subscriptionVersionId)) : undefined;
     const selectedVersion =

@@ -22,7 +22,10 @@ import RegistrationPackageInfoModal from './RegistrationPackageInfoModal';
 import RegistrationSubscriptionPricingBlock from './RegistrationSubscriptionPricingBlock';
 import RegistrationMonthlyCostLine from './RegistrationMonthlyCostLine';
 import RegistrationVersionLastNewsBlock from './RegistrationVersionLastNewsBlock';
-import RegistrationVersionNewsModal from './RegistrationVersionNewsModal';
+import RegistrationVersionSloganBlock from './RegistrationVersionSloganBlock';
+import RegistrationVersionNewsModal, {
+  type RegistrationVersionTextMode,
+} from './RegistrationVersionNewsModal';
 import RegistrationSpecialOfferBox from './RegistrationSpecialOfferBox';
 import { SubscriptionSharingSummary } from '@/components/admin/subscriptions/SubscriptionMembershipSharingDisplay';
 
@@ -51,7 +54,7 @@ export default function WaysToGetStartedSection({
   const priceFactor = countryPrice?.factor ?? 1;
   const [expanded, setExpanded] = useState(true);
   const [showPackageInfo, setShowPackageInfo] = useState(false);
-  const [showNews, setShowNews] = useState(false);
+  const [versionTextMode, setVersionTextMode] = useState<RegistrationVersionTextMode | null>(null);
 
   const [settingsRevision, setSettingsRevision] = useState(0);
 
@@ -170,6 +173,11 @@ export default function WaysToGetStartedSection({
 
                 {selectedEditData ? (
                   <>
+                    <RegistrationVersionSloganBlock
+                      general={selectedEditData.general}
+                      lang={lang}
+                      versionName={selectedVersion?.name}
+                    />
                     <SubscriptionSharingSummary
                       settings={selectedEditData.settings}
                       userType={
@@ -191,17 +199,19 @@ export default function WaysToGetStartedSection({
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap sm:flex-nowrap sm:flex-col gap-2 sm:w-44 shrink-0 justify-center sm:justify-start">
+              <div className="flex flex-wrap sm:flex-nowrap sm:flex-col gap-2 sm:w-48 shrink-0 justify-center sm:justify-start">
                 <button
                   type="button"
-                  onClick={() => setShowPackageInfo(true)}
+                  onClick={() =>
+                    selectedVersionId ? setVersionTextMode('info') : setShowPackageInfo(true)
+                  }
                   className="flex-1 sm:flex-none bg-[#555] hover:bg-[#333] text-white text-xs font-bold py-2.5 px-3 rounded-md shadow-sm transition-colors"
                 >
                   Info Versions
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowNews(true)}
+                  onClick={() => setVersionTextMode('news')}
                   disabled={!selectedVersionId}
                   className="flex-1 sm:flex-none bg-[#555] hover:bg-[#333] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-2.5 px-3 rounded-md shadow-sm transition-colors"
                 >
@@ -234,12 +244,17 @@ export default function WaysToGetStartedSection({
 
       <RegistrationVersionNewsModal
         key={`news-${selectedVersionId ?? 'none'}-${settingsRevision}`}
-        isOpen={showNews}
-        onClose={() => setShowNews(false)}
+        isOpen={versionTextMode !== null}
+        onClose={() => setVersionTextMode(null)}
         versionId={selectedVersionId}
         versionName={selectedVersion?.name}
         lang={lang}
         editData={selectedEditData}
+        mode={versionTextMode ?? 'news'}
+        onShowAllVersions={() => {
+          setVersionTextMode(null);
+          setShowPackageInfo(true);
+        }}
       />
     </>
   );

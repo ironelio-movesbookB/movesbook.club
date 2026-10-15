@@ -32,10 +32,13 @@ import {
   getEntityDirectAccessProfilePath,
 } from '@/lib/entity/entityDirectAccessSession';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
 import { getThemeColorById } from '@/lib/club/memberProfileTypes';
 
 export default function MyPage() {
-  const [activeSection, setActiveSection] = useState<'workouts' | 'progress' | 'settings' | 'staff-feedbacks'>('workouts');
+  const [activeSection, setActiveSection] = useState<
+    'workouts' | 'progress' | 'settings' | 'staff-feedbacks' | 'org-feedbacks-mine' | 'org-feedbacks-manage'
+  >('workouts');
   const {
     showAdBanner,
     showPersonalBanner,
@@ -262,6 +265,10 @@ export default function MyPage() {
                   setActiveTab('my-page');
                   setActiveSection('staff-feedbacks');
                 }}
+                onOrgFeedbacksClick={(scope) => {
+                  setActiveTab('my-page');
+                  setActiveSection(scope === 'manage' ? 'org-feedbacks-manage' : 'org-feedbacks-mine');
+                }}
                 onMyClubClick={() => {
                   if (!hasClubProfile) return;
                   setActiveTab('my-entity');
@@ -298,6 +305,13 @@ export default function MyPage() {
             {activeTab === 'my-page' ? <SharingNotifications scope={{ type: 'mypage' }} /> : null}
             {activeSection === 'staff-feedbacks' && (
               <MyStaffFeedbacksPanel onClose={() => setActiveSection('workouts')} />
+            )}
+            {(activeSection === 'org-feedbacks-mine' || activeSection === 'org-feedbacks-manage') && (
+              <OrgFeedbacksPanel
+                key={activeSection}
+                scope={activeSection === 'org-feedbacks-manage' ? 'manage' : 'mine'}
+                onClose={() => setActiveSection('workouts')}
+              />
             )}
             {activeSection === 'workouts' && <WorkoutsSection />}
             {activeSection === 'progress' && <ProgressSection />}
