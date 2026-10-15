@@ -48,18 +48,20 @@ export default function RegistrationVersionLastNewsBlock({
     return null;
   }
 
-  const containerClass =
-    variant === 'registration'
-      ? 'rounded-md border border-[#7a1f2e]/20 bg-white/90 px-3 py-2.5'
-      : 'rounded border border-gray-300 bg-white px-3 py-3';
+  const isRegistration = variant === 'registration';
+  const containerClass = isRegistration
+    ? 'rounded-md border border-[#7a1f2e]/20 bg-white/90 px-4 py-3 min-h-[120px]'
+    : 'rounded border border-gray-300 bg-white px-3 py-3';
 
   return (
     <div className={containerClass}>
-      <div className="text-[10px] font-bold uppercase tracking-wide text-[#7a1f2e]">
+      <div
+        className={`${isRegistration ? 'text-xs' : 'text-[10px]'} font-bold uppercase tracking-wide text-[#7a1f2e]`}
+      >
         {versionName ? `Last news — ${versionName}` : 'Last news about this version'}
       </div>
       <div
-        className="prose prose-sm mt-1 max-w-none text-gray-800 [&_p:last-child]:mb-0"
+        className={`prose prose-sm mt-1 max-w-none text-gray-800 [&_p:last-child]:mb-0 ${isRegistration ? 'text-[15px]' : ''}`}
         dangerouslySetInnerHTML={{ __html: newsHtml }}
       />
     </div>

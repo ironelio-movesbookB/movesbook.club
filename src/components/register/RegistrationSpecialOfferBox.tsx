@@ -20,6 +20,7 @@ export type PublicSpecialOffer = {
   maxSubscriptions: number;
   stillFree: number | null;
   showCounter: boolean;
+  flashBelow: number;
   logoUrl: string;
 };
 
@@ -37,10 +38,24 @@ function formatDmy(ymd: string): string {
   return y && m && d ? `${d}-${m}-${y}` : ymd;
 }
 
-function CounterDigits({ value }: { value: number }) {
+function CounterDigits({ value, flash = false }: { value: number; flash?: boolean }) {
   const digits = String(Math.max(0, value)).padStart(4, '0').split('');
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!flash) {
+      setVisible(true);
+      return;
+    }
+    const timer = window.setInterval(() => setVisible((v) => !v), 600);
+    return () => window.clearInterval(timer);
+  }, [flash]);
+
   return (
-    <div className="mt-1 inline-flex gap-0.5 rounded bg-gray-800 p-1">
+    <div
+      className="mt-1 inline-flex gap-0.5 rounded bg-gray-800 p-1"
+      style={{ visibility: visible ? 'visible' : 'hidden' }}
+    >
       {digits.map((d, i) => (
         <span
           key={i}
@@ -164,7 +179,10 @@ export default function RegistrationSpecialOfferBox({
           <div className="mt-1 text-sm text-gray-800">
             still free
             <div>
-              <CounterDigits value={offer.stillFree} />
+              <CounterDigits
+                value={offer.stillFree}
+                flash={offer.flashBelow > 0 && offer.stillFree > 0 && offer.stillFree < offer.flashBelow}
+              />
             </div>
           </div>
         ) : null}

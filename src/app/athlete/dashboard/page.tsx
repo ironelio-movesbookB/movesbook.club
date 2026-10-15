@@ -1190,7 +1190,7 @@ function AthleteDashboardContent() {
             <div className="w-80 flex-shrink-0 print:hidden">
               <div className="bg-white shadow-sm border h-full flex flex-col overflow-y-auto">
                 {activeTab === 'my-entity' ? (
-                  <AthleteMyClubRightSidebar />
+                  <AthleteMyClubRightSidebar clubId={selectedClubId ?? myClubs[0]?.id ?? null} />
                 ) : (
                   <div className="p-4 flex flex-col">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('sidebar_quick_actions')}</h3>

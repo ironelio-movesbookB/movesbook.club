@@ -16,6 +16,12 @@ import {
   getClubStaffMessageThread,
   deleteClubStaffMessage,
 } from '@/lib/messages/clubStaffMessages';
+import {
+  deleteOrgFeedback,
+  getOrgFeedbackThread,
+  isOrgFeedbackCategory,
+  resolveOrgFeedbackReply,
+} from '@/lib/messages/orgFeedbacks';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +37,8 @@ export async function GET(
   try {
     const clubDetail = await getClubStaffMessageThread(id, auth.userId);
     if (clubDetail) return NextResponse.json(clubDetail);
+    const feedbackDetail = await getOrgFeedbackThread(id, auth.userId);
+    if (feedbackDetail) return NextResponse.json(feedbackDetail);
 
     const { searchParams } = new URL(request.url);
     const communityReview = searchParams.get('communityReview') === '1';
@@ -99,6 +107,9 @@ export async function DELETE(
   try {
     const clubDeleted = await deleteClubStaffMessage(id, auth.userId);
     if (clubDeleted) return NextResponse.json({ ok: true, result: clubDeleted });
+    if (await deleteOrgFeedback(id, auth.userId)) {
+      return NextResponse.json({ ok: true, result: 'deleted' });
+    }
 
     if (!auth.isStaff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -127,6 +138,13 @@ export async function POST(
 
     const thread = await prisma.userMessageThread.findUnique({ where: { id } });
     if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    if (isOrgFeedbackCategory(thread.supportCategory)) {
+      const reply = await resolveOrgFeedbackReply(id, auth.userId);
+      if (!reply.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      await addReplyToThread({ threadId: id, senderId: auth.userId, isStaff: reply.asStaff, body: text });
+      return NextResponse.json(await getOrgFeedbackThread(id, auth.userId));
+    }
 
     const isClubMessage = thread.supportCategory === CLUB_MESSAGE_CATEGORY;
     const clubReplyOk = isClubMessage

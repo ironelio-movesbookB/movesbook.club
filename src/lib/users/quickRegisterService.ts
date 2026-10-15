@@ -22,6 +22,7 @@ import {
   ensureQuickRegisterSubscriptionSettings,
 } from '@/lib/users/quickRegisterSubscriptionSeed';
 import { getSubscriptionEditData } from '@/lib/admin/subscriptionSettingsMock';
+import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 import {
   getScenarioPricing,
   getTripleSubscriptionPricing,
@@ -454,6 +455,7 @@ export async function getQuickRegisterSubscriptionData(params: {
 
   const scenario: SubscriptionPricingScenario =
     params.registrationType === 'renewal' ? 'renewal' : 'first';
+  await hydrateVersionSettings();
   const editData = getSubscriptionEditData(Number(params.versionId), false);
   if (editData) {
     const standard = getScenarioPricing(editData.general, scenario);

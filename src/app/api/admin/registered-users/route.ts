@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, SportType, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { listPendingActivationUserIds } from '@/lib/registration/registrationPayments';
 import {
+  ACCOUNT_STATUS_NOT_ACTIVE,
+  ACCOUNT_STATUS_PENDING,
   aggregateClubAdminSubscriptionStatus,
   inferMembershipEndDateYmd,
   membershipStatusToneFromLabel,
@@ -578,6 +581,7 @@ export async function GET(request: NextRequest) {
   const historyByUserId = new Map<string, NetworkSubscriptionPeriod[]>();
   const deletedByUserId = new Map<string, SubscriptionPeriodDeletion[]>();
   const pcuAccessByUserId = new Map<string, PcuAccessWindow>();
+  const suspendedUserIds = new Set<string>();
   if (userIds.length > 0) {
     const settingsRows = await prisma.userSettings.findMany({
       where: { userId: { in: userIds } },
@@ -590,6 +594,7 @@ export async function GET(request: NextRequest) {
         accessStartIso: '',
         accessEndIso: '',
       });
+      if (pcu.suspend) suspendedUserIds.add(s.userId);
       if (pcu.accessStartIso.trim()) {
         pcuAccessByUserId.set(s.userId, {
           accessStartIso: pcu.accessStartIso,
@@ -664,6 +669,19 @@ export async function GET(request: NextRequest) {
     if (specialOfferOnly) {
       users = users.filter((row) => row.specialOffer);
     }
+  }
+
+  const pendingUserIds = await listPendingActivationUserIds(userIds).catch(() => new Set<string>());
+  if (suspendedUserIds.size > 0 || pendingUserIds.size > 0) {
+    users = users.map((row) => {
+      if (suspendedUserIds.has(row.id)) {
+        return { ...row, status: ACCOUNT_STATUS_NOT_ACTIVE, statusTone: 'not-active' as const };
+      }
+      if (pendingUserIds.has(row.id)) {
+        return { ...row, status: ACCOUNT_STATUS_PENDING, statusTone: 'pending' as const };
+      }
+      return row;
+    });
   }
 
   if (needsRowLevelSearchFilter) {

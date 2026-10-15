@@ -4,6 +4,8 @@ import {
   WallMembersLastLoggedSection,
   WallNextEventSection,
 } from '@/components/dashboard/wallRightColumn/shared';
+import SponsorSlot, { useSectionSponsors } from '@/components/club/sponsors/SponsorSlot';
+import type { SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
 
 function MarqueeText({
   text,
@@ -146,7 +148,20 @@ function ClubSocialBlocks() {
   );
 }
 
-function SponsoredBlock() {
+const MEMBERS_APP_SECTIONS: SponsorSectionKey[] = ['members_app'];
+
+function SponsoredBlock({ clubId }: { clubId?: string | null }) {
+  const sponsors = useSectionSponsors(clubId, MEMBERS_APP_SECTIONS);
+  if (sponsors.length) {
+    return (
+      <div className="mt-3">
+        <div className="bg-gray-900 px-3 py-2 text-xs font-bold tracking-wide text-white border-t border-gray-300">
+          SPONSORED
+        </div>
+        <SponsorSlot items={sponsors} compact className="border-b border-gray-300 bg-white px-3 py-3" />
+      </div>
+    );
+  }
   return (
     <div className="mt-3">
       <div className="bg-gray-900 px-3 py-2 text-xs font-bold tracking-wide text-white border-t border-gray-300">
@@ -176,7 +191,14 @@ function SponsoredBlock() {
  * Right column for athlete dashboard when "My Club" tab is selected.
  * Reused for CLUB accounts on /club/dashboard and club visitor walls.
  */
-export default function AthleteMyClubRightSidebar({ showSponsoredBlock = true }: { showSponsoredBlock?: boolean }) {
+export default function AthleteMyClubRightSidebar({
+  showSponsoredBlock = true,
+  clubId,
+}: {
+  showSponsoredBlock?: boolean;
+  /** Club / team whose "Members app" sponsors fill the SPONSORED block. */
+  clubId?: string | null;
+}) {
   return (
     <div className="flex flex-col">
       <WallNextEventSection />
@@ -186,7 +208,7 @@ export default function AthleteMyClubRightSidebar({ showSponsoredBlock = true }:
       </div>
 
       <ClubSocialBlocks />
-      {showSponsoredBlock ? <SponsoredBlock /> : null}
+      {showSponsoredBlock ? <SponsoredBlock clubId={clubId} /> : null}
     </div>
   );
 }

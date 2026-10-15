@@ -20,6 +20,7 @@ type OfferForm = {
   costEuro: string;
   maxSubscriptions: string;
   counterStart: string;
+  flashBelow: string;
   logoUrl: string;
 };
 
@@ -39,6 +40,7 @@ const EMPTY_FORM: OfferForm = {
   costEuro: '',
   maxSubscriptions: '',
   counterStart: '0',
+  flashBelow: '',
   logoUrl: '',
 };
 
@@ -91,6 +93,7 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
       costEuro: offer.costEuro ? String(offer.costEuro) : '',
       maxSubscriptions: offer.maxSubscriptions ? String(offer.maxSubscriptions) : '',
       counterStart: String(offer.counterStart ?? 0),
+      flashBelow: offer.flashBelow ? String(offer.flashBelow) : '',
       logoUrl: String(offer.logoUrl || ''),
     });
     setStatus({
@@ -202,6 +205,15 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
         return;
       }
     }
+    const flashBelow = Number(form.flashBelow) || 0;
+    const maxSubscriptions = Number(form.maxSubscriptions) || 0;
+    if (flashBelow > 0 && maxSubscriptions > 0 && flashBelow > maxSubscriptions) {
+      setMessage({
+        tone: 'error',
+        text: '"Counter will flash when less of" cannot be more than the maximum number of allowed subscriptions.',
+      });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -213,6 +225,7 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
           costEuro: Number(form.costEuro) || 0,
           maxSubscriptions: Number(form.maxSubscriptions) || 0,
           counterStart: Number(form.counterStart) || 0,
+          flashBelow,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -401,6 +414,22 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
               />
               <span className="block text-xs text-gray-500 mt-1">
                 Subscriptions already counted as taken when the offer starts.
+              </span>
+            </label>
+            <label className="text-sm">
+              <span className="block font-semibold text-gray-800 mb-1">Counter will flash when less of</span>
+              <input
+                type="number"
+                min={0}
+                max={Math.min(99, Number(form.maxSubscriptions) || 99)}
+                value={form.flashBelow}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, flashBelow: e.target.value.replace(/\D/g, '').slice(0, 2) }))
+                }
+                className={`${inputClass} w-20`}
+              />
+              <span className="block text-xs text-gray-500 mt-1">
+                Max 2 digits, not more than the maximum number of allowed subscriptions. Leave empty for no flashing.
               </span>
             </label>
           </div>

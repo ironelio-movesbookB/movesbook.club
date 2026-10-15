@@ -61,6 +61,10 @@ const publicApiRoutes = [
   '/api/admin/sport-dropdown-parameters',
   /** Registration page: active special offer of a version (guests have no token) */
   '/api/subscriptions/special-offer',
+  /** Registration page: admin-saved version settings (sharing, info text, last news) */
+  '/api/subscriptions/version-settings',
+  /** External cron: sponsor contract/payment reminders (secret header) */
+  '/api/club/sponsors/reminders',
   /** Registration payment page / success page (account not active yet, no token) */
   '/api/registration-payments',
 ];

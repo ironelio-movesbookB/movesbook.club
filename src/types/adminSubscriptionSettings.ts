@@ -64,6 +64,8 @@ export type SubscriptionEditSettings = {
   coachTiers: Record<SubscriptionTier, boolean>;
   athletesLimit: number;
   athleteTiers: Record<SubscriptionTier, boolean>;
+  /** Coach / team / club — free athlete accounts per athlete version tier (-1 = unlimited). */
+  athleteTierLimits?: Record<SubscriptionTier, number>;
   /** Coach / team / club — limit and sharing with invited coaches. */
   coachSharing: SubscriptionMembershipSetting;
   /** Coach / team / club — max manageable users (synced to browse table). */

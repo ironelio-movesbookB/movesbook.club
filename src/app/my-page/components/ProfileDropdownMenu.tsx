@@ -219,8 +219,8 @@ const baseMenuSections: MenuSection[] = [
     title: "Feedback and support",
     items: [
       {
-        label: "Feedback for the club",
-        href: "/feedbacks/my_feedback",
+        label: "Messages-Feedbacks with Club\\Team",
+        href: "/clubs/feedbacks?scope=mine",
         icon: RefreshCcw,
       },
       {
