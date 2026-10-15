@@ -1,35 +1,22 @@
 import { prisma } from '@/lib/prisma';
 import {
-  applySubscriptionEditDataList,
   getSubscriptionById,
   getSubscriptionEditData,
-  getSubscriptionListRows,
   getSubscriptionRowsByUserType,
 } from '@/lib/admin/subscriptionSettingsMock';
+import { loadVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 import { resolveLegacySubscriptionForUser } from '@/lib/registration/memberRegistrationInfoService';
 import type {
   SubscriptionEditData,
   SubscriptionUserType,
 } from '@/types/adminSubscriptionSettings';
 
-const VERSIONS = 'subscription_version_settings';
 const USER_VERSIONS = 'user_version_settings';
 
 let tablesReady = false;
 
 async function ensureTables() {
   if (tablesReady) return;
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS \`${VERSIONS}\` (
-      version_id INT NOT NULL,
-      user_type VARCHAR(20) NOT NULL,
-      data LONGTEXT NOT NULL,
-      updated_by VARCHAR(191) NULL,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      PRIMARY KEY (version_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS \`${USER_VERSIONS}\` (
       user_id VARCHAR(191) NOT NULL,
@@ -54,94 +41,6 @@ function parseEditData(raw: unknown): SubscriptionEditData | null {
   } catch {
     return null;
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* Version settings (/subscriptions/... edit pages)                    */
-/* ------------------------------------------------------------------ */
-
-const CACHE_TTL_MS = 30_000;
-let cacheLoadedAt = 0;
-
-export async function listSavedVersionEditData(): Promise<SubscriptionEditData[]> {
-  await ensureTables();
-  const rows = await prisma.$queryRawUnsafe<{ data: string }[]>(
-    `SELECT data FROM \`${VERSIONS}\` ORDER BY version_id`,
-  );
-  return rows.map((r) => parseEditData(r.data)).filter((d): d is SubscriptionEditData => d != null);
-}
-
-export async function listSeededVersionIds(): Promise<number[]> {
-  await ensureTables();
-  const rows = await prisma.$queryRawUnsafe<{ version_id: number }[]>(
-    `SELECT version_id FROM \`${VERSIONS}\` WHERE updated_by = ?`,
-    SEED_MARKER,
-  );
-  return rows.map((r) => Number(r.version_id));
-}
-
-/** Load saved version settings into the in-memory version cache (server side). */
-export async function hydrateVersionSettingsCache(force = false): Promise<void> {
-  if (!force && Date.now() - cacheLoadedAt < CACHE_TTL_MS) return;
-  const saved = await listSavedVersionEditData();
-  applySubscriptionEditDataList(saved);
-  cacheLoadedAt = Date.now();
-}
-
-export async function saveVersionEditData(
-  data: SubscriptionEditData,
-  updatedBy: string | null,
-  { onlyIfMissing = false }: { onlyIfMissing?: boolean } = {},
-): Promise<boolean> {
-  await ensureTables();
-  const row = getSubscriptionById(data.id);
-  if (!row) return false;
-  const payload = JSON.stringify({ ...data, userType: row.userType });
-  const sql = onlyIfMissing
-    ? `INSERT IGNORE INTO \`${VERSIONS}\` (version_id, user_type, data, updated_by) VALUES (?, ?, ?, ?)`
-    : `INSERT INTO \`${VERSIONS}\` (version_id, user_type, data, updated_by) VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE user_type = VALUES(user_type), data = VALUES(data),
-         updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP(3)`;
-  const affected = await prisma.$executeRawUnsafe(sql, data.id, row.userType, payload, updatedBy);
-  applySubscriptionEditDataList([{ ...data, userType: row.userType }]);
-  return affected > 0;
-}
-
-const SEED_MARKER = 'seed';
-
-/** Store every version (current values) in the database — rows that already exist are kept. */
-export async function seedVersionSettingsFromDefaults(): Promise<number> {
-  await hydrateVersionSettingsCache(true);
-  let inserted = 0;
-  for (const row of getSubscriptionListRows()) {
-    const data = getSubscriptionEditData(row.id, false);
-    if (data && (await saveVersionEditData(data, SEED_MARKER, { onlyIfMissing: true }))) inserted += 1;
-  }
-  return inserted;
-}
-
-/**
- * Migrate values saved in a staff browser (old localStorage storage).
- * Overwrites only rows that still hold the seeded defaults.
- */
-export async function migrateBrowserVersionEditData(
-  list: SubscriptionEditData[],
-  updatedBy: string,
-): Promise<number> {
-  await ensureTables();
-  let migrated = 0;
-  for (const data of list) {
-    if (!data?.id || !data.settings || !getSubscriptionById(data.id)) continue;
-    const rows = await prisma.$queryRawUnsafe<{ updated_by: string | null }[]>(
-      `SELECT updated_by FROM \`${VERSIONS}\` WHERE version_id = ? LIMIT 1`,
-      data.id,
-    );
-    if (rows[0] && rows[0].updated_by !== SEED_MARKER) continue;
-    await saveVersionEditData(data, updatedBy);
-    migrated += 1;
-  }
-  await seedVersionSettingsFromDefaults();
-  return migrated;
 }
 
 /* ------------------------------------------------------------------ */
@@ -244,7 +143,7 @@ export async function copyVersionSettingsToUser(
   updatedBy: string | null = null,
 ): Promise<UserVersionSettings | null> {
   await ensureTables();
-  await hydrateVersionSettingsCache();
+  await loadVersionSettings();
   const subscriptionType = subscriptionUserTypeForUser(userType);
   const effectiveVersionId =
     versionId != null && getSubscriptionById(versionId)?.userType === subscriptionType
@@ -301,7 +200,7 @@ export async function saveUserVersionSettings(
 /** Create the PCU copy for every user that does not have one yet. */
 export async function backfillUserVersionSettings(): Promise<number> {
   await ensureTables();
-  await hydrateVersionSettingsCache(true);
+  await loadVersionSettings(true);
   const missing = await prisma.$queryRawUnsafe<{ id: string; userType: string }[]>(
     `SELECT u.id, u.userType FROM users_new u
      LEFT JOIN \`${USER_VERSIONS}\` v ON v.user_id = u.id
