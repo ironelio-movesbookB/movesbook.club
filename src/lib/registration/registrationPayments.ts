@@ -301,6 +301,18 @@ export async function getAccountActivationStatus(
     : null;
 }
 
+/** Users whose account is not activated yet (email not confirmed or payment not completed). */
+export async function listPendingActivationUserIds(userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  await ensureRegistrationPaymentTables();
+  const rows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+    `SELECT user_id FROM user_account_activations
+     WHERE status <> 'active' AND user_id IN (${userIds.map(() => '?').join(',')})`,
+    ...userIds,
+  );
+  return new Set(rows.map((r) => String(r.user_id)));
+}
+
 /** New single-use token; the previous one stops working. */
 export async function issueActivationToken(userId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex');

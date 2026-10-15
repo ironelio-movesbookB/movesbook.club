@@ -70,9 +70,12 @@ export default function EditSubscriptionPanel({
 
   const handleSave = async () => {
     setSaving(true);
-    saveSubscriptionEditData(data);
-    await new Promise((r) => setTimeout(r, 300));
+    const saved = await saveSubscriptionEditData(data);
     setSaving(false);
+    if (!saved) {
+      window.alert('The settings could not be saved in the database. Please log in again as admin and retry.');
+      return;
+    }
     router.push('/subscriptions/subscription_settings');
   };
 

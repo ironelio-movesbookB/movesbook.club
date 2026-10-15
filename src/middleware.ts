@@ -59,8 +59,13 @@ const publicApiRoutes = [
   '/api/translations',
   /** Global sport dropdown catalog — GET is public; PUT still requires Super Admin in the route */
   '/api/admin/sport-dropdown-parameters',
+  /** Version settings shown during registration — GET is public; PUT / migrate require staff in the route */
   /** Registration page: active special offer of a version (guests have no token) */
   '/api/subscriptions/special-offer',
+  /** Registration page: admin-saved version settings (sharing, info text, last news) */
+  '/api/subscriptions/version-settings',
+  /** External cron: sponsor contract/payment reminders (secret header) */
+  '/api/club/sponsors/reminders',
   /** Registration payment page / success page (account not active yet, no token) */
   '/api/registration-payments',
 ];

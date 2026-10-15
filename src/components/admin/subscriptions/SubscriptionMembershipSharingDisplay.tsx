@@ -7,16 +7,11 @@ import type {
   SubscriptionUserType,
 } from '@/types/adminSubscriptionSettings';
 import {
+  getAthleteTierLimits,
   getMembershipSectionLabel,
+  SUBSCRIPTION_TIERS as TIERS,
   usesCoachTeamClubSharingLayout,
 } from '@/lib/admin/subscriptionEditSettingsLayout';
-
-const TIERS: { key: SubscriptionTier; label: string }[] = [
-  { key: 'trial', label: 'Trial' },
-  { key: 'base', label: 'Base' },
-  { key: 'premium', label: 'Premium' },
-  { key: 'pro', label: 'Pro' },
-];
 
 /** Days value shown in availability / sharing panels (renewal duration, else first). */
 export function getSubscriptionSharingDaysValue(days1: number, days2: number): number {
@@ -58,9 +53,15 @@ export default function SubscriptionMembershipSharingDisplay({
   const coachTeamClubLayout = usesCoachTeamClubSharingLayout(userType);
   const showDaysDuration = !hideDaysDuration && !coachTeamClubLayout;
   const athletesRelation = showsAthletesRelation(userType);
-  const relationLabel = athletesRelation ? 'Athletes' : 'Coaches';
-  const relationLimit = athletesRelation ? settings.athletesLimit : settings.coachesLimit;
-  const relationTiers = athletesRelation ? settings.athleteTiers : settings.coachTiers;
+  const relationLabel = athletesRelation ? 'Free accounts athletes' : 'Coaches';
+  const athleteTierLimits = getAthleteTierLimits(settings);
+  const tierValue = (tier: SubscriptionTier): string => {
+    if (athletesRelation) {
+      const value = athleteTierLimits[tier];
+      return value === -1 ? '∞' : String(value);
+    }
+    return settings.coachTiers[tier] ? String(settings.coachesLimit) : '';
+  };
   const coachSharing = settings.coachSharing ?? { limit: 1, sharingEnabled: true };
 
   const membershipRows = [
@@ -119,7 +120,7 @@ export default function SubscriptionMembershipSharingDisplay({
                 className="inline-flex h-10 w-14 items-center justify-center border border-gray-300 bg-[#e8e8e8] text-sm"
                 title={tier.label}
               >
-                {relationTiers[tier.key] ? relationLimit : ''}
+                {tierValue(tier.key)}
               </span>
             </div>
           ))}
@@ -169,13 +170,10 @@ export function SubscriptionSharingSummary({
   const coachSharing = settings.coachSharing ?? { limit: 1, sharingEnabled: true };
 
   const rows: { label: string; limit: number; sharingEnabled: boolean }[] = [];
+  const athleteTierLimits = getAthleteTierLimits(settings);
+  const athleteTiersShown = TIERS.filter((tier) => athleteTierLimits[tier.key] !== 0);
 
   if (coachTeamClubLayout) {
-    rows.push({
-      label: 'Athletes',
-      limit: settings.athletesLimit,
-      sharingEnabled: true,
-    });
     rows.push({
       label: 'Coaches',
       limit: coachSharing.limit,
@@ -194,7 +192,8 @@ export function SubscriptionSharingSummary({
   );
 
   const enabled = rows.filter((row) => row.sharingEnabled);
-  if (enabled.length === 0) return null;
+  const showAthletes = coachTeamClubLayout && athleteTiersShown.length > 0;
+  if (enabled.length === 0 && !showAthletes) return null;
 
   return (
     <div className="rounded-md border border-[#7a1f2e]/20 bg-white/90 px-3 py-2.5">
@@ -202,6 +201,23 @@ export function SubscriptionSharingSummary({
         Sharing options — {role}
       </div>
       <ul className="mt-1.5 space-y-1 text-sm text-gray-800">
+        {showAthletes ? (
+          <li className="flex items-start gap-2">
+            <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-[#5cb85c]" aria-hidden />
+            <span>
+              Athletes (free accounts):{' '}
+              {athleteTiersShown.map((tier, i) => {
+                const value = athleteTierLimits[tier.key];
+                return (
+                  <span key={tier.key}>
+                    {i > 0 ? ' · ' : ''}
+                    {tier.label} <span className="font-semibold">{value === -1 ? 'Unlimited' : value}</span>
+                  </span>
+                );
+              })}
+            </span>
+          </li>
+        ) : null}
         {enabled.map(({ label, limit }) => (
           <li key={label} className="flex items-center gap-2">
             <Share2 className="h-4 w-4 shrink-0 text-[#5cb85c]" aria-hidden />

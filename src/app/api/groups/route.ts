@@ -8,6 +8,10 @@ import {
   type CreateEntityBody,
 } from '@/lib/entity/createEntityFromFormBody';
 import type { EntityProfileFormPayload } from '@/lib/entity/entityForm';
+import {
+  companyLimitReachedMessage,
+  getCreatableCompaniesQuota,
+} from '@/lib/club/creatableCompaniesQuota';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +49,11 @@ export async function POST(request: NextRequest) {
         { error: 'Use create: true with group profile fields' },
         { status: 400 },
       );
+    }
+
+    const quota = await getCreatableCompaniesQuota(userId, String(decoded.userType));
+    if (quota && !quota.canCreate) {
+      return NextResponse.json({ error: companyLimitReachedMessage(quota) }, { status: 403 });
     }
 
     const payload = body as EntityProfileFormPayload;

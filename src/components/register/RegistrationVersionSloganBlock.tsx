@@ -23,7 +23,7 @@ export default function RegistrationVersionSloganBlock({
       return (
         <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-xs text-gray-500">
           No Info version text yet for this language. Enter content above — it opens when the user
-          clicks News about version during registration (English used as fallback).
+          clicks Info Versions during registration (English used as fallback).
         </p>
       );
     }

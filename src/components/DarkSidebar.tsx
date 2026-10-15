@@ -131,6 +131,9 @@ import {
   userHasClubProfile,
 } from '@/lib/club/clubSidebarLabel';
 import { formatCreatableCompaniesSidebarLabel } from '@/lib/club/creatableCompaniesQuota.shared';
+import CommunitiesSharingLists from '@/components/sharing/CommunitiesSharingLists';
+import type { SharePartyKind } from '@/lib/sharing/sharingTypes';
+import { useSharingSummary } from '@/hooks/useSharingSummary';
 import { canManageClubWebsite } from '@/lib/club/clubWebsitePermissions';
 import {
   formatEntitySidebarLabel,
@@ -299,6 +302,8 @@ interface DarkSidebarProps {
   onContactActivitiesClick?: () => void;
   /** Messages → My feedbacks for Staff — swap center section (keep left/right sidebars) */
   onMyFeedbacksStaffClick?: () => void;
+  /** Messages → Feedbacks with Club\Team (mine) / with Members (manage) — swap center section */
+  onOrgFeedbacksClick?: (scope: 'mine' | 'manage') => void;
   /** My Club → Music for the club → Add songs & playlists (same as navbar "Add Songs") */
   onClubAddSongsPlaylistsClick?: () => void;
   /** My Club → Music for the club → Music Panel (same as navbar "Music Panel") */
@@ -372,6 +377,7 @@ export default function DarkSidebar({
   onRegistrationInfoClick,
   onContactActivitiesClick,
   onMyFeedbacksStaffClick,
+  onOrgFeedbacksClick,
   onClubAddSongsPlaylistsClick,
   onClubMusicPanelClick,
   onIdentificationDevicesClick,
@@ -419,7 +425,6 @@ export default function DarkSidebar({
   const showSuggestMovesbook = showSuggestMovesbookForTab(userType, currentTab);
 
   const [communitiesOpen, setCommunitiesOpen] = useState(false);
-  const [communitiesMyTeamsOpen, setCommunitiesMyTeamsOpen] = useState(false);
   const [selectedAthleteTeamId, setSelectedAthleteTeamId] = useState<string | null>(null);
   const [currentClubMembersOpen, setCurrentClubMembersOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -428,6 +433,7 @@ export default function DarkSidebar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationCounts, setNotificationCounts] = useState({ movesbook: 0, clubs: 0, total: 0 });
   const [myFeedbackCount, setMyFeedbackCount] = useState(0);
+  const [orgFeedbackCounts, setOrgFeedbackCounts] = useState({ mine: 0, awaiting: 0 });
   const [myClubsOpen, setMyClubsOpen] = useState(false);
   const [clubAdminInfoOpen, setClubAdminInfoOpen] = useState(false);
   const [memberInfoOpen, setMemberInfoOpen] = useState(false);
@@ -452,7 +458,31 @@ export default function DarkSidebar({
         /* optional */
       }
     })();
+    void (async () => {
+      try {
+        const res = await fetch('/api/messages/org-feedbacks?count=1', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setOrgFeedbackCounts({
+          mine: Number(data.mine) || 0,
+          awaiting: Number(data.awaiting) || 0,
+        });
+      } catch {
+        /* optional */
+      }
+    })();
   }, [user?.id]);
+
+  const openOrgFeedbacks = (scope: 'mine' | 'manage') => {
+    if (onOrgFeedbacksClick) {
+      onOrgFeedbacksClick(scope);
+      return;
+    }
+    router.push(`/clubs/feedbacks?scope=${scope}`);
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -643,6 +673,15 @@ export default function DarkSidebar({
     isTeamManagerUser ||
     isGroupAdminUser ||
     isCoachUser;
+  const { summary: sharingSummary, reload: reloadSharingSummary } = useSharingSummary(
+    isManagedEntityWorkspaceUser,
+  );
+  useEffect(() => {
+    void reloadSharingSummary();
+  }, [entities.length, reloadSharingSummary]);
+  /** Max companies creatable — from the user's PCU (club, team, coach groups trained, group). */
+  const companyQuota = sharingSummary?.companyQuota ?? creatableCompaniesQuota;
+  const companyLimitReached = companyQuota ? !companyQuota.canCreate : false;
   const clubHasSelectedEntity =
     Boolean(selectedEntityId) || readSelectedClubHint();
   const showMyClubTab = isManagedEntityWorkspaceUser
@@ -1348,6 +1387,32 @@ export default function DarkSidebar({
     setClubTopicsPickerOpen(true);
   }, [clubsForTopicsPicker, handleClubSelectedForTopics]);
 
+  const renderAthleteTeamsExtra = (kind: SharePartyKind) =>
+    kind === 'team' && athleteTeams.length > 0 ? (
+      <ul className="mt-2 space-y-1 border-t border-white/10 pt-2">
+        {athleteTeams.map((team) => {
+          const isSelected = selectedAthleteTeamId === team.id;
+          return (
+            <li key={team.id}>
+              <button
+                type="button"
+                onClick={() => handleAthleteTeamSelect(team.id)}
+                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
+                  isSelected ? 'bg-zinc-700/60' : ''
+                }`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate leading-snug">{team.name?.trim() || 'Team'}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
   const getEntityLabel = () => {
     if (isClubAccountUserType(userType)) return t('sidebar_my_club');
     if (isTeamManagerUser) return t('sidebar_my_team');
@@ -1530,89 +1595,7 @@ export default function DarkSidebar({
 
         {communitiesOpen && (
           <div className="bg-gray-800 text-white">
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">Sharing friends</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
-
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">My Coaches</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
-
-            <div className="border-t border-gray-700">
-              <button
-                type="button"
-                onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
-                aria-expanded={communitiesMyTeamsOpen}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-gray-300" />
-                  <span className="text-sm">My teams</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 opacity-60 transition-transform ${
-                    communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
-                  }`}
-                />
-              </button>
-              {communitiesMyTeamsOpen && (
-                <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
-                  {athleteTeams.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {athleteTeams.map((team) => {
-                        const isSelected = selectedAthleteTeamId === team.id;
-                        return (
-                          <li key={team.id}>
-                            <button
-                              type="button"
-                              onClick={() => handleAthleteTeamSelect(team.id)}
-                              className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                isSelected ? 'bg-zinc-700/60' : ''
-                              }`}
-                            >
-                              <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                aria-hidden
-                              />
-                              <span className="min-w-0 flex-1 truncate leading-snug">
-                                {team.name?.trim() || 'Team'}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-            >
-              <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-300" />
-                <span className="text-sm">My Groups</span>
-              </div>
-              <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-            </button>
+            <CommunitiesSharingLists renderListExtra={renderAthleteTeamsExtra} />
 
             <div className="border-t border-gray-700">
               <button
@@ -1905,9 +1888,9 @@ export default function DarkSidebar({
                             ? t('sidebar_my_group')
                             : t('sidebar_my_clubs')}
                     </span>
-                    {isClubAccountUserType(userType) && creatableCompaniesQuota ? (
+                    {isManagedEntityWorkspaceUser && companyQuota ? (
                       <span className="text-[11px] font-semibold normal-case text-yellow-300">
-                        {formatCreatableCompaniesSidebarLabel(creatableCompaniesQuota)}
+                        {formatCreatableCompaniesSidebarLabel(companyQuota)}
                       </span>
                     ) : null}
                   </span>
@@ -1928,7 +1911,7 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateClubClick?.()}
-                    disabled={creatableCompaniesQuota ? !creatableCompaniesQuota.canCreate : false}
+                    disabled={companyLimitReached}
                     className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a club
@@ -2014,7 +1997,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateGroupTrainedClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     {t('create_group_trained')}
                   </button>
@@ -2061,7 +2045,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateTeamClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a team
                   </button>
@@ -2113,7 +2098,8 @@ export default function DarkSidebar({
                   <button
                     type="button"
                     onClick={() => onCreateGroupClick?.()}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800"
+                    disabled={companyLimitReached}
+                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
                   >
                     Create a group
                   </button>
@@ -2559,6 +2545,16 @@ export default function DarkSidebar({
                       {t('sidebar_my_feedbacks_staff')} ({myFeedbackCount})
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => openOrgFeedbacks('mine')}
+                    className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
+                    <span className="leading-snug">
+                      {t('sidebar_feedbacks_with_club_team')} ({orgFeedbackCounts.mine})
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
@@ -2820,89 +2816,7 @@ export default function DarkSidebar({
 
               {communitiesOpen && (
                 <div className="bg-gray-800 text-white">
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">Sharing friends</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">My Coaches</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
-
-                  <div className="border-t border-gray-700">
-                    <button
-                      type="button"
-                      onClick={() => setCommunitiesMyTeamsOpen((v) => !v)}
-                      aria-expanded={communitiesMyTeamsOpen}
-                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Plus className="w-4 h-4 text-gray-300" />
-                        <span className="text-sm">My teams</span>
-                      </div>
-                      <ChevronDown
-                        className={`w-4 h-4 opacity-60 transition-transform ${
-                          communitiesMyTeamsOpen ? 'rotate-180' : 'rotate-[-90deg]'
-                        }`}
-                      />
-                    </button>
-                    {communitiesMyTeamsOpen && (
-                      <div className="bg-[#2d2d2d] px-4 py-3 border-t border-gray-700">
-                        {athleteTeams.length === 0 ? (
-                          <p className="text-xs text-gray-400 text-center py-2">No teams yet</p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {athleteTeams.map((team) => {
-                              const isSelected = selectedAthleteTeamId === team.id;
-                              return (
-                                <li key={team.id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAthleteTeamSelect(team.id)}
-                                    className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                      isSelected ? 'bg-zinc-700/60' : ''
-                                    }`}
-                                  >
-                                    <span
-                                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                      aria-hidden
-                                    />
-                                    <span className="min-w-0 flex-1 truncate leading-snug">
-                                      {team.name?.trim() || 'Team'}
-                                    </span>
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-750 transition-colors border-t border-gray-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-gray-300" />
-                      <span className="text-sm">My Groups</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 opacity-60 rotate-[-90deg]" />
-                  </button>
+                  <CommunitiesSharingLists renderListExtra={renderAthleteTeamsExtra} />
 
                   <div className="border-t border-gray-700">
                     <button
@@ -3252,6 +3166,16 @@ export default function DarkSidebar({
                         <Users2 className="h-4 w-4 shrink-0 opacity-95" />
                         <span className="leading-snug">
                           {t('sidebar_my_feedbacks_staff')} ({myFeedbackCount})
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openOrgFeedbacks('manage')}
+                        className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
+                      >
+                        <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
+                        <span className="leading-snug">
+                          {t('sidebar_feedbacks_with_members')} ({orgFeedbackCounts.awaiting})
                         </span>
                       </button>
                     </div>
@@ -4993,6 +4917,22 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 <button
                                   type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
+                                <button
+                                  type="button"
                                   className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
@@ -5476,6 +5416,50 @@ export default function DarkSidebar({
                                     })}
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubMarketingOpen((v) => !v)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Monitor className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className="truncate text-sm font-semibold">Marketing</span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubMarketingOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubMarketingOpen && (
+                              <div className="bg-[#1e272a] text-white">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/sponsors')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
+                                  <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/marketing/website')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400" />
+                                  <span className="leading-snug">Website</span>
+                                </button>
                               </div>
                             )}
                           </div>

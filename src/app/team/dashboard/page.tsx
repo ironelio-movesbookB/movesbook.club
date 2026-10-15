@@ -1,5 +1,6 @@
 'use client';
 
+import SharingNotifications from '@/components/sharing/SharingNotifications';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Users, Loader2 } from 'lucide-react';
@@ -243,6 +244,13 @@ function TeamDashboardContent() {
           )}
 
           <div className="flex-1 min-w-0 flex flex-col px-4">
+            <SharingNotifications
+              scope={
+                activeTab === 'my-entity' && selectedTeamId
+                  ? { type: 'party', kind: 'team', id: selectedTeamId }
+                  : { type: 'mypage' }
+              }
+            />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
             ) : (

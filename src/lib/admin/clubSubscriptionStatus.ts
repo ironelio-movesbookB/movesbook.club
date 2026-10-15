@@ -8,7 +8,12 @@ export type ClubSubscriptionDisplayStatus =
 
 export const MEMBERSHIP_STATUS_NOT_YET_ACTIVE = 'Not yet active' as const;
 
+export const ACCOUNT_STATUS_PENDING = 'Pending' as const;
+export const ACCOUNT_STATUS_NOT_ACTIVE = 'Not active' as const;
+
 export type ClubSubscriptionStatusTone =
+  | 'pending'
+  | 'not-active'
   | 'active'
   | 'not-yet-active'
   | 'expiring'
@@ -125,6 +130,10 @@ export function defaultClubSubscriptionEndDate(from: Date = new Date()): string 
 /** Map resolved membership status label → color tone. */
 export function membershipStatusToneFromLabel(status: string): ClubSubscriptionStatusTone {
   switch (status) {
+    case ACCOUNT_STATUS_PENDING:
+      return 'pending';
+    case ACCOUNT_STATUS_NOT_ACTIVE:
+      return 'not-active';
     case 'Expired':
       return 'all-expired';
     case 'Expiring':
@@ -139,6 +148,9 @@ export function membershipStatusToneFromLabel(status: string): ClubSubscriptionS
 /** Text color for membership status labels (profile tables, grid cards). */
 export function membershipStatusLabelClassName(status: string): string {
   switch (membershipStatusToneFromLabel(status)) {
+    case 'not-active':
+      return 'text-red-900 font-bold';
+    case 'pending':
     case 'all-expired':
       return 'text-red-600 font-semibold';
     case 'expiring':
