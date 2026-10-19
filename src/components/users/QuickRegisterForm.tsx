@@ -2,14 +2,15 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { COUNTRY_SELECT_OPTIONS } from '@/constants/countries.constants';
 import {
   QUICK_REGISTER_SUCCESS_MESSAGE,
   type RegistrationStatus,
 } from '@/lib/users/quickRegisterShared';
-import { filterSportsCatalogForUserType, sportOptionsForUserType } from '@/lib/users/quickRegisterSports';
+import { ENTITY_SPORT_OPTIONS } from '@/lib/sport/entitySportOptions';
+import { sportNameTranslation } from '@/lib/sport/sportNameTranslations';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getQuickRegisterStrings,
@@ -17,7 +18,6 @@ import {
 } from '@/lib/users/quickRegisterI18n';
 
 type VersionOption = { id: string; name: string };
-type SelectOption = { id: string; name: string };
 
 function fmtYmd(d: Date): string {
   const m = d.getMonth() + 1;
@@ -67,8 +67,6 @@ export default function QuickRegisterForm() {
   const [confirmInviterUsername, setConfirmInviterUsername] = useState(inviterFromUrl);
   const [movesbookOfficialEmail, setMovesbookOfficialEmail] = useState('admin@movesbook.com');
 
-  const [sports, setSports] = useState<SelectOption[]>([]);
-  const [allSports, setAllSports] = useState<SelectOption[]>([]);
   const [versions, setVersions] = useState<VersionOption[]>([]);
   const [promocodeVersionIds, setPromocodeVersionIds] = useState('');
   const [inviterReadonly, setInviterReadonly] = useState(inviteByMovesbook || Boolean(inviterFromUrl));
@@ -365,18 +363,13 @@ export default function QuickRegisterForm() {
     [clearSubscriptionDetails]
   );
 
-  const applySportsForUserType = useCallback(
-    (type: string, catalog: SelectOption[]) => {
-      if (!type) {
-        setSports(catalog.length > 0 ? catalog : [...sportOptionsForUserType('5')]);
-        return;
-      }
-      const next = filterSportsCatalogForUserType(type, catalog);
-      setSports(next);
-      setSport((prev) => (next.some((s) => s.id === prev) ? prev : ''));
-    },
-    []
-  );
+  const registrationSports = useMemo(() => {
+    const lang = (currentLanguage || 'en').toLowerCase().slice(0, 2);
+    return ENTITY_SPORT_OPTIONS.map((name) => ({
+      id: name,
+      name: sportNameTranslation(name, lang) ?? name,
+    }));
+  }, [currentLanguage]);
 
   useEffect(() => {
     if (initDone.current) return;
@@ -398,13 +391,6 @@ export default function QuickRegisterForm() {
         }
         if (typeof data.inviterReadonly === 'boolean') setInviterReadonly(data.inviterReadonly);
         if (data.promocodeAllowedVersionIds) setPromocodeVersionIds(data.promocodeAllowedVersionIds);
-        if (Array.isArray(data.sports) && data.sports.length > 0) {
-          setAllSports(data.sports);
-          applySportsForUserType(userType, data.sports);
-        } else {
-          setAllSports([]);
-          applySportsForUserType(userType, []);
-        }
       })
       .catch(() => undefined);
 
@@ -501,7 +487,6 @@ export default function QuickRegisterForm() {
 
   const handleUserTypeChange = (value: string) => {
     setUserType(value);
-    applySportsForUserType(value, allSports);
     void loadVersions(value, promocodeVersionIds);
   };
 
@@ -749,12 +734,21 @@ export default function QuickRegisterForm() {
 
   return (
     <div className="quickregistration" style={{ marginTop: 20 }}>
-      <div className="quickregi-title">{t.registerYourself}</div>
-      <div className="quickregi-subtitle">
-        {t.alreadyHaveAccount}{' '}
-        <Link href="/login" target="_blank">
-          {t.logIn}
-        </Link>
+      <div className="qr-register-head">
+        <img
+          className="qr-register-badge"
+          src="/img/register-now.png"
+          alt="REGISTER NOW"
+        />
+        <div className="qr-register-head-copy">
+          <div className="quickregi-title">{t.registerYourself}</div>
+          <div className="quickregi-subtitle">
+            {t.alreadyHaveAccount}{' '}
+            <Link href="/login" target="_blank">
+              {t.logIn}
+            </Link>
+          </div>
+        </div>
       </div>
 
       {successMessage ? (
@@ -1052,7 +1046,7 @@ export default function QuickRegisterForm() {
                 <div className="qr-control">
                   <select id="sltSport" name="sport" value={sport} onChange={(e) => setSport(e.target.value)}>
                     <option value="">{t.selectSport}</option>
-                    {(sports.length > 0 ? sports : sportOptionsForUserType(userType || '5')).map((s) => (
+                    {registrationSports.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>

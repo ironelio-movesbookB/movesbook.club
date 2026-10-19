@@ -20,6 +20,7 @@ const LEGACY_USER_COLUMN_DEFS: [string, string][] = [
   ['subscription_start_date', 'DATE NULL'],
   ['subscription_end_date', 'VARCHAR(100) NULL'],
   ['credits', 'DECIMAL(10,2) NOT NULL DEFAULT 0'],
+  ['promocode_intro', 'TEXT NULL'],
   ['delete_status', "ENUM('Y','N') NOT NULL DEFAULT 'N'"],
   ['created', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP'],
   ['modified', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'],

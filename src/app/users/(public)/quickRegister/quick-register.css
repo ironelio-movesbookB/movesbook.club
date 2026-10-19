@@ -4,7 +4,7 @@
   margin: 0;
   font-family: Calibri, Arial, Helvetica, sans-serif;
   color: #707070;
-  background: url('/img/bg_grad.jpg') repeat-x top #f5f5f5;
+  background: #f5f5f5;
   min-height: 100vh;
 }
 
@@ -51,6 +51,25 @@
   margin: 20px auto 0;
   box-sizing: border-box;
   background: #fff;
+}
+
+.quick-register-body .qr-register-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.quick-register-body .qr-register-badge {
+  flex: 0 0 auto;
+  width: 220px;
+  height: auto;
+  display: block;
+}
+
+.quick-register-body .qr-register-head-copy {
+  flex: 1 1 auto;
 }
 
 .quick-register-body .quickregi-title {

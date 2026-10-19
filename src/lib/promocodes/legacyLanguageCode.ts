@@ -56,6 +56,12 @@ export function normalizeLegacyLanguageCode(raw: string | null | undefined): str
   return LABEL_TO_LEGACY_CODE[key] ?? trimmed;
 }
 
+export function legacyLanguageIdFromCode(code: string | null | undefined): string {
+  const normalized = normalizeLegacyLanguageCode(code);
+  const found = Object.entries(LEGACY_LANG_CODE_BY_ID).find(([, value]) => value === normalized);
+  return found ? found[0] : '1';
+}
+
 export function legacyLanguageCodeFromId(languageId: string | number): string {
   const id = Number(languageId);
   if (Number.isFinite(id) && LEGACY_LANG_CODE_BY_ID[id]) {

@@ -85,7 +85,7 @@
 }
 
 .promocodes-page.credits-earned-page #print-table tbody tr.highlighted td {
-  background: #f9f4db;
+  background: #ffe566;
 }
 
 .promocodes-page.credits-earned-page #print-table img {
@@ -204,7 +204,7 @@
 }
 
 .promocodes-page .promo-table tr.highlighted td {
-  background: #f9f4db;
+  background: #ffe566;
 }
 
 .promocodes-page .all_select {
@@ -268,11 +268,17 @@
 }
 
 .promo-send-message-modal {
-  width: min(92vw, 720px);
+  width: min(96vw, 1100px);
+  border: 1px solid #d1d5db;
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.promo-send-message-modal .promo-invite-input,
+.promo-send-message-modal .promo-send-message-editor {
+  border: 1px solid #d1d5db;
 }
 
 .promo-send-message-body {
@@ -289,7 +295,7 @@
 }
 
 .promo-send-message-editor {
-  border: 1px solid #717171;
+  border: 1px solid #d1d5db;
   margin-top: 8px;
   overflow: hidden;
 }

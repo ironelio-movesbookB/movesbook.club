@@ -23,6 +23,7 @@ import {
   legacyLanguageCodeFromId,
   normalizeLegacyLanguageCode,
 } from './legacyLanguageCode';
+import { languageIdForLegacyUser } from './promocodeSenderLanguage';
 import { coercePublicOrigin } from '@/lib/siteUrl';
 import { resolveInviteExpiryDate, userOwnsOrReceivedPromocode } from './childPromocode';
 import { incrementInviteStat } from './promocodeMonthlyStatsService';
@@ -543,7 +544,13 @@ export async function sendPromocodeInvite(params: {
 
   await ensurePromocodeInviteLocalizedContent();
 
-  const languageName = await getLegacyLanguageCode(params.languageId);
+  let languageId = params.languageId;
+  if (!params.isStaff && params.senderLegacyUserId) {
+    const senderLanguageId = await languageIdForLegacyUser(params.senderLegacyUserId);
+    if (senderLanguageId) languageId = senderLanguageId;
+  }
+
+  const languageName = await getLegacyLanguageCode(languageId);
 
   const resolvedLinks = await resolveInviteOtherInfoAndAdvPage({
     otherInfo: params.otherInfo,
@@ -559,7 +566,7 @@ export async function sendPromocodeInvite(params: {
   if (!finalMessage) {
     const built = await buildPromocodeInviteEmailBody({
       htmlPageId: params.htmlPageId,
-      languageId: params.languageId,
+      languageId,
     });
     finalMessage = built.body;
   }

@@ -24,6 +24,8 @@ import {
   fetchSuggestMovesbookIntroText,
   SUGGEST_MOVESBOOK_INTRO_EN,
 } from '@/constants/suggestMovesbookLongText';
+import { getSuggestMovesbookCopy } from '@/lib/promocodes/suggestMovesbookCopy';
+import { PromocodePersonMark } from '@/components/promocodes/PromocodePersonMark';
 import {
   buildWhatsAppShareUrl,
   buildTelegramSharePickerUrl,
@@ -106,6 +108,8 @@ export default function NotificationByPromocodeDashboardView() {
   const [registeredPage, setRegisteredPage] = useState(1);
   const [creditsPage, setCreditsPage] = useState(1);
   const [introMessage, setIntroMessage] = useState('');
+  const [introSaved, setIntroSaved] = useState(false);
+  const [savingIntro, setSavingIntro] = useState(false);
   const [introText, setIntroText] = useState(SUGGEST_MOVESBOOK_INTRO_EN);
   const [shareChannel, setShareChannel] = useState<ShareChannel>('WhatsApp');
   const [smsPhone, setSmsPhone] = useState('');
@@ -113,27 +117,8 @@ export default function NotificationByPromocodeDashboardView() {
   const { currentLanguage, setLanguage } = useLanguage();
   const invitePopupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isItalian = (currentLanguage || '').toLowerCase().startsWith('it');
-  const tabLabels = useMemo(() => {
-    if (!isItalian) {
-      return {
-        suggest: 'Suggest Movesbook',
-        invitations: 'List of invitations sent',
-        registered: 'User who registered',
-        credits: 'Credits earned',
-        connections: 'Connections chart',
-        generated: 'Promocodes generated',
-      };
-    }
-    return {
-      suggest: 'Suggerisci Movesbook',
-      invitations: 'Elenco inviti inviati',
-      registered: 'Utenti registrati',
-      credits: 'Crediti guadagnati',
-      connections: 'Grafico connessioni',
-      generated: 'Codici promozionali generati',
-    };
-  }, [isItalian]);
+  const copy = useMemo(() => getSuggestMovesbookCopy(currentLanguage || 'en'), [currentLanguage]);
+  const tabLabels = copy;
 
   const recordLinkShare = useCallback(async (promoId: number) => {
     if (!promoId) return;
@@ -159,6 +144,7 @@ export default function NotificationByPromocodeDashboardView() {
       }
       const dashboard = json as NotificationByPromocodeDashboard;
       setData(dashboard);
+      setIntroMessage(dashboard.savedIntro || '');
       setActiveTab(dashboard.defaultTab === 'invitations' ? 'invitations' : 'suggest');
       if (dashboard.promocode.id) {
         setPromocodeId(String(dashboard.promocode.id));
@@ -473,12 +459,12 @@ export default function NotificationByPromocodeDashboardView() {
                 maxWidth: 900,
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Promocodes you can create</div>
-              <div>Allowed: {data.childPromo.limit ?? 'unlimited'}</div>
-              <div>Already generated: {data.childPromo.generatedCount}</div>
-              <div>Expiring date to create new promocodes: {data.childPromo.until || '—'}</div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{copy.youCanCreate}</div>
+              <div>{copy.allowed}: {data.childPromo.limit ?? copy.unlimited}</div>
+              <div>{copy.alreadyGenerated}: {data.childPromo.generatedCount}</div>
+              <div>{copy.createUntil}: {data.childPromo.until || '—'}</div>
               <div>
-                Versions enabled:{' '}
+                {copy.versionsEnabled}:{' '}
                 {data.childPromo.versionIds.length > 0
                   ? data.childPromo.versionIds
                       .map((id) => data.subscriptionsData[id] || String(id))
@@ -486,7 +472,7 @@ export default function NotificationByPromocodeDashboardView() {
                   : '—'}
               </div>
               <div>
-                Days available for registration after invite:{' '}
+                {copy.daysAfterInvite}:{' '}
                 {data.childPromo.durationDays ?? '—'}
               </div>
 
@@ -501,24 +487,22 @@ export default function NotificationByPromocodeDashboardView() {
                 <button
                   type="button"
                   className={
-                    data.childPromo.currentGeneratedExpired && data.childPromo.allowed
+                    data.childPromo.allowed
                       ? 'promo-regen-btn promo-regen-btn--ready'
                       : 'promo-regen-btn promo-regen-btn--locked'
                   }
                   title={
-                    data.childPromo.currentGeneratedExpired
-                      ? data.childPromo.allowed
-                        ? 'Generate a new promocode'
-                        : data.childPromo.blockedReason || 'Cannot generate a new promocode'
-                      : 'Red until your current promocode expires, then becomes black to generate a new one'
+                    data.childPromo.allowed
+                      ? copy.canGenerate
+                      : data.childPromo.blockedReason || copy.canGenerate
                   }
-                  disabled={!(data.childPromo.currentGeneratedExpired && data.childPromo.allowed)}
+                  disabled={!data.childPromo.allowed}
                   onClick={createChildPromocode}
                   aria-label="Generate new promocode"
                 >
                   <RefreshCw size={22} aria-hidden />
                 </button>
-                <span>Promocode for you</span>
+                <span>{copy.promocodeForYou}</span>
                 <input
                   type="text"
                   readOnly
@@ -530,7 +514,7 @@ export default function NotificationByPromocodeDashboardView() {
                   }
                   style={{ width: 140, background: '#eee' }}
                 />
-                <span>is valid until</span>
+                <span>{copy.isValidUntil}</span>
                 <input
                   type="text"
                   readOnly
@@ -542,7 +526,7 @@ export default function NotificationByPromocodeDashboardView() {
                   }
                   style={{ width: 110, background: '#eee' }}
                 />
-                <span>last invite</span>
+                <span>{copy.lastInvite}</span>
                 <input
                   type="text"
                   readOnly
@@ -552,24 +536,13 @@ export default function NotificationByPromocodeDashboardView() {
               </div>
 
               <div style={{ marginTop: 10, fontSize: 13, color: '#555' }}>
-                {data.childPromo.currentGeneratedExpired ? (
-                  data.childPromo.allowed ? (
-                    <span style={{ color: '#116611' }}>
-                      Current promocode is expired (or not created yet). The button is black — you can
-                      generate a new promocode.
-                    </span>
-                  ) : (
-                    <span style={{ color: '#7b0a26', fontWeight: 600 }}>
-                      {data.childPromo.blockedReason}
-                    </span>
-                  )
+                {data.childPromo.allowed ? (
+                  <span style={{ color: '#116611' }}>
+                    {data.childPromo.currentGeneratedExpired ? copy.expiredCanGenerate : copy.canGenerate}
+                  </span>
                 ) : (
-                  <span style={{ color: '#cc0000', fontWeight: 600 }}>
-                    Button is red and locked until your current promocode expires
-                    {data.childPromo.currentGeneratedValidTo
-                      ? ` (${data.childPromo.currentGeneratedValidTo})`
-                      : ''}
-                    . Then it turns black and you can generate a new one.
+                  <span style={{ color: '#7b0a26', fontWeight: 600 }}>
+                    {data.childPromo.blockedReason}
                   </span>
                 )}
               </div>
@@ -582,7 +555,7 @@ export default function NotificationByPromocodeDashboardView() {
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {data.generatedPromocodes.map((p) => (
                   <li key={p.id}>
-                    {p.code} — valid until {p.validTo || '—'}
+                    {p.code} — {copy.validUntil} {p.validTo || '—'}
                   </li>
                 ))}
               </ul>
@@ -590,18 +563,40 @@ export default function NotificationByPromocodeDashboardView() {
           ) : null}
 
           <div className="invite-row" style={{ alignItems: 'flex-start' }}>
-            <span>Your message of intro</span>
+            <span>{copy.yourIntro}</span>
             <textarea
               value={introMessage}
-              onChange={(e) => setIntroMessage(e.target.value)}
+              onChange={(e) => {
+                setIntroSaved(false);
+                setIntroMessage(e.target.value);
+              }}
               rows={3}
-              style={{ width: '50%', minWidth: 260, padding: 8 }}
-              placeholder="Type a short intro that will be added to the invitation"
+              style={{ width: '50%', minWidth: 260, padding: 8, border: '1px solid #d1d5db' }}
+              placeholder={copy.introPlaceholder}
             />
+            <button
+              type="button"
+              className="button-black-promocode"
+              disabled={savingIntro}
+              onClick={() => {
+                setSavingIntro(true);
+                setIntroSaved(false);
+                void userPromocodeFetch('/api/users/notification-by-promocode/save-intro', {
+                  method: 'POST',
+                  body: JSON.stringify({ introMessage }),
+                })
+                  .then((res) => {
+                    if (res.ok) setIntroSaved(true);
+                  })
+                  .finally(() => setSavingIntro(false));
+              }}
+            >
+              {introSaved ? copy.saved : copy.save}
+            </button>
           </div>
 
           <div className="invite-row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
-            <span>Share also via</span>
+            <span>{copy.shareVia}</span>
             {(['WhatsApp', 'Telegram', 'SMS'] as const).map((channel) => (
               <button
                 key={channel}
@@ -1069,9 +1064,9 @@ export default function NotificationByPromocodeDashboardView() {
           <div className="connection-header">
             {data.connectionChart.currentUserUsername || 'User'}
             <span style={{ float: 'right' }}>
-              Current credits {formatChartCredits(data.connectionChart.totalCredits)}{' '}
-              Used <span style={{ color: 'red' }}>{formatChartCredits(data.connectionChart.usedCredits)}</span>{' '}
-              Available <span style={{ color: 'green' }}>{formatChartCredits(data.connectionChart.availableCredits)}</span>
+              {copy.currentCredits} {formatChartCredits(data.connectionChart.totalCredits)}{' '}
+              {copy.used} <span style={{ color: 'red' }}>{formatChartCredits(data.connectionChart.usedCredits)}</span>{' '}
+              {copy.available} <span style={{ color: 'green' }}>{formatChartCredits(Math.min(data.connectionChart.totalCredits, data.connectionChart.availableCredits))}</span>
             </span>
           </div>
 
@@ -1079,19 +1074,17 @@ export default function NotificationByPromocodeDashboardView() {
             <div className="connection-earn-banner">
               {data.connectionChart.currentUserUsername}{' '}
               <span style={{ color: 'red' }}>
-                allows to user{' '}
-                <strong>
-                  {data.connectionChart.allowsCurrentUserToEarn.username}
-                  {data.connectionChart.allowsCurrentUserToEarn.roleName
-                    ? ` (${formatRoleName(data.connectionChart.allowsCurrentUserToEarn.roleName, data.connectionChart.allowsCurrentUserToEarn.roleId)})`
-                    : ''}
-                </strong>{' '}
-                to earn credits
+                {copy.allowsPrefix}{' '}
+                {data.connectionChart.allowsCurrentUserToEarn.username}
+                {data.connectionChart.allowsCurrentUserToEarn.roleName
+                  ? ` (${formatRoleName(data.connectionChart.allowsCurrentUserToEarn.roleName, data.connectionChart.allowsCurrentUserToEarn.roleId)})`
+                  : ''}{' '}
+                {copy.allowsMiddle}
               </span>
             </div>
           )}
 
-          <div style={{ fontWeight: 'bold', padding: 10 }}>Personal registration</div>
+          <div style={{ padding: 10 }}>{copy.personalRegistration}</div>
           <div className="connection-list">
             <div className="connection-columns">
               <div>
@@ -1104,18 +1097,26 @@ export default function NotificationByPromocodeDashboardView() {
           </div>
 
           <div style={{ fontSize: 20, padding: 10 }}>
-            Users that allow to <span style={{ color: '#70020b' }}>{data.connectionChart.currentUserUsername || 'User'}</span> to earn other credits
+            {copy.usersThatAllow} <span style={{ color: '#70020b' }}>{data.connectionChart.currentUserUsername || 'User'}</span> {copy.toEarnOther}
           </div>
 
-          <div style={{ fontWeight: 'bold', padding: 10 }}>Direct recipients who registered</div>
+          <div style={{ padding: 10 }}>{copy.directRecipients}</div>
           <div className="connection-list">
             {data.connectionChart.directRecipients.length === 0 ? (
-              <p style={{ padding: 10 }}>No direct recipients registered yet.</p>
+              <p style={{ padding: 10 }}>{copy.noDirect}</p>
             ) : (
               <div className="connection-columns">
                 <div>
                   {data.connectionChart.directRecipients.map((d, i) => (
-                    <p key={i}>{d.username}{d.roleName ? ` (${formatRoleName(d.roleName)})` : ''}</p>
+                    <p key={i}>
+                      <PromocodePersonMark
+                        label={`${d.username}${d.roleName ? ` (${formatRoleName(d.roleName)})` : ''}`}
+                        image={d.image}
+                        logoUrl={d.logoUrl}
+                        roleId={d.roleId}
+                        registered
+                      />
+                    </p>
                   ))}
                 </div>
                 <div>
@@ -1127,15 +1128,23 @@ export default function NotificationByPromocodeDashboardView() {
             )}
           </div>
 
-          <div style={{ fontWeight: 'bold', padding: 10 }}>Indirect secondary recipients who registered</div>
+          <div style={{ padding: 10 }}>{copy.indirectRecipients}</div>
           <div className="connection-list">
             {data.connectionChart.indirectRecipients.length === 0 ? (
-              <p style={{ padding: 10 }}>No indirect secondary recipients registered yet.</p>
+              <p style={{ padding: 10 }}>{copy.noIndirect}</p>
             ) : (
               <div className="connection-columns three">
                 <div>
                   {data.connectionChart.indirectRecipients.map((d, i) => (
-                    <p key={i}>{d.username}{d.roleName ? ` (${formatRoleName(d.roleName)})` : ''}</p>
+                    <p key={i}>
+                      <PromocodePersonMark
+                        label={`${d.username}${d.roleName ? ` (${formatRoleName(d.roleName)})` : ''}`}
+                        image={d.image}
+                        logoUrl={d.logoUrl}
+                        roleId={d.roleId}
+                        registered
+                      />
+                    </p>
                   ))}
                 </div>
                 <div>

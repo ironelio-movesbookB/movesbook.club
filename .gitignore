@@ -59,7 +59,6 @@ next-env.d.ts
 /config/tools-defaults/
 /config/favourites-defaults/
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -105,3 +104,4 @@ package-lock.json
 branch_structure.json
 *.bak
 data/long-text-keys.json
+.gitignore
