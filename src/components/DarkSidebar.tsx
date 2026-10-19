@@ -1310,15 +1310,22 @@ export default function DarkSidebar({
     [onEntitySelect, setCurrentTab, userType, isAthleteUser, onMyClubClick, router]
   );
 
-  const openClubDashboardPage = useCallback(() => {
-    const clubId =
-      selectedEntityId ||
-      (typeof window !== 'undefined' ? localStorage.getItem('selectedClub') : null);
-    if (!clubId) return;
-    writeClubWorkspaceTab('my-entity');
-    setCurrentTab('my-entity');
-    router.push(`/my-club?clubId=${encodeURIComponent(clubId)}`);
-  }, [router, selectedEntityId, setCurrentTab]);
+  const openClubDashboardPage = useCallback(
+    (settings = false) => {
+      const clubId =
+        selectedEntityId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('selectedClub') : null);
+      if (!clubId) return;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedClub', clubId);
+      }
+      writeClubWorkspaceTab('my-entity');
+      setCurrentTab('my-entity');
+      const query = settings ? '?settings=1' : '';
+      router.push(`/clubs/monitoring/dashboard${query}`);
+    },
+    [router, selectedEntityId, setCurrentTab],
+  );
 
   const handleAthleteTeamSelect = useCallback(
     (teamId: string) => {
@@ -4379,20 +4386,35 @@ export default function DarkSidebar({
                             </button>
                             {clubMonitoringsOpen && (
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
-                                <button
-                                  type="button"
-                                  onClick={openClubDashboardPage}
-                                  className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left transition-colors hover:bg-[#333]"
-                                >
-                                  <div className="flex min-w-0 items-center gap-2">
+                                <div className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 transition-colors hover:bg-[#333]">
+                                  <button
+                                    type="button"
+                                    onClick={() => openClubDashboardPage(false)}
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                  >
                                     <Star className="h-4 w-4 shrink-0 text-white" strokeWidth={1.75} />
                                     <span className="text-[13px] font-medium text-yellow-300">Dashboard</span>
-                                  </div>
+                                  </button>
                                   <div className="flex shrink-0 items-center gap-1.5">
-                                    <Settings className="h-3.5 w-3.5 text-white opacity-90" />
-                                    <ChevronRight className="h-3.5 w-3.5 text-white opacity-90" />
+                                    <button
+                                      type="button"
+                                      onClick={() => openClubDashboardPage(true)}
+                                      className="text-white opacity-90 hover:opacity-100"
+                                      aria-label="Dashboard setting"
+                                      title="Dashboard setting"
+                                    >
+                                      <Settings className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openClubDashboardPage(false)}
+                                      className="text-white opacity-90"
+                                      aria-label="Open dashboard"
+                                    >
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
                                   </div>
-                                </button>
+                                </div>
                                 <button
                                   type="button"
                                   className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left transition-colors hover:bg-[#333]"
@@ -4715,6 +4737,11 @@ export default function DarkSidebar({
                                       Icon: Settings2,
                                       label: 'Other settings',
                                       path: '/club/settings/other_settings',
+                                    },
+                                    {
+                                      Icon: Wallet,
+                                      label: 'Payment settings',
+                                      path: '/club/settings/payment_settings',
                                     },
                                     {
                                       Icon: LayoutGrid,
