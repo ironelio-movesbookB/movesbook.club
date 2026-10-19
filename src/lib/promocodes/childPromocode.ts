@@ -144,9 +144,10 @@ export async function getChildPromoRights(legacyUserId: number): Promise<ChildPr
       currentGeneratedValidTo = latestRows[0].valid_to
         ? String(latestRows[0].valid_to).slice(0, 10)
         : null;
-      // Still valid → not expired; missing valid_to treated as expired so user can regenerate.
-      currentGeneratedExpired =
-        !currentGeneratedValidTo || currentGeneratedValidTo < today;
+      // Expired only when a real end date is already in the past.
+      currentGeneratedExpired = Boolean(
+        currentGeneratedValidTo && currentGeneratedValidTo < today
+      );
     }
   }
 
@@ -160,13 +161,8 @@ export async function getChildPromoRights(legacyUserId: number): Promise<ChildPr
     .filter((n) => Number.isFinite(n) && n > 0);
 
   let blockedReason: string | null = null;
-  if (!currentGeneratedExpired) {
-    blockedReason =
-      'Your current promocode is still valid. The regenerate button stays red until it expires.';
-  } else if (until) {
-    if (until < today) {
-      blockedReason = 'The date to create new promocodes has expired.';
-    }
+  if (until && until < today) {
+    blockedReason = 'The date to create new promocodes has expired.';
   }
   if (!blockedReason && limit != null && generatedCount >= limit) {
     blockedReason = `You already generated the maximum number of promocodes (${limit}).`;

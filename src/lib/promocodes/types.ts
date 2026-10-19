@@ -22,6 +22,13 @@ export type PromocodeApplyRow = {
   promocodeValidTo?: string | null;
   flagImage?: string | null;
   receiverCountryCode?: string | null;
+  receiverCountryName?: string | null;
+  senderFlagImage?: string | null;
+  senderCountryCode?: string | null;
+  senderCountryName?: string | null;
+  secondaryFlagImage?: string | null;
+  secondaryCountryCode?: string | null;
+  secondaryCountryName?: string | null;
   inviteMode?: string | null;
   inviteExpiresAt?: string | null;
 };
@@ -40,6 +47,8 @@ export type LegacyUserSnippet = {
   /** Legacy users.credits balance when the column exists. */
   credits?: number | null;
   roleId?: number | null;
+  /** Club / team / group logo when this account is an entity. */
+  logoUrl?: string | null;
 };
 
 export type PromocodeSettingRow = {
@@ -175,4 +184,8 @@ export type PromocodeUserRow = {
   daysSinceLastInvite: number | null;
   lastRegistrationDate: string | null;
   daysSinceLastRegistration: number | null;
+  email?: string | null;
+  image?: string | null;
+  logoUrl?: string | null;
+  roleId?: number | null;
 };
