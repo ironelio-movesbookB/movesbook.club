@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import PromocodesTabs from '@/components/promocodes/PromocodesTabs';
 import PromocodesPagination from '@/components/promocodes/PromocodeAppliesTable';
 import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSelect';
+import { PromocodePersonMark } from '@/components/promocodes/PromocodePersonMark';
 import PromocodeAssetImage from '@/components/promocodes/PromocodeAssetImage';
 import {
   PROMOCODE_NO_FLAG_IMAGE,
@@ -48,11 +49,12 @@ export default function PromocodeUsersPage() {
       currentUserUsername: string;
       thanksTo: { username: string } | null;
       personalRegistrationCredits: number;
-      direct: { username: string; credits: number }[];
-      indirect: { username: string; credits: number; senderUsername: string }[];
+      direct: { username: string; credits: number; image?: string | null; logoUrl?: string | null; roleId?: number | null }[];
+      indirect: { username: string; credits: number; senderUsername: string; image?: string | null; logoUrl?: string | null; roleId?: number | null }[];
     } | null;
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailPage, setDetailPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -171,6 +173,7 @@ export default function PromocodeUsersPage() {
               onChange={(size) => {
                 setPageSize(size);
                 setPage(1);
+                setDetailPage(1);
               }}
             />
             <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
@@ -200,33 +203,48 @@ export default function PromocodeUsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.items ?? []).length === 0 ? (
+                    {(data?.items ?? []).slice(0, pageSize).length === 0 ? (
                     <tr>
                       <td colSpan={15} className="p-6 text-center text-gray-500">
                         No users found.
                       </td>
                     </tr>
                   ) : (
-                    (data?.items ?? []).map((row) => (
+                    (data?.items ?? []).slice(0, pageSize).map((row) => (
                       <tr
                         key={row.legacyUserId}
                         className={`border-t hover:bg-[#f9f4db] cursor-pointer ${
-                          selectedUserId === row.legacyUserId ? 'bg-[#f9f4db]' : ''
+                          selectedUserId === row.legacyUserId ? 'bg-[#ffe566]' : ''
                         }`}
                         onClick={() => setSelectedUserId(row.legacyUserId)}
                       >
-                        <td className="p-2 font-medium">{row.username}</td>
+                        <td className="p-2 font-medium">
+                          <PromocodePersonMark
+                            label={row.username}
+                            email={row.email}
+                            image={row.image}
+                            logoUrl={row.logoUrl}
+                            roleId={row.roleId}
+                            countryCode={row.countryCode}
+                            countryName={row.country}
+                            flagImage={row.flagImage}
+                            registered
+                          />
+                        </td>
                         <td className="p-2">{row.wholeName}</td>
                         <td className="p-2">{row.country ?? ''}</td>
                         <td className="p-2">
-                          <PromocodeAssetImage
-                            src={promocodeFlagImageUrl(row.flagImage, {
-                              countryCode: row.countryCode,
-                            })}
-                            fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
-                            countryCode={row.countryCode}
-                            className="h-6"
-                          />
+                          <span title={row.country ?? row.countryCode ?? ''}>
+                            <PromocodeAssetImage
+                              src={promocodeFlagImageUrl(row.flagImage, {
+                                countryCode: row.countryCode,
+                              })}
+                              fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
+                              countryCode={row.countryCode}
+                              alt={row.country ?? ''}
+                              className="h-6"
+                            />
+                          </span>
                         </td>
                         <td className="p-2">{row.userType}</td>
                         <td className="p-2">{row.version ?? ''}</td>
@@ -235,7 +253,7 @@ export default function PromocodeUsersPage() {
                         <td className="p-2 text-center">{row.promocodesGenerated}</td>
                         <td className="p-2 text-center">{row.creditsEarned.toFixed(2)}</td>
                         <td className="p-2 text-center">{row.creditsUsed.toFixed(2)}</td>
-                        <td className="p-2 text-center">{row.creditsRemain.toFixed(2)}</td>
+                        <td className="p-2 text-center">{Math.min(row.creditsEarned, row.creditsRemain).toFixed(2)}</td>
                         <td className="p-2">
                           {row.lastInviteDate?.slice(0, 10) ?? ''}
                           {row.daysSinceLastInvite != null ? (
@@ -300,16 +318,22 @@ export default function PromocodeUsersPage() {
                       Total connected registrations:{' '}
                       <strong>{detail?.totals.connectedRegistrations ?? 0}</strong>
                       {' — '}credits earned{' '}
-                      <strong>{(detail?.totals.creditsEarned ?? 0).toFixed(2)}</strong>
-                      {' — '}used <strong>{selectedUser?.creditsUsed.toFixed(2) ?? '0.00'}</strong>
+                      <strong>{(selectedUser?.creditsEarned ?? detail?.totals.creditsEarned ?? 0).toFixed(2)}</strong>
+                      {' — '}used <strong>{(selectedUser?.creditsUsed ?? 0).toFixed(2)}</strong>
                       {' — '}available{' '}
-                      <strong>{selectedUser?.creditsRemain.toFixed(2) ?? '0.00'}</strong>
+                      <strong>
+                        {Math.min(
+                          selectedUser?.creditsEarned ?? detail?.totals.creditsEarned ?? 0,
+                          selectedUser?.creditsRemain ?? detail?.totals.creditsEarned ?? 0
+                        ).toFixed(2)}
+                      </strong>
                     </p>
                   </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-[#3d3d3d] text-white text-left">
                         <th className="p-2">Sender</th>
+                        <th className="p-2">Relation</th>
                         <th className="p-2">Mail / Username</th>
                         <th className="p-2">Promocode</th>
                         <th className="p-2">Date mail</th>
@@ -323,15 +347,43 @@ export default function PromocodeUsersPage() {
                     <tbody>
                       {(detail?.invites ?? []).length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="p-4 text-gray-500">
+                          <td colSpan={10} className="p-4 text-gray-500">
                             No invites.
                           </td>
                         </tr>
                       ) : (
-                        (detail?.invites ?? []).map((row, idx) => (
+                        (detail?.invites ?? [])
+                          .slice((detailPage - 1) * pageSize, detailPage * pageSize)
+                          .map((row, idx) => {
+                          const registered = Number(row.receiver_id ?? 0) > 0;
+                          const senderName = String(row.sender_username || row.sender_email || '');
+                          const receiverName = registered
+                            ? String(row.receiver_username || row.receiver_email || '')
+                            : String(row.receiver_email || '');
+                          const direct = Number(row.sender_id ?? 0) === selectedUserId;
+                          return (
                           <tr key={idx} className="border-t">
-                            <td className="p-2">{String(row.sender_email ?? selectedUser?.username ?? '')}</td>
-                            <td className="p-2">{String(row.receiver_email ?? '')}</td>
+                            <td className="p-2">
+                              <PromocodePersonMark
+                                label={senderName}
+                                email={String(row.sender_email ?? '')}
+                                image={row.sender_image != null ? String(row.sender_image) : null}
+                                logoUrl={row.sender_logo != null ? String(row.sender_logo) : null}
+                                roleId={row.sender_role_id != null ? Number(row.sender_role_id) : null}
+                                registered={Boolean(row.sender_username)}
+                              />
+                            </td>
+                            <td className="p-2">{direct ? 'Direct' : 'Indirect'}</td>
+                            <td className="p-2">
+                              <PromocodePersonMark
+                                label={receiverName}
+                                email={String(row.receiver_email ?? '')}
+                                image={row.receiver_image != null ? String(row.receiver_image) : null}
+                                logoUrl={row.receiver_logo != null ? String(row.receiver_logo) : null}
+                                roleId={row.receiver_role_id != null ? Number(row.receiver_role_id) : null}
+                                registered={registered}
+                              />
+                            </td>
                             <td className="p-2">{String(row.promocode_code ?? row.promocode_id ?? '')}</td>
                             <td className="p-2">{String(row.created ?? '').slice(0, 10)}</td>
                             <td className="p-2">{Number(row.receiver_id ?? 0) > 0 ? 'Yes' : 'No'}</td>
@@ -344,7 +396,8 @@ export default function PromocodeUsersPage() {
                             <td className="p-2">{String(row.cost_paid ?? row.total_payment ?? '--')}</td>
                             <td className="p-2">{String(row.sender_credit ?? '')}</td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -390,18 +443,38 @@ export default function PromocodeUsersPage() {
                             ...row,
                             _role: 'secondary' as const,
                           })),
-                        ].map((row, idx) => (
+                        ].map((raw, idx) => {
+                          const row = raw as Record<string, unknown> & { _role: 'receiver' | 'sender' | 'secondary' };
+                          return (
                           <tr key={idx} className="border-t">
-                            <td className="p-2">{String(row.sender_email ?? '')}</td>
+                            <td className="p-2">
+                              <PromocodePersonMark
+                                label={String(row.sender_username || row.sender_email || '')}
+                                email={String(row.sender_email ?? '')}
+                                image={row.sender_image != null ? String(row.sender_image) : null}
+                                logoUrl={row.sender_logo != null ? String(row.sender_logo) : null}
+                                roleId={row.sender_role_id != null ? Number(row.sender_role_id) : null}
+                                registered={Boolean(row.sender_username)}
+                              />
+                            </td>
                             <td className="p-2">
                               {row._role === 'receiver'
                                 ? '-'
                                 : String(row.secondary_sender_username ?? '')}
                             </td>
                             <td className="p-2">
-                              {row._role === 'receiver'
-                                ? selectedUser?.username ?? String(row.receiver_email ?? '')
-                                : String(row.receiver_email ?? '')}
+                              <PromocodePersonMark
+                                label={
+                                  row._role === 'receiver'
+                                    ? selectedUser?.username ?? String(row.receiver_username || row.receiver_email || '')
+                                    : String(row.receiver_username || row.receiver_email || '')
+                                }
+                                email={String(row.receiver_email ?? '')}
+                                image={row.receiver_image != null ? String(row.receiver_image) : null}
+                                logoUrl={row.receiver_logo != null ? String(row.receiver_logo) : null}
+                                roleId={row.receiver_role_id != null ? Number(row.receiver_role_id) : null}
+                                registered={Number(row.receiver_id ?? 0) > 0 || row._role === 'receiver'}
+                              />
                             </td>
                             <td className="p-2">{String(row.receiver_version ?? '')}</td>
                             <td className="p-2">
@@ -422,14 +495,15 @@ export default function PromocodeUsersPage() {
                               )}
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
                 </div>
               )}
               {detailTab === 'connections' && selectedUser && (
-                <div className="text-sm space-y-3">
+                <div className="text-sm space-y-3 max-h-[420px] overflow-y-auto pr-2">
                   <p>
                     Credits earned: <strong>{selectedUser.creditsEarned.toFixed(2)}</strong>
                     {' · '}used <strong>0.00</strong>
@@ -459,8 +533,15 @@ export default function PromocodeUsersPage() {
                       <p>No direct recipients registered yet.</p>
                     ) : (
                       (detail?.connections?.direct ?? []).map((d, i) => (
-                        <p key={i}>
-                          {d.username} — {d.credits.toFixed(2)}
+                        <p key={i} className="flex items-center gap-2">
+                          <PromocodePersonMark
+                            label={d.username}
+                            image={d.image}
+                            logoUrl={d.logoUrl}
+                            roleId={d.roleId}
+                            registered
+                          />
+                          <span>— {d.credits.toFixed(2)}</span>
                         </p>
                       ))
                     )}
@@ -471,8 +552,15 @@ export default function PromocodeUsersPage() {
                       <p>No indirect secondary recipients registered yet.</p>
                     ) : (
                       (detail?.connections?.indirect ?? []).map((d, i) => (
-                        <p key={i}>
-                          {d.username} — {d.credits.toFixed(2)} (by {d.senderUsername})
+                        <p key={i} className="flex items-center gap-2">
+                          <PromocodePersonMark
+                            label={d.username}
+                            image={d.image}
+                            logoUrl={d.logoUrl}
+                            roleId={d.roleId}
+                            registered
+                          />
+                          <span>— {d.credits.toFixed(2)} (by {d.senderUsername})</span>
                         </p>
                       ))
                     )}

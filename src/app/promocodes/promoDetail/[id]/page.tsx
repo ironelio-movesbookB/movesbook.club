@@ -18,6 +18,7 @@ export default function PromocodeDetailPage() {
   const [setting, setSetting] = useState<PromocodeSettingRow | null>(null);
   const [data, setData] = useState<PaginatedResult<PromocodeApplyRow> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
@@ -54,7 +55,14 @@ export default function PromocodeDetailPage() {
       setSetting(settingJson.setting ?? null);
 
       const appliesRes = await promocodesFetch(`/api/admin/promocodes/applies?${appliesParams}`);
-      setData(await appliesRes.json());
+      const appliesJson = await appliesRes.json();
+      if (!appliesRes.ok || !Array.isArray(appliesJson.items)) {
+        setLoadError(appliesJson.error || 'The recipient records could not be loaded.');
+        setData({ items: [], total: 0, page: 1, pageSize });
+      } else {
+        setLoadError('');
+        setData(appliesJson);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -145,6 +153,7 @@ export default function PromocodeDetailPage() {
         <PromocodesPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
+      {loadError ? <div className="py-4 text-center text-red-700">{loadError}</div> : null}
       {loading ? (
         <div className="py-12 text-center text-gray-500">Loading…</div>
       ) : (

@@ -3,10 +3,12 @@
 import {
   promocodeRecipientLabel,
   promocodeSecondarySenderLabel,
+  promocodeSenderEmail,
   promocodeSenderLabel,
 } from '@/lib/promocodes/promocodeApplyDisplay';
 import { formatPromocodeDisplayDate } from '@/lib/promocodes/formatPromocodeDate';
 import PromocodeAssetImage from './PromocodeAssetImage';
+import { PromocodePersonMark } from './PromocodePersonMark';
 import { PROMOCODE_NO_FLAG_IMAGE, promocodeFlagImageUrl } from './promocodeImageUrls';
 
 type Props = {
@@ -74,6 +76,67 @@ function recipientLabel(row: import('@/lib/promocodes/types').PromocodeApplyRow)
   className: string;
 } {
   return promocodeRecipientLabel(row);
+}
+
+function senderMark(
+  row: import('@/lib/promocodes/types').PromocodeApplyRow,
+  onClick?: (name: string) => void
+) {
+  return (
+    <PromocodePersonMark
+      label={promocodeSenderLabel(row)}
+      email={promocodeSenderEmail(row)}
+      image={row.sender?.image}
+      logoUrl={row.sender?.logoUrl}
+      roleId={row.sender?.roleId}
+      countryCode={row.senderCountryCode}
+      countryName={row.senderCountryName}
+      flagImage={row.senderFlagImage}
+      registered={Boolean(row.sender)}
+      onClick={onClick}
+    />
+  );
+}
+
+function recipientMark(
+  row: import('@/lib/promocodes/types').PromocodeApplyRow,
+  onClick?: (name: string) => void
+) {
+  const recipient = promocodeRecipientLabel(row);
+  return (
+    <PromocodePersonMark
+      label={recipient.text}
+      email={row.receiver?.email || row.receiverEmail}
+      image={row.receiver?.image}
+      logoUrl={row.receiver?.logoUrl}
+      roleId={row.receiver?.roleId}
+      countryCode={row.receiverCountryCode}
+      countryName={row.receiverCountryName}
+      flagImage={row.flagImage}
+      registered={Boolean(row.receiverId && row.receiverId > 0)}
+      onClick={onClick}
+    />
+  );
+}
+
+function secondaryMark(
+  row: import('@/lib/promocodes/types').PromocodeApplyRow,
+  onClick?: (name: string) => void
+) {
+  return (
+    <PromocodePersonMark
+      label={promocodeSecondarySenderLabel(row)}
+      email={row.secondarySender?.email}
+      image={row.secondarySender?.image}
+      logoUrl={row.secondarySender?.logoUrl}
+      roleId={row.secondarySender?.roleId}
+      countryCode={row.secondaryCountryCode}
+      countryName={row.secondaryCountryName}
+      flagImage={row.secondaryFlagImage}
+      registered={Boolean(row.secondarySender)}
+      onClick={onClick}
+    />
+  );
 }
 
 function clickableName(
@@ -194,7 +257,7 @@ export function PromocodeAppliesTable({
                 key={row.id}
                 onClick={() => onSelect?.(row.id)}
                 className={`border-t border-gray-200 hover:bg-[#f9f4db] cursor-pointer ${
-                  selectedId === row.id ? 'bg-[#f9f4db]' : ''
+                  selectedId === row.id ? 'bg-[#ffe566]' : ''
                 }`}
               >
                 {variant === 'promoAll' && (
@@ -202,9 +265,9 @@ export function PromocodeAppliesTable({
                     <td className="p-2">{date}</td>
                     <td className="p-2 text-[#7b0a26]">{row.promocodeCode}</td>
                     <td className="p-2 text-center">{row.inviteMode || 'Mail'}</td>
-                    <td className="p-2 text-center">{clickableName(sender, onSenderClick)}</td>
+                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
                     <td className="p-2 text-center">{row.senderCredit ?? '00'}</td>
-                    <td className="p-2 text-center">{clickableName(secondary, onSecondaryClick)}</td>
+                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
                     <td className="p-2 text-center">{row.secondarySenderCredit ?? '00'}</td>
                     <td className="p-2 text-center">
                       <PromocodeAssetImage
@@ -215,7 +278,7 @@ export function PromocodeAppliesTable({
                       />
                     </td>
                     <td className={`p-2 ${recipient.className}`}>
-                      {clickableName(recipient.text, onRecipientClick)}
+                      {recipientMark(row, onRecipientClick)}
                     </td>
                     <td className="p-2 text-center">{row.receiverCredit ?? '00'}</td>
                     <td className="p-2 text-center">{row.receiverVersion}</td>
@@ -226,9 +289,9 @@ export function PromocodeAppliesTable({
                 {variant === 'detail' && (
                   <>
                     <td className="p-2">{date}</td>
-                    <td className="p-2 text-center">{clickableName(sender, onSenderClick)}</td>
+                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
                     <td className="p-2 text-center">{row.senderCredit}</td>
-                    <td className="p-2 text-center">{clickableName(secondary, onSecondaryClick)}</td>
+                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
                     <td className="p-2 text-center">{row.secondarySenderCredit}</td>
                     <td className="p-2 text-center">
                       <PromocodeAssetImage
@@ -239,7 +302,7 @@ export function PromocodeAppliesTable({
                       />
                     </td>
                     <td className={`p-2 ${recipient.className}`}>
-                      {clickableName(recipient.text, onRecipientClick)}
+                      {recipientMark(row, onRecipientClick)}
                     </td>
                     <td className="p-2 text-center">{row.receiverCredit}</td>
                     <td className="p-2 text-center">{row.receiverVersion}</td>
@@ -258,14 +321,14 @@ export function PromocodeAppliesTable({
                       />
                     </td>
                     <td className={`p-2 ${recipient.className}`}>
-                      {clickableName(recipient.text, onRecipientClick)}
+                      {recipientMark(row, onRecipientClick)}
                     </td>
                     <td className="p-2 text-center">{row.receiverVersion}</td>
                     <td className="p-2 text-center">{dataStart}</td>
                     <td className="p-2 text-center">{dataEnd}</td>
                     <td className="p-2 text-[#7b0a26]">{row.promocodeCode}</td>
-                    <td className="p-2 text-center">{clickableName(sender, onSenderClick)}</td>
-                    <td className="p-2 text-center">{clickableName(secondary, onSecondaryClick)}</td>
+                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
+                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
                     <td className="p-2 text-center">{date}</td>
                     <td className="p-2 text-center">{status}</td>
                     <td className="p-2 text-center">{row.receiverCredit ?? '00'}</td>

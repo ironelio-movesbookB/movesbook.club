@@ -174,23 +174,26 @@
   padding: 15px;
   background: #cac8c9;
   color: #70020b;
-  font-weight: bold;
-  font-size: 20px;
+  font-weight: normal;
+  font-size: 19px;
 }
 
 .notification-promocode-page .connection-earn-banner {
   padding: 10px;
   margin: 10px;
   border: 2px solid red;
-  font-size: 19px;
+  font-size: 18px;
+  font-weight: normal;
   color: #651b3c;
 }
 
 .notification-promocode-page .connection-list {
   background: #effbcd;
   color: #77203c;
-  font-weight: bold;
+  font-weight: normal;
   padding: 10px;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .notification-promocode-page .connection-columns {

@@ -232,3 +232,31 @@ export async function saveInviteOtherInfoAndAdvPageToUserSettings(
     senderLegacyUserId
   );
 }
+
+export async function loadSenderIntroMessage(legacyUserId: number): Promise<string> {
+  const usersTable = await getLegacyUsersTable();
+  if (!usersTable || legacyUserId <= 0) return '';
+  const columns = await getTableColumns(usersTable);
+  if (!columns.has('promocode_intro')) return '';
+  const rows = await prisma.$queryRawUnsafe<{ promocode_intro: string | null }[]>(
+    `SELECT promocode_intro FROM \`${usersTable}\` WHERE id = ? LIMIT 1`,
+    legacyUserId
+  ).catch(() => [] as { promocode_intro: string | null }[]);
+  return rows[0]?.promocode_intro ? String(rows[0].promocode_intro) : '';
+}
+
+export async function saveSenderIntroMessage(legacyUserId: number, intro: string): Promise<void> {
+  const usersTable = await getLegacyUsersTable();
+  if (!usersTable || legacyUserId <= 0) return;
+  const columns = await getTableColumns(usersTable);
+  if (!columns.has('promocode_intro')) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE \`${usersTable}\` ADD COLUMN promocode_intro TEXT NULL`
+    );
+  }
+  await prisma.$executeRawUnsafe(
+    `UPDATE \`${usersTable}\` SET promocode_intro = ? WHERE id = ?`,
+    intro,
+    legacyUserId
+  );
+}

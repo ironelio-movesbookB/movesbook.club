@@ -46,6 +46,8 @@ import {
   ensureRegistrationPaymentTables,
 } from '@/lib/registration/registrationPayments';
 import { incrementRegistrationStat } from '@/lib/promocodes/promocodeMonthlyStatsService';
+import { languageIdForLegacyUser } from '@/lib/promocodes/promocodeSenderLanguage';
+import { legacyLanguageCodeFromId } from '@/lib/promocodes/legacyLanguageCode';
 
 export { QUICK_REGISTER_SUCCESS_MESSAGE, type RegistrationStatus };
 
@@ -966,21 +968,105 @@ async function createQuickRegisterPayment(
   );
 }
 
+const WELCOME_MAIL: Record<string, { subject: string; welcome: string; created: string; username: string; password: string; visit: string; confirm: string; button: string }> = {
+  en: {
+    subject: 'Welcome to Movesbook',
+    welcome: 'Welcome to Movesbook',
+    created: 'Your account has been created successfully.',
+    username: 'Username',
+    password: 'Password',
+    visit: 'Visit Movesbook at',
+    confirm: 'Please click on the link below within 7 days to confirm your email address and Movesbook account.',
+    button: 'CONFIRM MY ACCOUNT',
+  },
+  it: {
+    subject: 'Benvenuto su Movesbook',
+    welcome: 'Benvenuto su Movesbook',
+    created: 'Il tuo account è stato creato correttamente.',
+    username: 'Nome utente',
+    password: 'Password',
+    visit: 'Visita Movesbook su',
+    confirm: 'Clicca il link qui sotto entro 7 giorni per confermare il tuo indirizzo email e l\'account Movesbook.',
+    button: 'CONFERMA IL MIO ACCOUNT',
+  },
+  fr: {
+    subject: 'Bienvenue sur Movesbook',
+    welcome: 'Bienvenue sur Movesbook',
+    created: 'Votre compte a été créé avec succès.',
+    username: 'Nom d\'utilisateur',
+    password: 'Mot de passe',
+    visit: 'Visitez Movesbook sur',
+    confirm: 'Cliquez sur le lien ci-dessous dans les 7 jours pour confirmer votre adresse e-mail et votre compte Movesbook.',
+    button: 'CONFIRMER MON COMPTE',
+  },
+  de: {
+    subject: 'Willkommen bei Movesbook',
+    welcome: 'Willkommen bei Movesbook',
+    created: 'Ihr Konto wurde erfolgreich erstellt.',
+    username: 'Benutzername',
+    password: 'Passwort',
+    visit: 'Besuchen Sie Movesbook unter',
+    confirm: 'Bitte klicken Sie innerhalb von 7 Tagen auf den Link unten, um Ihre E-Mail-Adresse und Ihr Movesbook-Konto zu bestätigen.',
+    button: 'MEIN KONTO BESTÄTIGEN',
+  },
+  es: {
+    subject: 'Bienvenido a Movesbook',
+    welcome: 'Bienvenido a Movesbook',
+    created: 'Tu cuenta se ha creado correctamente.',
+    username: 'Nombre de usuario',
+    password: 'Contraseña',
+    visit: 'Visita Movesbook en',
+    confirm: 'Haz clic en el enlace de abajo dentro de 7 días para confirmar tu correo y tu cuenta de Movesbook.',
+    button: 'CONFIRMAR MI CUENTA',
+  },
+};
+
+function welcomeMailCopy(language: string) {
+  const code = language.trim().toLowerCase().slice(0, 2);
+  return WELCOME_MAIL[code] ?? WELCOME_MAIL.en;
+}
+
+async function welcomeLanguageCode(payload: QuickRegisterPayload): Promise<string> {
+  if (payload.invite_by_movesbook && payload.promocode?.trim()) {
+    const settingsTable = await getPromocodeSettingsTable();
+    if (settingsTable) {
+      const rows = await prisma.$queryRawUnsafe<{ language_id: unknown }[]>(
+        `SELECT language_id FROM \`${settingsTable}\` WHERE LOWER(code) = LOWER(?) AND delete_status = 2 LIMIT 1`,
+        payload.promocode.trim()
+      ).catch(() => [] as { language_id: unknown }[]);
+      if (rows[0]?.language_id != null && String(rows[0].language_id).trim()) {
+        return legacyLanguageCodeFromId(String(rows[0].language_id));
+      }
+    }
+  }
+  const inviter = payload.inviter_username?.trim();
+  if (inviter) {
+    const user = await fetchLegacyUserByUsername(inviter);
+    if (user?.id) {
+      const languageId = await languageIdForLegacyUser(user.id);
+      if (languageId) return legacyLanguageCodeFromId(languageId);
+    }
+  }
+  return (payload.language || 'en').slice(0, 2).toLowerCase();
+}
+
 function buildQuickRegisterConfirmationHtml(params: {
   username: string;
   password: string;
   siteUrl: string;
   confirmationUrl: string;
+  language: string;
 }): string {
+  const copy = welcomeMailCopy(params.language);
   const siteLink = escapeHtml(params.siteUrl.replace(/\/$/, ''));
   return `
-<p>Welcome to Movesbook ${escapeHtml(params.username)}!</p>
-<p>Your account has been created successfully.</p>
-<p><strong>Username:</strong> ${escapeHtml(params.username)}</p>
-<p><strong>Password:</strong> ${escapeHtml(params.password)}</p>
-<p>Visit Movesbook at <a href="${siteLink}">${siteLink}</a></p>
-<p>Please click on the link below within 7 days to confirm your email address and Movesbook account.</p>
-<p><a href="${escapeHtml(params.confirmationUrl)}">CONFIRM MY ACCOUNT</a></p>`;
+<p>${copy.welcome} ${escapeHtml(params.username)}!</p>
+<p>${copy.created}</p>
+<p><strong>${copy.username}:</strong> ${escapeHtml(params.username)}</p>
+<p><strong>${copy.password}:</strong> ${escapeHtml(params.password)}</p>
+<p>${copy.visit} <a href="${siteLink}">${siteLink}</a></p>
+<p>${copy.confirm}</p>
+<p><a href="${escapeHtml(params.confirmationUrl)}">${copy.button}</a></p>`;
 }
 
 function escapeHtml(value: string): string {
@@ -998,21 +1084,25 @@ async function sendQuickRegisterConfirmationEmail(params: {
   email: string;
   password: string;
   origin?: string;
+  language?: string;
 }): Promise<void> {
   const origin = coercePublicOrigin(params.origin);
   const siteUrl = origin.replace(/\/$/, '') || getSiteOrigin();
   const userToken = Buffer.from(String(params.userId), 'utf8').toString('base64');
   const roleToken = Buffer.from(String(params.roleId), 'utf8').toString('base64');
   const confirmationUrl = `${siteUrl}/confirm_register_link/${encodeURIComponent(userToken)}/${encodeURIComponent(roleToken)}`;
+  const language = params.language || 'en';
+  const copy = welcomeMailCopy(language);
 
   await sendIonosEmail({
     to: params.email,
-    subject: 'Welcome to Movesbook',
+    subject: copy.subject,
     html: buildQuickRegisterConfirmationHtml({
       username: params.username,
       password: params.password,
       siteUrl,
       confirmationUrl,
+      language,
     }),
   });
 }
@@ -1111,6 +1201,7 @@ async function completeAlreadyRegisteredPromocodeRetry(params: {
       email: params.payload.email.trim(),
       password: params.payload.password,
       origin: params.payload.origin,
+      language: await welcomeLanguageCode(params.payload),
     });
   } catch (err) {
     console.error('quickRegister confirmation email:', err);
@@ -1788,6 +1879,7 @@ export async function quickRegisterUser(
       email: payload.email.trim(),
       password: payload.password,
       origin: payload.origin,
+      language: await welcomeLanguageCode(payload),
     });
   } catch (err) {
     console.error('quickRegister confirmation email:', err);
