@@ -24,16 +24,18 @@ export function isApplyRegistrationComplete(row: {
   isRegistered?: string | number | null;
   registrationDate?: string | null;
 }): boolean {
-  if (!row.receiverId || row.receiverId <= 0) return false;
+  if (row.receiverId != null && row.receiverId > 0) return true;
   if (row.isRegistered === 1 || row.isRegistered === '1') return true;
   return Boolean(row.registrationDate?.trim());
 }
 
 export function promocodeSenderLabel(row: PromocodeApplyRow): string {
-  if (row.sender && userExistedAtApplyTime(row.sender, row.created)) {
-    return row.sender.username ?? '';
-  }
+  if (row.sender?.username) return row.sender.username;
   return row.senderEmail ?? '';
+}
+
+export function promocodeSenderEmail(row: PromocodeApplyRow): string {
+  return row.sender?.email || row.senderEmail || '';
 }
 
 export function promocodeSecondarySenderLabel(row: PromocodeApplyRow): string {

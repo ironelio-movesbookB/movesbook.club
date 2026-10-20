@@ -24,7 +24,13 @@ import {
 import { buildPromocodeSettingsSelectSql } from '@/lib/promocodes/promocodeSettingsQuery';
 import { loadPromocodeInviteLanguageParagraph } from '@/lib/promocodes/promocodeInviteLanguage';
 import { getChildPromoRights, resolveInviteExpiryDate, userOwnsOrReceivedPromocode, type ChildPromoRights } from '@/lib/promocodes/childPromocode';
+import { loadSenderIntroMessage } from '@/lib/promocodes/promocodeInviteLinks';
+import { attachEntityLogos } from '@/lib/promocodes/promocodeAvatars';
 import { incrementInviteStat } from '@/lib/promocodes/promocodeMonthlyStatsService';
+import {
+  isMovesbookLegacyUser,
+  languageIdForLegacyUser,
+} from '@/lib/promocodes/promocodeSenderLanguage';
 
 const ROLE_NAMES: Record<number, string> = {
   1: 'Super Admin',
@@ -141,6 +147,9 @@ export type ConnectionChartData = {
     roleName: string;
     credits: number;
     receiverId: number;
+    image?: string | null;
+    logoUrl?: string | null;
+    roleId?: number | null;
   }>;
   indirectRecipients: Array<{
     username: string;
@@ -148,6 +157,9 @@ export type ConnectionChartData = {
     credits: number;
     senderUsername: string;
     senderRoleName: string;
+    image?: string | null;
+    logoUrl?: string | null;
+    roleId?: number | null;
   }>;
 };
 
@@ -174,6 +186,7 @@ export type NotificationByPromocodeDashboard = {
   subscriptionsData: Record<number, string>;
   childPromo: ChildPromoRights;
   generatedPromocodes: PromocodeOption[];
+  savedIntro: string;
 };
 
 type ApplyRow = Record<string, unknown>;
@@ -1071,11 +1084,16 @@ export async function getNotificationByPromocodeDashboard(params: {
         receiverId
       );
       const rid = roleRows[0]?.role_id != null ? Number(roleRows[0].role_id) : null;
+      const directUsers = new Map([[receiverId, ru]]);
+      await attachEntityLogos(directUsers);
       directRecipients.push({
         username: ru.username ?? '',
         roleName: rid != null ? ROLE_NAMES[rid] ?? '' : '',
         credits: rowNum(row, 'sender_credit'),
         receiverId,
+        image: ru.image,
+        logoUrl: ru.logoUrl ?? null,
+        roleId: rid,
       });
     }
 
@@ -1119,12 +1137,17 @@ export async function getNotificationByPromocodeDashboard(params: {
           receiverVersionName: rowStr(row, 'receiver_version'),
         });
 
+        const indirectUsers = new Map([[receiverId, ru]]);
+        await attachEntityLogos(indirectUsers);
         indirectRecipients.push({
           username: ru.username ?? '',
           roleName: receiverRoleId != null ? ROLE_NAMES[receiverRoleId] ?? '' : '',
           credits: secondaryCredit,
           senderUsername: su.username ?? '',
           senderRoleName: senderRoleId != null ? ROLE_NAMES[senderRoleId] ?? '' : '',
+          image: ru.image,
+          logoUrl: ru.logoUrl ?? null,
+          roleId: receiverRoleId,
         });
       }
     }
@@ -1173,6 +1196,7 @@ export async function getNotificationByPromocodeDashboard(params: {
     subscriptionsData,
     childPromo,
     generatedPromocodes,
+    savedIntro: await loadSenderIntroMessage(legacyUserId),
   };
 }
 
@@ -1275,7 +1299,11 @@ export async function sendNotificationByPromocodeInvite(params: {
   const otherInfo = rowStr(receivedInvite[0], 'other_info');
   const advPage = rowStr(receivedInvite[0], 'adv_page');
 
-  const languageId = rowNum(promocode, 'language_id') || 1;
+  let languageId = rowNum(promocode, 'language_id') || 1;
+  if (!(await isMovesbookLegacyUser(params.legacyUserId))) {
+    const senderLanguageId = await languageIdForLegacyUser(params.legacyUserId);
+    if (senderLanguageId) languageId = Number(senderLanguageId);
+  }
   const langColumn = await resolveLanguageColumn(languageId);
   const inviteMessageParagraph = await loadPromocodeInviteLanguageParagraph(String(languageId));
   const helpHtmlPageId = rowStr(promocode, 'help_html_page_id');

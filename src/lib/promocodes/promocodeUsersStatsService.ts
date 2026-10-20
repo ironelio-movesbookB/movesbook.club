@@ -10,6 +10,7 @@ import {
   getSubscriptionSettingsTable,
 } from './legacyDb';
 import { fetchModernUserCountries, findModernUserCountry } from './modernUserCountry';
+import { attachEntityLogos } from './promocodeAvatars';
 import type { PaginatedResult, PromocodeUserRow } from './types';
 
 function formatDate(value: unknown): string | null {
@@ -45,6 +46,58 @@ const ROLE_NAMES: Record<number, string> = {
 function daysBetween(from: Date, to: Date): number {
   const ms = to.getTime() - from.getTime();
   return Math.max(0, Math.floor(ms / (24 * 60 * 60 * 1000)));
+}
+
+function blankDate(value: unknown): string {
+  if (value == null) return '';
+  const text = String(value).trim();
+  if (!text || text === 'null' || text.startsWith('0000-00-00')) return '';
+  return text;
+}
+
+/** Registered people are usernames; dates and cost come from the apply row or the user subscription. */
+async function annotateRegisteredPeople(
+  rows: Record<string, unknown>[]
+): Promise<Record<string, unknown>[]> {
+  if (rows.length === 0) return rows;
+  const ids = new Set<number>();
+  for (const row of rows) {
+    const senderId = Number(row.sender_id ?? 0);
+    const receiverId = Number(row.receiver_id ?? 0);
+    if (senderId > 0) ids.add(senderId);
+    if (receiverId > 0) ids.add(receiverId);
+  }
+  const users = await fetchLegacyUsersByIds(Array.from(ids));
+  await attachEntityLogos(users);
+  return rows.map((row) => {
+    const sender = users.get(Number(row.sender_id ?? 0));
+    const receiverId = Number(row.receiver_id ?? 0);
+    const receiver = receiverId > 0 ? users.get(receiverId) : undefined;
+    const registered = Boolean(receiver);
+    return {
+      ...row,
+      sender_username: sender?.username ?? '',
+      sender_email: sender?.email || row.sender_email || '',
+      sender_image: sender?.image ?? '',
+      sender_logo: sender?.logoUrl ?? '',
+      sender_role_id: sender?.roleId ?? null,
+      receiver_username: registered ? receiver?.username ?? '' : '',
+      receiver_email: receiver?.email || row.receiver_email || '',
+      receiver_image: receiver?.image ?? '',
+      receiver_logo: receiver?.logoUrl ?? '',
+      receiver_role_id: receiver?.roleId ?? null,
+      registration_date:
+        blankDate(row.registration_date) ||
+        (registered ? receiver?.subscriptionStartDate ?? '' : ''),
+      subscription_start_date:
+        blankDate(row.subscription_start_date) ||
+        (registered ? receiver?.subscriptionStartDate ?? '' : ''),
+      subscription_end_date:
+        blankDate(row.subscription_end_date) ||
+        (registered ? receiver?.subscriptionEndDate ?? '' : ''),
+      cost_paid: blankDate(row.cost_paid) || blankDate(row.total_payment),
+    };
+  });
 }
 
 function creditOf(row: Record<string, unknown>, key: string): number {
@@ -181,6 +234,7 @@ export async function listUsersOfPromocodes(params: {
   const offset = (page - 1) * pageSize;
   const pageIds = receiverIds.slice(offset, offset + pageSize);
   const users = await fetchLegacyUsersByIds(pageIds);
+  await attachEntityLogos(users);
 
   const modernCountries = await fetchModernUserCountries(
     pageIds.map((id) => {
@@ -377,7 +431,7 @@ export async function listUsersOfPromocodes(params: {
     items.push({
       legacyUserId: id,
       username: user.username ?? '',
-      wholeName: [user.firstname, user.lastname].filter(Boolean).join(' ').trim() || (user.username ?? ''),
+      wholeName: user.firstname?.trim() || (user.username ?? ''),
       country: modern?.country ?? countryCode,
       countryCode,
       flagImage,
@@ -393,6 +447,10 @@ export async function listUsersOfPromocodes(params: {
       daysSinceLastInvite,
       lastRegistrationDate,
       daysSinceLastRegistration,
+      email: user.email,
+      image: user.image,
+      logoUrl: user.logoUrl ?? null,
+      roleId: user.roleId ?? null,
     });
   }
 
@@ -485,8 +543,10 @@ export async function listInvitesAndRegistrationsForUser(legacyUserId: number) {
       )
     ).reduce((sum, n) => sum + n, 0);
 
+  const annotatedInvites = await annotateRegisteredPeople([...invites, ...friendInvites]);
+
   return {
-    invites: [...invites, ...friendInvites],
+    invites: annotatedInvites,
     registrations,
     friendInvites,
     friendRegistrations,
@@ -561,15 +621,29 @@ export async function listConnectionChartForUser(legacyUserId: number) {
     directCreditById.set(id, Number(row.sender_credit ?? 0) || 0);
   }
   const directUsers = await fetchLegacyUsersByIds(directIds);
+  await attachEntityLogos(directUsers);
   const direct = directIds
     .map((id) => {
       const u = directUsers.get(id);
       if (!u) return null;
-      return { username: u.username ?? '', credits: directCreditById.get(id) ?? 0 };
+      return {
+        username: u.username ?? '',
+        credits: directCreditById.get(id) ?? 0,
+        image: u.image,
+        logoUrl: u.logoUrl ?? null,
+        roleId: u.roleId ?? null,
+      };
     })
-    .filter((v): v is { username: string; credits: number } => v != null);
+    .filter((v): v is { username: string; credits: number; image: string | null; logoUrl: string | null; roleId: number | null } => v != null);
 
-  let indirect: { username: string; credits: number; senderUsername: string }[] = [];
+  let indirect: {
+    username: string;
+    credits: number;
+    senderUsername: string;
+    image?: string | null;
+    logoUrl?: string | null;
+    roleId?: number | null;
+  }[] = [];
   if (directIds.length > 0) {
     const placeholders = directIds.map(() => '?').join(',');
     const indirectRows = await prisma.$queryRawUnsafe<
@@ -594,6 +668,7 @@ export async function listConnectionChartForUser(legacyUserId: number) {
       )
     );
     const people = await fetchLegacyUsersByIds(allIds);
+    await attachEntityLogos(people);
     for (const row of indirectRows) {
       const receiverId = Number(row.receiver_id);
       const senderId = Number(row.sender_id);
@@ -612,6 +687,9 @@ export async function listConnectionChartForUser(legacyUserId: number) {
         username: ru.username ?? '',
         credits,
         senderUsername: su.username ?? '',
+        image: ru.image,
+        logoUrl: ru.logoUrl ?? null,
+        roleId: ru.roleId ?? null,
       });
     }
   }
@@ -671,8 +749,8 @@ export async function listCreditsForUser(legacyUserId: number) {
   }
 
   return {
-    asSender: dedupeAppliesByReceiverPromocode(asSenderRaw),
-    asSecondary,
-    asReceiver: dedupeAppliesByReceiverPromocode(asReceiverRaw),
+    asSender: await annotateRegisteredPeople(dedupeAppliesByReceiverPromocode(asSenderRaw)),
+    asSecondary: await annotateRegisteredPeople(asSecondary),
+    asReceiver: await annotateRegisteredPeople(dedupeAppliesByReceiverPromocode(asReceiverRaw)),
   };
 }
