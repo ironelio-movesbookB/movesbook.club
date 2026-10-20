@@ -184,7 +184,6 @@ function MyCoachingGroupContent() {
                   <ManagedEntitySidebarAvatar
                     description={coachingGroup?.description}
                     imageUrl={coachingGroup?.imageUrl}
-                    userImageUrl={user?.image}
                     alt={coachingGroup?.name || 'Coaching group'}
                   />
                 </div>

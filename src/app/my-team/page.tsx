@@ -227,7 +227,6 @@ function MyTeamContent() {
                   <ManagedEntitySidebarAvatar
                     description={team?.description}
                     imageUrl={team?.imageUrl}
-                    userImageUrl={user?.image}
                     alt={team?.name || 'Team'}
                   />
                 </div>

@@ -150,6 +150,7 @@ import ClubMembersDashboardSection from '@/components/club/ClubMembersDashboardS
 import PersonalMyTopicsSidebarBlock from '@/components/club/PersonalMyTopicsSidebarBlock';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
 import MubSidebarBar from '@/components/mub/MubSidebarBar';
+import SidebarAccountBesidePhoto from '@/components/sidebar/SidebarAccountBesidePhoto';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { CLUB_WEBSITE_SETTINGS_INDEX_PATH, clubWebsiteDisplayUrl } from '@/lib/clubWebsiteSettingsPaths';
 import { PERSONAL_WEBSITE_TOPICS_PATH } from '@/lib/personalWebsiteSettingsPaths';
@@ -1724,11 +1725,9 @@ export default function DarkSidebar({
           personName={user?.name || 'User'}
           club={displaySelectedClub ?? null}
           userCountry={user?.country}
-          userImageUrl={userImageOverride ?? user?.image}
           userType={userType}
           onClubYoutubeSaved={handleClubYoutubeSaved}
           onClubBootstrapped={handleClubBootstrapped}
-          onChangeLogo={() => setShowChangeProfilePhotoModal(true)}
           onChatClick={onClubChatClick}
         />
       ) : (
@@ -1756,28 +1755,31 @@ export default function DarkSidebar({
             <span className="text-white text-sm font-medium truncate">{user?.name || 'User'}</span>
           </div>
 
-          {/* Profile Picture — `users_new.image` via API + local override after upload */}
-          <div className="mb-2">
-            <div className="w-20 h-20 bg-gray-700 rounded-lg mb-1 overflow-hidden flex items-center justify-center relative border border-gray-600/60">
-              {sidebarProfileImageSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={sidebarProfileImageSrc}
-                  src={sidebarProfileImageSrc}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : (
-                <UserCircle className="w-12 h-12 text-gray-500" />
-              )}
+          {/* Profile picture with type of user, current version and expiration beside it */}
+          <div className="mb-2 flex items-start gap-2">
+            <div className="w-20 shrink-0">
+              <div className="w-20 h-20 bg-gray-700 rounded-lg mb-1 overflow-hidden flex items-center justify-center relative border border-gray-600/60">
+                {sidebarProfileImageSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={sidebarProfileImageSrc}
+                    src={sidebarProfileImageSrc}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <UserCircle className="w-12 h-12 text-gray-500" />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangeProfilePhotoModal(true)}
+                className="text-white text-xs hover:text-yellow-400 transition-colors"
+              >
+                {t('sidebar_change_photo')}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowChangeProfilePhotoModal(true)}
-              className="text-white text-xs hover:text-yellow-400 transition-colors"
-            >
-              {t('sidebar_change_photo')}
-            </button>
+            <SidebarAccountBesidePhoto userType={user?.userType} />
           </div>
 
           {/* User Details - Compact Single Line */}
@@ -1811,8 +1813,6 @@ export default function DarkSidebar({
             <span className="text-white text-xs">{t('sidebar_allow_visiting')}</span>
           </div>
 
-          <MubSidebarBar variant="compact" />
-
           {/* Visitor Tracking - Compact */}
           <div className="space-y-1 mb-2">
             <div className="flex items-center gap-1.5 text-white text-xs">
@@ -1842,6 +1842,8 @@ export default function DarkSidebar({
 
           {/* Comments Section - Compact */}
           <div className="text-gray-500 text-xs">{t('sidebar_comments')}</div>
+
+          <MubSidebarBar variant="compact" className="mt-2" />
         </div>
       )}
 

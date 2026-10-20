@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken, verifyPassword } from '@/lib/auth';
+import {
+  isAddableMemberUserType,
+  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
+} from '@/lib/club/memberArchiveStatus';
 
 const prisma = new PrismaClient();
 
@@ -63,6 +67,13 @@ export async function POST(
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
+      );
+    }
+
+    if (!isAddableMemberUserType(userToAdd.userType)) {
+      return NextResponse.json(
+        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
+        { status: 400 },
       );
     }
 

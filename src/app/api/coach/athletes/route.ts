@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import {
+  isAddableMemberUserType,
+  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
+} from '@/lib/club/memberArchiveStatus';
 
 
 // GET /api/coach/athletes - List all athletes for a coach
@@ -97,8 +101,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    if (athlete.userType !== 'ATHLETE') {
-      return NextResponse.json({ error: 'User is not an athlete' }, { status: 400 });
+    if (!isAddableMemberUserType(athlete.userType)) {
+      return NextResponse.json(
+        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
+        { status: 400 },
+      );
     }
 
     // Check if relationship already exists

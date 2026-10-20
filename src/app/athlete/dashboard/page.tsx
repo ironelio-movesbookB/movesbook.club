@@ -91,11 +91,13 @@ import ClubMovesbookNewsPanel from '@/components/club/ClubMovesbookNewsPanel';
 import AthleteLegacyBanner, {
   type AthleteLegacyBannerProfile,
 } from '@/components/athlete/AthleteLegacyBanner';
+import { isUserClubAdmin } from '@/lib/club/clubWebsitePermissions';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import ChangeBannerModal, {
   type BannerAlignment,
 } from '@/components/athlete/ChangeBannerModal';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import AthleteMyPageRightSidebarExtras from '@/components/dashboard/AthleteMyPageRightSidebarExtras';
 import AthleteMyClubRightSidebar from '@/components/dashboard/AthleteMyClubRightSidebar';
 import MemberRegistrationInfoPanel from '@/components/member/MemberRegistrationInfoPanel';
@@ -436,6 +438,13 @@ function AthleteDashboardContent() {
     }
   }, [activeTab, activeSection]);
 
+  const entityClub =
+    activeTab === 'my-entity'
+      ? myClubs.find((c) => c.id === selectedClubId) ?? myClubs[0] ?? null
+      : null;
+  const entityVisual = useEntityVisual(entityClub?.id, entityClub?.description);
+  const canEditEntityClub = isUserClubAdmin(user?.id, entityClub);
+
   // Don't render if not authenticated (after all hooks are called)
   if (loading || !user) {
     return null;
@@ -705,8 +714,13 @@ function AthleteDashboardContent() {
           <div className="flex-shrink-0 px-0">
             <AthleteLegacyBanner
               profile={bannerProfile}
-              primaryClubName={
-                myClubs.find((c) => c.id === selectedClubId)?.name ?? myClubs[0]?.name
+              primaryClubName={entityClub?.name ?? null}
+              entityLogoUrl={entityClub ? entityVisual.logoUrl : null}
+              entityBannerUrl={entityClub ? entityVisual.bannerUrl : null}
+              entityEdit={
+                canEditEntityClub && entityClub
+                  ? { kind: 'club', entityId: entityClub.id }
+                  : null
               }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               onAvatarCameraClick={() => setShowChangeProfilePhotoModal(true)}
@@ -723,7 +737,7 @@ function AthleteDashboardContent() {
               <div 
                 className="absolute inset-0 bg-cover opacity-20"
                 style={{
-                  backgroundImage: `url(${heroBannerStripBgUrl(bannerProfile)})`,
+                  backgroundImage: `url(${entityClub ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : heroBannerStripBgUrl(bannerProfile)})`,
                   backgroundSize: 'cover',
                   backgroundPosition:
                     bannerProfile?.profileBannerAlignment === 'center' ? 'center center' : 'center top',

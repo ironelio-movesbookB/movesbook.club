@@ -41,7 +41,8 @@ import AdminPasswordConfirmModal from '@/components/club/AdminPasswordConfirmMod
 import CreateClubModal, { type CreateClubFormPayload } from '@/components/club/CreateClubModal';
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
 import type { AthleteLegacyBannerProfile } from '@/components/athlete/AthleteLegacyBanner';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import {
   ClubWorkspaceContext,
   type ClubMyPageNewsPanel,
@@ -760,6 +761,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     [pathname, router],
   );
 
+  const entityLogoKind = isTeamWorkspaceUser
+    ? 'team'
+    : ownEntityWorkspace?.profileKind === 'coach'
+      ? 'coach'
+      : ownEntityWorkspace?.profileKind === 'group'
+        ? 'group'
+        : 'club';
+  const showEntityBanner = shellActiveTab !== 'my-page' && Boolean(bannerClub);
+  const entityVisual = useEntityVisual(
+    showEntityBanner ? bannerClub?.id : null,
+    bannerClub?.description,
+  );
+
   if (loading || !user || !canUseMembersArchive) {
     return null;
   }
@@ -812,10 +826,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             coverBannerAlignment={
               bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
             }
+            entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
+            entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
+            entityEdit={
+              showEntityBanner && bannerClub
+                ? { kind: entityLogoKind, entityId: bannerClub.id }
+                : null
+            }
             onCoverCameraClick={() => setShowChangeBannerModal(true)}
             onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
             showSuggestMovesbook={showSuggestMovesbookForTab(user.userType, shellActiveTab)}
             showSponsored={shellActiveTab === 'my-page'}
+            personal={shellActiveTab === 'my-page'}
+            avatarImagePath={bannerProfile?.image}
           />
         )}
 
