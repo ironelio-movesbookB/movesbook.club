@@ -53,7 +53,9 @@ export default function SubscriptionMembershipSharingDisplay({
   const coachTeamClubLayout = usesCoachTeamClubSharingLayout(userType);
   const showDaysDuration = !hideDaysDuration && !coachTeamClubLayout;
   const athletesRelation = showsAthletesRelation(userType);
-  const relationLabel = athletesRelation ? 'Free accounts athletes' : 'Coaches';
+  const relationLabel = athletesRelation
+    ? 'Free athlete accounts included in the package'
+    : 'Coaches';
   const athleteTierLimits = getAthleteTierLimits(settings);
   const tierValue = (tier: SubscriptionTier): string => {
     if (athletesRelation) {
@@ -108,6 +110,13 @@ export default function SubscriptionMembershipSharingDisplay({
 
       <div>
         <div className="mb-2 text-sm font-medium text-gray-800">{relationLabel}</div>
+        {athletesRelation ? (
+          <p className="mb-2 max-w-3xl text-xs leading-5 text-gray-600">
+            With Trial and Basic accounts, athletes can freely view all their financial data and
+            receive information and notifications from the club or team. The Premium and Pro
+            versions offer athletes a wide range of additional features.
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-end gap-2">
           {TIERS.map((tier) => (
             <div key={tier.key} className="flex flex-col items-center gap-1">
@@ -128,7 +137,10 @@ export default function SubscriptionMembershipSharingDisplay({
       </div>
 
       <div className="border border-gray-300 p-4">
-        <p className="mb-3 text-sm text-gray-700">{getMembershipSectionLabel(userType, role)}</p>
+        <p className="mb-1 text-sm text-gray-700">{getMembershipSectionLabel(userType, role)}</p>
+        {coachTeamClubLayout ? (
+          <p className="mb-3 text-xs text-gray-600">The areas to be shared can be selected</p>
+        ) : null}
         {membershipRows.map(({ label, setting, shareLabel }) => (
           <div
             key={label}

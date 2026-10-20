@@ -90,19 +90,19 @@ export async function POST(
       );
     }
 
+    if (!isAddableMemberUserType(userToAdd.userType)) {
+      return NextResponse.json(
+        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
+        { status: 400 }
+      );
+    }
+
     // Verify password
     const isPasswordValid = await verifyPassword(password, userToAdd.password);
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid password' },
         { status: 401 }
-      );
-    }
-
-    if (!isAddableMemberUserType(userToAdd.userType)) {
-      return NextResponse.json(
-        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
-        { status: 400 }
       );
     }
 

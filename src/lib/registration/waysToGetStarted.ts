@@ -1,15 +1,17 @@
 import {
   PACKAGE_TYPE_CONFIGS,
   getGlobalPackages,
+  getPackageViewMode,
   getTiersForUserType,
 } from '@/lib/admin/packageSettingsMock';
 import { getManagementSettingsData } from '@/lib/admin/managementFunctionSettingsMock';
-import { getPackageDisplayTitle, getPackageDisplayDescription, getPackageDescriptionFirstLine, hasPackageFullOverview, getPackageFullOverviewHtml } from '@/lib/admin/packageSettingsLang';
+import { getPackageDisplayTitle, getPackageDisplayDescription, getPackageDescriptionPreview, hasPackageFullOverview, getPackageFullOverviewHtml } from '@/lib/admin/packageSettingsLang';
 import {
   isPackageIncludedInVersion,
   resolveSubscriptionTierMapping,
 } from '@/lib/registration/packageReviewTierMapping';
-import type { PackageItem, PackageTypeId } from '@/types/adminPackageSettings';
+import type { PackageItem, PackageSection, PackageTypeId, PackageViewMode } from '@/types/adminPackageSettings';
+import { PACKAGE_SECTIONS } from '@/types/adminPackageSettings';
 import type { SubscriptionUserType } from '@/types/adminSubscriptionSettings';
 import {
   getSubscriptionById,
@@ -123,8 +125,21 @@ export type RegistrationPackageReviewRow = {
   sortOrder: number;
   title: string;
   description: string;
+  fullDescription: string;
+  html: string;
+  pictures: [string, string, string];
+  kind: 'package' | 'separator';
+  icon: string;
+  titleColor: string;
+  backgroundColor: string;
   tiers: Record<string, boolean>;
 };
+
+export const REGISTRATION_PACKAGE_SECTIONS = PACKAGE_SECTIONS;
+
+export function getRegistrationPackageViewMode(): PackageViewMode {
+  return getPackageViewMode();
+}
 
 function comparePackageSortOrder(a: { sortOrder: number; id: number }, b: { sortOrder: number; id: number }) {
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
@@ -134,16 +149,18 @@ function comparePackageSortOrder(a: { sortOrder: number; id: number }, b: { sort
 export function getPackageReviewRows(
   userType: RegistrationUserType,
   lang: string,
+  section?: PackageSection,
 ): RegistrationPackageReviewRow[] {
   const userTypeId = getPackageTypeIdForUserType(userType);
 
   return getGlobalPackages()
-    .filter((pkg) => pkg.published)
+    .filter((pkg) => pkg.published && (pkg.catalog ?? 'packages') === 'packages')
+    .filter((pkg) => (section ? (pkg.section ?? 'training') === section : true))
     .sort(comparePackageSortOrder)
     .map((pkg) => packageToReviewRow(pkg, userTypeId, lang, userType));
 }
 
-export type RegistrationPackageCategory = 'social_training' | 'management';
+export type RegistrationPackageCategory = PackageSection;
 
 export type RegistrationSelectedEntity = {
   tierKey: string;
@@ -157,6 +174,11 @@ export type RegistrationOverviewFeature = {
   title: string;
   description: string;
   pictures: [string, string, string];
+  kind: 'package' | 'separator';
+  icon: string;
+  titleColor: string;
+  backgroundColor: string;
+  html: string;
 };
 
 export type RegistrationDetailedOverviewItem = {
@@ -171,15 +193,13 @@ export function getDetailedOverviewForEntity(
   lang: string,
   category: RegistrationPackageCategory,
 ): RegistrationDetailedOverviewItem[] {
-  if (category === 'management') {
-    return [];
-  }
-
   const userTypeId = getPackageTypeIdForUserType(userType);
 
   return getGlobalPackages()
     .filter((pkg) => {
       if (!pkg.published) return false;
+      if ((pkg.section ?? 'training') !== category) return false;
+      if (pkg.kind === 'separator') return false;
       if (!hasPackageFullOverview(pkg.htmlByLang, lang)) return false;
       const userTiers = getTiersForUserType(pkg, userTypeId);
       const columns = getVersionColumnsForUserType(userType);
@@ -227,47 +247,28 @@ export function getOverviewFeaturesForEntity(
 ): RegistrationOverviewFeature[] {
   const userTypeId = getPackageTypeIdForUserType(userType);
 
-  if (category === 'management') {
-    const managementData = getManagementSettingsData(lang);
-    const tierMap: Record<string, 'basic' | 'premium' | 'pro'> = {
-      base: 'basic',
-      basic: 'basic',
-      basic_pfu: 'basic',
-      prem: 'premium',
-      prem_pfu: 'premium',
-      premium: 'premium',
-      pro: 'pro',
-      pro_pfu: 'pro',
-      trial: 'basic',
-      standard: 'basic',
-    };
-    const tierField = tierMap[tierKey] ?? 'basic';
-
-    return managementData.features
-      .filter((feature) => feature[tierField])
-      .map((feature) => ({
-        id: feature.id,
-        title: feature.name,
-        description: feature.optionalEnabled ? 'Optional module' : '',
-        pictures: ['', '', ''] as [string, string, string],
-      }));
-  }
-
   return getGlobalPackages()
     .filter((pkg) => {
       if (!pkg.published) return false;
+      if ((pkg.section ?? 'training') !== category) return false;
+      if (pkg.kind === 'separator') return true;
       const userTiers = getTiersForUserType(pkg, userTypeId);
       const columns = getVersionColumnsForUserType(userType);
       const column = columns.find((col) => col.key === tierKey);
       if (!column) return userTiers[tierKey] ?? false;
       return isPackageIncludedInVersion(userTiers, column.packageTierKey);
     })
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .sort(comparePackageSortOrder)
     .map((pkg) => ({
       id: pkg.id,
       title: getPackageDisplayTitle(pkg.titlesByLang, lang),
       description: getPackageDisplayDescription(pkg.descriptionsByLang, lang),
       pictures: pkg.pictures,
+      kind: pkg.kind ?? 'package',
+      icon: pkg.icon ?? '',
+      titleColor: pkg.titleColor || '#111111',
+      backgroundColor: pkg.backgroundColor || '#e8e8e8',
+      html: getPackageFullOverviewHtml(pkg.htmlByLang, lang),
     }));
 }
 
@@ -299,8 +300,15 @@ export function getManagementReviewRows(
     return {
       id: feature.id,
       sortOrder: feature.id,
-      title: feature.name.toUpperCase(),
+      title: feature.name,
       description: feature.optionalEnabled ? 'Optional module' : '',
+      fullDescription: feature.optionalEnabled ? 'Optional module' : '',
+      html: '',
+      pictures: ['', '', ''] as [string, string, string],
+      kind: 'package' as const,
+      icon: '',
+      titleColor: '#111111',
+      backgroundColor: '#e8e8e8',
       tiers,
     };
   });
@@ -311,10 +319,7 @@ export function getPackageReviewRowsForCategory(
   lang: string,
   category: RegistrationPackageCategory,
 ): RegistrationPackageReviewRow[] {
-  if (category === 'management') {
-    return getManagementReviewRows(userType, lang);
-  }
-  return getPackageReviewRows(userType, lang);
+  return getPackageReviewRows(userType, lang, category);
 }
 
 export function getEntityDisplayTitle(
@@ -336,7 +341,8 @@ function packageToReviewRow(
   lang: string,
   userType: RegistrationUserType,
 ): RegistrationPackageReviewRow {
-  const description = getPackageDescriptionFirstLine(pkg.descriptionsByLang, lang);
+  const fullDescription = getPackageDisplayDescription(pkg.descriptionsByLang, lang);
+  const description = getPackageDescriptionPreview(pkg.descriptionsByLang, lang);
   const title = getPackageDisplayTitle(pkg.titlesByLang, lang);
   const userTiers = getTiersForUserType(pkg, userTypeId);
   const columns = getVersionColumnsForUserType(userType);
@@ -350,8 +356,15 @@ function packageToReviewRow(
   return {
     id: pkg.id,
     sortOrder: pkg.sortOrder,
-    title: title.toUpperCase(),
+    title,
     description,
+    fullDescription,
+    html: getPackageFullOverviewHtml(pkg.htmlByLang, lang),
+    pictures: pkg.pictures ?? ['', '', ''],
+    kind: pkg.kind ?? 'package',
+    icon: pkg.icon ?? '',
+    titleColor: pkg.titleColor || '#111111',
+    backgroundColor: pkg.backgroundColor || '#e8e8e8',
     tiers,
   };
 }

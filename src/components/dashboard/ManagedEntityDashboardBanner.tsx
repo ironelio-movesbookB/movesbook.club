@@ -3,11 +3,14 @@
 import { Camera, Home } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { DEFAULT_HERO_BANNER_URL } from '@/lib/profileBannerSequence';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import SafeCoverImage from '@/components/media/SafeCoverImage';
 import {
   getManagedEntityDashboardLabels,
   type ManagedEntityDashboardKind,
 } from '@/lib/dashboard/managedEntityDashboardLabels';
+import EntityImageFileInput from '@/lib/entity/EntityImageFileInput';
+import { useEntityImageInput, type EntityVisualEdit } from '@/lib/entity/useEntityVisual';
 
 interface ManagedEntityDashboardBannerProps {
   entityKind: ManagedEntityDashboardKind;
@@ -21,6 +24,13 @@ interface ManagedEntityDashboardBannerProps {
   activeTab: 'my-page' | 'my-entity';
   showWorkoutSection: boolean;
   onWorkoutsToggle: () => void;
+  /** Logged-in admin photo, shown on My Page only. */
+  avatarImagePath?: string | null;
+  /** Selected company logo. Shown on My Team / My Group, never on My Page. */
+  entityLogoUrl?: string | null;
+  /** Selected company banner. Shown on My Team / My Group, never on My Page. */
+  entityBannerUrl?: string | null;
+  entityEdit?: EntityVisualEdit | null;
 }
 
 export default function ManagedEntityDashboardBanner({
@@ -35,16 +45,33 @@ export default function ManagedEntityDashboardBanner({
   activeTab,
   showWorkoutSection,
   onWorkoutsToggle,
+  avatarImagePath,
+  entityLogoUrl,
+  entityBannerUrl,
+  entityEdit = null,
 }: ManagedEntityDashboardBannerProps) {
   const { t } = useLanguage();
   const labels = getManagedEntityDashboardLabels(entityKind);
   const displayName = entityName?.trim() || labels.fallbackEntityName;
 
-  const src = coverImageUrl || DEFAULT_HERO_BANNER_URL;
+  const entityCoverInputRef = useEntityImageInput();
+  const personal = activeTab === 'my-page';
+  const userCover = coverImageUrl || DEFAULT_HERO_BANNER_URL;
+  const src = personal ? userCover : entityBannerUrl || DEFAULT_HERO_BANNER_URL;
   const alignCenter = coverBannerAlignment === 'center';
   const coverObjectClass = alignCenter ? 'object-cover object-center' : 'object-cover object-top';
   const stripBgPos = alignCenter ? 'center center' : 'center top';
   const stripSrc = src.startsWith('/uploads/') ? DEFAULT_HERO_BANNER_URL : src;
+  const avatarSrc = resolvePublicImageUrl(avatarImagePath);
+  const entityLogoSrc = resolvePublicImageUrl(entityLogoUrl);
+  const thumbSrc = personal ? avatarSrc || userCover : entityLogoSrc;
+  const openCover = () => {
+    if (personal) {
+      onCoverCameraClick();
+      return;
+    }
+    if (entityEdit) entityCoverInputRef.current?.click();
+  };
 
   return (
     <div className="mb-6 flex-shrink-0 px-0">
@@ -58,38 +85,44 @@ export default function ManagedEntityDashboardBanner({
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent pointer-events-none" />
 
-          <div
-            className="absolute top-0 left-0 right-0 h-12 flex items-start justify-start p-2 z-10"
+          {!personal && entityEdit ? (
+            <EntityImageFileInput edit={entityEdit} asset="banner" inputRef={entityCoverInputRef} />
+          ) : null}
+          <button
+            type="button"
+            onClick={openCover}
+            disabled={!personal && !entityEdit}
+            className="absolute top-0 left-0 right-0 h-16 flex items-start justify-start p-2 z-10 cursor-pointer disabled:cursor-default"
             style={{
               background: 'linear-gradient(to bottom, rgba(0,0,0,0.45), transparent)',
             }}
+            title={t('athlete_banner_change_cover')}
+            aria-label={t('athlete_banner_change_cover')}
           >
-            <button
-              type="button"
-              onClick={onCoverCameraClick}
-              className="text-white/95 p-2 rounded bg-black/25 hover:bg-black/45 focus:outline-none focus:ring-2 focus:ring-white/60 pointer-events-auto"
-              title={t('athlete_banner_change_cover')}
-              aria-label={t('athlete_banner_change_cover')}
-            >
+            <span className="text-white/95 p-2 rounded bg-black/25 pointer-events-none">
               <Camera className="w-5 h-5" />
-            </button>
-          </div>
+            </span>
+          </button>
 
           <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-3 p-3 z-10">
             <div className="flex items-end gap-2 min-w-0">
-              <div className="w-[72px] h-[54px] shrink-0 border-2 border-white shadow-lg overflow-hidden bg-gray-200">
-                <SafeCoverImage
-                  src={src}
-                  width={72}
-                  height={54}
-                  className={`w-full h-full opacity-90 ${alignCenter ? 'object-cover object-center' : 'object-cover object-top'}`}
-                />
+              <div className="w-20 h-20 shrink-0 border-2 border-white shadow-lg overflow-hidden bg-gray-200">
+                {thumbSrc ? (
+                  <SafeCoverImage
+                    src={thumbSrc}
+                    width={80}
+                    height={80}
+                    className={`w-full h-full opacity-90 ${personal && !avatarSrc ? (alignCenter ? 'object-cover object-center' : 'object-cover object-top') : 'object-cover object-center'}`}
+                  />
+                ) : null}
               </div>
               <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
-                <span className="px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[min(12rem,100%)] truncate">
-                  {displayName}
-                </span>
-                {entityId && onEntityProfileClick ? (
+                {personal ? null : (
+                  <span className="px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[min(12rem,100%)] truncate">
+                    {displayName}
+                  </span>
+                )}
+                {!personal && entityId && onEntityProfileClick ? (
                   <button
                     type="button"
                     onClick={onEntityProfileClick}

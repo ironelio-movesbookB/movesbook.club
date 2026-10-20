@@ -11,6 +11,7 @@ import {
 import { getClubIdentificationCardsDisplay } from '@/lib/admin/clubIdentificationCardPricing';
 import ClubAccountPackPricingSections from '@/components/club/ClubAccountPackPricingSections';
 import ClubIdentificationCardPricingSections from '@/components/club/ClubIdentificationCardPricingSections';
+import { isPurchaseTabVisible } from '@/lib/admin/packageSettingsMock';
 
 export type ClubPricelistTab =
   | 'versions_features'
@@ -226,11 +227,14 @@ function OthersVersionPanel({ data }: { data: ClubOthersVersionData }) {
           <div className="bg-[#337ab7] text-white text-xs font-bold px-2 py-1 mb-2">
             {data.sharingHeader}
           </div>
+          <p className="mb-2 text-[11px] font-semibold text-gray-800">
+            Yearly cost for each unit added enabled
+          </p>
           <div className="space-y-1">
             {data.sharingRows.map((row) => (
               <div
                 key={row.label}
-                className="grid grid-cols-[90px_60px_24px_60px] items-center gap-2 text-xs"
+                className="grid grid-cols-[110px_64px_24px_72px] items-center gap-2 text-xs"
               >
                 <span className="font-medium">{row.label}</span>
                 <input
@@ -388,7 +392,7 @@ export default function RegistrationClubPricelistsPanel({
           >
             Back
           </button>
-          {CLUB_PRICELIST_TABS.map((tab) => (
+          {CLUB_PRICELIST_TABS.filter((tab) => isPurchaseTabVisible(tab.key)).map((tab) => (
             <PricelistTabButton
               key={tab.key}
               active={activeSubTab === tab.key}

@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { parseBannerSequenceJson } from '@/lib/profileBannerSequence';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
+import EntityImageFileInput from '@/lib/entity/EntityImageFileInput';
+import { useEntityImageInput, type EntityVisualEdit } from '@/lib/entity/useEntityVisual';
 
 export type AthleteLegacyBannerProfile = {
   image?: string | null;
@@ -27,6 +29,12 @@ type AthleteLegacyBannerProps = {
   onCoverCameraClick?: () => void;
   /** Opens profile photo upload (avatar badge camera) */
   onAvatarCameraClick?: () => void;
+  /** Selected club/team logo. Used only while a company name is shown. */
+  entityLogoUrl?: string | null;
+  /** Selected club/team banner. Used only while a company name is shown. */
+  entityBannerUrl?: string | null;
+  /** Uploads the company logo/banner. Ignored on My Page. */
+  entityEdit?: EntityVisualEdit | null;
   t: (key: string) => string;
 };
 
@@ -103,26 +111,54 @@ export default function AthleteLegacyBanner({
   primaryClubName,
   onCoverCameraClick,
   onAvatarCameraClick,
+  entityLogoUrl,
+  entityBannerUrl,
+  entityEdit = null,
   t,
 }: AthleteLegacyBannerProps) {
-  const sequencePaths = parseBannerSequenceJson(profile?.profileBannerSequence);
+  const entityMode = Boolean(primaryClubName?.trim());
+  const coverInputRef = useEntityImageInput();
+  const logoInputRef = useEntityImageInput();
+  const sequencePaths = entityMode ? [] : parseBannerSequenceJson(profile?.profileBannerSequence);
   const useSequence = sequencePaths.length > 0;
 
-  const videoSrc = profile?.profileBannerVideo?.trim()
-    ? resolvePublicImageUrl(profile.profileBannerVideo)
-    : null;
+  const videoSrc =
+    !entityMode && profile?.profileBannerVideo?.trim()
+      ? resolvePublicImageUrl(profile.profileBannerVideo)
+      : null;
 
-  const bannerSrc = profile?.profileBanner?.trim()
-    ? resolvePublicImageUrl(profile.profileBanner) || DEFAULT_BANNER
-    : DEFAULT_BANNER;
+  const bannerSrc = entityMode
+    ? entityBannerUrl || DEFAULT_BANNER
+    : profile?.profileBanner?.trim()
+      ? resolvePublicImageUrl(profile.profileBanner) || DEFAULT_BANNER
+      : DEFAULT_BANNER;
 
   const alignCenter = profile?.profileBannerAlignment === 'center';
   const coverObjectClass = alignCenter ? 'object-cover object-center' : 'object-cover object-top';
 
-  const avatarSrc = resolvePublicImageUrl(profile?.image);
-  const clubLabel = primaryClubName?.trim()
+  const avatarSrc = entityMode
+    ? resolvePublicImageUrl(entityLogoUrl)
+    : resolvePublicImageUrl(profile?.image);
+  const avatarInitials = entityMode
+    ? (primaryClubName || '?').trim().slice(0, 2).toUpperCase()
+    : (profile?.name || profile?.firstName || '?').slice(0, 2).toUpperCase();
+  const openCover = () => {
+    if (entityMode) {
+      if (entityEdit) coverInputRef.current?.click();
+      return;
+    }
+    onCoverCameraClick?.();
+  };
+  const openAvatar = () => {
+    if (entityMode) {
+      if (entityEdit) logoInputRef.current?.click();
+      return;
+    }
+    onAvatarCameraClick?.();
+  };
+  const entityLabel = primaryClubName?.trim()
     ? `${primaryClubName.trim()} ${t('athlete_banner_club_badge')}`
-    : t('athlete_banner_club_badge');
+    : '';
 
   return (
     <div className="flex w-full flex-col sm:flex-row shadow-lg overflow-hidden bg-black min-h-[220px] max-h-[280px]">
@@ -155,23 +191,28 @@ export default function AthleteLegacyBanner({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent pointer-events-none" />
 
-        {/* Cover camera — opens CHANGE THE BANNER modal (large banner only) */}
-        <div
-          className="absolute top-0 left-0 right-0 h-12 flex items-start justify-start p-2 z-10"
+        {/* Top of the personal banner — click opens CHANGE THE BANNER */}
+        {entityMode && entityEdit ? (
+          <>
+            <EntityImageFileInput edit={entityEdit} asset="banner" inputRef={coverInputRef} />
+            <EntityImageFileInput edit={entityEdit} asset="logo" inputRef={logoInputRef} />
+          </>
+        ) : null}
+        <button
+          type="button"
+          onClick={openCover}
+          disabled={entityMode ? !entityEdit : !onCoverCameraClick}
+          className="absolute top-0 left-0 right-0 h-16 flex items-start justify-start p-2 z-10 cursor-pointer disabled:cursor-default"
           style={{
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.45), transparent)',
           }}
+          title={t('athlete_banner_change_cover')}
+          aria-label={t('athlete_banner_change_cover')}
         >
-          <button
-            type="button"
-            onClick={onCoverCameraClick}
-            className="text-white/95 p-2 rounded bg-black/25 hover:bg-black/45 focus:outline-none focus:ring-2 focus:ring-white/60 pointer-events-auto"
-            title={t('athlete_banner_change_cover')}
-            aria-label={t('athlete_banner_change_cover')}
-          >
+          <span className="text-white/95 p-2 rounded bg-black/25 pointer-events-none">
             <Camera className="w-5 h-5" />
-          </button>
-        </div>
+          </span>
+        </button>
 
         {/* Avatar + club badge */}
         <div className="absolute bottom-0 left-0 right-0 flex items-end gap-3 p-3 z-10">
@@ -188,14 +229,14 @@ export default function AthleteLegacyBanner({
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gray-300 text-gray-600 text-sm font-medium">
-                    {(profile?.name || profile?.firstName || '?').slice(0, 2).toUpperCase()}
+                    {avatarInitials}
                   </div>
                 )}
               </div>
               <button
                 type="button"
-                onClick={onAvatarCameraClick}
-                disabled={!onAvatarCameraClick}
+                onClick={openAvatar}
+                disabled={entityMode ? !entityEdit : !onAvatarCameraClick}
                 className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded bg-black/70 text-white flex items-center justify-center text-[10px] hover:bg-black/85 focus:outline-none focus:ring-2 focus:ring-white/70 disabled:pointer-events-none disabled:opacity-50 z-10"
                 title={t('athlete_banner_change_photo')}
                 aria-label={t('athlete_banner_change_photo')}
@@ -203,9 +244,11 @@ export default function AthleteLegacyBanner({
                 <Camera className="w-3.5 h-3.5" />
               </button>
             </div>
-            <span className="mb-1 px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[12rem] truncate">
-              {clubLabel}
-            </span>
+            {entityLabel ? (
+              <span className="mb-1 px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[12rem] truncate">
+                {entityLabel}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
