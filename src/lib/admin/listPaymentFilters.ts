@@ -1,7 +1,7 @@
 import type { RegisteredUserListRow } from '@/lib/admin/expandRegisteredUserListRows';
 
 export type ListPaymentStatus = 'paid' | 'unpaid' | 'test';
-export type ListPaymentMode = 'stripe' | 'paypal' | 'promocode' | 'manual' | 'free' | 'test' | 'pending';
+export type ListPaymentMode = 'stripe' | 'klarna' | 'paypal' | 'promocode' | 'manual' | 'free' | 'test' | 'pending';
 
 export const LIST_PAYMENT_STATUS_OPTIONS: { value: ListPaymentStatus; label: string }[] = [
   { value: 'paid', label: 'Paid' },
@@ -11,6 +11,7 @@ export const LIST_PAYMENT_STATUS_OPTIONS: { value: ListPaymentStatus; label: str
 
 export const LIST_PAYMENT_MODE_OPTIONS: { value: ListPaymentMode; label: string }[] = [
   { value: 'stripe', label: 'Stripe' },
+  { value: 'klarna', label: 'Installment (Klarna)' },
   { value: 'paypal', label: 'PayPal' },
   { value: 'promocode', label: 'Promocode' },
   { value: 'manual', label: 'Manual (admin)' },
@@ -32,7 +33,7 @@ export function parseListPaymentMode(raw: string | null | undefined): ListPaymen
 /** How the membership of a grid row was paid; null when nothing is recorded. */
 export function rowPaymentMode(row: RegisteredUserListRow): ListPaymentMode | null {
   const method = row.paymentMethod?.trim().toLowerCase() ?? '';
-  if (method === 'stripe' || method === 'paypal' || method === 'free' || method === 'test' || method === 'pending') {
+  if (method === 'stripe' || method === 'klarna' || method === 'paypal' || method === 'free' || method === 'test' || method === 'pending') {
     return method;
   }
   if (method === 'virtual_card' || method.includes('promo')) return 'promocode';
