@@ -167,6 +167,7 @@ export type ListQuery = {
   /** Filter to these procedure record ids (payment-form scoped archives). */
   recordIds?: string[];
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';

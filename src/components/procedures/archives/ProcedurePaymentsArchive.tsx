@@ -71,6 +71,26 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
   const [pageSize, setPageSize] = useState(client.pageSize);
   const [total, setTotal] = useState(0);
   const [editTarget, setEditTarget] = useState<ProcedurePaymentView | null>(null);
+  const isExpense = procedureCode === 'expense';
+  const [expenseTypes, setExpenseTypes] = useState<{ id: string; name: string }[]>([]);
+  const [draftExpenseName, setDraftExpenseName] = useState('');
+  const [appliedExpenseName, setAppliedExpenseName] = useState('');
+
+  useEffect(() => {
+    if (!isExpense) return;
+    let active = true;
+    client
+      .fetchFormOptions<{ expenses: { id: string; name: string }[] }>()
+      .then((options) => {
+        if (active) setExpenseTypes(options.expenses);
+      })
+      .catch((e) => {
+        if (active) setError(e instanceof Error ? e.message : 'Failed to load expense types');
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, isExpense]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +101,7 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
         pageSize,
         ...scope.filters,
         ...filters.applied,
+        ...(isExpense && appliedExpenseName ? { expenseName: appliedExpenseName } : {}),
       });
       setTotal(res.total);
       const printReceipt = isOut
@@ -125,7 +146,7 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [client, isOut, page, pageSize, scope.filters, filters.applied, requestPassword]);
+  }, [client, isExpense, appliedExpenseName, isOut, page, pageSize, scope.filters, filters.applied, requestPassword]);
 
   useEffect(() => {
     load();
@@ -168,13 +189,38 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
     >
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.payments}`}
+        orderFirst={isExpense}
+        additionalFilter={
+          isExpense ? (
+            <label className="flex min-w-[180px] flex-col">
+              <span className="mb-1 block text-[12px] font-semibold text-gray-800">Type of expense</span>
+              <select
+                className="block h-9 w-full rounded border border-gray-400 bg-white px-2.5 text-[13px] text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+                value={draftExpenseName}
+                onChange={(event) => setDraftExpenseName(event.target.value)}
+              >
+                <option value="">All types</option>
+                {expenseTypes.map((expense) => (
+                  <option key={expense.id} value={expense.name}>
+                    {expense.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : undefined
+        }
         values={filters.draft}
         onChange={filters.onChange}
         onApply={() => {
-          if (filters.apply()) setPage(1);
+          if (filters.apply()) {
+            setAppliedExpenseName(draftExpenseName);
+            setPage(1);
+          }
         }}
         onClear={() => {
           filters.clear();
+          setDraftExpenseName('');
+          setAppliedExpenseName('');
           setPage(1);
         }}
         dateRangeError={filters.dateRangeError}

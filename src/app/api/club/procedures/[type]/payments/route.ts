@@ -27,6 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       pageSize: Number(request.nextUrl.searchParams.get('pageSize') ?? 10),
       recordId: request.nextUrl.searchParams.get('recordId') ?? undefined,
       memberId: request.nextUrl.searchParams.get('memberId') ?? undefined,
+      expenseName: request.nextUrl.searchParams.get('expenseName') ?? undefined,
       recordIds,
       ...filters,
     });

@@ -80,6 +80,7 @@ export type ListParams = {
   memberId?: string;
   includePaid?: boolean;
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';
@@ -179,6 +180,7 @@ function buildQuery(params?: ListParams & { view?: string }): string {
   if (params?.memberId) qs.set('memberId', params.memberId);
   if (params?.includePaid) qs.set('includePaid', 'true');
   if (params?.search) qs.set('search', params.search);
+  if (params?.expenseName) qs.set('expenseName', params.expenseName);
   if (params?.fromDate) qs.set('fromDate', params.fromDate);
   if (params?.toDate) qs.set('toDate', params.toDate);
   if (params?.orderBy) qs.set('orderBy', params.orderBy);

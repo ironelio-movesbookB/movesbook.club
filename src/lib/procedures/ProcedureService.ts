@@ -860,6 +860,9 @@ export class ProcedureService {
           : query.recordId
             ? { id: query.recordId }
             : {}),
+        ...(procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE && query.expenseName?.trim()
+          ? { metadata: { path: '$.expenseName', equals: query.expenseName.trim() } }
+          : {}),
       },
       ...(query.fromDate || query.toDate
         ? {
