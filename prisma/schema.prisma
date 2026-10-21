@@ -4284,3 +4284,36 @@ model LegacyUnits {
   @@ignore
 }
 
+/// src/lib/club/memberPaymentMethodsStore.ts
+model ClubMemberPaymentMethodsRow {
+  entityId     String   @id @map("entity_id") @db.VarChar(191)
+  settingsJson String   @map("settings_json") @db.LongText
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("club_member_payment_methods")
+  @@ignore
+}
+
+/// src/lib/club/memberOnlinePayments.ts
+model ClubMemberOnlinePaymentRow {
+  id              String    @id @db.VarChar(191)
+  entityId        String    @map("entity_id") @db.VarChar(191)
+  entityName      String    @map("entity_name") @db.VarChar(255)
+  memberUserId    String    @map("member_user_id") @db.VarChar(191)
+  memberName      String    @map("member_name") @db.VarChar(255)
+  createdByUserId String    @map("created_by_user_id") @db.VarChar(191)
+  provider        String    @db.VarChar(16)
+  amountEur       Decimal   @map("amount_eur") @db.Decimal(10, 2)
+  description     String    @db.VarChar(255)
+  status          String    @db.VarChar(16)
+  providerMode    String?   @map("provider_mode") @db.VarChar(16)
+  providerRef     String?   @map("provider_ref") @db.VarChar(255)
+  createdAt       DateTime? @default(now()) @map("created_at")
+  paidAt          DateTime? @map("paid_at")
+
+  @@index([entityId], map: "idx_club_member_online_entity")
+  @@index([memberUserId], map: "idx_club_member_online_member")
+  @@map("club_member_online_payments")
+  @@ignore
+}
+

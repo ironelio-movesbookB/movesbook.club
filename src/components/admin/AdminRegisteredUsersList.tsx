@@ -43,6 +43,13 @@ import {
 } from '@/lib/admin/statsBarListHref';
 import { STATS_KIND_LABELS, type StatsTypeKindFilter, type StatsUserKind, type StatsVersionBucket } from '@/lib/admin/statisticsKinds';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
+import {
+  PURCHASE_PRODUCTS,
+  RECORDED_MEMBERSHIP_PRODUCT,
+  purchaseProductLabel,
+  subscriptionPurchaseDescription,
+  type PurchaseProductCode,
+} from '@/lib/admin/purchaseProducts';
 
 export type AdminUserSegment = 'all' | 'single-user' | 'coaches' | 'groups' | 'teams' | 'clubs';
 
@@ -68,6 +75,8 @@ export interface AdminRegisteredUsersListProps {
   onClearStatsBar?: () => void;
   /** Only users registered with the special offer of this subscription version. */
   specialOfferVersionId?: number | null;
+  /** subscriptions = /admin/all. payments = List of payments. products = products purchased. */
+  listPurpose?: 'subscriptions' | 'payments' | 'products';
 }
 
 interface ProfilePayload {
@@ -137,6 +146,7 @@ interface RowUser {
   imageUrl?: string | null;
   specialOffer?: boolean;
   specialOfferTitle?: string;
+  offerPrice?: boolean;
 }
 
 function VersionCell({ row }: { row: RowUser }) {
@@ -148,6 +158,20 @@ function VersionCell({ row }: { row: RowUser }) {
       {row.version}
     </td>
   );
+}
+
+function AmountCell({ row }: { row: RowUser }) {
+  if (row.offerPrice) {
+    return (
+      <td
+        className="px-2 py-2 border-t border-gray-300 text-blue-700"
+        title="Special offer price. Not a payment received."
+      >
+        Offer {row.amount}
+      </td>
+    );
+  }
+  return <td className="px-2 py-2 border-t border-gray-300 text-gray-700">{row.amount}</td>;
 }
 
 function rowListKey(r: RowUser): string {
@@ -194,6 +218,7 @@ interface FilterState {
   userTypeCategory: string;
   login: LoginFilter;
   paymentMode: ListPaymentMode | '';
+  productType: PurchaseProductCode | '';
   subDateField: 'dateStart' | 'dateEnd';
   rangeFrom: string;
   rangeTo: string;
@@ -206,6 +231,7 @@ const EMPTY_FILTERS: FilterState = {
   userTypeCategory: '',
   login: 'all',
   paymentMode: '',
+  productType: '',
   subDateField: 'dateStart',
   rangeFrom: '',
   rangeTo: '',
@@ -369,6 +395,7 @@ export default function AdminRegisteredUsersList({
   statsBarScope = null,
   onClearStatsBar,
   specialOfferVersionId = null,
+  listPurpose = 'subscriptions',
 }: AdminRegisteredUsersListProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -459,7 +486,13 @@ export default function AdminRegisteredUsersList({
       : segment;
   const profileIsClubsSegment = profileSegment === 'clubs';
 
-  const gridCardGroups = useMemo(() => groupRowsForAdminGrid(rows), [rows]);
+  const productFilterHidesRows =
+    listPurpose !== 'subscriptions' &&
+    appliedFilters.productType !== '' &&
+    appliedFilters.productType !== RECORDED_MEMBERSHIP_PRODUCT;
+  const tableRows = productFilterHidesRows ? [] : rows;
+  const shownPayments = productFilterHidesRows ? { count: 0, totalEur: 0 } : payments;
+  const gridCardGroups = useMemo(() => groupRowsForAdminGrid(tableRows), [tableRows]);
 
   // Seed filters from statistics bar deep-link (?statsBar=1&country=&statsKind=&subscriptionVersion=).
   useEffect(() => {
@@ -646,14 +679,14 @@ export default function AdminRegisteredUsersList({
   }, [segment]);
 
   const allOnPageSelected =
-    rows.length > 0 && rows.every((r) => selected.has(rowListKey(r)));
+    tableRows.length > 0 && tableRows.every((r) => selected.has(rowListKey(r)));
 
   const toggleSelectAll = () => {
     if (allOnPageSelected) {
       setSelected(new Set());
       return;
     }
-    setSelected(new Set(rows.map((r) => rowListKey(r))));
+    setSelected(new Set(tableRows.map((r) => rowListKey(r))));
   };
 
   const toggleRow = (id: string) => {
@@ -1365,7 +1398,12 @@ export default function AdminRegisteredUsersList({
         <>
           <div className="bg-[#b8b8b8] px-4 py-3 border border-gray-400">
             <h1 className="text-lg sm:text-xl font-semibold text-gray-800">
-              Details of subscription{profileIsClubsSegment ? ' · ' : ' — '}
+              {listPurpose === 'payments'
+                ? 'List of payments'
+                : listPurpose === 'products'
+                  ? 'Archive of the products purchased'
+                  : 'Details of subscription'}
+              {profileIsClubsSegment ? ' · ' : ' — '}
               <span className="text-red-600">{roleTitle}</span>
             </h1>
           </div>
@@ -1879,6 +1917,28 @@ export default function AdminRegisteredUsersList({
                     </select>
                   </FilterRow>
 
+                  {listPurpose !== 'subscriptions' ? (
+                    <FilterRow label="Product">
+                      <select
+                        value={draftFilters.productType}
+                        onChange={(e) =>
+                          setDraftFilters((f) => ({
+                            ...f,
+                            productType: e.target.value as FilterState['productType'],
+                          }))
+                        }
+                        className={FILTER_CONTROL_CLASS}
+                      >
+                        <option value="">All products</option>
+                        {PURCHASE_PRODUCTS.map((product) => (
+                          <option key={product.code} value={product.code}>
+                            {product.letter} - {product.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FilterRow>
+                  ) : null}
+
                   <FilterRow label="Subscription">
                     <select
                       value={draftFilters.subDateField}
@@ -1994,7 +2054,7 @@ export default function AdminRegisteredUsersList({
             title="Paid memberships in the current grid (all pages)"
           >
             <span className="text-gray-600">Payments:</span>
-            <span className="font-semibold tabular-nums">{loading ? '…' : payments.count}</span>
+            <span className="font-semibold tabular-nums">{loading ? '…' : shownPayments.count}</span>
           </div>
           <div
             className="h-9 flex items-center gap-1 border border-gray-500 bg-white px-3 text-sm rounded whitespace-nowrap"
@@ -2002,7 +2062,7 @@ export default function AdminRegisteredUsersList({
           >
             <span className="text-gray-600">Total:</span>
             <span className="font-semibold tabular-nums text-green-800">
-              {loading ? '…' : formatEuroTotal(payments.totalEur)}
+              {loading ? '…' : formatEuroTotal(shownPayments.totalEur)}
             </span>
           </div>
 
@@ -2149,9 +2209,23 @@ export default function AdminRegisteredUsersList({
                 <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Country</th>
                 <th className="px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14">Flag</th>
                 <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Location</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date Start</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date End</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version</th>
+                {listPurpose === 'products' ? (
+                  <>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Product</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Description</th>
+                    <th className="px-2 py-2 text-left font-semibold border-r border-[#3d7a80]">Qty</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date Start</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date End</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version</th>
+                  </>
+                )}
+                {listPurpose === 'payments' ? (
+                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Payment for</th>
+                ) : null}
                 <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Username</th>
                 {showCompanyColumn && (
                   <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80] min-w-[8rem]">
@@ -2164,17 +2238,23 @@ export default function AdminRegisteredUsersList({
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {tableRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={(showCompanyColumn ? 13 : 12) + (isAllSegment ? 1 : 0)}
+                    colSpan={
+                      (showCompanyColumn ? 13 : 12) +
+                      (isAllSegment ? 1 : 0) +
+                      (listPurpose === 'subscriptions' ? 0 : 1)
+                    }
                     className="px-4 py-10 text-center text-gray-500 bg-white"
                   >
-                    No registered users in this category yet.
+                    {listPurpose !== 'subscriptions' && productFilterHidesRows
+                      ? 'No purchases of this product are recorded yet.'
+                      : 'No registered users in this category yet.'}
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
+                tableRows.map((r, i) => (
                   <tr
                     key={rowListKey(r)}
                     className={i % 2 === 0 ? 'bg-white' : 'bg-[#f3f3f3]'}
@@ -2196,11 +2276,31 @@ export default function AdminRegisteredUsersList({
                     <td className="px-3 py-2 border-t border-gray-300">{r.country?.trim() || '—'}</td>
                     <CountryFlagCell country={r.country} />
                     <td className="px-3 py-2 border-t border-gray-300">{r.location?.trim() || '—'}</td>
-                    <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">{r.dateStart}</td>
-                    <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
-                      {r.dateEnd ?? '—'}
-                    </td>
-                    <VersionCell row={r} />
+                    {listPurpose === 'products' ? (
+                      <>
+                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">{r.dateStart}</td>
+                        <td className="px-3 py-2 border-t border-gray-300">
+                          {purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}
+                        </td>
+                        <td className="px-3 py-2 border-t border-gray-300">
+                          {subscriptionPurchaseDescription(r.userType, r.version, 1)}
+                        </td>
+                        <td className="px-2 py-2 border-t border-gray-300 text-center">1</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">{r.dateStart}</td>
+                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
+                          {r.dateEnd ?? '—'}
+                        </td>
+                        <VersionCell row={r} />
+                      </>
+                    )}
+                    {listPurpose === 'payments' ? (
+                      <td className="px-3 py-2 border-t border-gray-300">
+                        {purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}
+                      </td>
+                    ) : null}
                     <td className="px-3 py-2 border-t border-gray-300 font-medium">
                       {isClubsSegment || (isAllSegment && isClubUserType(r.userType)) ? (
                         <button
@@ -2221,7 +2321,7 @@ export default function AdminRegisteredUsersList({
                           : r.companyName || '—'}
                       </td>
                     )}
-                    <td className="px-2 py-2 border-t border-gray-300 text-gray-700">{r.amount}</td>
+                    <AmountCell row={r} />
                     <td className="px-3 py-2 border-t border-gray-300">
                       <span className={clubAdminStatusClassName(r.statusTone)}>{r.status}</span>
                     </td>

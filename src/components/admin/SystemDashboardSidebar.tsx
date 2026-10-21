@@ -187,22 +187,42 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
     },
     {
       id: 'club_options',
-      label: 'Club options',
+      label: 'Purchase options',
       items: [
+        { label: 'List of payments', icon: CreditCard, href: '/admin/payments' },
         { label: 'Club accounts', icon: UserCircle, href: '/admin/club-accounts' },
-        { 
-          label: 'Accounts', 
+        {
+          label: "Coach's Members Accounts",
           icon: UserCircle,
           hasSubmenu: true,
-          id: 'club_accounts',
+          id: 'coach_member_accounts',
           subItems: [
-            { label: 'Price list', href: '/admin/accounts/price-list' },
-            { label: 'Requests of accounts', href: '/admin/accounts/requests' }
-          ]
+            { label: 'Price list', href: '/admin/accounts/price-list?audience=coach' },
+            { label: 'Requests of accounts', href: '/admin/accounts/requests?audience=coach' },
+          ],
         },
-        { label: 'Identification cards', icon: ShoppingBasket, href: '/admin/identification-cards' },
+        {
+          label: "Team Member's Accounts",
+          icon: UserCircle,
+          hasSubmenu: true,
+          id: 'team_member_accounts',
+          subItems: [
+            { label: 'Price list', href: '/admin/accounts/price-list?audience=team' },
+            { label: 'Requests of accounts', href: '/admin/accounts/requests?audience=team' },
+          ],
+        },
+        {
+          label: "Club Members' Accounts",
+          icon: UserCircle,
+          hasSubmenu: true,
+          id: 'club_member_accounts',
+          subItems: [
+            { label: 'Price list', href: '/admin/accounts/price-list?audience=club' },
+            { label: 'Requests of accounts', href: '/admin/accounts/requests?audience=club' },
+          ],
+        },
         { label: 'Products purchased', icon: ShoppingBasket, href: '/admin/products-purchased' },
-        { label: 'Order purchased', icon: Truck, href: '/admin/orders' },
+        { label: 'Identification Cards', icon: Truck, href: '/admin/orders' },
         {
           label: 'Hardware',
           icon: Smartphone,
