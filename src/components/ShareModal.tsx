@@ -22,6 +22,8 @@ type ShareModalProps = {
   hidePost?: boolean;
   /** Show an Email option (mailto). */
   showEmail?: boolean;
+  /** Open the shared page with its archive grid only, without workspace chrome. */
+  gridOnly?: boolean;
 };
 
 export default function ShareModal({
@@ -32,6 +34,7 @@ export default function ShareModal({
   description,
   hidePost = false,
   showEmail = false,
+  gridOnly = false,
 }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -43,10 +46,16 @@ export default function ShareModal({
 
   const shareUrl =
     url ?? (typeof window !== "undefined" ? window.location.href : "");
+  const gridShareUrl = (() => {
+    if (!gridOnly || typeof window === "undefined" || !shareUrl) return shareUrl;
+    const parsed = new URL(shareUrl, window.location.href);
+    parsed.searchParams.set("share", "grid");
+    return parsed.toString();
+  })();
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(gridShareUrl);
       setCopied(true);
     } catch (err) {
       alert("Failed to copy link");
@@ -78,7 +87,7 @@ export default function ShareModal({
 
           {/* WhatsApp */}
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(shareUrl)}`}
+            href={`https://wa.me/?text=${encodeURIComponent(gridShareUrl)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex flex-col items-center justify-center border rounded-lg py-3 hover:bg-gray-100 transition text-gray-700"
@@ -89,7 +98,7 @@ export default function ShareModal({
 
           {/* Telegram */}
           <a
-            href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}`}
+            href={`https://t.me/share/url?url=${encodeURIComponent(gridShareUrl)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex flex-col items-center justify-center border rounded-lg py-3 hover:bg-gray-100 transition text-gray-700"
@@ -100,7 +109,7 @@ export default function ShareModal({
 
           {/* Facebook */}
           <a
-            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
+            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(gridShareUrl)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex flex-col items-center justify-center border rounded-lg py-3 hover:bg-gray-100 transition text-gray-700"
@@ -111,7 +120,7 @@ export default function ShareModal({
 
           {showEmail ? (
             <a
-              href={`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`}
+              href={`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(gridShareUrl)}`}
               className="flex flex-col items-center justify-center border rounded-lg py-3 hover:bg-gray-100 transition text-gray-700"
             >
               <Mail size={22} className="text-gray-600" />

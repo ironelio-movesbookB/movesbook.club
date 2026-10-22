@@ -136,7 +136,7 @@ export function getAdminPasswordConfirmCopy(kind: ManagedEntityKind): {
       return {
         title: 'Confirm Club Admin password',
         description: (u) =>
-          `Retype the password for Club Admin <${u}> to create another club.`,
+          `Retype the password for Club Admin <${u}> to confirm this action.`,
       };
   }
 }

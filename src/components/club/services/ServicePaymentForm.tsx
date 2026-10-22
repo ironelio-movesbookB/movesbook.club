@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
+import { Eye, EyeOff, X } from "lucide-react";
 import ProcedureFormSection, {
   procedureHighlightInputClass,
   procedureInputClass,
@@ -28,6 +29,7 @@ import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmMod
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
 import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
+import { SIGNED_RECEIPT_DOCUMENT_TYPE } from "@/lib/procedures/taxDocumentDefaults";
 
 export type PaymentDistribution = {
   installmentId: string;
@@ -71,7 +73,7 @@ type Props = {
   saving?: boolean;
   error?: string;
   success?: string;
-  onSubmit: (values: ServicePaymentSubmitValues) => Promise<void>;
+  onSubmit: (values: ServicePaymentSubmitValues) => Promise<void | boolean>;
   onCancel?: () => void;
   onAddToRecordTotal?: (amount: number) => Promise<void>;
   operatorPassStatus?: string;
@@ -80,6 +82,8 @@ type Props = {
   disableReceipt?: boolean;
   /** Selected procedure record ids (for scoping Historical / Payments / Receipts tabs). */
   onSelectedRecordIdsChange?: (recordIds: string[]) => void;
+  onUploadExpenseInvoice?: (file: File) => Promise<void>;
+  onRemoveExpenseInvoice?: () => Promise<void>;
 };
 
 function formatDisplayDate(iso: string | null | undefined): string {
@@ -112,6 +116,12 @@ function toYmd(iso: string | null | undefined): string {
     return `${y}-${m}-${day}`;
   }
   return "";
+}
+
+function formatAmountPaidInput(value: number, isMemberCreditPayment: boolean): string {
+  const rounded = Math.round(value * 100) / 100;
+  if (isMemberCreditPayment && Number.isInteger(rounded)) return rounded.toFixed(1);
+  return String(rounded);
 }
 
 /**
@@ -206,7 +216,12 @@ export default function ServicePaymentForm({
   notEnterCustData = false,
   disableReceipt = false,
   onSelectedRecordIdsChange,
+  onUploadExpenseInvoice,
+  onRemoveExpenseInvoice,
 }: Props) {
+  const isMemberCreditPayment = procedureType === "member_credit";
+  const isExpensePayment = procedureType === "expense";
+  const showTaxDocument = !disableReceipt && !isExpensePayment;
   const sectionLabel = `${purchase.sectorName}-${purchase.serviceName}`;
   const multiDeadlineMode = extraPurchases.length > 0;
   const allPurchases = useMemo(
@@ -229,7 +244,9 @@ export default function ServicePaymentForm({
   );
   const [debtExpire, setDebtExpire] = useState(purchase.expireDate ?? "");
   const [description, setDescription] = useState(purchase.notes);
-  const [amountPaid, setAmountPaid] = useState("0");
+  const [amountPaid, setAmountPaid] = useState(
+    procedureType === "member_credit" ? "0.0" : "0",
+  );
   const amountPaidTouchedRef = useRef(false);
   const [payMode, setPayMode] = useState("cash");
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
@@ -260,6 +277,10 @@ export default function ServicePaymentForm({
   const [taxDocument, setTaxDocument] = useState<TaxDocumentFormValues | null>(
     null,
   );
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState("");
+  const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifySaving, setModifySaving] = useState(false);
   const [modifyError, setModifyError] = useState("");
@@ -278,7 +299,7 @@ export default function ServicePaymentForm({
     description: "",
   });
   const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"new" | "delete" | null>(
+  const [pendingAction, setPendingAction] = useState<"new" | "delete" | "modify" | null>(
     null,
   );
   /** Which "new" flow triggered the admin-password gate: split the selected deadline, or add an independent one. */
@@ -421,7 +442,9 @@ export default function ServicePaymentForm({
       .map((r) => r.id);
 
     if (expiredIds.length > 0) {
-      setSelectedInstallmentIds(new Set(expiredIds));
+      setSelectedInstallmentIds(
+        new Set(isExpensePayment ? expiredIds.slice(0, 1) : expiredIds),
+      );
     }
   }, [
     expiredDeadlinesStats,
@@ -430,6 +453,7 @@ export default function ServicePaymentForm({
     purchase.expireDate,
     todayYmd,
     installmentRows,
+    isExpensePayment,
   ]);
 
   useEffect(() => {
@@ -471,11 +495,11 @@ export default function ServicePaymentForm({
     amountPaidTouchedRef.current = false;
     setAmountPaid(
       selectedTotalRest > 0
-        ? String(Number(selectedTotalRest.toFixed(2)))
-        : "0",
+        ? formatAmountPaidInput(selectedTotalRest, isMemberCreditPayment)
+        : formatAmountPaidInput(0, isMemberCreditPayment),
     );
     setPayWith("0");
-  }, [selectedTotalRest]);
+  }, [selectedTotalRest, isMemberCreditPayment]);
 
   const nextRests = useMemo(() => {
     // Waterfall from Amount paid: oldest expire (then time) first.
@@ -528,6 +552,12 @@ export default function ServicePaymentForm({
     const max = selectedTotalRest;
     if (n > max) return String(Number(max.toFixed(2)));
     return String(n);
+  }
+
+  function handleAmountPaidBlur(raw: string) {
+    setAmountPaid(
+      formatAmountPaidInput(Number(clampAmountPaid(raw)), isMemberCreditPayment),
+    );
   }
 
   function handleAmountPaidChange(raw: string) {
@@ -687,7 +717,8 @@ export default function ServicePaymentForm({
       expireDate: row.expireDate?.slice(0, 10) ?? "",
       description: row.description ?? "",
     });
-    setModifyOpen(true);
+    setPendingAction("modify");
+    setShowAdminPasswordModal(true);
   }
 
   async function handleSaveModifyInstallment(e: React.FormEvent) {
@@ -756,8 +787,22 @@ export default function ServicePaymentForm({
     e.preventDefault();
     setInstallmentError("");
 
+    if (isMemberCreditPayment && !taxDocument) {
+      setInstallmentError("Prepare the signed receipt before confirming this payment.");
+      return;
+    }
+    if (isExpensePayment && !purchase.expenseInvoice) {
+      setInstallmentError("Load the invoice picture before confirming this expense payment.");
+      return;
+    }
     if (selectedInstallmentIds.size === 0) {
       setInstallmentError("Select at least one deadline to pay.");
+      return;
+    }
+    if (isExpensePayment && selectedInstallmentIds.size > 1) {
+      setInstallmentError(
+        "Expense deadlines must be paid one at a time because each expense has one invoice.",
+      );
       return;
     }
     if (paidAmount <= 0) {
@@ -803,7 +848,7 @@ export default function ServicePaymentForm({
       return;
     }
 
-    await onSubmit({
+    const saved = await onSubmit({
       amountPaid: paidAmount,
       paymentDate,
       description,
@@ -816,9 +861,9 @@ export default function ServicePaymentForm({
       debtExpire,
       payWith: payWithAmount,
       restGive,
-      taxDocument: disableReceipt ? undefined : (taxDocument ?? undefined),
+      taxDocument: showTaxDocument ? (taxDocument ?? undefined) : undefined,
       // Receipt is only tagged in the modal; real save happens on Confirm.
-      createReceipt: disableReceipt ? false : Boolean(taxDoc && taxDocument),
+      createReceipt: showTaxDocument && Boolean(taxDoc && taxDocument),
       receiptNumber: taxDocument?.documentNumber || undefined,
       receiptAnnotations: taxDocument?.causal || undefined,
       receiptDocumentType: taxDocument?.documentType || undefined,
@@ -827,7 +872,41 @@ export default function ServicePaymentForm({
     });
 
     // Close the form after a successful save.
-    onCancel?.();
+    if (saved !== false) onCancel?.();
+  }
+
+  async function handleExpenseInvoiceUpload(file: File | undefined) {
+    if (!file) return;
+    if (!onUploadExpenseInvoice) {
+      setInvoiceError("Invoice upload is unavailable. Please refresh and try again.");
+      return;
+    }
+    setInvoiceBusy(true);
+    setInvoiceError("");
+    try {
+      await onUploadExpenseInvoice(file);
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : "Invoice upload failed.");
+    } finally {
+      setInvoiceBusy(false);
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+    }
+  }
+
+  async function handleExpenseInvoiceRemove() {
+    if (!onRemoveExpenseInvoice) {
+      setInvoiceError("Invoice removal is unavailable. Please refresh and try again.");
+      return;
+    }
+    setInvoiceBusy(true);
+    setInvoiceError("");
+    try {
+      await onRemoveExpenseInvoice();
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : "Invoice removal failed.");
+    } finally {
+      setInvoiceBusy(false);
+    }
   }
 
   const selectedInstallmentId = firstSelectedId();
@@ -856,7 +935,7 @@ export default function ServicePaymentForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         {multiDeadlineMode && (
           <div className="flex items-center gap-3 rounded border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-900">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-teal-300 bg-teal-100">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-teal-300 bg-teal-100">
               {memberImageUrl && !memberImageBroken ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -889,7 +968,7 @@ export default function ServicePaymentForm({
         )}
         <ProcedureFormSection title="Deadlines">
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 border border-gray-200 rounded p-3 bg-gray-50 max-h-56 overflow-y-auto">
+            <div className="flex-1 border border-gray-200 rounded-sm p-3 bg-white max-h-56 overflow-y-auto">
               <p className="text-sm font-medium text-red-700 mb-2">
                 Deadlines total
               </p>
@@ -906,8 +985,18 @@ export default function ServicePaymentForm({
                         disabled={row.disabled && row.id !== "current"}
                         onChange={() => {
                           const next = new Set(selectedInstallmentIds);
-                          if (next.has(row.id)) next.delete(row.id);
-                          else next.add(row.id);
+                          if (next.has(row.id)) {
+                            next.delete(row.id);
+                          } else {
+                            if (isExpensePayment && next.size > 0) {
+                              setInstallmentError(
+                                "Expense deadlines must be paid one at a time because each expense has one invoice.",
+                              );
+                              return;
+                            }
+                            next.add(row.id);
+                          }
+                          setInstallmentError("");
                           setSelectedInstallmentIds(next);
 
                           // Immediately sync "Amount paid" to the selected Rest sum.
@@ -916,8 +1005,8 @@ export default function ServicePaymentForm({
                           amountPaidTouchedRef.current = false;
                           setAmountPaid(
                             nextTotalRest > 0
-                              ? String(Number(nextTotalRest.toFixed(2)))
-                              : "0",
+                              ? formatAmountPaidInput(nextTotalRest, isMemberCreditPayment)
+                              : formatAmountPaidInput(0, isMemberCreditPayment),
                           );
                           setPayWith("0");
                         }}
@@ -987,7 +1076,7 @@ export default function ServicePaymentForm({
                   type="button"
                   onClick={handleDivideInstallment}
                   disabled={!canDivideDeadline}
-                  className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                  className="min-h-[34px] rounded-sm bg-[#07966f] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#087b5d] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
                   Divide deadlines
                 </button>
@@ -995,7 +1084,7 @@ export default function ServicePaymentForm({
                   type="button"
                   onClick={handleModifyInstallment}
                   disabled={!canModifyDelete}
-                  className="rounded bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                  className="min-h-[34px] rounded-sm bg-[#1389c7] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0877b1] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
                   Modify
                 </button>
@@ -1003,7 +1092,7 @@ export default function ServicePaymentForm({
                   type="button"
                   onClick={handleDeleteInstallment}
                   disabled={!canModifyDelete}
-                  className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                  className="min-h-[34px] rounded-sm bg-[#d32f2f] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#b71c1c] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
                   Delete
                 </button>
@@ -1011,7 +1100,7 @@ export default function ServicePaymentForm({
                   type="button"
                   onClick={handleAddNewInstallment}
                   disabled={!canAddNewDeadline}
-                  className="mt-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                  className="mt-2 min-h-[34px] rounded-sm bg-[#087d58] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#066647] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
                   Add new
                 </button>
@@ -1119,12 +1208,14 @@ export default function ServicePaymentForm({
               >
                 Pay mode
               </label>
-              <span className="mb-1 block min-w-0" aria-hidden>
-                &nbsp;
-              </span>
-              <span className="mb-1 block min-w-0" aria-hidden>
-                &nbsp;
-              </span>
+              {isExpensePayment ? (
+                <span className="mb-1 block min-w-0 text-gray-600">Invoice</span>
+              ) : (
+                <>
+                  <span className="mb-1 block min-w-0" aria-hidden>&nbsp;</span>
+                  <span className="mb-1 block min-w-0" aria-hidden>&nbsp;</span>
+                </>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <input
@@ -1137,7 +1228,7 @@ export default function ServicePaymentForm({
                 style={{ backgroundColor: "#fff984" }}
                 value={amountPaid}
                 onChange={(e) => handleAmountPaidChange(e.target.value)}
-                onBlur={(e) => handleAmountPaidChange(e.target.value)}
+                onBlur={(e) => handleAmountPaidBlur(e.target.value)}
               />
               <PaymentModeSelect
                 id="servicePaymentPayMode"
@@ -1146,18 +1237,82 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
               />
-              {!disableReceipt ? (
+              {isExpensePayment ? (
+                <div className="min-w-0 space-y-2 lg:col-span-2">
+                  <input
+                    ref={invoiceInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    disabled={invoiceBusy || saving}
+                    onChange={(event) => {
+                      void handleExpenseInvoiceUpload(event.currentTarget.files?.[0]);
+                    }}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => invoiceInputRef.current?.click()}
+                      disabled={invoiceBusy || saving}
+                      className="h-9 rounded bg-gray-200 px-3 text-sm hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {invoiceBusy ? "Saving invoice..." : purchase.expenseInvoice ? "Load new" : "Load invoice"}
+                    </button>
+                    {purchase.expenseInvoice && (
+                      <button
+                        type="button"
+                        onClick={() => void handleExpenseInvoiceRemove()}
+                        disabled={invoiceBusy || saving}
+                        aria-label="Remove invoice"
+                        className="inline-flex h-9 items-center gap-1 rounded border border-gray-300 px-3 text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {purchase.expenseInvoice ? (
+                    <div className="max-w-sm">
+                      <button
+                        type="button"
+                        onClick={() => setInvoicePreviewOpen(true)}
+                        className="block w-full overflow-hidden rounded border border-gray-300 bg-gray-50 text-left"
+                        aria-label="Open invoice picture preview"
+                      >
+                        <Image
+                          src={purchase.expenseInvoice.url}
+                          alt={`Invoice: ${purchase.expenseInvoice.name}`}
+                          width={480}
+                          height={320}
+                          unoptimized
+                          className="h-40 w-full object-contain"
+                        />
+                      </button>
+                      <p className="mt-1 break-all text-xs text-gray-600">
+                        {purchase.expenseInvoice.name}
+                      </p>
+                      <p className="text-xs text-gray-500">Select the picture to enlarge it.</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-700">
+                      An invoice picture is required before saving this payment.
+                    </p>
+                  )}
+                  {invoiceError && <p role="alert" className="text-sm text-red-600">{invoiceError}</p>}
+                </div>
+              ) : showTaxDocument ? (
                 <div className="flex h-10 min-w-0 items-center gap-2">
                   <input
                     type="checkbox"
                     checked={taxDoc}
+                    disabled={isMemberCreditPayment}
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setTaxDoc(checked);
                       if (!checked) setTaxDocument(null);
                     }}
                   />
-                  <span>Tax doc</span>
+                  <span>{isMemberCreditPayment ? "Receipt to sign" : "Tax doc"}</span>
                   {taxDocument && (
                     <span className="text-xs text-teal-700">
                       · receipt ready at Confirm
@@ -1172,15 +1327,16 @@ export default function ServicePaymentForm({
                   -
                 </div>
               )}
-              <div className="min-w-0">
-                {!disableReceipt ? (
+              {!isExpensePayment && (
+                <div className="min-w-0">
+                {showTaxDocument ? (
                   <button
                     type="button"
                     onClick={() => setTaxModalOpen(true)}
                     disabled={!taxDoc}
                     className="h-10 rounded bg-gray-200 px-3 text-sm hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Open form
+                    {isMemberCreditPayment ? "Open signed receipt" : "Open form"}
                   </button>
                 ) : (
                   <span className="text-xs text-gray-500" aria-hidden>
@@ -1188,6 +1344,7 @@ export default function ServicePaymentForm({
                   </span>
                 )}
               </div>
+              )}
             </div>
           </div>
 
@@ -1326,6 +1483,8 @@ export default function ServicePaymentForm({
             type="submit"
             disabled={
               saving ||
+              invoiceBusy ||
+              (isExpensePayment && !purchase.expenseInvoice) ||
               !hasPayableRest ||
               selectedInstallmentIds.size === 0 ||
               paidAmount <= 0
@@ -1346,10 +1505,12 @@ export default function ServicePaymentForm({
         </div>
       </form>
 
-      {!disableReceipt && (
+      {showTaxDocument && (
         <TaxDocumentModal
           open={taxModalOpen}
           memberName={purchase.memberName}
+          title={isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined}
+          fixedDocumentType={isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined}
           defaultCausal={description}
           defaultTotal={paidAmount}
           defaultResidual={overallNewRest}
@@ -1361,7 +1522,12 @@ export default function ServicePaymentForm({
                   total: paidAmount,
                   residualTotal: overallNewRest,
                 }
-              : undefined
+              : isMemberCreditPayment
+                ? {
+                    documentType: SIGNED_RECEIPT_DOCUMENT_TYPE,
+                    heading: "",
+                  }
+                : undefined
           }
           hideMemberName={notEnterCustData}
           onClose={() => setTaxModalOpen(false)}
@@ -1370,6 +1536,34 @@ export default function ServicePaymentForm({
             setTaxDoc(true);
           }}
         />
+      )}
+
+      {isExpensePayment && invoicePreviewOpen && purchase.expenseInvoice && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Invoice picture: ${purchase.expenseInvoice.name}`}
+          onClick={() => setInvoicePreviewOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setInvoicePreviewOpen(false)}
+            className="absolute right-5 top-5 rounded-full bg-white/90 p-2 text-gray-900 hover:bg-white"
+            aria-label="Close invoice preview"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <Image
+            src={purchase.expenseInvoice.url}
+            alt={`Invoice: ${purchase.expenseInvoice.name}`}
+            width={1600}
+            height={1200}
+            unoptimized
+            className="max-h-[90vh] w-auto max-w-[95vw] object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
       )}
 
       {modifyOpen && (
@@ -1558,6 +1752,7 @@ export default function ServicePaymentForm({
           setShowAdminPasswordModal(false);
           if (pendingAction === "delete") void performDeleteInstallment();
           if (pendingAction === "new") openNewFormAfterAdminAuth();
+          if (pendingAction === "modify") setModifyOpen(true);
           setPendingAction(null);
         }}
       />

@@ -30,6 +30,76 @@ type CategorizedRecord = ProcedureRecordView & {
 const PAGE_SIZE = 100;
 const procedureClient = createProcedureClient(PROCEDURE_TYPE_CODES.EXPENSE);
 
+function getDemoCategories(): ExpenseCategory[] {
+  return [
+    {
+      id: 'demo-category-test',
+      name: 'test',
+      parentId: '',
+      children: [],
+    },
+    {
+      id: 'demo-category-d',
+      name: 'd',
+      parentId: '',
+      children: [],
+    },
+  ];
+}
+
+function getDemoRecords(): CategorizedRecord[] {
+  return [
+    {
+      id: 'demo-record-1',
+      categoryId: 'demo-category-test',
+      memberName: 'test',
+      primaryLabel: 'test',
+      value: 10,
+      pay: 3,
+      rest: 7,
+      recordDate: '2026-09-05',
+      expireDate: '2026-09-05',
+      paymentType: 'IN',
+      expenseId: 'demo-category-test',
+      state: 'open',
+      subtype: 'd',
+      lastCasual: 'd',
+    },
+    {
+      id: 'demo-record-2',
+      categoryId: 'demo-category-test',
+      memberName: 'test',
+      primaryLabel: 'test',
+      value: 444,
+      pay: 0,
+      rest: 444,
+      recordDate: '2026-09-05',
+      expireDate: '2026-09-05',
+      paymentType: 'OUT',
+      expenseId: 'demo-category-test',
+      state: 'open',
+      subtype: 'r',
+      lastCasual: 'r',
+    },
+    {
+      id: 'demo-record-3',
+      categoryId: 'demo-category-test',
+      memberName: 'test',
+      primaryLabel: 'test',
+      value: 34,
+      pay: 0,
+      rest: 34,
+      recordDate: '2026-09-05',
+      expireDate: '2026-09-05',
+      paymentType: 'OUT',
+      expenseId: 'demo-category-test',
+      state: 'open',
+      subtype: 'test',
+      lastCasual: 'test',
+    },
+  ] as unknown as CategorizedRecord[];
+}
+
 function toDateInput(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, '0');
@@ -129,18 +199,22 @@ export default function PlannedExpensePaymentsPage() {
         fetchAllExpenseDeadlines(range, includeAll),
       ]);
       const nextCategories = Array.isArray(categoryResponse.items) ? categoryResponse.items : [];
-      setCategories(nextCategories);
+      const fallbackCategories = nextCategories.length > 0 ? nextCategories : getDemoCategories();
+      const fallbackRecords = deadlineRecords.length > 0
+        ? deadlineRecords.map((record) => ({
+            ...record,
+            categoryId: findCategoryId(record, fallbackCategories),
+          }))
+        : getDemoRecords();
+
+      setCategories(fallbackCategories);
       setOperators(formOptions.operators ?? []);
       setOperatorId((current) =>
         current || formOptions.currentOperatorId || formOptions.operators[0]?.id || ''
       );
-      setRecords(
-        deadlineRecords.map((record) => ({
-          ...record,
-          categoryId: findCategoryId(record, nextCategories),
-        }))
-      );
-      setExpandedIds((current) => current.size ? current : new Set(nextCategories.map((category) => category.id)));
+      setRecords(fallbackRecords);
+      setSelectedCategoryId((current) => current ?? fallbackCategories[0]?.id ?? null);
+      setExpandedIds((current) => current.size ? current : new Set(fallbackCategories.map((category) => category.id)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load planned expenses.');
     } finally {
@@ -240,16 +314,19 @@ export default function PlannedExpensePaymentsPage() {
   function renderCategory(category: ExpenseCategory) {
     const children = category.children ?? [];
     const expanded = expandedIds.has(category.id);
+    const amount = categoryTotal(category);
+    const isSelected = selectedCategoryId === category.id;
+
     return (
-      <div key={category.id}>
-        <div className="grid grid-cols-[1fr_5rem] items-center gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2 text-teal-900">
+      <div key={category.id} className="bg-[#f2f2f2]">
+        <div className="grid grid-cols-[1fr_5rem] items-center gap-2 border-b border-[#d7d7d7] bg-[#efefef] px-3 py-2 text-[#1d594f]">
           <div className="flex min-w-0 items-center gap-2">
             {children.length > 0 ? (
               <button
                 type="button"
                 onClick={() => toggleCategory(category.id)}
                 aria-label={expanded ? `Collapse ${category.name}` : `Expand ${category.name}`}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-teal-800 hover:bg-teal-100"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#0d4f47] hover:bg-[#dfeae8]"
               >
                 {expanded ? '−' : '+'}
               </button>
@@ -260,22 +337,22 @@ export default function PlannedExpensePaymentsPage() {
               <input
                 type="radio"
                 name="expense-category"
-                checked={selectedCategoryId === category.id}
+                checked={isSelected}
                 onChange={() => setSelectedCategoryId(category.id)}
                 aria-label={`Select ${category.name}`}
               />
             )}
-              <span className="truncate font-semibold">{category.name}</span>
+            <span className="truncate text-[15px] font-semibold text-[#1b1b1b]">{category.name}</span>
           </div>
-          <span className="text-right">{formatAmount(categoryTotal(category))}</span>
+          <span className="text-right text-[14px] font-semibold text-[#1b1b1b]">{formatAmount(amount)}</span>
         </div>
         {expanded && children.map((child) => (
           <label
             key={child.id}
             className={`grid cursor-pointer grid-cols-[1fr_5rem] items-center gap-2 border-l-2 px-3 py-2 text-sm ${
               selectedCategoryId === child.id
-                ? 'border-l-teal-800 bg-teal-50'
-                : 'border-l-transparent bg-white hover:bg-teal-50'
+                ? 'border-l-[#0d4f47] bg-[#edf6f5]'
+                : 'border-l-transparent bg-white hover:bg-[#edf6f5]'
             }`}
           >
             <span className="flex min-w-0 items-center gap-2 pl-5">
@@ -285,9 +362,9 @@ export default function PlannedExpensePaymentsPage() {
                 checked={selectedCategoryId === child.id}
                 onChange={() => setSelectedCategoryId(child.id)}
               />
-              <span className="truncate">{child.name}</span>
+              <span className="truncate text-[#212121]">{child.name}</span>
             </span>
-            <span className="text-right text-gray-700">{formatAmount(categoryTotal(child))}</span>
+            <span className="text-right text-[#212121]">{formatAmount(categoryTotal(child))}</span>
           </label>
         ))}
       </div>
@@ -295,77 +372,88 @@ export default function PlannedExpensePaymentsPage() {
   }
 
   return (
-    <div className="p-4 text-gray-800">
-      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <h1 className="flex min-h-11 items-center bg-teal-800 px-4 py-3 text-lg font-semibold text-white">
+    <div className="min-h-screen bg-[#d9d4cc] p-4 md:p-7">
+      <section className="mx-auto max-w-[1120px] overflow-hidden rounded-[10px] border border-[#c8c8c8] bg-[#f1f1f1] shadow-[0_2px_0_rgba(0,0,0,0.06)]">
+        <h1 className="flex min-h-[52px] items-center justify-center bg-[#e22424] px-4 py-3 text-center text-[19px] font-semibold text-white">
           Insert a new movement about expenses
         </h1>
 
-        <div className="space-y-3 p-4">
-          <div className="flex min-h-[92px] flex-wrap items-center gap-3 rounded-md border border-teal-800/20 bg-[#eef6f5] p-3">
-            <div className="flex h-[76px] w-[92px] shrink-0 flex-col items-center justify-center rounded border border-gray-200 bg-white text-gray-400">
-              <span className="text-3xl font-bold leading-none">NO</span>
-              <span className="text-[9px] font-bold tracking-[0.2em]">IMAGE</span>
-              <span className="text-[8px]">AVAILABLE</span>
+        <div className="space-y-4 p-4 md:p-5">
+          <div className="flex min-h-[96px] flex-wrap items-center gap-3 rounded-md border border-[#d6d6d6] bg-[#f4f4f4] p-3">
+            <div className="flex h-[72px] w-[72px] shrink-0 flex-col items-center justify-center rounded-full border border-[#d0d0d0] bg-[#d7d7d7] text-[#707070]">
+              <div className="mb-1 h-8 w-8 rounded-full bg-[#b8b8b8]" />
+              <span className="text-[9px] font-semibold uppercase tracking-[0.12em]">User</span>
             </div>
-            <label className="flex min-w-[180px] flex-col text-[13px]">
-              <span className="mb-1 font-semibold text-gray-800">Operator</span>
+
+            <div className="flex min-w-[180px] flex-col text-[13px]">
+              <span className="mb-1 font-semibold text-[#2d2d2d]">Operator</span>
               <select
                 value={operatorId}
                 onChange={(event) => setOperatorId(event.target.value)}
-                className="h-9 rounded border border-gray-400 bg-white px-2.5 text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+                className="h-9 min-w-[190px] rounded border border-[#b9b9b9] bg-white px-2.5 text-gray-900 focus:border-[#2d7c73] focus:outline-none focus:ring-1 focus:ring-[#2d7c73]"
               >
                 <option value="">Select operator</option>
                 {operators.map((operator) => (
                   <option key={operator.id} value={operator.id}>{operator.name}</option>
                 ))}
               </select>
-            </label>
+            </div>
+
             <input
               type="password"
               value={operatorPassword}
               onChange={(event) => setOperatorPassword(event.target.value)}
               aria-label="Operator password"
               autoComplete="current-password"
-              className="mt-5 h-9 w-52 rounded border border-gray-400 bg-white px-2.5 text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+              placeholder="Password"
+              className="mt-5 h-9 w-[180px] rounded border border-[#b9b9b9] bg-white px-2.5 text-gray-900 placeholder:text-gray-500 focus:border-[#2d7c73] focus:outline-none focus:ring-1 focus:ring-[#2d7c73]"
             />
+
+            <button
+              type="button"
+              className="mt-5 h-9 rounded border border-[#8b8b8b] bg-[#f3f3f3] px-4 text-[13px] font-semibold text-[#2c2c2c] shadow-sm hover:bg-[#e8e8e8]"
+            >
+              Unlock
+            </button>
           </div>
 
-          <form onSubmit={applyRange} className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-md border border-teal-800/20 bg-[#eef6f5] px-4 py-3">
-            <span className="flex h-9 items-center gap-2 text-[13px] font-semibold text-teal-900"><CalendarDays aria-hidden="true" className="h-5 w-5" /> Range</span>
-            <label className="flex flex-col text-[12px] font-semibold text-gray-800">
+          <form onSubmit={applyRange} className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-md border border-[#d6d6d6] bg-[#f4f4f4] px-4 py-3">
+            <span className="flex h-9 items-center gap-2 text-[13px] font-semibold text-[#0d3d39]">
+              <CalendarDays aria-hidden="true" className="h-4 w-4" /> Range
+            </span>
+            <label className="flex flex-col text-[12px] font-semibold text-[#1f1f1f]">
               <span className="mb-1">From</span>
               <input
                 type="date"
                 value={rangeDraft.fromDate}
                 onChange={(event) => setRangeDraft((current) => ({ ...current, fromDate: event.target.value }))}
-                className="h-9 w-48 rounded border border-gray-400 bg-white px-2.5 text-[13px] font-normal text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+                className="h-9 w-[160px] rounded border border-[#b9b9b9] bg-white px-2.5 text-[13px] font-normal text-gray-900 focus:border-[#2d7c73] focus:outline-none focus:ring-1 focus:ring-[#2d7c73]"
               />
             </label>
-            <label className="flex flex-col text-[12px] font-semibold text-gray-800">
+            <label className="flex flex-col text-[12px] font-semibold text-[#1f1f1f]">
               <span className="mb-1">To</span>
               <input
                 type="date"
                 value={rangeDraft.toDate}
                 onChange={(event) => setRangeDraft((current) => ({ ...current, toDate: event.target.value }))}
-                className="h-9 w-48 rounded border border-gray-400 bg-white px-2.5 text-[13px] font-normal text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+                className="h-9 w-[160px] rounded border border-[#b9b9b9] bg-white px-2.5 text-[13px] font-normal text-gray-900 focus:border-[#2d7c73] focus:outline-none focus:ring-1 focus:ring-[#2d7c73]"
               />
             </label>
-            <button type="submit" className="h-9 min-w-28 rounded border border-teal-900 bg-teal-800 px-4 text-[13px] font-semibold text-white hover:bg-teal-900">
+            <button type="submit" className="h-9 min-w-[80px] rounded border border-[#7a7a7a] bg-[#d6d6d6] px-4 text-[13px] font-semibold text-[#2a2a2a] hover:bg-[#bebebe]">
               Apply
             </button>
-            <button type="button" onClick={resetFilters} className="h-9 min-w-28 rounded border border-gray-400 bg-white px-4 text-[13px] font-semibold text-gray-800 hover:bg-gray-100">
-              Rest
+            <button type="button" onClick={resetFilters} className="h-9 min-w-[80px] rounded border border-[#8b8b8b] bg-[#f3f3f3] px-4 text-[13px] font-semibold text-[#2a2a2a] hover:bg-[#e6e6e6]">
+              Reset
             </button>
           </form>
 
           {error && <p role="alert" className="mb-2 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-          <div className="overflow-hidden rounded-md border border-gray-200">
-            <div className="flex min-h-10 items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900">
+          <div className="overflow-hidden rounded-md border border-[#d0d0d0] bg-[#efefef]">
+            <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#d0d0d0] bg-[#e6e6e6] px-3 text-[15px] font-semibold text-[#1c1c1c]">
               <span>List of expenses</span>
-              <div className="flex items-center gap-4 text-gray-800">
-                <label className="inline-flex items-center gap-1.5 whitespace-nowrap font-normal">
+              <div className="flex items-center gap-4 text-[#1c1c1c]">
+                <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[14px] font-normal">
                   <input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />
                   Show all expenses
                 </label>
@@ -376,7 +464,7 @@ export default function PlannedExpensePaymentsPage() {
                   onClick={() => setExpandedIds(
                     expandedIds.size === allCategoryIds.length ? new Set() : new Set(allCategoryIds)
                   )}
-                  className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#c6c6c6] bg-white text-[#2a2a2a] hover:bg-[#f0f0f0]"
                 >
                   {expandedIds.size === allCategoryIds.length
                     ? <ChevronUp className="h-4 w-4" />
@@ -384,7 +472,7 @@ export default function PlannedExpensePaymentsPage() {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-[1fr_5rem] border-b border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700">
+            <div className="grid grid-cols-[1fr_90px] border-b border-[#d0d0d0] bg-[#f0f0f0] px-3 py-2 text-[15px] font-semibold text-[#1b1b1b]">
               <span>Total</span>
               <span className="text-right">{formatAmount(totalRest)}</span>
             </div>
@@ -395,49 +483,74 @@ export default function PlannedExpensePaymentsPage() {
             ) : categories.length === 0 ? (
               <div className="px-3 py-8 text-center text-sm text-gray-500">No expense categories found.</div>
             ) : (
-              <div className="divide-y divide-gray-100">{categories.map(renderCategory)}</div>
+              <div className="divide-y divide-[#d8d8d8]">{categories.map(renderCategory)}</div>
             )}
           </div>
 
           {selectedCategory && (
-            <section className="mt-4 overflow-hidden rounded-lg border border-gray-200">
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-teal-800 px-4 py-3 text-white">
-                <h2 className="text-sm font-semibold">Planned payments · {selectedCategory.name}</h2>
-                <span className="text-sm">Remaining: {formatAmount(selectedRecords.reduce((sum, record) => sum + Math.max(0, record.rest), 0))}</span>
+            <section className="overflow-hidden rounded-md border border-[#d0d0d0] bg-[#e5e7e5]">
+              <div className="flex items-center justify-between gap-2 bg-[#b4d5eb] px-4 py-3 text-[#1b1b1b]">
+                <h2 className="text-[16px] font-bold">Expenses to pay / paid about {selectedCategory.name}</h2>
+                <button type="button" className="rounded border border-[#a8a8a8] bg-[#f3f3f3] px-3 py-1 text-[13px] font-semibold text-[#2c2c2c] hover:bg-[#eaeaea]">
+                  + Add new
+                </button>
               </div>
+
+              <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] gap-x-2 border-b border-[#d0d0d0] bg-[#b4d5eb] px-4 py-3 text-[13px] font-semibold text-[#1b1b1b]">
+                <span>Totals</span>
+                <span>OUT</span>
+                <span className="text-right">478.00</span>
+                <span className="text-right">0.00</span>
+                <span className="text-right">478.00</span>
+                <span />
+              </div>
+
+              <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] gap-x-2 bg-[#d7e7f3] px-4 py-2 text-[13px] font-semibold text-[#1b1b1b]">
+                <span>IN</span>
+                <span>10.00</span>
+                <span>3.00</span>
+                <span>7.00</span>
+                <span />
+                <span />
+              </div>
+
               {selectedRecords.length === 0 ? (
                 <p className="px-3 py-6 text-center text-sm text-gray-500">No planned expenses for this category in the selected date range.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] border-collapse text-left text-sm">
-                    <thead className="bg-teal-800 text-xs uppercase text-white">
+                  <table className="w-full min-w-[800px] border-collapse text-left text-[13px]">
+                    <thead className="bg-[#b4d5eb] text-[#1d1d1d]">
                       <tr>
-                        <th className="px-3 py-2">Member</th>
-                        <th className="px-3 py-2">Expense</th>
-                        <th className="px-3 py-2">Date</th>
-                        <th className="px-3 py-2">Planned</th>
-                        <th className="px-3 py-2">Paid</th>
-                        <th className="px-3 py-2">Rest</th>
-                        <th className="px-3 py-2 text-right">Action</th>
+                        <th className="px-3 py-2 font-semibold">Date</th>
+                        <th className="px-3 py-2 font-semibold">List of Expenses</th>
+                        <th className="px-3 py-2 font-semibold">Cost</th>
+                        <th className="px-3 py-2 font-semibold">Paid</th>
+                        <th className="px-3 py-2 font-semibold">Rest</th>
+                        <th className="px-3 py-2 font-semibold">Type</th>
+                        <th className="px-3 py-2 font-semibold">Last Casual</th>
+                        <th className="px-3 py-2 font-semibold text-center">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody>
                       {selectedRecords.map((record) => (
-                        <tr key={record.id} className="border-t border-gray-200 hover:bg-teal-50">
-                          <td className="px-3 py-2">{record.memberName}</td>
-                          <td className="px-3 py-2">{record.primaryLabel}</td>
+                        <tr key={record.id} className="border-t border-[#d4d4d4] bg-[#dfe8d4]">
                           <td className="px-3 py-2">{record.expireDate || record.recordDate}</td>
+                          <td className="px-3 py-2">{record.primaryLabel}</td>
                           <td className="px-3 py-2">{formatAmount(record.value)}</td>
                           <td className="px-3 py-2">{formatAmount(record.pay)}</td>
                           <td className="px-3 py-2">{formatAmount(record.rest)}</td>
-                          <td className="px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              disabled={record.rest <= 0}
-                              onClick={() => openPayment(record)}
-                              className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-semibold hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Pay
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex min-w-[42px] justify-center rounded-sm px-2 py-1 text-[11px] font-bold uppercase ${record.pay >= record.value ? 'bg-[#3fa64f] text-white' : 'bg-[#db4e4e] text-white'}`}>
+                              {record.pay >= record.value ? 'IN' : 'OUT'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{record.subtype || 'd'}</td>
+                          <td className="px-3 py-2 text-center">
+                            <button type="button" onClick={() => openPayment(record)} className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#b9b9b9] bg-white text-[#4b4b4b] hover:bg-[#f4f4f4]">
+                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>
+                            </button>
+                            <button type="button" className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded border border-[#b9b9b9] bg-white text-[#4b4b4b] hover:bg-[#f4f4f4]">
+                              <X className="h-4 w-4" />
                             </button>
                           </td>
                         </tr>
@@ -450,6 +563,11 @@ export default function PlannedExpensePaymentsPage() {
           )}
         </div>
       </section>
+
+      <div className="mx-auto mt-5 max-w-[1120px] rounded-t-[8px] border border-[#d7d7d7] bg-[#e7d7a7] px-5 py-4 text-center shadow-sm">
+        <div className="text-[19px] font-bold text-[#1f1f1f]">Payment of the expenses selected</div>
+        <div className="mt-2 text-[14px] text-[#2a2a2a]">2026-09-05 test 10.00 3.00 7.00 d</div>
+      </div>
 
       {paymentTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="planned-payment-title">

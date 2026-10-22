@@ -28,6 +28,8 @@ type Props = {
   dateRangeError?: string;
   /** Legacy page selector + Print row. */
   pagination?: ReactNode;
+  /** Optional control displayed beside Print. */
+  paginationTrailing?: ReactNode;
   /** Optional archive-specific filter shown after Search. */
   additionalFilter?: ReactNode;
   /** Place Order before Search for archives that need ordering first. */
@@ -50,6 +52,7 @@ export default function ArchiveListToolbar({
   onClear,
   dateRangeError,
   pagination,
+  paginationTrailing,
   additionalFilter,
   orderFirst = false,
   selectedCount,
@@ -141,6 +144,7 @@ export default function ArchiveListToolbar({
       <ArchiveActionsBar
         shareTitle={title}
         pagination={pagination}
+        paginationTrailing={paginationTrailing}
         selectedCount={selectedCount}
         onDeleteSelected={onDeleteSelected}
       />

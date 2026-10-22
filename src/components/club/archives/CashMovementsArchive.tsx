@@ -32,6 +32,12 @@ type CashRow = Member & {
   procedureType?: string;
 };
 
+type PaymentsScope = {
+  procedureType: ProcedureTypeCode;
+  recordId: string;
+  memberId: string;
+};
+
 type Props = {
   title: string;
   direction: 'all' | 'IN' | 'OUT';
@@ -89,6 +95,8 @@ export default function CashMovementsArchive({
   const [view, setView] = useState<ViewMode>('historical');
   const [historical, setHistorical] = useState<CashRow[]>([]);
   const [detailRows, setDetailRows] = useState<Member[]>([]);
+  const [paymentsScope, setPaymentsScope] = useState<PaymentsScope | null>(null);
+  const [showAllPayments, setShowAllPayments] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -215,19 +223,13 @@ export default function CashMovementsArchive({
     }
   }
 
-  async function loadTotalsPayments(row: CashRow) {
-    if (!row.procedureRecordId || !row.procedureType) {
-      window.alert('Please select at least one record');
-      return;
-    }
+  async function loadPaymentsForScope(scope: PaymentsScope, showAll: boolean) {
     setDetailLoading(true);
     setError('');
     try {
-      const client = createProcedureClient(row.procedureType as ProcedureTypeCode);
-      // Resolve the member, then list THAT member's payments only (not the whole club).
-      const { record } = await client.fetchRecord(row.procedureRecordId);
+      const client = createProcedureClient(scope.procedureType);
       const res = await client.fetchPayments({
-        memberId: record.userId,
+        ...(showAll ? { memberId: scope.memberId } : { recordId: scope.recordId }),
         page: 1,
         pageSize: 100,
       });
@@ -245,12 +247,39 @@ export default function CashMovementsArchive({
           operator: p.operatorName,
         }))
       );
+      setPaymentsScope(scope);
+      setShowAllPayments(showAll);
       setView('totals_payments');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load payment totals');
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function loadTotalsPayments(row: CashRow) {
+    if (!row.procedureRecordId || !row.procedureType) {
+      window.alert('Please select at least one record');
+      return;
+    }
+    setDetailLoading(true);
+    setError('');
+    try {
+      const procedureType = row.procedureType as ProcedureTypeCode;
+      const { record } = await createProcedureClient(procedureType).fetchRecord(row.procedureRecordId);
+      await loadPaymentsForScope(
+        { procedureType, recordId: row.procedureRecordId, memberId: record.userId },
+        false
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load payment totals');
+      setDetailLoading(false);
+    }
+  }
+
+  function toggleAllPayments() {
+    if (!paymentsScope) return;
+    void loadPaymentsForScope(paymentsScope, !showAllPayments);
   }
 
   function handleDetailsDeadline() {
@@ -272,6 +301,8 @@ export default function CashMovementsArchive({
   function handleHistorical() {
     setView('historical');
     setDetailRows([]);
+    setPaymentsScope(null);
+    setShowAllPayments(false);
   }
 
   function applyFilterForm() {
@@ -335,6 +366,16 @@ export default function CashMovementsArchive({
       >
         Payments record selected
       </button>
+      {view === 'totals_payments' && (
+        <button
+          type="button"
+          className="ml-auto px-3 py-2 text-sm font-medium text-teal-700 hover:text-teal-900"
+          onClick={toggleAllPayments}
+          disabled={detailLoading || !paymentsScope}
+        >
+          {showAllPayments ? 'Show selected record' : 'Show all'}
+        </button>
+      )}
     </>
   );
 
@@ -351,7 +392,9 @@ export default function CashMovementsArchive({
             'Select a payment, then open Details deadline or Totals about payments. Check rows to delete selected.'
           : view === 'details_deadline'
             ? 'Parent deadline / debt related to the selected payment. Click Historical to go back.'
-            : 'All payments of the same member (same typology) as the selected row. Click Historical to go back.'
+            : showAllPayments
+              ? 'All payments of the current member (same typology) as the selected row. Click Historical to go back.'
+              : 'Payments related to the selected record. Use Show all to view all payments of this member.'
       }
     >
       {showingHistorical && (
