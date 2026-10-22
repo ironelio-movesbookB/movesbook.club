@@ -1138,13 +1138,15 @@ export async function listCashMovements(
 
   async function pushPayments(
     procedureType: string,
-    idPrefix: string,
-    cashDirection: 'IN' | 'OUT'
+    idPrefix: string
   ) {
     const payments = await procedureService
       .listPayments(ctx, procedureType, { page: 1, pageSize: 500 })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
     for (const p of payments.items) {
+      const baseDirection = getProcedureDirection(procedureType);
+      const cashDirection = p.amount < 0 ? (baseDirection === 'IN' ? 'OUT' : 'IN') : baseDirection;
+      if (direction !== 'all' && cashDirection !== direction) continue;
       items.push({
         id: `${idPrefix}${p.id}`,
         paymentId: p.id,
@@ -1154,10 +1156,12 @@ export async function listCashMovements(
         typology: p.typology,
         service: p.serviceName,
         insertDate: p.paymentDate,
-        paid: p.amount,
+        paid: Math.abs(p.amount),
         rest: p.residualDebt,
         value: p.originalDebt,
         direction: cashDirection,
+        cancelled: Boolean(p.cancelledAt),
+        reversalOfId: p.reversalOfId,
         payMod: p.payMode,
         casual: p.notes,
         operator: p.operatorName,
@@ -1165,15 +1169,10 @@ export async function listCashMovements(
     }
   }
 
-  if (direction === 'all' || direction === 'IN') {
-    await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-', 'IN');
-    await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-', 'IN');
-    await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-', 'IN');
-  }
-
-  if (direction === 'all' || direction === 'OUT') {
-    await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-', 'OUT');
-  }
+  await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-');
+  await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
   items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);

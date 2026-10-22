@@ -90,9 +90,14 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
     {
       key: 'paid',
-      header: def.metadataKeys.direction === 'OUT' ? 'Value OUT' : 'Payment IN',
+      header: def.metadataKeys.direction === 'OUT' ? 'Payment OUT' : 'Payment IN',
       render: (v) => (
-        <span className={`font-bold ${def.metadataKeys.direction === 'OUT' ? 'text-red-700' : 'text-green-800'}`}>
+        <span
+          className="font-bold"
+          style={{
+            color: def.metadataKeys.direction === 'OUT' ? '#b91c1c' : '#166534',
+          }}
+        >
           {formatEuro(v)}
         </span>
       ),
@@ -101,7 +106,9 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
       key: 'originalDebt',
       header: 'OF..',
       render: (_, row) =>
-        `${Number(row.rest ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
+        `${Number(
+          def.metadataKeys.direction === 'OUT' ? row.paid ?? 0 : row.rest ?? 0
+        ).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
     },
     { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
     { key: 'casual', header: 'Notes' },

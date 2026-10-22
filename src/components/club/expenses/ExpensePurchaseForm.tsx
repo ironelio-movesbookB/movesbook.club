@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
+import Image from 'next/image';
+import { Eye, EyeOff, X } from 'lucide-react';
 import ProcedureFormSection, {
   ProcedureFormCell,
   ProcedureFormGrid,
@@ -11,6 +12,7 @@ import ProcedureFormSection, {
   procedureReadonlyInputClass,
 } from '@/components/procedures/ProcedureFormLayout';
 import { createProcedureClient } from '@/lib/club/procedureClient';
+import { uploadExpenseInvoice } from '@/lib/club/expenseInvoiceClient';
 import { fetchCompanies } from '@/lib/club/archives/clubArchiveClient';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
@@ -39,6 +41,10 @@ export default function ExpensePurchaseForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [invoicePreviewUrl, setInvoicePreviewUrl] = useState('');
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
+  const [createdRecordId, setCreatedRecordId] = useState<string | null>(null);
   const [expenseId, setExpenseId] = useState('');
   const [expenseName, setExpenseName] = useState('');
   const [companyId, setCompanyId] = useState('');
@@ -80,11 +86,23 @@ export default function ExpensePurchaseForm() {
     if (selectedExpense) setExpenseName(selectedExpense.name);
   }, [selectedExpense]);
 
+  useEffect(() => {
+    if (!invoiceFile) {
+      setInvoicePreviewUrl('');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(invoiceFile);
+    setInvoicePreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [invoiceFile]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     if (!options?.clubMemberId) return setError('The club account could not be identified.');
     if (!expenseName.trim()) return setError('Please select or enter an expense.');
+    if (!invoiceFile) return setError('Please load the invoice picture for this expense.');
     if (total <= 0) return setError('Amount must be greater than zero.');
     if (!operatorId) return setError('Please select an operator.');
     if (!operatorPassword.trim()) return setError('Operator password is required.');
@@ -97,25 +115,31 @@ export default function ExpensePurchaseForm() {
 
     setSaving(true);
     try {
-      await client.createRecord({
-        memberId: options.clubMemberId,
-        totalAmount: total,
-        initialPayment: paid,
-        recordDate: movementDate,
-        // An initial payment is made on the expense date; a fully paid expense has nothing planned.
-        paymentDate: movementDate,
-        dueDate: rest > 0 ? dueDate : movementDate,
-        causal,
-        notes: causal,
-        expenseId: expenseId || null,
-        expenseName: expenseName.trim(),
-        operatorId,
-        operatorPassword,
-        payMode,
-        movementTime,
-        companyId,
-        companyName: selectedCompany?.name,
-      });
+      let recordId = createdRecordId;
+      if (!recordId) {
+        const created = await client.createRecord({
+          memberId: options.clubMemberId,
+          totalAmount: total,
+          initialPayment: paid,
+          recordDate: movementDate,
+          // An initial payment is made on the expense date; a fully paid expense has nothing planned.
+          paymentDate: movementDate,
+          dueDate: rest > 0 ? dueDate : movementDate,
+          causal,
+          notes: causal,
+          expenseId: expenseId || null,
+          expenseName: expenseName.trim(),
+          operatorId,
+          operatorPassword,
+          payMode,
+          movementTime,
+          companyId,
+          companyName: selectedCompany?.name,
+        });
+        recordId = created.recordId;
+        setCreatedRecordId(recordId);
+      }
+      await uploadExpenseInvoice(recordId, invoiceFile);
       router.push(def.routes.records);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -131,7 +155,7 @@ export default function ExpensePurchaseForm() {
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
         <ProcedureFormSection title="Movement data">
           <ProcedureFormGrid>
-            <ProcedureFormCell label="Club">
+            <ProcedureFormCell label="Official name of Club/Team">
               <input
                 type="text"
                 value={options?.clubName ?? ''}
@@ -208,6 +232,60 @@ export default function ExpensePurchaseForm() {
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowEmpty={false}
               />
+            </ProcedureFormCell>
+            <ProcedureFormCell label="Invoice">
+              <input
+                ref={invoiceInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  setInvoiceFile(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => invoiceInputRef.current?.click()}
+                className="rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                Load invoice
+              </button>
+              <p className="mt-1 text-xs text-gray-500">
+                One invoice picture per expense. You can replace it before saving.
+              </p>
+              {invoiceFile && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <span className="min-w-0 flex-1 break-all">{invoiceFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceFile(null)}
+                      aria-label="Remove invoice"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {invoicePreviewUrl && invoiceFile.type.startsWith('image/') && (
+                    <Image
+                      src={invoicePreviewUrl}
+                      alt={`Preview of ${invoiceFile.name}`}
+                      width={640}
+                      height={480}
+                      unoptimized
+                      className="max-h-64 max-w-full rounded border border-gray-200 object-contain"
+                    />
+                  )}
+                  {invoicePreviewUrl && invoiceFile.type === 'application/pdf' && (
+                    <iframe
+                      src={invoicePreviewUrl}
+                      title={`Preview of ${invoiceFile.name}`}
+                      className="h-64 w-full rounded border border-gray-200"
+                    />
+                  )}
+                </div>
+              )}
             </ProcedureFormCell>
             <ProcedureFormCell label="Operator">
               <select className={procedureInputClass} value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>

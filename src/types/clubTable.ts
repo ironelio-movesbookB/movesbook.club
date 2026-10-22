@@ -97,6 +97,10 @@ export type Member = {
   isDuplicate?: boolean;
   /** Archive of Payments: stored as "To be verified" and not confirmed yet (grey row). */
   toBeVerified?: boolean;
+  /** Cash archive cancellation state for procedure payments. */
+  cancelled?: boolean;
+  /** Cash archive reversals reference the original payment and cannot be edited/deleted alone. */
+  reversalOfId?: string | null;
   /**
    * Archive of Users A/B/C/D:
    * member | pending | not_member | archived
@@ -108,6 +112,7 @@ export type Member = {
   isCoach?: boolean;
   options?: React.ReactNode;
   edit?: React.ReactNode;
+  cancel?: React.ReactNode;
   delete?: React.ReactNode;
   /** OUT payments: prints the receipt the payee signs for acceptance. */
   print?: React.ReactNode;

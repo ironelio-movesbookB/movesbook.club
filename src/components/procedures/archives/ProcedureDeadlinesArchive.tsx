@@ -108,9 +108,9 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
             record,
             (target) => requestPassword(() => setEditTarget(target)),
             (id) =>
-              requestPassword(async () => {
+              requestPassword(async (adminPassword) => {
                 try {
-                  await client.deleteRecord(id);
+                  await client.deleteRecord(id, adminPassword);
                   load();
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
@@ -143,7 +143,10 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
   const memberQuery = selectedMemberId ? `?memberId=${encodeURIComponent(selectedMemberId)}` : '';
 
   /** PHP: Pay deadlines selected requires 2+ rows, same member, all Rest > 0. */
-  const canPaySelected = checkedRows.length > 1 && selectionIsPayable(checkedRows);
+  const canPaySelected =
+    procedureCode !== PROCEDURE_TYPE_CODES.EXPENSE &&
+    checkedRows.length > 1 &&
+    selectionIsPayable(checkedRows);
 
   function openPayment(ids: string[]) {
     if (ids.length === 0) return;
@@ -205,10 +208,10 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
   function handleDeleteSelected() {
     const ids = Array.from(checkedIds);
     if (ids.length === 0) return;
-    requestPassword(async () => {
+    requestPassword(async (adminPassword) => {
       try {
         for (const id of ids) {
-          await client.deleteRecord(id);
+          await client.deleteRecord(id, adminPassword);
         }
         setCheckedIds(new Set());
         load();
@@ -220,12 +223,16 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
 
   const tabs: ProcedureTab[] = [
     ...getProcedureTabs(procedureCode, activeTab, selectedId, selectedMemberId),
-    {
-      id: 'pay-selected' as any,
-      label: 'Pay more deadlines',
-      onClick: handlePaySelected,
-      disabled: !canPaySelected,
-    },
+    ...(procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
+      ? []
+      : [
+          {
+            id: 'pay-selected' as any,
+            label: 'Pay more deadlines',
+            onClick: handlePaySelected,
+            disabled: !canPaySelected,
+          },
+        ]),
   ];
 
   const displayAlsoPaidToggle = (
@@ -264,7 +271,11 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
         </div>
       }
       error={error || selectionError}
-      footerHint="Double-click a row with Rest > 0 to pay. Or check several (same member, Rest > 0) and use Pay more deadlines. Edit and Delete ask for your password."
+      footerHint={
+        procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
+          ? 'Double-click a row with Rest > 0 to pay one expense at a time. Each expense can have one invoice. Edit and Delete ask for your password.'
+          : 'Double-click a row with Rest > 0 to pay. Or check several (same member, Rest > 0) and use Pay more deadlines. Edit and Delete ask for your password.'
+      }
     >
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.deadlines}`}
@@ -319,6 +330,8 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
             recordDate: editTarget.recordDate,
             paydate: editTarget.paydate,
             expireDate: editTarget.expireDate,
+            value: editTarget.value,
+            pay: editTarget.pay,
             notes: editTarget.notes,
             operatorId: editTarget.operatorId,
           }}

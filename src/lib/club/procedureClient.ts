@@ -10,6 +10,7 @@ import type {
   ProcedurePaymentDto,
   ProcedureReceiptDto,
   ProcedureRecordDto,
+  ExpenseInvoiceImage,
   ProcedureTypeCode,
 } from '@/lib/procedures/types';
 
@@ -30,6 +31,7 @@ export type ProcedureRecordView = {
   pay: number;
   rest: number;
   expenseId?: string | null;
+  expenseInvoice?: ExpenseInvoiceImage | null;
   notes: string;
   operatorId: string | null;
   operatorName: string;
@@ -39,6 +41,8 @@ export type ProcedureRecordView = {
 export type ProcedurePaymentView = {
   id: string;
   recordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberName: string;
   typology: string;
   primaryLabel: string;
@@ -105,6 +109,7 @@ function apiBase(code: ProcedureTypeCode): string {
 
 function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): ProcedureRecordView {
   const metadata = record.metadata;
+  const invoice = metadata?.expenseInvoice;
   return {
     id: record.id,
     userId: record.memberId,
@@ -126,6 +131,15 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
     pay: record.paidAmount,
     rest: record.balanceAmount,
     expenseId: metaString(metadata, 'expenseId') || null,
+    expenseInvoice:
+      invoice && typeof invoice === 'object' &&
+      typeof (invoice as Record<string, unknown>).name === 'string' &&
+      typeof (invoice as Record<string, unknown>).url === 'string'
+        ? {
+            name: String((invoice as Record<string, unknown>).name),
+            url: String((invoice as Record<string, unknown>).url),
+          }
+        : null,
     notes: record.notes ?? '',
     operatorId: record.operatorId,
     operatorName: record.operatorName,
@@ -137,6 +151,8 @@ function mapPayment(def: ProcedureDefinition, payment: ProcedurePaymentDto): Pro
   return {
     id: payment.id,
     recordId: payment.procedureRecordId,
+    cancelledAt: payment.cancelledAt,
+    reversalOfId: payment.reversalOfId,
     memberName: payment.memberName,
     typology: payment.typology,
     primaryLabel: payment.serviceName ?? '-',
@@ -258,8 +274,11 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       return { recordId: result.recordId };
     },
 
-    async deleteRecord(id: string): Promise<void> {
-      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async deleteRecord(id: string, adminPassword: string): Promise<void> {
+      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ adminPassword }),
+      });
     },
 
     async addPayment(

@@ -52,7 +52,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: message === 'Record not found' ? 404 : 500 });
+    const status =
+      message === 'Record not found'
+        ? 404
+        : message.includes('Cost cannot exceed')
+          ? 400
+          : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 

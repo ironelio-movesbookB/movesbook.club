@@ -10,6 +10,7 @@ import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell
 import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
 import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import {
+  CancelRowButton,
   DeleteRowButton,
   EditRowButton,
   usePasswordGate,
@@ -38,6 +39,7 @@ type Props = {
   footerHint?: string;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
+  onCancelItem?: (item: Member) => void | Promise<void>;
 };
 
 const deadlineColumns: Column[] = [
@@ -80,6 +82,7 @@ export default function CashMovementsArchive({
   footerHint,
   onEditItem,
   onDeleteItem,
+  onCancelItem,
 }: Props) {
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
   const filters = useArchiveListFilters();
@@ -113,17 +116,40 @@ export default function CashMovementsArchive({
       setTotal(res.total);
       const items = (res.items as CashRow[]).map((item) => {
         const enriched: CashRow = { ...item };
-        if (onEditItem) {
+        if (onEditItem && !item.cancelled && !item.reversalOfId) {
           enriched.edit = (
             <EditRowButton
               onClick={() => requestPassword(() => onEditItem(item))}
             />
           );
         }
-        if (onDeleteItem) {
+        if (onDeleteItem && !item.reversalOfId) {
           enriched.delete = (
             <DeleteRowButton
               onClick={() => requestPassword(() => onDeleteItem(item))}
+            />
+          );
+        }
+        if (onCancelItem) {
+          enriched.cancel = item.reversalOfId ? (
+            <span className="text-xs text-gray-500">Reversal</span>
+          ) : item.cancelled ? (
+            <span className="text-xs font-semibold text-gray-500">Cancelled</span>
+          ) : (
+            <CancelRowButton
+              onClick={() =>
+                requestPassword(() => {
+                  if (
+                    window.confirm(
+                      'Cancel this payment? An opposite transaction will be recorded and the related deadline balance restored.'
+                    )
+                  ) {
+                    void Promise.resolve(onCancelItem(item)).catch((e) => {
+                      setError(e instanceof Error ? e.message : 'Cancel failed');
+                    });
+                  }
+                })
+              }
             />
           );
         }
@@ -143,7 +169,7 @@ export default function CashMovementsArchive({
     } finally {
       setLoading(false);
     }
-  }, [filters.applied, direction, onDeleteItem, onEditItem, page, pageSize, requestPassword]);
+  }, [filters.applied, direction, onCancelItem, onDeleteItem, onEditItem, page, pageSize, requestPassword]);
 
   useEffect(() => {
     loadHistorical();
@@ -262,7 +288,7 @@ export default function CashMovementsArchive({
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;
-    const items = historical.filter((r) => checkedIds.has(r.id));
+    const items = historical.filter((r) => checkedIds.has(r.id) && !r.reversalOfId);
     if (items.length === 0) return;
     requestPassword(async () => {
       try {
@@ -378,7 +404,7 @@ export default function CashMovementsArchive({
         onToggleSelect={
           showingHistorical
             ? (row) => {
-                if (!row.id) return;
+                if (!row.id || row.reversalOfId) return;
                 setSelectedId(row.id);
                 setCheckedIds((prev) => {
                   const next = new Set(prev);
@@ -396,7 +422,9 @@ export default function CashMovementsArchive({
                   setCheckedIds(new Set());
                   return;
                 }
-                setCheckedIds(new Set(historical.map((r) => r.id).filter(Boolean)));
+                setCheckedIds(
+                  new Set(historical.filter((r) => !r.reversalOfId).map((r) => r.id).filter(Boolean))
+                );
               }
             : undefined
         }

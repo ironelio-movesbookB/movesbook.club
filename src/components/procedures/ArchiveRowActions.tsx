@@ -10,9 +10,9 @@ import AdminPasswordConfirmModal from '@/components/club/AdminPasswordConfirmMod
  */
 export function usePasswordGate() {
   const [isOpen, setIsOpen] = useState(false);
-  const pending = useRef<(() => void) | null>(null);
+  const pending = useRef<((password: string) => void) | null>(null);
 
-  const request = useCallback((action: () => void) => {
+  const request = useCallback((action: (password: string) => void) => {
     pending.current = action;
     setIsOpen(true);
   }, []);
@@ -22,11 +22,11 @@ export function usePasswordGate() {
     setIsOpen(false);
   }, []);
 
-  const confirm = useCallback(() => {
+  const confirm = useCallback((password: string) => {
     const action = pending.current;
     pending.current = null;
     setIsOpen(false);
-    action?.();
+    action?.(password);
   }, []);
 
   const modal = (
@@ -66,6 +66,23 @@ export function DeleteRowButton({ onClick }: { onClick: () => void }) {
       aria-label="Delete"
     >
       <Trash2 className="w-4 h-4" />
+    </button>
+  );
+}
+
+export function CancelRowButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className="text-red-700 hover:text-red-900"
+      title="Cancel payment"
+      aria-label="Cancel payment"
+    >
+      CANCEL
     </button>
   );
 }

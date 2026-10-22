@@ -170,14 +170,15 @@ export async function deleteInstallment(
   );
 }
 
-/** Archive of the Deadlines: delete one deadline (refused when it is already paid). */
+/** Archive of the Deadlines: delete one deadline after administrator confirmation. */
 export async function deleteArchiveDeadline(
   procedureType: string,
   recordId: string,
-  installmentId: string
+  installmentId: string,
+  adminPassword: string
 ): Promise<{ deleted: 'deadline' | 'record' }> {
   return clubApiFetch<{ deleted: 'deadline' | 'record' }>(
     `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}&mode=archive`,
-    { method: 'DELETE' }
+    { method: 'DELETE', body: JSON.stringify({ adminPassword }) }
   );
 }

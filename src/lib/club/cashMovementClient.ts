@@ -34,3 +34,12 @@ export async function deleteCashMovement(prefixedId: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+export async function cancelCashMovement(prefixedId: string): Promise<void> {
+  const parsed = parseCashMovementId(prefixedId);
+  if (!parsed) throw new Error('Invalid cash movement ID');
+  await clubApiFetch(
+    `/api/club/procedures/${parsed.procedureType}/payments/${parsed.paymentId}/cancel`,
+    { method: 'POST' }
+  );
+}

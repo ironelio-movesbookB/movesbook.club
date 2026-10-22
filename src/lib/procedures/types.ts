@@ -20,6 +20,11 @@ export type PaginatedResult<T> = {
   pageSize: number;
 };
 
+export type ExpenseInvoiceImage = {
+  name: string;
+  url: string;
+};
+
 export type ClubAuthContext = {
   userId: string;
   club: { id: string; name: string };
@@ -58,6 +63,8 @@ export type ProcedureRecordDto = {
 export type ProcedurePaymentDto = {
   id: string;
   procedureRecordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberId: string;
   memberName: string;
   amount: number;

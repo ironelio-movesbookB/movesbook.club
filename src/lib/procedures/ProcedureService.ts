@@ -4,7 +4,7 @@ import { findExistingTable } from '@/lib/club/legacyTableLookup';
 import { getProcedureDefinition, getProcedureTypology } from './registry';
 import { paginated, parsePagination } from './pagination';
 import { verifyOperatorPassword } from './operatorAuth';
-import { applyCardCreditPayment } from './insertCreditService';
+import { applyCardCreditPayment, restoreCardCreditPayment } from './insertCreditService';
 import {
   ensureDefaultInstallment,
   applyPaymentToInstallments,
@@ -515,23 +515,67 @@ export class ProcedureService {
     const procedureType = await this.getProcedureTypeByCode(procedureTypeCode);
     if (!procedureType) throw new Error('Unknown procedure type');
 
-    const result = await prisma.procedureRecord.updateMany({
-      where: {
-        id: recordId,
-        clubId: ctx.club.id,
-        procedureTypeId: procedureType.id,
-        status: ProcedureRecordStatus.ACTIVE,
-      },
-      data: { status: ProcedureRecordStatus.DELETED },
-    });
-    if (result.count === 0) throw new Error('Record not found');
+    const deleted = await prisma.$transaction(async (tx) => {
+      const record = await tx.procedureRecord.findFirst({
+        where: {
+          id: recordId,
+          clubId: ctx.club.id,
+          procedureTypeId: procedureType.id,
+          status: ProcedureRecordStatus.ACTIVE,
+        },
+        select: { memberId: true, metadata: true, totalAmount: true },
+      });
+      if (!record) throw new Error('Record not found');
 
-    const deleted = await prisma.procedureRecord.findUnique({
-      where: { id: recordId },
-      select: { memberId: true, metadata: true },
+      const payments = await tx.procedurePayment.findMany({
+        where: { procedureRecordId: recordId },
+        select: { amount: true, payMode: true, cancelledAt: true, reversalOfId: true, notes: true },
+      });
+      const originalPayments = payments.filter(
+        (payment) => !payment.cancelledAt && !payment.reversalOfId
+      );
+      const activePaidAmount = roundMoney(
+        originalPayments.reduce((sum, payment) => sum + decimalToNumber(payment.amount), 0)
+      );
+      const cardPaidAmount = roundMoney(
+        originalPayments
+          .filter((payment) => payment.payMode === 'card')
+          .reduce((sum, payment) => sum + decimalToNumber(payment.amount), 0)
+      );
+
+      const updated = await tx.procedureRecord.updateMany({
+        where: {
+          id: recordId,
+          clubId: ctx.club.id,
+          procedureTypeId: procedureType.id,
+          status: ProcedureRecordStatus.ACTIVE,
+        },
+        data: {
+          status: ProcedureRecordStatus.DELETED,
+          paidAmount: 0,
+          balanceAmount: record.totalAmount,
+        },
+      });
+      if (updated.count !== 1) throw new Error('Record not found');
+
+      if (activePaidAmount > 0) {
+        await reversePaymentOnInstallments(recordId, activePaidAmount, tx);
+      }
+      if (cardPaidAmount > 0) {
+        await restoreCardCreditPayment(
+          ctx.club.id,
+          record.memberId,
+          cardPaidAmount,
+          ctx.userId,
+          tx
+        );
+      }
+      await tx.procedurePayment.deleteMany({ where: { procedureRecordId: recordId } });
+      return { ...record, payments };
     });
-    const source = (deleted?.metadata as Record<string, unknown> | null)?.source;
-    if (deleted && source === MEMBER_SETTINGS_RECORD_SOURCE) {
+
+    const source = (deleted.metadata as Record<string, unknown> | null)?.source;
+    if (source === MEMBER_SETTINGS_RECORD_SOURCE) {
       try {
         await forgetMemberSettingsDeadlines({
           clubId: ctx.club.id,
@@ -539,7 +583,25 @@ export class ProcedureService {
           recordId,
         });
       } catch (error) {
-        console.error('softDeleteRecord: member Settings link not reset', error);
+        console.error('softDeleteRecord: Member Settings link not reset', error);
+      }
+      if (
+        deleted.payments.some(
+          (payment) =>
+            !payment.cancelledAt &&
+            !payment.reversalOfId &&
+            payment.notes === MEMBER_SETTINGS_INSTALLMENT_LABELS.firstPayment
+        )
+      ) {
+        try {
+          await forgetMemberSettingsFirstPaid({
+            clubId: ctx.club.id,
+            memberUserId: deleted.memberId,
+            recordId,
+          });
+        } catch (error) {
+          console.error('softDeleteRecord: Member Settings Paid tick not reset', error);
+        }
       }
     }
   }
@@ -575,9 +637,20 @@ export class ProcedureService {
     if (input.notes !== undefined) data.notes = input.notes;
     if (input.operatorId) data.operatorId = input.operatorId;
     if (input.totalAmount !== undefined) {
+      if (
+        procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE &&
+        (!Number.isFinite(input.totalAmount) ||
+          input.totalAmount < 0 ||
+          input.totalAmount > decimalToNumber(record.paidAmount))
+      ) {
+        throw new Error('Cost cannot exceed the amount already paid.');
+      }
       const diff = input.totalAmount - decimalToNumber(record.totalAmount);
       data.totalAmount = input.totalAmount;
-      data.balanceAmount = decimalToNumber(record.balanceAmount) + diff;
+      data.balanceAmount =
+        procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE
+          ? Math.max(0, decimalToNumber(record.balanceAmount) + diff)
+          : decimalToNumber(record.balanceAmount) + diff;
     }
 
     await prisma.procedureRecord.update({
@@ -604,15 +677,104 @@ export class ProcedureService {
     if (!payment || payment.procedureRecord.clubId !== ctx.club.id || payment.procedureRecord.procedureTypeId !== procedureType.id) {
       throw new Error('Payment not found');
     }
+    if (payment.cancelledAt || payment.reversalOfId) {
+      throw new Error('Cancelled payments and reversals cannot be edited');
+    }
 
     const data: Record<string, unknown> = {};
     if (input.paymentDate) data.paymentDate = toDateOnly(input.paymentDate);
     if (input.notes !== undefined) data.notes = input.notes;
     if (input.operatorId) data.operatorId = input.operatorId;
 
-    await prisma.procedurePayment.update({
-      where: { id: paymentId },
+    const updated = await prisma.procedurePayment.updateMany({
+      where: { id: paymentId, cancelledAt: null, reversalOfId: null },
       data: data as Prisma.ProcedurePaymentUpdateInput,
+    });
+    if (updated.count !== 1) {
+      throw new Error('Cancelled payments and reversals cannot be edited');
+    }
+
+    return { success: true };
+  }
+
+  async cancelPayment(ctx: ClubAuthContext, procedureTypeCode: string, paymentId: string) {
+    const procedureType = await this.getProcedureTypeByCode(procedureTypeCode);
+    if (!procedureType) throw new Error('Unknown procedure type');
+
+    const payment = await prisma.procedurePayment.findFirst({
+      where: { id: paymentId },
+      include: {
+        procedureRecord: {
+          select: {
+            procedureTypeId: true,
+            clubId: true,
+            memberId: true,
+            totalAmount: true,
+            paidAmount: true,
+            balanceAmount: true,
+          },
+        },
+      },
+    });
+    if (
+      !payment ||
+      payment.procedureRecord.clubId !== ctx.club.id ||
+      payment.procedureRecord.procedureTypeId !== procedureType.id
+    ) {
+      throw new Error('Payment not found');
+    }
+    if (payment.cancelledAt) throw new Error('Payment has already been cancelled');
+    if (payment.reversalOfId) throw new Error('A reversal transaction cannot be cancelled');
+
+    const amount = roundMoney(decimalToNumber(payment.amount));
+    if (amount <= 0) throw new Error('Only original payments can be cancelled');
+    const record = payment.procedureRecord;
+    const total = decimalToNumber(record.totalAmount);
+    const newPaid = roundMoney(Math.max(0, decimalToNumber(record.paidAmount) - amount));
+    const newBalance = roundMoney(Math.min(total, decimalToNumber(record.balanceAmount) + amount));
+    const cancellationDate = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      const marked = await tx.procedurePayment.updateMany({
+        where: { id: paymentId, cancelledAt: null, reversalOfId: null },
+        data: { cancelledAt: cancellationDate },
+      });
+      if (marked.count !== 1) throw new Error('Payment has already been cancelled');
+
+      const updatedRecord = await tx.procedureRecord.updateMany({
+        where: {
+          id: payment.procedureRecordId,
+          paidAmount: record.paidAmount,
+          balanceAmount: record.balanceAmount,
+        },
+        data: { paidAmount: newPaid, balanceAmount: newBalance },
+      });
+      if (updatedRecord.count !== 1) {
+        throw new Error('Payment state changed. Refresh the archive and try again.');
+      }
+
+      await reversePaymentOnInstallments(payment.procedureRecordId, amount, tx);
+      await tx.procedurePayment.create({
+        data: {
+          procedureRecordId: payment.procedureRecordId,
+          amount: -amount,
+          balanceAfter: newBalance,
+          paymentDate: toDateOnly(cancellationDate.toISOString()),
+          operatorId: ctx.userId,
+          payMode: payment.payMode,
+          notes: 'Cancellation reversal',
+          reversalOfId: payment.id,
+        },
+      });
+      if (payment.payMode === 'card') {
+        await restoreCardCreditPayment(
+          ctx.club.id,
+          payment.procedureRecord.memberId,
+          amount,
+          ctx.userId,
+          tx
+        );
+      }
     });
 
     return { success: true };
@@ -642,20 +804,62 @@ export class ProcedureService {
       throw new Error('Payment not found');
     }
 
-    // The payment's amount owes again: back into the record's rest and the deadlines it settled.
+    if (payment.reversalOfId) {
+      throw new Error('A reversal transaction can only be deleted with its cancelled payment');
+    }
+
+    if (payment.cancelledAt) {
+      await prisma.$transaction(async (tx) => {
+        const reversal = await tx.procedurePayment.findFirst({
+          where: { reversalOfId: paymentId },
+        });
+        if (!reversal) throw new Error('Cancellation reversal not found');
+        const originalAmount = roundMoney(decimalToNumber(payment.amount));
+        if (roundMoney(decimalToNumber(reversal.amount)) !== -originalAmount) {
+          throw new Error('Cancellation reversal does not match the original payment');
+        }
+        await tx.procedurePayment.delete({ where: { id: reversal.id } });
+        await tx.procedurePayment.delete({ where: { id: paymentId } });
+      });
+      return { success: true };
+    }
+
+    // Removing an uncancelled payment restores its amount to the record and deadlines.
     const record = payment.procedureRecord;
     const amount = roundMoney(decimalToNumber(payment.amount));
+    if (amount <= 0) throw new Error('Only original payments can be deleted');
     const total = decimalToNumber(record.totalAmount);
     await prisma.$transaction(async (tx) => {
-      await tx.procedurePayment.delete({ where: { id: paymentId } });
-      await tx.procedureRecord.update({
-        where: { id: payment.procedureRecordId },
+      const deleted = await tx.procedurePayment.deleteMany({
+        where: { id: paymentId, cancelledAt: null, reversalOfId: null },
+      });
+      if (deleted.count !== 1) {
+        throw new Error('Payment state changed. Refresh the archive and try again.');
+      }
+      const updatedRecord = await tx.procedureRecord.updateMany({
+        where: {
+          id: payment.procedureRecordId,
+          paidAmount: record.paidAmount,
+          balanceAmount: record.balanceAmount,
+        },
         data: {
           paidAmount: roundMoney(Math.max(0, decimalToNumber(record.paidAmount) - amount)),
           balanceAmount: roundMoney(Math.min(total, decimalToNumber(record.balanceAmount) + amount)),
         },
       });
+      if (updatedRecord.count !== 1) {
+        throw new Error('Payment state changed. Refresh the archive and try again.');
+      }
       await reversePaymentOnInstallments(payment.procedureRecordId, amount, tx);
+      if (payment.payMode === 'card') {
+        await restoreCardCreditPayment(
+          ctx.club.id,
+          record.memberId,
+          amount,
+          ctx.userId,
+          tx
+        );
+      }
     });
 
     const source = (record.metadata as Record<string, unknown> | null)?.source;
@@ -823,7 +1027,10 @@ export class ProcedureService {
       procedureTypeCode,
       clubId: row.clubId,
       memberId: row.memberId,
-      memberName: profileById.get(row.memberId)?.name ?? row.memberId,
+      memberName:
+        procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE
+          ? ctx.club.name
+          : profileById.get(row.memberId)?.name ?? row.memberId,
       memberImage: profileById.get(row.memberId)?.image ?? null,
       operatorId: row.operatorId,
       operatorName: row.operatorId ? profileById.get(row.operatorId)?.name ?? '-' : '-',
@@ -909,6 +1116,8 @@ export class ProcedureService {
       return {
         id: row.id,
         procedureRecordId: row.procedureRecordId,
+        cancelledAt: row.cancelledAt?.toISOString() ?? null,
+        reversalOfId: row.reversalOfId,
         memberId: row.procedureRecord.memberId,
         memberName: nameById.get(row.procedureRecord.memberId) ?? row.procedureRecord.memberId,
         amount: decimalToNumber(row.amount),

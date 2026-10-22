@@ -105,14 +105,14 @@ function checkedRecords(rows: Member[]): { id: string; procedureType: string }[]
 }
 
 /** A "Display every deadlines" row deletes only that deadline; a record row deletes the record. */
-async function deleteRow(row: Member): Promise<void> {
+async function deleteRow(row: Member, adminPassword: string): Promise<void> {
   const code = row.procedureType as ProcedureTypeCode | undefined;
   const recordId = recordIdOf(row);
   if (!code || !recordId) return;
   if (row.deadlineNo && row.id) {
-    await deleteArchiveDeadline(code, recordId, row.id);
+    await deleteArchiveDeadline(code, recordId, row.id, adminPassword);
   } else {
-    await createProcedureClient(code).deleteRecord(recordId);
+    await createProcedureClient(code).deleteRecord(recordId, adminPassword);
   }
 }
 
@@ -185,9 +185,9 @@ function ArchiveDeadlinesPageInner() {
   }, []);
 
   const performDelete = useCallback(
-    async (row: Member) => {
+    async (row: Member, adminPassword: string) => {
       try {
-        await deleteRow(row);
+        await deleteRow(row, adminPassword);
         reload();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Delete failed');
@@ -213,7 +213,11 @@ function ArchiveDeadlinesPageInner() {
         res.items.map((row) => ({
           ...row,
           edit: <EditRowButton onClick={() => requestPassword(() => openEdit(row))} />,
-          delete: <DeleteRowButton onClick={() => requestPassword(() => performDelete(row))} />,
+          delete: (
+            <DeleteRowButton
+              onClick={() => requestPassword((adminPassword) => performDelete(row, adminPassword))}
+            />
+          ),
         }))
       );
     } catch (e) {
@@ -298,7 +302,7 @@ function ArchiveDeadlinesPageInner() {
     }
   }
 
-  async function deleteSelected() {
+  async function deleteSelected(adminPassword: string) {
     const perDeadline = checkedRows.some((row) => row.deadlineNo);
     const targets: Member[] = perDeadline
       ? checkedRows
@@ -310,7 +314,7 @@ function ArchiveDeadlinesPageInner() {
     const failures: string[] = [];
     for (const row of targets) {
       try {
-        await deleteRow(row);
+        await deleteRow(row, adminPassword);
       } catch (e) {
         failures.push(e instanceof Error ? e.message : 'Delete failed');
       }
@@ -467,6 +471,8 @@ function ArchiveDeadlinesPageInner() {
             recordDate: editTarget.record.recordDate,
             paydate: editTarget.record.paydate,
             expireDate: editTarget.record.expireDate,
+            value: editTarget.record.value,
+            pay: editTarget.record.pay,
             notes: editTarget.record.notes,
             operatorId: editTarget.record.operatorId,
           }}
