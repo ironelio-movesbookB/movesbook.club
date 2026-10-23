@@ -96,9 +96,9 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
             (page - 1) * pageSize + i,
             (target) => requestPassword(() => setEditTarget(target)),
             (id) =>
-              requestPassword(async () => {
+              requestPassword(async (adminPassword) => {
                 try {
-                  await client.deleteRecord(id);
+                  await client.deleteRecord(id, adminPassword);
                   load();
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
@@ -133,10 +133,10 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
   function handleDeleteSelected() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    requestPassword(async () => {
+    requestPassword(async (adminPassword) => {
       try {
         for (const id of ids) {
-          await client.deleteRecord(id);
+          await client.deleteRecord(id, adminPassword);
         }
         setSelectedIds(new Set());
         load();
@@ -234,6 +234,8 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
             recordDate: editTarget.recordDate,
             paydate: editTarget.paydate,
             expireDate: editTarget.expireDate,
+            value: editTarget.value,
+            pay: editTarget.pay,
             notes: editTarget.notes,
             operatorId: editTarget.operatorId,
           }}

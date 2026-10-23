@@ -17,6 +17,8 @@ type EditRecordModalProps = {
     recordDate: string | null;
     paydate: string | null;
     expireDate?: string | null;
+    value: number;
+    pay: number;
     notes: string;
     operatorId: string | null;
   };
@@ -33,6 +35,7 @@ export default function EditRecordModal({
   const title = getProcedureDefinition(procedureCode)?.name ?? 'Record';
   const [recordDate, setRecordDate] = useState('');
   const [expireDate, setExpireDate] = useState('');
+  const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [operators, setOperators] = useState<{ id: string; name: string }[]>([]);
@@ -46,6 +49,7 @@ export default function EditRecordModal({
     setExpireDate(
       toDateInputValue(record.expireDate !== undefined ? record.expireDate : record.paydate)
     );
+    setCost(String(record.value));
     setNotes(record.notes ?? '');
     setOperatorId(record.operatorId ?? '');
     setError(null);
@@ -59,6 +63,18 @@ export default function EditRecordModal({
   if (!isOpen) return null;
 
   const handleSave = async () => {
+    if (procedureCode === PROCEDURE_TYPE_CODES.EXPENSE) {
+      const parsedCost = Number(cost);
+      if (cost.trim() === '' || !Number.isFinite(parsedCost) || parsedCost < 0) {
+        setError('Enter a valid cost.');
+        return;
+      }
+      if (parsedCost > record.pay) {
+        setError('Cost cannot exceed the amount already paid.');
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -67,6 +83,7 @@ export default function EditRecordModal({
         dueDate: expireDate || undefined,
         notes: notes || undefined,
         operatorId: operatorId || undefined,
+        ...(procedureCode === PROCEDURE_TYPE_CODES.EXPENSE ? { totalAmount: Number(cost) } : {}),
       });
       onSaved();
       onClose();
@@ -124,6 +141,30 @@ export default function EditRecordModal({
               style={{ backgroundColor: '#d3f07b' }}
             />
           </div>
+
+          {procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && (
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label htmlFor="edit-record-cost" className="text-sm text-gray-800">Cost</label>
+                <span className="text-xs text-gray-600">Already paid: €{record.pay.toFixed(2)}</span>
+              </div>
+              <input
+                id="edit-record-cost"
+                type="number"
+                min="0"
+                max={record.pay}
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                disabled={saving}
+                className="w-full rounded border border-gray-400 px-3 py-2 text-sm disabled:opacity-60"
+                aria-describedby="edit-record-cost-hint"
+              />
+              <p id="edit-record-cost-hint" className="mt-1 text-xs text-gray-500">
+                Cost must not exceed the amount already paid.
+              </p>
+            </div>
+          )}
 
           <div>
             <label htmlFor="edit-notes" className="mb-1 block text-sm text-gray-800">Notes</label>

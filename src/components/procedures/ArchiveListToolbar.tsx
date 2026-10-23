@@ -28,6 +28,12 @@ type Props = {
   dateRangeError?: string;
   /** Legacy page selector + Print row. */
   pagination?: ReactNode;
+  /** Optional control displayed beside Print. */
+  paginationTrailing?: ReactNode;
+  /** Optional archive-specific filter shown after Search. */
+  additionalFilter?: ReactNode;
+  /** Place Order before Search for archives that need ordering first. */
+  orderFirst?: boolean;
   selectedCount?: number;
   onDeleteSelected?: () => void;
   /** Hide filter form (actions + pagination only). */
@@ -46,10 +52,27 @@ export default function ArchiveListToolbar({
   onClear,
   dateRangeError,
   pagination,
+  paginationTrailing,
+  additionalFilter,
+  orderFirst = false,
   selectedCount,
   onDeleteSelected,
   hideFilters = false,
 }: Props) {
+  const orderControl = (
+    <label className="flex min-w-[150px] flex-col">
+      <span className="mb-1 block text-[12px] font-semibold text-gray-800">Order</span>
+      <select
+        className={`${inputClass} !mb-0 leading-normal`}
+        value={values.orderBy}
+        onChange={(e) => onChange({ orderBy: e.target.value as ArchiveOrderBy })}
+      >
+        <option value="recent">Most recent</option>
+        <option value="old">Oldest first</option>
+      </select>
+    </label>
+  );
+
   return (
     <div className="mb-3">
       {!hideFilters && (
@@ -62,6 +85,7 @@ export default function ArchiveListToolbar({
             }}
           >
             <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+              {orderFirst && orderControl}
               <label className="flex min-w-[180px] flex-1 flex-col">
                 <span className="mb-1 block text-[12px] font-semibold text-gray-800">Search</span>
                 <input
@@ -72,6 +96,7 @@ export default function ArchiveListToolbar({
                   placeholder="Name, typology, notes..."
                 />
               </label>
+              {additionalFilter}
               <label className="flex flex-col">
                 <span className="mb-1 block text-[12px] font-semibold text-gray-800">From</span>
                 <input
@@ -92,17 +117,7 @@ export default function ArchiveListToolbar({
                   onChange={(e) => onChange({ toDate: e.target.value })}
                 />
               </label>
-              <label className="flex min-w-[150px] flex-col">
-                <span className="mb-1 block text-[12px] font-semibold text-gray-800">Order</span>
-                <select
-                  className={`${inputClass} !mb-0 leading-normal`}
-                  value={values.orderBy}
-                  onChange={(e) => onChange({ orderBy: e.target.value as ArchiveOrderBy })}
-                >
-                  <option value="recent">Most recent</option>
-                  <option value="old">Oldest first</option>
-                </select>
-              </label>
+              {!orderFirst && orderControl}
               <div className="flex h-9 items-center gap-2 self-end">
                 <button
                   type="submit"
@@ -129,6 +144,7 @@ export default function ArchiveListToolbar({
       <ArchiveActionsBar
         shareTitle={title}
         pagination={pagination}
+        paginationTrailing={paginationTrailing}
         selectedCount={selectedCount}
         onDeleteSelected={onDeleteSelected}
       />
@@ -136,8 +152,8 @@ export default function ArchiveListToolbar({
   );
 }
 
-export function emptyArchiveFilterValues(): ArchiveListFilterValues {
-  return { search: '', fromDate: '', toDate: '', orderBy: 'recent' };
+export function emptyArchiveFilterValues(orderBy: ArchiveOrderBy = 'recent'): ArchiveListFilterValues {
+  return { search: '', fromDate: '', toDate: '', orderBy };
 }
 
 export function toArchiveFilterParams(

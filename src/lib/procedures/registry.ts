@@ -91,7 +91,8 @@ const EXPENSE: ProcedureDefinition = {
   name: 'Member Expense',
   typologyLabel: 'EXPENSES',
   pageSize: 25,
-  metadataKeys: { primary: 'expenseName' },
+  // Expenses are money leaving the club: payments are tracked as OUT.
+  metadataKeys: { primary: 'expenseName', direction: 'OUT' },
   columnHeaders: { primary: 'Expense' },
   routes: {
     form: '/clubs/new_expense',
@@ -111,7 +112,7 @@ const EXPENSE: ProcedureDefinition = {
   },
   form: {
     title: 'Member expenses',
-    subtitle: 'Record a member expense and optionally pay part of it now.',
+    subtitle: 'Insert an expense: pay it now, or plan it with a payment date and pay it later.',
   },
 };
 
@@ -281,6 +282,11 @@ export function getProcedureDefinition(code: string): ProcedureDefinition | null
 
 export function getProcedureTypology(code: string): string {
   return getProcedureDefinition(code)?.typologyLabel ?? 'PROCEDURE';
+}
+
+/** Cash direction of a procedure's payments: OUT when the club pays (expenses, member credits). */
+export function getProcedureDirection(code: string): 'IN' | 'OUT' {
+  return getProcedureDefinition(code)?.metadataKeys.direction ?? 'IN';
 }
 
 export type ProcedureTab = {

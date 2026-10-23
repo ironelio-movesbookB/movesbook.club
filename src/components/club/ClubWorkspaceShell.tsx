@@ -79,6 +79,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const gridShareMode = searchParams?.get('share') === 'grid';
   const { user, loading } = useAuth();
   const { t } = useLanguage();
   const { showAlert } = usePcuAlert();
@@ -776,6 +777,23 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
   if (loading || !user || !canUseMembersArchive) {
     return null;
+  }
+
+  if (gridShareMode) {
+    return (
+      <ClubWorkspaceContext.Provider
+        value={{
+          activeTab: shellActiveTab,
+          selectedClubId,
+          myPageNewsPanel,
+          setMyPageNewsPanel,
+          selectedMember,
+          setSelectedMember,
+        }}
+      >
+        <main className="min-h-screen w-full bg-white">{children}</main>
+      </ClubWorkspaceContext.Provider>
+    );
   }
 
   return (

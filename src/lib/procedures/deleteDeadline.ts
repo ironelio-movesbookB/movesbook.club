@@ -11,6 +11,7 @@ import {
   MEMBER_SETTINGS_RECORD_SOURCE,
   memberSettingsKeyForLabel,
 } from '@/lib/club/memberSettingsDeadlineLinks';
+import { restoreCardCreditPayment } from './insertCreditService';
 
 const EPSILON = 0.005;
 
@@ -25,8 +26,9 @@ export type DeleteDeadlineResult = { deleted: 'deadline' | 'record' };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Archive of the Deadlines: delete one deadline. Its amount leaves the record's
- * total and rest; paid deadlines and the record's payments are never touched.
+ * Archive of the Deadlines: delete one deadline. Payments belonging to a deleted
+ * record are removed with it. For a multi-deadline record, removing one installment
+ * removes that record's payment history and reopens the remaining installments.
  */
 export async function deleteSingleDeadline(
   ctx: ClubAuthContext,
@@ -48,14 +50,7 @@ export async function deleteSingleDeadline(
     await listInstallments(recordId),
     Number(record.balanceAmount ?? 0)
   );
-  const paidAmount = Number(record.paidAmount ?? 0);
   const deleteWholeRecord = async () => {
-    if (paidAmount > EPSILON) {
-      throw new DeadlineDeleteError(
-        'This deadline has payments. Delete the payment first in the Archive of the Payments.',
-        409
-      );
-    }
     await procedureService.softDeleteRecord(ctx, procedureTypeCode, recordId);
     return { deleted: 'record' as const };
   };
@@ -66,32 +61,66 @@ export async function deleteSingleDeadline(
 
   const target = installments.find((i) => i.id === installmentId);
   if (!target) throw new DeadlineDeleteError('Deadline not found', 404);
-  if (target.paid > EPSILON) {
-    throw new DeadlineDeleteError(
-      'This deadline is already paid (fully or in part). Delete its payment first in the Archive of the Payments.',
-      409
-    );
-  }
   if (installments.length === 1) return deleteWholeRecord();
-
-  const amount = target.balance;
-  const remaining = installments.filter((i) => i.id !== target.id);
-  const nextOpen = remaining.find((i) => i.balance > EPSILON);
+  const payments = await prisma.procedurePayment.findMany({
+    where: { procedureRecordId: recordId },
+    select: { amount: true, payMode: true, cancelledAt: true, reversalOfId: true },
+  });
+  const cardPaidAmount = round2(
+    payments
+      .filter((payment) => !payment.cancelledAt && !payment.reversalOfId && payment.payMode === 'card')
+      .reduce((sum, payment) => sum + Number(payment.amount), 0)
+  );
+  const rawInstallments = await prisma.procedureInstallment.findMany({
+    where: { procedureRecordId: recordId },
+    orderBy: [{ expireDate: 'asc' }, { paymentDate: 'asc' }, { createdAt: 'asc' }],
+  });
+  const rawTarget = rawInstallments.find((i) => i.id === target.id);
+  if (!rawTarget) throw new DeadlineDeleteError('Deadline not found', 404);
+  const deletedAmount = round2(Number(rawTarget.paid) + Number(rawTarget.balance));
+  const remaining = rawInstallments.filter((i) => i.id !== target.id);
+  const nextOpen = remaining.find((i) => Number(i.balance) + Number(i.paid) > EPSILON);
   const dueSource = nextOpen ?? remaining[remaining.length - 1];
-  const dueDate = dueSource ? dueSource.expireDate ?? dueSource.paymentDate : null;
-  const totalAmount = round2(Math.max(0, Number(record.totalAmount ?? 0) - amount));
-  const balanceAmount = round2(Math.max(0, Number(record.balanceAmount ?? 0) - amount));
+  const dueDate = dueSource?.expireDate ?? dueSource?.paymentDate ?? null;
+  const totalAmount = round2(Math.max(0, Number(record.totalAmount ?? 0) - deletedAmount));
+  const balanceAmount = totalAmount;
 
   await prisma.$transaction(async (tx) => {
-    await tx.procedureInstallment.delete({ where: { id: target.id } });
-    await tx.procedureRecord.update({
-      where: { id: recordId },
+    const updated = await tx.procedureRecord.updateMany({
+      where: {
+        id: recordId,
+        clubId: ctx.club.id,
+        status: ProcedureRecordStatus.ACTIVE,
+        totalAmount: record.totalAmount,
+        paidAmount: record.paidAmount,
+        balanceAmount: record.balanceAmount,
+      },
       data: {
         totalAmount,
+        paidAmount: 0,
         balanceAmount,
         dueDate: dueDate ? new Date(`${dueDate}T00:00:00.000Z`) : record.dueDate,
       },
     });
+    if (updated.count !== 1) {
+      throw new DeadlineDeleteError('Record changed. Refresh the archive and try again.', 409);
+    }
+
+    await tx.procedurePayment.deleteMany({ where: { procedureRecordId: recordId } });
+    await tx.procedureInstallment.delete({ where: { id: target.id } });
+    for (const installment of remaining) {
+      await tx.procedureInstallment.update({
+        where: { id: installment.id },
+        data: {
+          paid: 0,
+          balance: round2(Number(installment.paid) + Number(installment.balance)),
+        },
+      });
+    }
+
+    if (cardPaidAmount > 0) {
+      await restoreCardCreditPayment(ctx.club.id, record.memberId, cardPaidAmount, ctx.userId, tx);
+    }
   });
 
   const source = (record.metadata as Record<string, unknown> | null)?.source;

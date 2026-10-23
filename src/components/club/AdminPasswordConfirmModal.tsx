@@ -10,7 +10,7 @@ import {
 type AdminPasswordConfirmModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onVerified: () => void;
+  onVerified: (password: string) => void;
   adminUsername?: string;
   entityKind?: ManagedEntityKind;
 };
@@ -69,7 +69,7 @@ export default function AdminPasswordConfirmModal({
         return;
       }
       setPassword('');
-      onVerified();
+      onVerified(trimmed);
     } catch {
       setError('Could not verify password. Try again.');
     } finally {
