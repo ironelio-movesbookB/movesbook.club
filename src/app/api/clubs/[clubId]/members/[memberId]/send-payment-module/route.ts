@@ -10,6 +10,15 @@ import {
   paymentMethodIn,
   SEND_PAYMENT_MODULE_METHODS,
 } from '@/lib/procedures/payModes';
+import {
+  createMemberOnlinePayment,
+  onlineProviderForMethod,
+  parseMemberEuroAmount,
+} from '@/lib/club/memberOnlinePayments';
+import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
+import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
+import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
+import { registrationOrigin } from '@/lib/registration/registrationFlow';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +108,42 @@ export async function POST(
     '',
     'Please complete the payment with the method above. Reply to this message for any question.',
   ];
+
+  let payUrl = '';
+  const provider = onlineProviderForMethod(method);
+  if (provider) {
+    const amount =
+      installments.map((row) => parseMemberEuroAmount(row.amount)).find((value) => value > 0) ||
+      parseMemberEuroAmount(fee);
+    const stored = await loadStoredMemberPaymentMethods(params.clubId);
+    const siteMode = await getMemberPaymentMode();
+    const connected = memberGatewayReady(stored, provider, siteMode);
+    if (connected && amount > 0) {
+      const member = await prisma.user.findUnique({
+        where: { id: params.memberId },
+        select: { name: true, username: true },
+      });
+      const label =
+        installments.find((row) => parseMemberEuroAmount(row.amount) > 0)?.label || 'Membership fee';
+      const payment = await createMemberOnlinePayment({
+        entityId: params.clubId,
+        entityName,
+        memberUserId: params.memberId,
+        memberName: member?.name?.trim() || member?.username || 'Member',
+        createdByUserId: senderId,
+        provider,
+        amountEur: amount,
+        description: `${entityName} — ${label}`,
+      });
+      payUrl = `${registrationOrigin(request)}/pay/club/${payment.id}`;
+      lines.push('', `Pay online: ${payUrl}`);
+    } else if (!connected) {
+      lines.push(
+        '',
+        'Online payment is not connected for the current mode. The club saves the matching keys under Payment methods for members.',
+      );
+    }
+  }
   const content = lines.join('\n');
 
   const [user1Id, user2Id] = [senderId, params.memberId].sort();
@@ -129,5 +174,10 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ ok: true, conversationId: conversation.id, messageId: message.id });
+  return NextResponse.json({
+    ok: true,
+    conversationId: conversation.id,
+    messageId: message.id,
+    payUrl: payUrl || null,
+  });
 }

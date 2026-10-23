@@ -390,58 +390,61 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
               onClick={() => toggleSection('club')}
               className="w-full bg-[#058592] px-4 py-2 font-bold text-sm text-white flex items-center justify-between hover:bg-[#046c76] transition cursor-move"
             >
-              <span>Club options</span>
+              <span>Purchase options</span>
               <Triangle className="w-4 h-4 text-white fill-[#ff8d00] rotate-180" />
             </button>
             
             {openSections.club && (
               <div className="bg-[#2b2b2b] mt-1 space-y-1">
+                 <Link href="/admin/payments" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
+                    <PoundSterling className="w-4 h-4 text-white" />
+                    <span>List of payments</span>
+                 </Link>
+
                  {/* Club accounts */}
                  <Link href="/admin/club-accounts" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <UserCircle className="w-4 h-4 text-white" />
                     <span>Club accounts</span>
                  </Link>
-    
-                 {/* Accounts */}
-                 <div className="space-y-1">
-                    <button 
-                      onClick={() => toggleSubSection('club_accounts')}
+
+                 {[
+                   { id: 'coach_member_accounts', label: "Coach's Members Accounts", audience: 'coach' },
+                   { id: 'team_member_accounts', label: "Team Member's Accounts", audience: 'team' },
+                   { id: 'club_member_accounts', label: "Club Members' Accounts", audience: 'club' },
+                 ].map((section) => (
+                   <div key={section.id} className="space-y-1">
+                    <button
+                      onClick={() => toggleSubSection(section.id)}
                       className="w-[90%] ml-auto flex items-center justify-between px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white"
                     >
                        <div className="flex items-center gap-3">
                           <UserCircle className="w-4 h-4 text-white" />
-                          <span>Accounts</span>
+                          <span>{section.label}</span>
                        </div>
-                       <Triangle className={`w-3 h-3 text-white fill-white transition-transform ${openSubSections['club_accounts'] ? 'rotate-180' : ''}`} />
+                       <Triangle className={`w-3 h-3 text-white fill-white transition-transform ${openSubSections[section.id] ? 'rotate-180' : ''}`} />
                     </button>
-                    {openSubSections['club_accounts'] && (
+                    {openSubSections[section.id] && (
                       <div className="w-[80%] ml-auto space-y-1">
-                         <Link href="/admin/accounts/price-list" className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
+                         <Link href={`/admin/accounts/price-list?audience=${section.audience}`} className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
                            Price list
                          </Link>
-                         <Link href="/admin/accounts/requests" className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
+                         <Link href={`/admin/accounts/requests?audience=${section.audience}`} className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
                            Requests of accounts
                          </Link>
                       </div>
                     )}
-                 </div>
-    
-                 {/* Identification cards */}
-                 <Link href="/admin/identification-cards" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
-                    <ShoppingBasket className="w-4 h-4 text-white" />
-                    <span>Identification cards</span>
-                 </Link>
-    
+                   </div>
+                 ))}
+
                  {/* Products purchased */}
                  <Link href="/admin/products-purchased" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <ShoppingBasket className="w-4 h-4 text-white" />
                     <span>Products purchased</span>
                  </Link>
-    
-                 {/* Order purchased */}
+
                  <Link href="/admin/orders" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <Truck className="w-4 h-4 text-white" />
-                    <span>Order purchased</span>
+                    <span>Identification Cards</span>
                  </Link>
     
                  {/* Hardware Subtabs */}
@@ -508,12 +511,6 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                 <Link href="/admin/membership/structure" className="flex items-center gap-3 px-3 py-2 bg-black border border-[#aeaeae] hover:bg-[#1a1a1a] transition text-sm text-white">
                    <Settings className="w-4 h-4 text-white" />
                    <span>Structure of subscriptions</span>
-                </Link>
-    
-                {/* List of payments */}
-                <Link href="/admin/payments" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
-                   <PoundSterling className="w-4 h-4 text-white" />
-                   <span>List of payments</span>
                 </Link>
               </div>
             )}

@@ -44,6 +44,7 @@ import {
   type MemberProfileBundle,
 } from '@/lib/club/memberProfileTypes';
 import { PAYMENT_TYPE_OPTIONS } from '@/lib/procedures/payModes';
+import { useClubEnabledPaymentMethods } from '@/lib/club/useClubEnabledPaymentMethods';
 import MemberOwnerScheduleSections, {
   ForeignerAndIbanFields,
   MedicalCertExtraFields,
@@ -128,6 +129,7 @@ export default function ClubMemberProfileEditor({
   onReload,
   profileSource = 'club',
 }: Props) {
+  const clubEnabledPayments = useClubEnabledPaymentMethods();
   const radioGroupId = useId();
   const st = useSportT();
   const [saving, setSaving] = useState(false);
@@ -2653,7 +2655,10 @@ export default function ClubMemberProfileEditor({
           <div className="mt-3">
             <Field label="Payment method preferred (multicheck)">
               <div className="flex flex-wrap gap-3">
-                {PAYMENT_TYPE_OPTIONS.map((m) => (
+                {(clubEnabledPayments
+                  ? PAYMENT_TYPE_OPTIONS.filter((method) => clubEnabledPayments.includes(method.value))
+                  : PAYMENT_TYPE_OPTIONS
+                ).map((m) => (
                   <CheckRow
                     key={m.value}
                     label={m.label}

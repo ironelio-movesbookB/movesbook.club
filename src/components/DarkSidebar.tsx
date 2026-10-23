@@ -4586,6 +4586,11 @@ export default function DarkSidebar({
                                       path: '/club/settings/payment_settings',
                                     },
                                     {
+                                      Icon: CreditCard,
+                                      label: 'Payment methods for members',
+                                      path: '/club/settings/member_payment_methods',
+                                    },
+                                    {
                                       Icon: LayoutGrid,
                                       label: 'Tables',
                                       path: '/club/settings/tables/areas',
@@ -5126,6 +5131,14 @@ export default function DarkSidebar({
                             </button>
                             {clubGeneralSettingsOpen && (
                               <div className="bg-[#1e272a] text-white">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/club/settings/member_payment_methods')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <CreditCard className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                  <span className="leading-snug">Payment methods for members</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => router.push('/club/settings/documents')}

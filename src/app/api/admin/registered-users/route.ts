@@ -657,10 +657,12 @@ export async function GET(request: NextRequest) {
               Math.abs(Date.parse(`${r.dateStart}T00:00:00Z`) - rowStartMs) <= 24 * 60 * 60 * 1000,
           );
         if (!reg) return row;
+        const recordedPayment = Boolean(row.amount && row.amount !== '—');
         return {
           ...row,
           version: reg.versionName,
-          amount: row.amount && row.amount !== '—' ? row.amount : `€ ${reg.costEuro}`,
+          amount: recordedPayment ? row.amount : `€ ${reg.costEuro}`,
+          offerPrice: !recordedPayment,
           specialOffer: true,
           specialOfferTitle: reg.offerTitle,
         };
