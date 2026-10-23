@@ -16,11 +16,12 @@ import {
   type InstallmentRow,
 } from '@/lib/club/archives/clubArchiveClient';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-import { formatEuro } from '@/lib/club/servicePurchasesClient';
+import { clubApiFetch, formatEuro } from '@/lib/club/servicePurchasesClient';
 import type { ServiceSaleFormOptions, ServiceSalePayment, ServiceSalePurchase } from '@/lib/club/serviceSaleClient';
 import AdminPasswordConfirmModal from '@/components/club/AdminPasswordConfirmModal';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
+import { useClubEnabledPaymentMethods } from '@/lib/club/useClubEnabledPaymentMethods';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 
 export type PaymentDistribution = {
@@ -216,7 +217,11 @@ export default function ServicePaymentForm({
   const [amountPaid, setAmountPaid] = useState('0');
   const amountPaidTouchedRef = useRef(false);
   const [payMode, setPayMode] = useState('cash');
+  const [linkNotice, setLinkNotice] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
+  const enabledMethods = useClubEnabledPaymentMethods();
   const [taxDoc, setTaxDoc] = useState(!disableReceipt);
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [operatorId, setOperatorId] = useState(options.currentOperatorId ?? options.operators[0]?.id ?? '');
@@ -228,6 +233,19 @@ export default function ServicePaymentForm({
   const [passwordRequired, setPasswordRequired] = useState(isPasswordEnabled);
   const [showPassword, setShowPassword] = useState(false);
   const prevPassStatus = useRef(operatorPassStatus);
+
+  useEffect(() => {
+    clubApiFetch<{ settings?: { stripeEnabled?: boolean } }>('/api/club/settings/member-payment-methods')
+      .then((data) => setStripeEnabled(Boolean(data.settings?.stripeEnabled)))
+      .catch(() => setStripeEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    if (!enabledMethods) return;
+    const choices = stripeEnabled ? [...enabledMethods, 'stripe'] : [...enabledMethods];
+    if (choices.includes(payMode as (typeof choices)[number])) return;
+    setPayMode(choices[0] ?? '');
+  }, [enabledMethods, stripeEnabled, payMode]);
 
   useEffect(() => {
     if (prevPassStatus.current !== operatorPassStatus) {
@@ -744,6 +762,47 @@ export default function ServicePaymentForm({
       return;
     }
 
+    const onlinePay =
+      procedureType !== 'expense' &&
+      (payMode === 'credit_card' || payMode === 'debit_card' || payMode === 'paypal' || payMode === 'stripe');
+    if (onlinePay) {
+      const totals = new Map<string, number>();
+      for (const row of distributions) {
+        const recordId = row.recordId || purchase.id;
+        totals.set(recordId, Math.round(((totals.get(recordId) ?? 0) + row.amount) * 100) / 100);
+      }
+      setLinkBusy(true);
+      setLinkNotice('');
+      try {
+        const data = await clubApiFetch<{ payUrl?: string; emailed?: boolean }>(
+          '/api/club/member-online-payments',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              memberUserId: purchase.userId,
+              amountEur: paidAmount,
+              description: description.trim() || `${purchase.sectorName} ${purchase.serviceName}`.trim(),
+              payMode,
+              procedureType,
+              operatorId,
+              paymentDate,
+              lines: [...totals.entries()].map(([recordId, amount]) => ({ recordId, amount })),
+            }),
+          },
+        );
+        setLinkNotice(
+          data.emailed
+            ? `Payment link emailed to the member. ${data.payUrl ?? ''}`
+            : `The member has no email, so no mail was sent. Share this link: ${data.payUrl ?? ''}`,
+        );
+      } catch (err) {
+        setInstallmentError(err instanceof Error ? err.message : 'Could not send the payment link');
+      } finally {
+        setLinkBusy(false);
+      }
+      return;
+    }
+
     await onSubmit({
       amountPaid: paidAmount,
       paymentDate,
@@ -1045,6 +1104,8 @@ export default function ServicePaymentForm({
                 value={payMode}
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
+                allowedMethods={enabledMethods}
+                extraOptions={stripeEnabled ? [{ value: 'stripe', label: 'Stripe' }] : []}
               />
               {!disableReceipt ? (
                 <div className="flex h-10 min-w-0 items-center gap-2">
@@ -1196,15 +1257,16 @@ export default function ServicePaymentForm({
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {installmentError && <p className="text-red-600 text-sm">{installmentError}</p>}
+        {linkNotice && <p className="text-green-700 text-sm break-all">{linkNotice}</p>}
         {success && <p className="text-green-700 text-sm">{success}</p>}
 
         <div className="flex justify-center gap-3">
           <button
             type="submit"
-            disabled={saving || !hasPayableRest || selectedInstallmentIds.size === 0 || paidAmount <= 0}
+            disabled={saving || linkBusy || !hasPayableRest || selectedInstallmentIds.size === 0 || paidAmount <= 0}
             className="px-6 py-2 bg-red-700 text-white rounded hover:bg-red-800 disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Confirm'}
+            {saving || linkBusy ? 'Saving...' : 'Confirm'}
           </button>
           {onCancel && (
             <button
