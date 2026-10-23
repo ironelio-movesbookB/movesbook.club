@@ -80,6 +80,7 @@ function CoachDashboardContent() {
   const { bannerProfile, setBannerProfile } = useDashboardBannerProfile(!loading && !!user);
   const [showChangeBannerModal, setShowChangeBannerModal] = useState(false);
   const [coachingGroups, setCoachingGroups] = useState<any[]>([]);
+  const [coachingGroupsLoaded, setCoachingGroupsLoaded] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'my-page' | 'my-entity'>('my-page');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -118,6 +119,8 @@ function CoachDashboardContent() {
       }
     } catch (error) {
       console.error('Error loading coaching groups:', error);
+    } finally {
+      setCoachingGroupsLoaded(true);
     }
   }, []);
 
@@ -206,11 +209,12 @@ function CoachDashboardContent() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (!coachingGroupsLoaded) return;
     if (isEntityWorkspaceSession('coach')) return;
     if (!hasFormGroup && activeTab === 'my-entity') {
       setActiveTab('my-page');
     }
-  }, [hasFormGroup, activeTab]);
+  }, [coachingGroupsLoaded, hasFormGroup, activeTab]);
 
   useEffect(() => {
     if (showWorkoutSection) {

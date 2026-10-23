@@ -102,7 +102,12 @@ import AthleteMyPageRightSidebarExtras from '@/components/dashboard/AthleteMyPag
 import AthleteMyClubRightSidebar from '@/components/dashboard/AthleteMyClubRightSidebar';
 import MemberRegistrationInfoPanel from '@/components/member/MemberRegistrationInfoPanel';
 import MemberVisitorContactActivitiesPanel from '@/components/member/MemberVisitorContactActivitiesPanel';
-import { isClubAccountUserType, showSuggestMovesbookForTab } from '@/utils/dashboardRouting';
+import {
+  getDashboardPathForUserType,
+  isClubAccountUserType,
+  isManagedEntityAdminUserType,
+  showSuggestMovesbookForTab,
+} from '@/utils/dashboardRouting';
 import {
   getEntityDirectAccessLock,
   getEntityDirectAccessProfilePath,
@@ -129,6 +134,18 @@ const AvatarPlaceholder = ({ size = 'w-10 h-10' }: { size?: string }) => (
 function AthleteDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const asMember = searchParams?.get('asMember') === '1';
+  const memberKind = searchParams?.get('kind') || 'club';
+  const memberId = searchParams?.get('id');
+  const memberName = searchParams?.get('name') || '';
+  const memberTabLabel =
+    memberKind === 'team'
+      ? 'My Team'
+      : memberKind === 'group'
+        ? 'My Group'
+        : memberKind === 'coaching-group'
+          ? 'Trained Group'
+          : 'My Club';
   const { user, loading } = useAuth();
   const { t } = useLanguage();
   const { unreadCount: chatUnreadCount } = useChatUnreadCount();
@@ -227,6 +244,7 @@ function AthleteDashboardContent() {
   // Redirect if not athlete: club accounts use /club/dashboard (e.g. News → ?open=news); others use legacy my-page.
   useEffect(() => {
     if (user && !['ATHLETE', 'ADMIN'].includes(user.userType)) {
+      if (asMember && isManagedEntityAdminUserType(user.userType)) return;
       if (isClubAccountUserType(user.userType)) {
         const lock = getEntityDirectAccessLock();
         if (lock) {
@@ -239,7 +257,13 @@ function AthleteDashboardContent() {
         router.push('/my-page');
       }
     }
-  }, [user, router]);
+  }, [user, router, asMember]);
+
+  useEffect(() => {
+    if (!asMember || !memberId) return;
+    setActiveTab('my-entity');
+    if (memberKind === 'club') setSelectedClubId(memberId);
+  }, [asMember, memberId, memberKind]);
 
   // Open News/OGP, My Music, or Music editor when navigating with ?open=news / ?open=music / ?open=add-songs
   useEffect(() => {
@@ -276,12 +300,12 @@ function AthleteDashboardContent() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (myClubs.length === 0 && activeTab === 'my-entity') {
+    if (!asMember && myClubs.length === 0 && activeTab === 'my-entity') {
       setActiveTab('my-page');
       setClubChatOpen(false);
       setClubMainPanel('default');
     }
-  }, [myClubs.length, activeTab]);
+  }, [myClubs.length, activeTab, asMember]);
 
   const openClubNewsPanel = useCallback((panel: Exclude<AthleteClubMainPanel, 'default'>) => {
     setActiveTab('my-entity');
@@ -918,11 +942,18 @@ function AthleteDashboardContent() {
           {showLeftSidebar && !newsExpanded && !musicExpanded && !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start print:hidden">
               <DarkSidebar
-                userType={user?.userType || ''}
-                entities={myClubs}
+                userType={asMember ? 'ATHLETE' : user?.userType || ''}
+                entityTabLabel={asMember ? memberTabLabel : undefined}
+                entities={
+                  asMember && memberId
+                    ? [{ id: memberId, name: memberName || memberTabLabel }]
+                    : myClubs
+                }
                 athleteTeams={myTeams}
                 onAthleteTeamSelect={handleMyTeamSelect}
-                selectedEntityId={selectedClubId ?? myClubs[0]?.id ?? null}
+                selectedEntityId={
+                  asMember && memberId ? memberId : selectedClubId ?? myClubs[0]?.id ?? null
+                }
                 onEntitySelect={handleAthleteClubSelect}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
@@ -933,6 +964,10 @@ function AthleteDashboardContent() {
                   }
                 }}
                 onMyPageClick={() => {
+                  if (asMember && user && isManagedEntityAdminUserType(user.userType)) {
+                    router.push(getDashboardPathForUserType(user.userType));
+                    return;
+                  }
                   setActiveTab('my-page');
                   setActiveSection('overview');
                 }}
@@ -1190,7 +1225,9 @@ function AthleteDashboardContent() {
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border p-8 pt-12 flex-1 flex items-start justify-center">
                   <div className="text-center">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">My Club Page</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                      {asMember ? `${memberTabLabel} Page` : 'My Club Page'}
+                    </h2>
                     <p className="text-gray-600 mb-6">Club-related content will be displayed here.</p>
                   </div>
                 </div>
@@ -1205,7 +1242,7 @@ function AthleteDashboardContent() {
             !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 print:hidden">
               <div className="bg-white shadow-sm border h-full flex flex-col overflow-y-auto">
-                {activeTab === 'my-entity' ? (
+                {activeTab === 'my-entity' && (!asMember || memberKind === 'club') ? (
                   <AthleteMyClubRightSidebar clubId={selectedClubId ?? myClubs[0]?.id ?? null} />
                 ) : (
                   <div className="p-4 flex flex-col">

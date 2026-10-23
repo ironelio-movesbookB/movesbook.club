@@ -15,12 +15,9 @@ import {
   companyLimitReachedMessage,
   getCreatableCompaniesQuota,
 } from '@/lib/club/creatableCompaniesQuota';
+import { isManagedEntityAdminUserType } from '@/utils/dashboardRouting';
 
 export const dynamic = 'force-dynamic';
-
-function isTeamAdminUserType(userType: string): boolean {
-  return userType === 'TEAM' || userType === 'TEAM_MANAGER';
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    if (!isTeamAdminUserType(String(decoded.userType))) {
+    if (!isManagedEntityAdminUserType(String(decoded.userType))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
