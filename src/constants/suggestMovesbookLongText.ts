@@ -1,4 +1,5 @@
 import { fetchLongTextTranslation, fetchTranslationValues } from './infoRepsLongText';
+import { stripStoredHtml } from '@/lib/promocodes/suggestMovesbookCopy';
 import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
 
 export const SUGGEST_MOVESBOOK_INTRO_KEY = 'SuggestMovesbookIntro';
@@ -14,16 +15,16 @@ export async function fetchSuggestMovesbookIntroText(language: string): Promise<
   const fallback = lang.startsWith('it') ? SUGGEST_MOVESBOOK_INTRO_IT : SUGGEST_MOVESBOOK_INTRO_EN;
 
   const values = await fetchTranslationValues(SUGGEST_MOVESBOOK_INTRO_KEY);
-  if (!values) return fallback;
+  if (!values) return stripStoredHtml(fallback);
 
   const normalized = normalizeToolsLanguage(language);
   const localized = values[normalized]?.trim();
-  if (localized) return localized;
+  if (localized) return stripStoredHtml(localized);
 
   if (lang.startsWith('it')) {
     const it = values.it?.trim();
-    return it || SUGGEST_MOVESBOOK_INTRO_IT;
+    return stripStoredHtml(it || SUGGEST_MOVESBOOK_INTRO_IT);
   }
 
-  return fetchLongTextTranslation(SUGGEST_MOVESBOOK_INTRO_KEY, language, fallback);
+  return stripStoredHtml(await fetchLongTextTranslation(SUGGEST_MOVESBOOK_INTRO_KEY, language, fallback));
 }

@@ -63,6 +63,7 @@ import {
   SEND_PAYMENT_MODULE_METHODS,
   TO_BE_VERIFIED_METHODS,
 } from "@/lib/procedures/payModes";
+import { useClubEnabledPaymentMethods } from "@/lib/club/useClubEnabledPaymentMethods";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type MemberTypeOption = {
@@ -130,6 +131,7 @@ export default function MemberProfileSettingsTab({
   message,
   onSave,
 }: Props) {
+  const clubEnabledPayments = useClubEnabledPaymentMethods();
   const { currentLanguage } = useLanguage();
   const lang = (currentLanguage || "en").toLowerCase().split("-")[0] || "en";
   const s = club.settings;
@@ -539,12 +541,15 @@ export default function MemberProfileSettingsTab({
   );
   const paymentMethodChoices = useMemo(() => {
     const tagged = sanitizeDefaultPaymentMethods(defaultPaymentMethods);
+    const catalog = clubEnabledPayments
+      ? PAYMENT_TYPE_OPTIONS.filter((o) => clubEnabledPayments.includes(o.value))
+      : PAYMENT_TYPE_OPTIONS;
     const list =
       tagged.length > 0
-        ? PAYMENT_TYPE_OPTIONS.filter((o) => tagged.includes(o.value))
-        : [...PAYMENT_TYPE_OPTIONS];
+        ? catalog.filter((o) => tagged.includes(o.value))
+        : [...catalog];
     return list.map((o) => ({ value: o.value as string, label: o.label }));
-  }, [defaultPaymentMethods]);
+  }, [clubEnabledPayments, defaultPaymentMethods]);
   const savedMethodOutsideDefaults =
     paymentMethod !== "" &&
     !paymentMethodChoices.some((o) => o.value === paymentMethod);
@@ -599,7 +604,12 @@ export default function MemberProfileSettingsTab({
       const json = await res.json().catch(() => ({}));
       setModuleMessage(
         res.ok
-          ? { ok: true, text: "Payment module sent to the member in Messages." }
+          ? {
+              ok: true,
+              text: json.payUrl
+                ? `Payment module sent. The member pays here: ${json.payUrl}`
+                : "Payment module sent to the member in Messages.",
+            }
           : {
               ok: false,
               text: json.error || "Could not send the payment module.",
@@ -1198,7 +1208,10 @@ export default function MemberProfileSettingsTab({
           </button>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {PAYMENT_TYPE_OPTIONS.map((method) => {
+          {(clubEnabledPayments
+            ? PAYMENT_TYPE_OPTIONS.filter((method) => clubEnabledPayments.includes(method.value))
+            : PAYMENT_TYPE_OPTIONS
+          ).map((method) => {
             const checked = defaultPaymentMethods.includes(method.value);
             const disableNew =
               !checked &&

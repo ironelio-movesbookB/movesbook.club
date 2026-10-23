@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 type Db = Prisma.TransactionClient | typeof prisma;
 
 export type RegistrationPaymentStatus = 'pending' | 'paid' | 'test' | 'free';
-export type RegistrationPaymentProvider = 'stripe' | 'paypal';
+export type RegistrationPaymentProvider = 'stripe' | 'paypal' | 'klarna';
 /** `quick_register`: promocode registration; the account is created only after payment. */
 export type RegistrationPaymentKind = 'register' | 'quick_register';
 export type AccountActivationStatus = 'pending_payment' | 'pending_activation' | 'active';

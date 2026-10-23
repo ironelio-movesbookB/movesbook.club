@@ -120,7 +120,7 @@ function PackSection({
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-gray-700">Dura</span>
+              <span className="text-gray-700">Duration</span>
               <input
                 readOnly
                 value={pack.durationDays}
@@ -144,9 +144,15 @@ function PackSection({
           {pack.versionLabel}
         </div>
         <div className="p-4 space-y-3">
-          <div className={`flex items-end gap-2 ${showPackCheckboxes ? 'pl-[150px]' : ''}`}>
+          {(() => {
+            const columns = `168px 20px repeat(${pack.packSizes.length}, 64px)`;
+            return (
+              <>
+          <div className="grid items-end gap-2" style={{ gridTemplateColumns: columns }}>
+            <span />
+            <span />
             {pack.packSizes.map((size, i) => (
-              <div key={size} className="flex w-16 flex-col items-center gap-1">
+              <div key={size} className="flex flex-col items-center gap-1">
                 <div className="w-full border border-gray-600 bg-[#c0392b] py-1 text-center text-xs font-bold text-white">
                   {size}
                 </div>
@@ -163,8 +169,8 @@ function PackSection({
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="w-[140px] shrink-0 text-xs text-gray-800">Price for account in Pack</span>
+          <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
+            <span className="text-xs text-gray-800">Price for account in Pack</span>
             <span className="text-sm font-bold">€</span>
             {pack.unitPrices.map((price, i) => (
               <input
@@ -173,23 +179,26 @@ function PackSection({
                 readOnly={!editable}
                 value={price}
                 onChange={(e) => updateUnitPrice(i, e.target.value)}
-                className="w-16 border border-gray-400 bg-[#fffacd] px-1 py-1 text-center text-sm"
+                className="w-full border border-gray-400 bg-[#fffacd] px-1 py-1 text-center text-sm"
               />
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="w-[140px] shrink-0 text-xs text-gray-800">Total Price</span>
+          <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
+            <span className="text-xs text-gray-800">Total Price</span>
             <span className="text-sm font-bold">€</span>
             {pack.totalPrices.map((price, i) => (
               <input
                 key={`total-${pack.versionKey}-${i}`}
                 readOnly
                 value={price}
-                className="w-16 border border-gray-400 bg-yellow-300 px-1 py-1 text-center text-sm font-semibold"
+                className="w-full border border-gray-400 bg-yellow-300 px-1 py-1 text-center text-sm font-semibold"
               />
             ))}
           </div>
+              </>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-4 border-t border-gray-300 pt-3 text-sm">
             <div className="flex items-center gap-2">
@@ -219,7 +228,7 @@ function PackSection({
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-gray-700">Dura</span>
+              <span className="text-gray-700">Duration</span>
               <input
                 type="text"
                 readOnly={!editable}

@@ -38,7 +38,8 @@ import RightSidebar from '@/components/dashboard/RightSidebar';
 import DisplayOptionsToolbar from '@/app/my-page/components/DisplayOptionsToolbar';
 import ManagedEntityDashboardBanner from '@/components/dashboard/ManagedEntityDashboardBanner';
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import { getManagedEntityProfilePath } from '@/lib/dashboard/managedEntityDashboardLabels';
 import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useDashboardBannerProfile } from '@/hooks/useDashboardBannerProfile';
@@ -203,6 +204,16 @@ function GroupDashboardContent() {
     }
   }, [showWorkoutSection, setShowLeftSidebar]);
 
+  const activeGroup = selectedGroupId
+    ? formCreatedGroups.find((g) => g.id === selectedGroupId) ?? null
+    : null;
+  const bannerGroup = activeGroup ?? formCreatedGroups[0] ?? null;
+  const showEntityBanner = activeTab === 'my-entity' && Boolean(selectedGroupId) && Boolean(bannerGroup);
+  const entityVisual = useEntityVisual(
+    showEntityBanner ? bannerGroup?.id : null,
+    bannerGroup?.description,
+  );
+
   if (loading || !user) {
     return null;
   }
@@ -214,10 +225,6 @@ function GroupDashboardContent() {
     setActiveTab('my-entity');
   };
 
-  const activeGroup = selectedGroupId
-    ? formCreatedGroups.find((g) => g.id === selectedGroupId) ?? null
-    : null;
-  const bannerGroup = activeGroup ?? formCreatedGroups[0] ?? null;
   const dashboardShellActiveTab: 'my-page' | 'my-entity' =
     activeTab === 'my-entity' &&
     selectedGroupId &&
@@ -262,8 +269,16 @@ function GroupDashboardContent() {
               coverBannerAlignment={
                 bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
               }
+              entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
+              entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
+              entityEdit={
+                showEntityBanner && bannerGroup
+                  ? { kind: 'group', entityId: bannerGroup.id }
+                  : null
+              }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               showSponsored={dashboardShellActiveTab === 'my-page'}
+              avatarImagePath={bannerProfile?.image}
               activeTab={dashboardShellActiveTab}
               showWorkoutSection={showWorkoutSection}
               onWorkoutsToggle={() => setShowWorkoutSection((v) => !v)}

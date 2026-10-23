@@ -458,6 +458,26 @@ export async function ensurePromocodeMetaTables(): Promise<void> {
           `ALTER TABLE promocode_applies ADD COLUMN invite_expires_at DATE NULL`
         );
       }
+      if (!applyColumns.has('registration_date')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN registration_date DATETIME NULL`
+        );
+      }
+      if (!applyColumns.has('subscription_start_date')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN subscription_start_date DATE NULL`
+        );
+      }
+      if (!applyColumns.has('subscription_end_date')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN subscription_end_date DATE NULL`
+        );
+      }
+      if (!applyColumns.has('is_registered')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE promocode_applies ADD COLUMN is_registered TINYINT NULL DEFAULT NULL`
+        );
+      }
       if (!applyColumns.has('cost_paid')) {
         await prisma.$executeRawUnsafe(
           `ALTER TABLE promocode_applies ADD COLUMN cost_paid VARCHAR(64) NULL DEFAULT NULL`

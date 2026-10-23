@@ -15,7 +15,8 @@ import RightSidebar from '@/components/dashboard/RightSidebar';
 import DisplayOptionsToolbar from '@/app/my-page/components/DisplayOptionsToolbar';
 import ManagedEntityDashboardBanner from '@/components/dashboard/ManagedEntityDashboardBanner';
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import { getManagedEntityProfilePath } from '@/lib/dashboard/managedEntityDashboardLabels';
 import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useDashboardBannerProfile } from '@/hooks/useDashboardBannerProfile';
@@ -153,6 +154,12 @@ function TeamDashboardContent() {
     ? formCreatedTeams.find((team) => team.id === selectedTeamId) ?? null
     : null;
   const bannerTeam = activeTeam ?? formCreatedTeams[0] ?? null;
+  const showEntityBanner =
+    activeTab === 'my-entity' && Boolean(selectedTeamId) && Boolean(bannerTeam);
+  const entityVisual = useEntityVisual(
+    showEntityBanner ? bannerTeam?.id : null,
+    bannerTeam?.description,
+  );
   const dashboardShellActiveTab: 'my-page' | 'my-entity' =
     activeTab === 'my-entity' &&
     selectedTeamId &&
@@ -202,8 +209,16 @@ function TeamDashboardContent() {
               coverBannerAlignment={
                 bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
               }
+              entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
+              entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
+              entityEdit={
+                showEntityBanner && bannerTeam
+                  ? { kind: 'team', entityId: bannerTeam.id }
+                  : null
+              }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               showSponsored={dashboardShellActiveTab === 'my-page'}
+              avatarImagePath={bannerProfile?.image}
               activeTab={dashboardShellActiveTab}
               showWorkoutSection={showWorkoutSection}
               onWorkoutsToggle={() => setShowWorkoutSection((v) => !v)}

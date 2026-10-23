@@ -19,7 +19,7 @@ type PaymentView = {
   providers: { stripe: boolean; paypal: boolean };
 };
 
-type Provider = 'paypal' | 'stripe';
+type Provider = 'paypal' | 'stripe' | 'klarna';
 
 type PageProps = {
   params: { id: string };
@@ -40,8 +40,8 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
 
   const successUrl = `/register/success?p=${encodeURIComponent(params.id)}`;
   const returningFrom: Provider | null =
-    searchParams.provider === 'stripe' && searchParams.session_id
-      ? 'stripe'
+    (searchParams.provider === 'stripe' || searchParams.provider === 'klarna') && searchParams.session_id
+      ? searchParams.provider
       : searchParams.provider === 'paypal' && searchParams.token
         ? 'paypal'
         : null;
@@ -73,7 +73,7 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 provider: returningFrom,
-                ref: returningFrom === 'stripe' ? searchParams.session_id : searchParams.token,
+                ref: returningFrom === 'paypal' ? searchParams.token : searchParams.session_id,
               }),
             },
           );
@@ -206,6 +206,24 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                       <span className="font-medium text-gray-800">Credit / debit card</span>
                     </label>
                   ) : null}
+                  {payment.providers.stripe ? (
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="provider"
+                        className="mt-1"
+                        checked={provider === 'klarna'}
+                        onChange={() => setProvider('klarna')}
+                        disabled={busy}
+                      />
+                      <span>
+                        <span className="block font-medium text-gray-800">Installment payment</span>
+                        <span className="block text-sm text-gray-600">
+                          Pay in 3, 6 or 12 parts with Klarna. The full subscription amount is received now.
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
                 </div>
               )}
 
@@ -220,8 +238,9 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-green-600 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                  Pay {formatEuroAmount(payment.amountEur)}
-                  {localText ? ` (${localText})` : ''}
+                  {provider === 'klarna'
+                    ? `Continue with installment payment (${formatEuroAmount(payment.amountEur)})`
+                    : `Pay ${formatEuroAmount(payment.amountEur)}${localText ? ` (${localText})` : ''}`}
                 </button>
               ) : null}
             </>

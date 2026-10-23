@@ -38,6 +38,9 @@ export async function createStripeCheckoutSession(
     customerEmail?: string;
     successUrl: string;
     cancelUrl: string;
+    /** Klarna installments. The card checkout leaves the methods to the Stripe account. */
+    installment?: boolean;
+    locale?: string;
   },
 ): Promise<{ id: string; url: string }> {
   const form: Record<string, string> = {
@@ -51,6 +54,15 @@ export async function createStripeCheckoutSession(
     'line_items[0][price_data][unit_amount]': String(euroCents(input.amountEur)),
     'line_items[0][price_data][product_data][name]': input.productName.slice(0, 250),
   };
+  if (input.installment) {
+    form['payment_method_types[0]'] = 'klarna';
+    form.billing_address_collection = 'required';
+    form['metadata[payment_method]'] = 'klarna';
+    const locale = (input.locale ?? '').toLowerCase();
+    if (locale === 'en' || locale === 'it' || locale === 'fr' || locale === 'de' || locale === 'es') {
+      form.locale = locale;
+    }
+  }
   if (input.customerEmail) form.customer_email = input.customerEmail;
   const session = await stripeRequest<{ id: string; url: string | null }>(
     creds,

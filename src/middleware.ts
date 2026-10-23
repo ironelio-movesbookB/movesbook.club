@@ -68,6 +68,8 @@ const publicApiRoutes = [
   '/api/club/sponsors/reminders',
   /** Registration payment page / success page (account not active yet, no token) */
   '/api/registration-payments',
+  /** Member pay link from the club payment module (no login required) */
+  '/api/club-member-payments',
 ];
 
 /** Public share links (read-only workout day / session). */

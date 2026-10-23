@@ -1,6 +1,7 @@
 import { inferMembershipEndDateYmd } from '@/lib/admin/clubSubscriptionStatus';
 import type { RegisteredUserListRow } from '@/lib/admin/expandRegisteredUserListRows';
 import {
+  formatMembershipAmount,
   isSubscriptionPeriodDeleted,
   periodStatusFromDates,
   periodsForRow,
@@ -46,7 +47,7 @@ function periodToProfileRow(
     version: period.version?.trim() || '—',
     username: period.username?.trim() || defaults.username,
     companyName: period.companyName?.trim() || defaults.companyName,
-    e: defaults.e,
+    e: formatMembershipAmount(period) ?? (isCurrent ? defaults.e : '—'),
     status: periodStatusFromDates(period),
   };
 }

@@ -25,7 +25,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const body = (await request.json().catch(() => ({}))) as { provider?: string; ref?: string };
     const returnedRef = typeof body.ref === 'string' ? body.ref.trim().slice(0, 255) : '';
     const provider =
-      body.provider === 'stripe' || body.provider === 'paypal' ? body.provider : payment.provider;
+      body.provider === 'stripe' || body.provider === 'paypal' || body.provider === 'klarna'
+        ? body.provider
+        : payment.provider;
     const providerRef = returnedRef || payment.providerRef;
     if (!provider || !providerRef) {
       return NextResponse.json({ error: 'The payment was not started' }, { status: 400 });
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const credentials = await getActivePaymentCredentials();
     const origin = registrationOrigin(request);
 
-    if (provider === 'stripe') {
+    if (provider === 'stripe' || provider === 'klarna') {
       if (!credentials.stripe) {
         return NextResponse.json({ error: 'Card payment is not available' }, { status: 400 });
       }
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
       await finalizePaidRegistration(
-        { ...payment, provider: 'stripe' },
+        { ...payment, provider },
         session.paymentIntent || providerRef,
         origin,
       );
