@@ -37,10 +37,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: result.message }, { status: 400 });
     }
     if (result.paymentId) {
+      const method = payload.payment_method === 'paypal' ? 'paypal' : 'stripe';
       return NextResponse.json({
         success: true,
         message: result.message,
-        paymentUrl: `/register/payment/${result.paymentId}`,
+        paymentUrl: `/register/payment/${result.paymentId}?method=${method}`,
       });
     }
     return NextResponse.json({ success: true, message: result.message });

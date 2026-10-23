@@ -30,6 +30,8 @@ import { useSuperAdminPassword } from '@/components/admin/SuperAdminPasswordModa
 import {
   LIST_PAYMENT_MODE_OPTIONS,
   LIST_PAYMENT_STATUS_OPTIONS,
+  listPaymentModeLabel,
+  rowPaymentMode,
   type ListPaymentMode,
   type ListPaymentStatus,
 } from '@/lib/admin/listPaymentFilters';
@@ -135,6 +137,8 @@ interface RowUser {
   dateEnd: string | null;
   version: string;
   amount: string;
+  paymentMethod?: string;
+  amountEur?: number;
   status: string;
   clubsOwnedCount?: number;
   companyName?: string;
@@ -2031,6 +2035,28 @@ export default function AdminRegisteredUsersList({
             </button>
           </form>
 
+          {listPurpose === 'payments' ? (
+            <select
+              value={appliedFilters.paymentMode}
+              onChange={(e) => {
+                const paymentMode = e.target.value as FilterState['paymentMode'];
+                setAppliedFilters((current) => ({ ...current, paymentMode }));
+                setDraftFilters((current) => ({ ...current, paymentMode }));
+                setPage(1);
+                setSelected(new Set());
+              }}
+              className="h-9 border border-black bg-white px-3 text-sm rounded min-w-[150px] text-gray-800"
+              title="Pay mode"
+            >
+              <option value="">Pay mode</option>
+              {LIST_PAYMENT_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
           <select
             value={paymentStatus}
             onChange={(e) => {
@@ -2226,6 +2252,9 @@ export default function AdminRegisteredUsersList({
                 {listPurpose === 'payments' ? (
                   <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Payment for</th>
                 ) : null}
+                {listPurpose === 'payments' ? (
+                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Pay mode</th>
+                ) : null}
                 <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Username</th>
                 {showCompanyColumn && (
                   <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80] min-w-[8rem]">
@@ -2244,7 +2273,7 @@ export default function AdminRegisteredUsersList({
                     colSpan={
                       (showCompanyColumn ? 13 : 12) +
                       (isAllSegment ? 1 : 0) +
-                      (listPurpose === 'subscriptions' ? 0 : 1)
+                      (listPurpose === 'payments' ? 2 : listPurpose === 'subscriptions' ? 0 : 1)
                     }
                     className="px-4 py-10 text-center text-gray-500 bg-white"
                   >
@@ -2299,6 +2328,11 @@ export default function AdminRegisteredUsersList({
                     {listPurpose === 'payments' ? (
                       <td className="px-3 py-2 border-t border-gray-300">
                         {purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}
+                      </td>
+                    ) : null}
+                    {listPurpose === 'payments' ? (
+                      <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
+                        {listPaymentModeLabel(rowPaymentMode(r))}
                       </td>
                     ) : null}
                     <td className="px-3 py-2 border-t border-gray-300 font-medium">
