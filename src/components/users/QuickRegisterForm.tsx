@@ -84,7 +84,7 @@ export default function QuickRegisterForm() {
   const [credit2, setCredit2] = useState('');
   const [membersNumber, setMembersNumber] = useState('');
   const [totalPayment, setTotalPayment] = useState('');
-  const [payWithVirtualCard, setPayWithVirtualCard] = useState(true);
+  const [payProvider, setPayProvider] = useState<'paypal' | 'stripe'>('stripe');
   const [tripleDurationDays, setTripleDurationDays] = useState('');
   const [tripleDurationPrice, setTripleDurationPrice] = useState('');
   const [tripleDurationDiscount, setTripleDurationDiscount] = useState('');
@@ -688,7 +688,7 @@ export default function QuickRegisterForm() {
           invite_by_movesbook: inviteByMovesbook,
           origin_email: originEmail || undefined,
           disccount_hidden: discountHidden,
-          payment_method: payWithVirtualCard ? 'virtual_card' : 'standard',
+          payment_method: payProvider,
           total_payment: totalPayment,
           use_triple: useTripleSubscription,
           language: currentLanguage,
@@ -1196,11 +1196,21 @@ export default function QuickRegisterForm() {
                 <div className="payment-row-item payment-logos">
                   <label className="inline-flex items-center gap-2 text-sm mr-3" style={{ color: '#7b0a26' }}>
                     <input
-                      type="checkbox"
-                      checked={payWithVirtualCard}
-                      onChange={(e) => setPayWithVirtualCard(e.target.checked)}
+                      type="radio"
+                      name="quick_register_pay"
+                      checked={payProvider === 'stripe'}
+                      onChange={() => setPayProvider('stripe')}
                     />
-                    {t.payWithVirtualCard}
+                    Card (Stripe)
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm mr-3" style={{ color: '#7b0a26' }}>
+                    <input
+                      type="radio"
+                      name="quick_register_pay"
+                      checked={payProvider === 'paypal'}
+                      onChange={() => setPayProvider('paypal')}
+                    />
+                    PayPal
                   </label>
                   <Image src="/img/payment_logo/logo_visa.svg" alt="Visa" width={45} height={28} />
                   <Image src="/img/payment_logo/logo_mc.svg" alt="Mastercard" width={45} height={28} />

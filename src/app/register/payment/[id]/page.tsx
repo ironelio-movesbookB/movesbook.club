@@ -23,7 +23,7 @@ type Provider = 'paypal' | 'stripe' | 'klarna';
 
 type PageProps = {
   params: { id: string };
-  searchParams: { provider?: string; session_id?: string; token?: string; cancelled?: string };
+  searchParams: { provider?: string; session_id?: string; token?: string; cancelled?: string; method?: string };
 };
 
 export default function RegistrationPaymentPage({ params, searchParams }: PageProps) {
@@ -60,7 +60,13 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
           return;
         }
         setPayment(view);
-        setProvider(view.providers.paypal ? 'paypal' : view.providers.stripe ? 'stripe' : null);
+        const asked = searchParams.method;
+        const askedOk =
+          (asked === 'paypal' && view.providers.paypal) ||
+          ((asked === 'stripe' || asked === 'klarna') && view.providers.stripe);
+        setProvider(
+          askedOk ? (asked as Provider) : view.providers.paypal ? 'paypal' : view.providers.stripe ? 'stripe' : null,
+        );
 
         if (returningFrom && !confirmStarted.current) {
           confirmStarted.current = true;

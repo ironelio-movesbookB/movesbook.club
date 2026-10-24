@@ -607,7 +607,11 @@ export default function MemberProfileSettingsTab({
           ? {
               ok: true,
               text: json.payUrl
-                ? `Payment module sent. The member pays here: ${json.payUrl}`
+                ? `Payment module sent. ${
+                    json.emailed
+                      ? "An email with the link was sent."
+                      : "No email was sent because this member has no email address."
+                  } The member pays here: ${json.payUrl}`
                 : "Payment module sent to the member in Messages.",
             }
           : {

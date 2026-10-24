@@ -152,6 +152,8 @@ export type AddProcedurePaymentInput = {
   notes?: string | null;
   operatorId?: string | null;
   operatorPassword?: string | null;
+  /** Set only when the member pay link is confirmed. The desk already checked the password. */
+  skipOperatorPassword?: boolean;
   payMode?: string | null;
   paymentType?: string | null;
   taxDoc?: boolean;

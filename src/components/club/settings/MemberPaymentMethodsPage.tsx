@@ -143,6 +143,26 @@ export default function MemberPaymentMethodsPage({ gateway }: { gateway?: Gatewa
     <div className="min-h-full bg-[#f7f7f8] p-4 lg:p-6">
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <div>
+          {gateway ? (
+            <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={
+                  gateway === 'paypal'
+                    ? '/img/payment_logo/logo_paypal_brand.jpg'
+                    : '/img/payment_logo/logo_stripe_brand.png'
+                }
+                alt={gateway === 'paypal' ? 'PayPal' : 'Stripe'}
+                className={`h-16 w-auto object-contain ${gateway === 'stripe' ? 'rounded bg-black px-3 py-1' : ''}`}
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/img/payment_logo/logo_movesbook_brand.jpg"
+                alt="Movesbook"
+                className="h-14 w-auto object-contain"
+              />
+            </div>
+          ) : null}
           <h1 className="text-xl font-semibold text-gray-950">
             {gateway === 'stripe'
               ? 'Connect Stripe'

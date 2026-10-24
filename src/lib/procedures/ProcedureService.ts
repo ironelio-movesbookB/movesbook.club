@@ -414,7 +414,9 @@ export class ProcedureService {
     if (amount > currentBalance) throw new Error('Payment exceeds remaining balance');
 
     const operatorId = input.operatorId ?? ctx.userId;
-    await assertOperatorPassword(procedureTypeCode, operatorId, input.operatorPassword, ctx.club.id, ctx.userId);
+    if (!input.skipOperatorPassword) {
+      await assertOperatorPassword(procedureTypeCode, operatorId, input.operatorPassword, ctx.club.id, ctx.userId);
+    }
 
     const paymentDate = toDateOnly(input.paymentDate);
     const newPaid = roundMoney(decimalToNumber(record.paidAmount) + amount);
