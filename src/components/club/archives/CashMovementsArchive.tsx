@@ -10,6 +10,7 @@ import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell
 import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
 import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import {
+  CancelRowButton,
   DeleteRowButton,
   EditRowButton,
   usePasswordGate,
@@ -31,6 +32,12 @@ type CashRow = Member & {
   procedureType?: string;
 };
 
+type PaymentsScope = {
+  procedureType: ProcedureTypeCode;
+  recordId: string;
+  memberId: string;
+};
+
 type Props = {
   title: string;
   direction: 'all' | 'IN' | 'OUT';
@@ -38,6 +45,7 @@ type Props = {
   footerHint?: string;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
+  onCancelItem?: (item: Member) => void | Promise<void>;
 };
 
 const deadlineColumns: Column[] = [
@@ -80,12 +88,15 @@ export default function CashMovementsArchive({
   footerHint,
   onEditItem,
   onDeleteItem,
+  onCancelItem,
 }: Props) {
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
   const filters = useArchiveListFilters();
   const [view, setView] = useState<ViewMode>('historical');
   const [historical, setHistorical] = useState<CashRow[]>([]);
   const [detailRows, setDetailRows] = useState<Member[]>([]);
+  const [paymentsScope, setPaymentsScope] = useState<PaymentsScope | null>(null);
+  const [showAllPayments, setShowAllPayments] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -113,17 +124,40 @@ export default function CashMovementsArchive({
       setTotal(res.total);
       const items = (res.items as CashRow[]).map((item) => {
         const enriched: CashRow = { ...item };
-        if (onEditItem) {
+        if (onEditItem && !item.cancelled && !item.reversalOfId) {
           enriched.edit = (
             <EditRowButton
               onClick={() => requestPassword(() => onEditItem(item))}
             />
           );
         }
-        if (onDeleteItem) {
+        if (onDeleteItem && !item.reversalOfId) {
           enriched.delete = (
             <DeleteRowButton
               onClick={() => requestPassword(() => onDeleteItem(item))}
+            />
+          );
+        }
+        if (onCancelItem) {
+          enriched.cancel = item.reversalOfId ? (
+            <span className="text-xs text-gray-500">Reversal</span>
+          ) : item.cancelled ? (
+            <span className="text-xs font-semibold text-gray-500">Cancelled</span>
+          ) : (
+            <CancelRowButton
+              onClick={() =>
+                requestPassword(() => {
+                  if (
+                    window.confirm(
+                      'Cancel this payment? An opposite transaction will be recorded and the related deadline balance restored.'
+                    )
+                  ) {
+                    void Promise.resolve(onCancelItem(item)).catch((e) => {
+                      setError(e instanceof Error ? e.message : 'Cancel failed');
+                    });
+                  }
+                })
+              }
             />
           );
         }
@@ -143,7 +177,7 @@ export default function CashMovementsArchive({
     } finally {
       setLoading(false);
     }
-  }, [filters.applied, direction, onDeleteItem, onEditItem, page, pageSize, requestPassword]);
+  }, [filters.applied, direction, onCancelItem, onDeleteItem, onEditItem, page, pageSize, requestPassword]);
 
   useEffect(() => {
     loadHistorical();
@@ -189,19 +223,13 @@ export default function CashMovementsArchive({
     }
   }
 
-  async function loadTotalsPayments(row: CashRow) {
-    if (!row.procedureRecordId || !row.procedureType) {
-      window.alert('Please select at least one record');
-      return;
-    }
+  async function loadPaymentsForScope(scope: PaymentsScope, showAll: boolean) {
     setDetailLoading(true);
     setError('');
     try {
-      const client = createProcedureClient(row.procedureType as ProcedureTypeCode);
-      // Resolve the member, then list THAT member's payments only (not the whole club).
-      const { record } = await client.fetchRecord(row.procedureRecordId);
+      const client = createProcedureClient(scope.procedureType);
       const res = await client.fetchPayments({
-        memberId: record.userId,
+        ...(showAll ? { memberId: scope.memberId } : { recordId: scope.recordId }),
         page: 1,
         pageSize: 100,
       });
@@ -219,12 +247,39 @@ export default function CashMovementsArchive({
           operator: p.operatorName,
         }))
       );
+      setPaymentsScope(scope);
+      setShowAllPayments(showAll);
       setView('totals_payments');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load payment totals');
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function loadTotalsPayments(row: CashRow) {
+    if (!row.procedureRecordId || !row.procedureType) {
+      window.alert('Please select at least one record');
+      return;
+    }
+    setDetailLoading(true);
+    setError('');
+    try {
+      const procedureType = row.procedureType as ProcedureTypeCode;
+      const { record } = await createProcedureClient(procedureType).fetchRecord(row.procedureRecordId);
+      await loadPaymentsForScope(
+        { procedureType, recordId: row.procedureRecordId, memberId: record.userId },
+        false
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load payment totals');
+      setDetailLoading(false);
+    }
+  }
+
+  function toggleAllPayments() {
+    if (!paymentsScope) return;
+    void loadPaymentsForScope(paymentsScope, !showAllPayments);
   }
 
   function handleDetailsDeadline() {
@@ -246,6 +301,8 @@ export default function CashMovementsArchive({
   function handleHistorical() {
     setView('historical');
     setDetailRows([]);
+    setPaymentsScope(null);
+    setShowAllPayments(false);
   }
 
   function applyFilterForm() {
@@ -262,7 +319,7 @@ export default function CashMovementsArchive({
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;
-    const items = historical.filter((r) => checkedIds.has(r.id));
+    const items = historical.filter((r) => checkedIds.has(r.id) && !r.reversalOfId);
     if (items.length === 0) return;
     requestPassword(async () => {
       try {
@@ -309,6 +366,16 @@ export default function CashMovementsArchive({
       >
         Payments record selected
       </button>
+      {view === 'totals_payments' && (
+        <button
+          type="button"
+          className="ml-auto px-3 py-2 text-sm font-medium text-teal-700 hover:text-teal-900"
+          onClick={toggleAllPayments}
+          disabled={detailLoading || !paymentsScope}
+        >
+          {showAllPayments ? 'Show selected record' : 'Show all'}
+        </button>
+      )}
     </>
   );
 
@@ -325,7 +392,9 @@ export default function CashMovementsArchive({
             'Select a payment, then open Details deadline or Totals about payments. Check rows to delete selected.'
           : view === 'details_deadline'
             ? 'Parent deadline / debt related to the selected payment. Click Historical to go back.'
-            : 'All payments of the same member (same typology) as the selected row. Click Historical to go back.'
+            : showAllPayments
+              ? 'All payments of the current member (same typology) as the selected row. Click Historical to go back.'
+              : 'Payments related to the selected record. Use Show all to view all payments of this member.'
       }
     >
       {showingHistorical && (
@@ -378,7 +447,7 @@ export default function CashMovementsArchive({
         onToggleSelect={
           showingHistorical
             ? (row) => {
-                if (!row.id) return;
+                if (!row.id || row.reversalOfId) return;
                 setSelectedId(row.id);
                 setCheckedIds((prev) => {
                   const next = new Set(prev);
@@ -396,7 +465,9 @@ export default function CashMovementsArchive({
                   setCheckedIds(new Set());
                   return;
                 }
-                setCheckedIds(new Set(historical.map((r) => r.id).filter(Boolean)));
+                setCheckedIds(
+                  new Set(historical.filter((r) => !r.reversalOfId).map((r) => r.id).filter(Boolean))
+                );
               }
             : undefined
         }

@@ -6,7 +6,7 @@ import {
   projectInstallmentsOnBalance,
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
-import { getProcedureTypology } from '@/lib/procedures/registry';
+import { getProcedureDirection, getProcedureTypology } from '@/lib/procedures/registry';
 import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
@@ -1138,13 +1138,15 @@ export async function listCashMovements(
 
   async function pushPayments(
     procedureType: string,
-    idPrefix: string,
-    cashDirection: 'IN' | 'OUT'
+    idPrefix: string
   ) {
     const payments = await procedureService
       .listPayments(ctx, procedureType, { page: 1, pageSize: 500 })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
     for (const p of payments.items) {
+      const baseDirection = getProcedureDirection(procedureType);
+      const cashDirection = p.amount < 0 ? (baseDirection === 'IN' ? 'OUT' : 'IN') : baseDirection;
+      if (direction !== 'all' && cashDirection !== direction) continue;
       items.push({
         id: `${idPrefix}${p.id}`,
         paymentId: p.id,
@@ -1154,10 +1156,12 @@ export async function listCashMovements(
         typology: p.typology,
         service: p.serviceName,
         insertDate: p.paymentDate,
-        paid: p.amount,
+        paid: Math.abs(p.amount),
         rest: p.residualDebt,
         value: p.originalDebt,
         direction: cashDirection,
+        cancelled: Boolean(p.cancelledAt),
+        reversalOfId: p.reversalOfId,
         payMod: p.payMode,
         casual: p.notes,
         operator: p.operatorName,
@@ -1165,14 +1169,53 @@ export async function listCashMovements(
     }
   }
 
-  if (direction === 'all' || direction === 'IN') {
-    await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-', 'IN');
-    await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-', 'IN');
-    await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-', 'IN');
-  }
+  await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-');
+  await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
-  if (direction === 'all' || direction === 'OUT') {
-    await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-', 'OUT');
+  if (direction === 'all' || direction === 'IN') {
+    try {
+      const online = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          member_name: string;
+          description: string;
+          amount_eur: number | string;
+          provider: string;
+          paid_at: Date | string | null;
+        }>
+      >(
+        `SELECT id, member_name, description, amount_eur, provider, paid_at
+         FROM club_member_online_payments
+         WHERE entity_id = ? AND status = 'paid'
+           AND (settlement_json IS NULL OR settlement_json = '')
+         ORDER BY paid_at DESC
+         LIMIT 500`,
+        ctx.club.id,
+      );
+      for (const row of online) {
+        const paidAt = row.paid_at instanceof Date ? row.paid_at : row.paid_at ? new Date(row.paid_at) : null;
+        const insertDate =
+          paidAt && !Number.isNaN(paidAt.getTime())
+            ? `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}-${String(paidAt.getDate()).padStart(2, '0')}`
+            : '-';
+        items.push({
+          id: `online-${row.id}`,
+          name: row.member_name || '-',
+          typology: 'Payment',
+          service: row.description || '-',
+          insertDate,
+          paid: Number(row.amount_eur) || 0,
+          direction: 'IN',
+          payMod: row.provider === 'paypal' ? 'PayPal' : 'Credit card',
+          casual: row.description || '',
+          operator: 'Online',
+        });
+      }
+    } catch {
+      /* The online-payment table is created the first time a pay link is sent. */
+    }
   }
 
   items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
@@ -1394,6 +1437,7 @@ export async function listUnifiedPayments(
       })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
 
+    const direction = getProcedureDirection(procedureType);
     for (const p of res.items) {
       items.push({
         id: p.id,
@@ -1406,6 +1450,9 @@ export async function listUnifiedPayments(
         service: p.serviceName ?? '-',
         insertDate: p.paymentDate,
         paid: p.amount,
+        direction,
+        paymentIn: direction === 'IN' ? p.amount : null,
+        paymentOut: direction === 'OUT' ? p.amount : null,
         originalDebt: p.originalDebt,
         residualDebt: p.residualDebt,
         rest: p.balanceAfter ?? p.residualDebt,
@@ -1444,6 +1491,7 @@ export async function listUnifiedReceipts(
       })
       .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listReceipts>>['items'] }));
 
+    const direction = getProcedureDirection(procedureType);
     for (const r of res.items) {
       items.push({
         id: r.id,
@@ -1459,6 +1507,9 @@ export async function listUnifiedReceipts(
         contract: r.documentNumber,
         value: r.amount,
         paid: r.paymentAmount,
+        direction,
+        paymentIn: direction === 'IN' ? r.paymentAmount : null,
+        paymentOut: direction === 'OUT' ? r.paymentAmount : null,
         residualDebt: r.residualDebt ?? Math.max(0, r.amount - r.paymentAmount),
         casual: r.annotations ?? '',
         operator: r.operatorName,

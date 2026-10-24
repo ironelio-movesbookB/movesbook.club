@@ -19,6 +19,8 @@ type Props = {
   /** Number of checked rows — enables Delete selected when > 0. */
   selectedCount?: number;
   onDeleteSelected?: () => void;
+  /** Optional control shown beside Print, such as an archive-specific paid filter. */
+  paginationTrailing?: ReactNode;
   /** Optional title used in mail / share copy. */
   shareTitle?: string;
 };
@@ -56,6 +58,7 @@ export default function ArchiveActionsBar({
   selectedCount = 0,
   onDeleteSelected,
   shareTitle,
+  paginationTrailing,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
   const canDelete = selectedCount > 0 && typeof onDeleteSelected === 'function';
@@ -123,6 +126,7 @@ export default function ArchiveActionsBar({
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">{pagination}</div>
         <div className="flex items-center gap-2">
+          {paginationTrailing}
           <button
             type="button"
             onClick={handlePrint}
@@ -151,7 +155,11 @@ export default function ArchiveActionsBar({
         </div>
       </div>
 
-      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        gridOnly
+      />
     </div>
   );
 }

@@ -20,6 +20,11 @@ export type PaginatedResult<T> = {
   pageSize: number;
 };
 
+export type ExpenseInvoiceImage = {
+  name: string;
+  url: string;
+};
+
 export type ClubAuthContext = {
   userId: string;
   club: { id: string; name: string };
@@ -58,6 +63,8 @@ export type ProcedureRecordDto = {
 export type ProcedurePaymentDto = {
   id: string;
   procedureRecordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberId: string;
   memberName: string;
   amount: number;
@@ -145,6 +152,8 @@ export type AddProcedurePaymentInput = {
   notes?: string | null;
   operatorId?: string | null;
   operatorPassword?: string | null;
+  /** Set only when the member pay link is confirmed. The desk already checked the password. */
+  skipOperatorPassword?: boolean;
   payMode?: string | null;
   paymentType?: string | null;
   taxDoc?: boolean;
@@ -167,6 +176,7 @@ export type ListQuery = {
   /** Filter to these procedure record ids (payment-form scoped archives). */
   recordIds?: string[];
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';

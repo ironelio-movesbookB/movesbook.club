@@ -10,6 +10,7 @@ import type {
   ProcedurePaymentDto,
   ProcedureReceiptDto,
   ProcedureRecordDto,
+  ExpenseInvoiceImage,
   ProcedureTypeCode,
 } from '@/lib/procedures/types';
 
@@ -29,6 +30,8 @@ export type ProcedureRecordView = {
   value: number;
   pay: number;
   rest: number;
+  expenseId?: string | null;
+  expenseInvoice?: ExpenseInvoiceImage | null;
   notes: string;
   operatorId: string | null;
   operatorName: string;
@@ -38,6 +41,8 @@ export type ProcedureRecordView = {
 export type ProcedurePaymentView = {
   id: string;
   recordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberName: string;
   typology: string;
   primaryLabel: string;
@@ -52,6 +57,9 @@ export type ProcedurePaymentView = {
   payMode: string | null;
 };
 
+/** Payment/receipt lists also carry the club name (payer on OUT receipts). */
+export type ClubPaginatedResult<T> = PaginatedResult<T> & { clubName?: string };
+
 export type ProcedureReceiptView = {
   id: string;
   recordId: string;
@@ -63,6 +71,8 @@ export type ProcedureReceiptView = {
   documentNumber: string;
   cost: number;
   paymentIn: number;
+  /** Balance still open on the record after this receipt's payment. */
+  residual: number | null;
   annotations: string;
   operatorName: string;
 };
@@ -74,6 +84,7 @@ export type ListParams = {
   memberId?: string;
   includePaid?: boolean;
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';
@@ -98,6 +109,7 @@ function apiBase(code: ProcedureTypeCode): string {
 
 function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): ProcedureRecordView {
   const metadata = record.metadata;
+  const invoice = metadata?.expenseInvoice;
   return {
     id: record.id,
     userId: record.memberId,
@@ -118,6 +130,16 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
     value: record.totalAmount,
     pay: record.paidAmount,
     rest: record.balanceAmount,
+    expenseId: metaString(metadata, 'expenseId') || null,
+    expenseInvoice:
+      invoice && typeof invoice === 'object' &&
+      typeof (invoice as Record<string, unknown>).name === 'string' &&
+      typeof (invoice as Record<string, unknown>).url === 'string'
+        ? {
+            name: String((invoice as Record<string, unknown>).name),
+            url: String((invoice as Record<string, unknown>).url),
+          }
+        : null,
     notes: record.notes ?? '',
     operatorId: record.operatorId,
     operatorName: record.operatorName,
@@ -129,6 +151,8 @@ function mapPayment(def: ProcedureDefinition, payment: ProcedurePaymentDto): Pro
   return {
     id: payment.id,
     recordId: payment.procedureRecordId,
+    cancelledAt: payment.cancelledAt,
+    reversalOfId: payment.reversalOfId,
     memberName: payment.memberName,
     typology: payment.typology,
     primaryLabel: payment.serviceName ?? '-',
@@ -156,6 +180,7 @@ function mapReceipt(def: ProcedureDefinition, receipt: ProcedureReceiptDto): Pro
     documentNumber: receipt.documentNumber ?? '',
     cost: receipt.amount,
     paymentIn: receipt.paymentAmount,
+    residual: receipt.residualDebt ?? null,
     annotations: receipt.annotations ?? '',
     operatorName: receipt.operatorName,
   };
@@ -171,6 +196,7 @@ function buildQuery(params?: ListParams & { view?: string }): string {
   if (params?.memberId) qs.set('memberId', params.memberId);
   if (params?.includePaid) qs.set('includePaid', 'true');
   if (params?.search) qs.set('search', params.search);
+  if (params?.expenseName) qs.set('expenseName', params.expenseName);
   if (params?.fromDate) qs.set('fromDate', params.fromDate);
   if (params?.toDate) qs.set('toDate', params.toDate);
   if (params?.orderBy) qs.set('orderBy', params.orderBy);
@@ -248,8 +274,11 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       return { recordId: result.recordId };
     },
 
-    async deleteRecord(id: string): Promise<void> {
-      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async deleteRecord(id: string, adminPassword: string): Promise<void> {
+      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ adminPassword }),
+      });
     },
 
     async addPayment(
@@ -300,8 +329,8 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       });
     },
 
-    async fetchPayments(params?: ListParams): Promise<PaginatedResult<ProcedurePaymentView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedurePaymentDto>>(
+    async fetchPayments(params?: ListParams): Promise<ClubPaginatedResult<ProcedurePaymentView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedurePaymentDto>>(
         `${base}/payments?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
       );
       return {
@@ -309,6 +338,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 
@@ -326,8 +356,8 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       await clubApiFetch(`${base}/payments/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
 
-    async fetchReceipts(params?: ListParams): Promise<PaginatedResult<ProcedureReceiptView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedureReceiptDto>>(
+    async fetchReceipts(params?: ListParams): Promise<ClubPaginatedResult<ProcedureReceiptView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedureReceiptDto>>(
         `${base}/receipts?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
       );
       return {
@@ -335,6 +365,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 
