@@ -29,22 +29,76 @@ const EMPTY_SECRETS: GatewaySecrets = {
   paypalLiveSecret: '',
 };
 
-const STEPS: Record<Gateway, string[]> = {
+type StepPiece = string | { mark: string };
+
+const STEPS: Record<Gateway, StepPiece[][]> = {
   stripe: [
-    'Open dashboard.stripe.com and sign in. Create an account if you do not have one.',
-    'With Test mode on, open Developers, then API keys. Copy the test publishable key and the test secret key.',
-    'Turn Test mode off and copy the live publishable key and the live secret key.',
-    'Paste both pairs below. A secret is shown only once in Stripe, so paste it before you leave that page.',
-    'Press Save. The mode shown above decides which pair your members pay with.',
+    [
+      'Open ',
+      { mark: 'dashboard.stripe.com' },
+      ' and sign in with the Stripe account that should receive the money.',
+    ],
+    [
+      'Turn ',
+      { mark: 'Test mode' },
+      ' on. Open Developers, then API keys. Copy the ',
+      { mark: 'Publishable key' },
+      ' and the ',
+      { mark: 'Secret key' },
+      '.',
+    ],
+    [
+      'Turn Test mode off for ',
+      { mark: 'Live' },
+      ' and copy that ',
+      { mark: 'Publishable key' },
+      ' and ',
+      { mark: 'Secret key' },
+      ' as well.',
+    ],
+    ['Paste both pairs below and press Save.'],
+    ['The mode shown above decides which pair your members pay with.'],
   ],
   paypal: [
-    'Open developer.paypal.com and sign in with the PayPal account that should receive the money.',
-    'Open Apps & Credentials. Under Sandbox, copy the Client ID and the Secret.',
-    'Switch to Live and copy that Client ID and Secret as well.',
-    'Paste both pairs below and press Save.',
-    'The mode shown above decides which pair your members pay with.',
+    [
+      'Open ',
+      { mark: 'developer.paypal.com' },
+      ' and sign in with the PayPal account that should receive the money.',
+    ],
+    [
+      'Open Apps & Credentials. Under ',
+      { mark: 'Sandbox' },
+      ', copy the ',
+      { mark: 'Client ID' },
+      ' and the ',
+      { mark: 'Secret key' },
+      '.',
+    ],
+    [
+      'Switch to ',
+      { mark: 'Live' },
+      ' and copy that ',
+      { mark: 'Client ID' },
+      ' and ',
+      { mark: 'Secret' },
+      ' as well.',
+    ],
+    ['Paste both pairs below and press Save.'],
+    ['The mode shown above decides which pair your members pay with.'],
   ],
 };
+
+function renderStep(pieces: StepPiece[]) {
+  return pieces.map((piece, index) =>
+    typeof piece === 'string' ? (
+      <span key={index}>{piece}</span>
+    ) : (
+      <mark key={index} className="bg-yellow-200 px-0.5 text-gray-950">
+        {piece.mark}
+      </mark>
+    ),
+  );
+}
 
 export default function MemberPaymentMethodsPage({ gateway }: { gateway?: Gateway }) {
   const [settings, setSettings] = useState<MemberPaymentMethodSettings | null>(null);
@@ -144,24 +198,16 @@ export default function MemberPaymentMethodsPage({ gateway }: { gateway?: Gatewa
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <div>
           {gateway ? (
-            <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={
-                  gateway === 'paypal'
-                    ? '/img/payment_logo/logo_paypal_brand.jpg'
-                    : '/img/payment_logo/logo_stripe_brand.png'
-                }
-                alt={gateway === 'paypal' ? 'PayPal' : 'Stripe'}
-                className={`h-16 w-auto object-contain ${gateway === 'stripe' ? 'rounded bg-black px-3 py-1' : ''}`}
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/img/payment_logo/logo_movesbook_brand.jpg"
-                alt="Movesbook"
-                className="h-14 w-auto object-contain"
-              />
-            </div>
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={
+                gateway === 'paypal'
+                  ? '/img/payment_logo/logo_paypal_wordmark.png'
+                  : '/img/payment_logo/logo_stripe_wordmark.png'
+              }
+              alt={gateway === 'paypal' ? 'PayPal' : 'Stripe'}
+              className="mb-3 h-14 w-auto object-contain object-left"
+            />
           ) : null}
           <h1 className="text-xl font-semibold text-gray-950">
             {gateway === 'stripe'
@@ -342,6 +388,7 @@ function GatewayPrompt({
 
 function KeyPair({
   title,
+  stepTitle,
   publicLabel,
   publicValue,
   publicPlaceholder,
@@ -353,6 +400,7 @@ function KeyPair({
   onSecret,
 }: {
   title: string;
+  stepTitle: string;
   publicLabel: string;
   publicValue: string;
   publicPlaceholder: string;
@@ -364,7 +412,9 @@ function KeyPair({
   onSecret: (value: string) => void;
 }) {
   return (
-    <div className="rounded border border-gray-200 p-4">
+    <div>
+      <p className="mb-2 text-sm font-semibold leading-snug text-red-600">{stepTitle}</p>
+      <div className="rounded border border-gray-200 p-4">
       <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">{title}</h3>
       <label className="mt-3 block text-sm font-medium text-gray-800">
         {publicLabel}
@@ -389,6 +439,7 @@ function KeyPair({
           autoComplete="new-password"
         />
       </label>
+      </div>
     </div>
   );
 }
@@ -417,7 +468,9 @@ function GatewayForm({
         <h2 className="text-base font-semibold text-gray-900">Do these steps in order</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-gray-700">
           {STEPS[gateway].map((step) => (
-            <li key={step}>{step}</li>
+            <li key={step.map((piece) => (typeof piece === 'string' ? piece : piece.mark)).join('')}>
+              {renderStep(step)}
+            </li>
           ))}
         </ol>
       </section>
@@ -427,6 +480,7 @@ function GatewayForm({
             <>
               <KeyPair
                 title="Test"
+                stepTitle="Step #2 phase 2 - Paste Publishable key and Secret key from Stripe test"
                 publicLabel="Publishable key"
                 publicValue={settings.stripeTestPublishableKey}
                 publicPlaceholder="pk_test_..."
@@ -439,6 +493,7 @@ function GatewayForm({
               />
               <KeyPair
                 title="Live"
+                stepTitle="Step #3 phase 2 - Paste Publishable key and Secret key from Stripe live"
                 publicLabel="Publishable key"
                 publicValue={settings.stripeLivePublishableKey}
                 publicPlaceholder="pk_live_..."
@@ -454,6 +509,7 @@ function GatewayForm({
             <>
               <KeyPair
                 title="Sandbox"
+                stepTitle="Step #2 phase 2 - Paste Client ID and Secret key from Paypal Sandbox"
                 publicLabel="Client ID"
                 publicValue={settings.paypalSandboxClientId}
                 publicPlaceholder="Sandbox client ID"
@@ -466,6 +522,7 @@ function GatewayForm({
               />
               <KeyPair
                 title="Live"
+                stepTitle="Step #3 phase 2 - Paste Client ID and Secret key from Paypal live"
                 publicLabel="Client ID"
                 publicValue={settings.paypalLiveClientId}
                 publicPlaceholder="Live client ID"
