@@ -5,6 +5,20 @@ export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: { type: string; id: string } };
 
+function paymentErrorStatus(message: string): number {
+  if (message === 'Payment not found') return 404;
+  if (message === 'Unknown procedure type') return 400;
+  if (
+    message.toLowerCase().includes('cancel') ||
+    message.toLowerCase().includes('reversal') ||
+    message.toLowerCase().includes('state changed') ||
+    message.startsWith('Only original')
+  ) {
+    return 409;
+  }
+  return 500;
+}
+
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const auth = await getClubAuthContext(request);
@@ -21,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: message === 'Payment not found' ? 404 : 500 });
+    return NextResponse.json({ error: message }, { status: paymentErrorStatus(message) });
   }
 }
 
@@ -35,6 +49,6 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: message === 'Payment not found' ? 404 : 500 });
+    return NextResponse.json({ error: message }, { status: paymentErrorStatus(message) });
   }
 }

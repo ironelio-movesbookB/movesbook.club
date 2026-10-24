@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import CashMovementsArchive from '@/components/club/archives/CashMovementsArchive';
 import EditCashMovementModal from '@/components/club/archives/EditCashMovementModal';
-import { deleteCashMovement } from '@/lib/club/cashMovementClient';
+import { cancelCashMovement, deleteCashMovement } from '@/lib/club/cashMovementClient';
 import type { Column, Member } from '@/types/clubTable';
 
 const columns: Column[] = [
@@ -17,6 +17,7 @@ const columns: Column[] = [
   { key: 'casual', header: 'Notes' },
   { key: 'operator', header: 'Operator' },
   { key: 'edit', header: 'Edit' },
+  { key: 'cancel', header: 'Cancel' },
   { key: 'delete', header: 'Delete' },
 ];
 
@@ -36,6 +37,11 @@ export default function MovementCashDetailsPage() {
         columns={columns}
         footerHint="Check a payment row, then use Details deadline or Payments record selected. Edit and Delete ask for your password."
         onEditItem={setEditTarget}
+        onCancelItem={async (item) => {
+          if (!item.id) return;
+          await cancelCashMovement(item.id);
+          reload();
+        }}
         onDeleteItem={async (item) => {
           if (!item.id) return;
           await deleteCashMovement(item.id);

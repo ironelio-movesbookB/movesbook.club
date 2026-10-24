@@ -8,6 +8,11 @@ import ServicePaymentForm, {
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { createProcedureClient } from '@/lib/club/procedureClient';
+import {
+  fetchExpenseInvoicePreview,
+  removeExpenseInvoice,
+  uploadExpenseInvoice,
+} from '@/lib/club/expenseInvoiceClient';
 import { getProcedureDefinition, getProcedureTabs } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ServiceSaleFormOptions, ServiceSalePayment, ServiceSalePurchase } from '@/lib/club/serviceSaleClient';
@@ -27,6 +32,7 @@ export default function ExpensePaymentDetailPage() {
   const [success, setSuccess] = useState('');
   const [otherSettings, setOtherSettings] = useState<{ operatorPassStatus: string } | null>(null);
   const autoPaid = useRef(false);
+  const invoicePreviewUrl = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const [purchaseRes, paymentsRes, formOptions, settings] = await Promise.all([
@@ -36,6 +42,22 @@ export default function ExpensePaymentDetailPage() {
       fetchOtherSettings().catch(() => ({ formPayDeadlineStatus: 'Yes', operatorPassStatus: 'Yes', calTaxStatus: false })),
     ]);
     const r = purchaseRes.record;
+    let expenseInvoice = r.expenseInvoice ?? null;
+    if (expenseInvoice) {
+      try {
+        const previewUrl = await fetchExpenseInvoicePreview(id);
+        if (invoicePreviewUrl.current) URL.revokeObjectURL(invoicePreviewUrl.current);
+        invoicePreviewUrl.current = previewUrl;
+        expenseInvoice = { ...expenseInvoice, url: previewUrl };
+      } catch (previewError) {
+        setError(
+          previewError instanceof Error
+            ? `Invoice preview could not be loaded: ${previewError.message}`
+            : 'Invoice preview could not be loaded.'
+        );
+        expenseInvoice = null;
+      }
+    }
     const purchaseData = {
       id: r.id,
       userId: r.userId,
@@ -55,6 +77,7 @@ export default function ExpensePaymentDetailPage() {
       operatorId: r.operatorId,
       operatorName: r.operatorName,
       lastPaymentDate: r.lastPaymentDate,
+      expenseInvoice,
     };
     setPurchase(purchaseData);
     setOtherSettings({ operatorPassStatus: settings.operatorPassStatus });
@@ -104,6 +127,32 @@ export default function ExpensePaymentDetailPage() {
   useEffect(() => {
     load().catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
   }, [load]);
+
+  useEffect(
+    () => () => {
+      if (invoicePreviewUrl.current) URL.revokeObjectURL(invoicePreviewUrl.current);
+    },
+    []
+  );
+
+  async function handleUploadInvoice(file: File) {
+    const result = await uploadExpenseInvoice(id, file);
+    const previewUrl = await fetchExpenseInvoicePreview(id);
+    if (invoicePreviewUrl.current) URL.revokeObjectURL(invoicePreviewUrl.current);
+    invoicePreviewUrl.current = previewUrl;
+    setPurchase((current) =>
+      current && result.invoice
+        ? { ...current, expenseInvoice: { ...result.invoice, url: previewUrl } }
+        : current
+    );
+  }
+
+  async function handleRemoveInvoice() {
+    const result = await removeExpenseInvoice(id);
+    if (invoicePreviewUrl.current) URL.revokeObjectURL(invoicePreviewUrl.current);
+    invoicePreviewUrl.current = null;
+    setPurchase((current) => current ? { ...current, expenseInvoice: result.invoice } : current);
+  }
 
   async function handleAddToRecordTotal(additionalAmount: number): Promise<void> {
     if (!purchase) return;
@@ -188,6 +237,8 @@ export default function ExpensePaymentDetailPage() {
             onSubmit={handleSubmit}
             onCancel={() => router.push('/clubs/expense_dead_line')}
             onAddToRecordTotal={handleAddToRecordTotal}
+            onUploadExpenseInvoice={handleUploadInvoice}
+            onRemoveExpenseInvoice={handleRemoveInvoice}
             operatorPassStatus={otherSettings?.operatorPassStatus ?? 'Yes'}
           />
         )}
