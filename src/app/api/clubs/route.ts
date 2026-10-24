@@ -8,12 +8,12 @@ import {
   hashClubCompanyPassword,
 } from '@/lib/club/clubDirectLogin';
 import { getClubCreatableCompaniesQuota } from '@/lib/club/creatableCompaniesQuota';
+import {
+  isClubAccountUserType,
+  isManagedEntityAdminUserType,
+} from '@/utils/dashboardRouting';
 
 export const dynamic = 'force-dynamic';
-
-function isClubAdminUserType(userType: string): boolean {
-  return userType === 'CLUB' || userType === 'CLUB_TRAINER';
-}
 
 type CreateClubBody = {
   create?: boolean;
@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    if (!isClubAdminUserType(String(decoded.userType))) {
+    const userType = String(decoded.userType);
+    if (!isManagedEntityAdminUserType(userType)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -104,6 +105,10 @@ export async function POST(request: NextRequest) {
       body = (await request.json()) as CreateClubBody;
     } catch {
       body = null;
+    }
+
+    if (!isExplicitClubCreate(body) && !isClubAccountUserType(userType)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     if (isExplicitClubCreate(body)) {

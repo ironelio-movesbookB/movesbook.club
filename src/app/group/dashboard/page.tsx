@@ -51,7 +51,11 @@ import {
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getDashboardPathForUserType, isGroupAccountUserType } from '@/utils/dashboardRouting';
+import {
+  getDashboardPathForUserType,
+  isGroupAccountUserType,
+  isManagedEntityAdminUserType,
+} from '@/utils/dashboardRouting';
 import {
   useEntityDirectAccessGuard,
   useEntityDirectAccessLockedForKind,
@@ -81,6 +85,7 @@ function GroupDashboardContent() {
   const { bannerProfile, setBannerProfile } = useDashboardBannerProfile(!loading && !!user);
   const [showChangeBannerModal, setShowChangeBannerModal] = useState(false);
   const [groups, setGroups] = useState<any[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'my-page' | 'my-entity'>('my-page');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -103,6 +108,8 @@ function GroupDashboardContent() {
       }
     } catch (error) {
       console.error('Error loading groups:', error);
+    } finally {
+      setGroupsLoaded(true);
     }
   }, []);
 
@@ -133,10 +140,14 @@ function GroupDashboardContent() {
   });
 
   const handleMyPageTabClick = useCallback(() => {
+    if (user && !isGroupAccountUserType(user.userType)) {
+      router.push(getDashboardPathForUserType(user.userType));
+      return;
+    }
     clearEntityCompanyLoginSession();
     hideMyEntityTab();
     setActiveTab('my-page');
-  }, [hideMyEntityTab]);
+  }, [hideMyEntityTab, router, user]);
 
   const handleTabChange = useCallback(
     (tab: 'my-page' | 'my-entity') => {
@@ -169,13 +180,13 @@ function GroupDashboardContent() {
   }, []);
 
   useEffect(() => {
-    if (user && !isGroupAccountUserType(user.userType)) {
+    if (user && !isManagedEntityAdminUserType(user.userType)) {
       router.replace(getDashboardPathForUserType(user.userType));
     }
   }, [user, router]);
 
   useEffect(() => {
-    if (user && isGroupAccountUserType(user.userType)) {
+    if (user && isManagedEntityAdminUserType(user.userType)) {
       void loadGroups();
     }
   }, [user, loadGroups]);
@@ -190,11 +201,12 @@ function GroupDashboardContent() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (!groupsLoaded) return;
     if (isEntityWorkspaceSession('group')) return;
     if (!hasFormGroup && activeTab === 'my-entity') {
       setActiveTab('my-page');
     }
-  }, [hasFormGroup, activeTab]);
+  }, [groupsLoaded, hasFormGroup, activeTab]);
 
   useEffect(() => {
     if (showWorkoutSection) {
@@ -290,7 +302,12 @@ function GroupDashboardContent() {
           {showLeftSidebar && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start">
               <DarkSidebar
-                userType={user?.userType || ''}
+                userType={
+                  activeTab === 'my-entity' && user && !isGroupAccountUserType(user.userType)
+                    ? 'GROUP'
+                    : user?.userType || ''
+                }
+                entityTabLabel={activeTab === 'my-entity' ? 'My Group' : undefined}
                 entities={groups}
                 selectedEntityId={selectedGroupId}
                 clubMyClubTabVisible={myEntityTabVisible || entityDirectAccessLocked}

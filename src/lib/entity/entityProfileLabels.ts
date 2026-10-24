@@ -117,19 +117,19 @@ export function getAdminPasswordConfirmCopy(kind: ManagedEntityKind): {
       return {
         title: 'Confirm Coach password',
         description: (u) =>
-          `Retype the password for Coach <${u}> to create another trained group.`,
+          `Retype the password for Coach <${u}> to create another.`,
       };
     case 'team':
       return {
         title: 'Confirm Team Admin password',
         description: (u) =>
-          `Retype the password for Team Admin <${u}> to create another team.`,
+          `Retype the password for Team Admin <${u}> to create another.`,
       };
     case 'group':
       return {
         title: 'Confirm Group Admin password',
         description: (u) =>
-          `Retype the password for Group Admin <${u}> to create another group.`,
+          `Retype the password for Group Admin <${u}> to create another.`,
       };
     case 'club':
     default:

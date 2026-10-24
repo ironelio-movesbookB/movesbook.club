@@ -29,6 +29,7 @@ import {
   useEntityDirectAccessLockedForKind,
 } from '@/hooks/useEntityDirectAccessGuard';
 import { clearEntityCompanyLoginSession, isEntityWorkspaceSession } from '@/lib/entity/entityDirectAccessSession';
+import { getDashboardPathForUserType, isTeamAccountUserType } from '@/utils/dashboardRouting';
 import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashboardNav';
 import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
@@ -100,10 +101,14 @@ function TeamDashboardContent() {
   });
 
   const handleMyPageTabClick = useCallback(() => {
+    if (user && !isTeamAccountUserType(user.userType)) {
+      router.push(getDashboardPathForUserType(user.userType));
+      return;
+    }
     clearEntityCompanyLoginSession();
     hideMyEntityTab();
     setActiveTab('my-page');
-  }, [hideMyEntityTab, setActiveTab]);
+  }, [hideMyEntityTab, router, setActiveTab, user]);
 
   const handleTabChange = useCallback(
     (tab: 'my-page' | 'my-entity') => {
@@ -230,7 +235,12 @@ function TeamDashboardContent() {
           {showLeftSidebar && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start">
               <DarkSidebar
-                userType={user?.userType || ''}
+                userType={
+                  activeTab === 'my-entity' && user && !isTeamAccountUserType(user.userType)
+                    ? 'TEAM'
+                    : user?.userType || ''
+                }
+                entityTabLabel={activeTab === 'my-entity' ? 'My Team' : undefined}
                 entities={teams}
                 selectedEntityId={selectedTeamId}
                 clubMyClubTabVisible={myEntityTabVisible || entityDirectAccessLocked}
