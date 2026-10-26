@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   normalizePaymentTypeValue,
   OTHERS_PAYMENT_OPTION,
+  PAYMENT_TYPE_OPTIONS,
   splitPaymentMethodsForForm,
 } from '@/lib/procedures/payModes';
 
@@ -16,6 +17,12 @@ type Props = {
   id?: string;
   /** When true, include an empty "select" option. */
   allowEmpty?: boolean;
+  /**
+   * When set, the list is only these method values (the ones ticked for members).
+   * Null keeps the usual defaults-plus-Others list.
+   */
+  allowedMethods?: string[] | null;
+  extraOptions?: { value: string; label: string }[];
 };
 
 /**
@@ -29,11 +36,28 @@ export default function PaymentModeSelect({
   className,
   id,
   allowEmpty = true,
+  allowedMethods,
+  extraOptions = [],
 }: Props) {
-  const normalizedValue = normalizePaymentTypeValue(value) || value;
+  const locked = Array.isArray(allowedMethods);
+  const normalizedValue = locked ? value : normalizePaymentTypeValue(value) || value;
+  const lockedOptions = useMemo(() => {
+    if (!locked) return [];
+    const allowed = new Set(allowedMethods);
+    const known: { value: string; label: string }[] = PAYMENT_TYPE_OPTIONS.filter((option) =>
+      allowed.has(option.value),
+    ).map((option) => ({
+      value: option.value,
+      label: option.label,
+    }));
+    for (const extra of extraOptions) {
+      if (!known.some((option) => option.value === extra.value)) known.push(extra);
+    }
+    return known;
+  }, [locked, allowedMethods, extraOptions]);
   const { defaults, others } = useMemo(
-    () => splitPaymentMethodsForForm(defaultPaymentMethods),
-    [defaultPaymentMethods],
+    () => (locked ? { defaults: [], others: [] } : splitPaymentMethodsForForm(defaultPaymentMethods)),
+    [defaultPaymentMethods, locked],
   );
 
   const valueInOthers = Boolean(
@@ -69,13 +93,22 @@ export default function PaymentModeSelect({
       onChange={(e) => handleChange(e.target.value)}
     >
       {allowEmpty ? <option value="">select</option> : null}
-      {defaults.map((m) => (
-        <option key={m.value} value={m.value}>
-          {m.label}
-        </option>
-      ))}
-      {others.length > 0 ? <option value={OTHERS_PAYMENT_OPTION}>Others</option> : null}
-      {showOthers
+      {locked
+        ? lockedOptions.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))
+        : null}
+      {!locked
+        ? defaults.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))
+        : null}
+      {!locked && others.length > 0 ? <option value={OTHERS_PAYMENT_OPTION}>Others</option> : null}
+      {!locked && showOthers
         ? others.map((m) => (
             <option key={`other-${m.value}`} value={m.value}>
               {m.label}

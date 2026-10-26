@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import { UserPlus, UserCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import type { MemberArchiveStatus } from '@/lib/club/memberArchiveStatus';
+import {
+  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
+  type MemberArchiveStatus,
+} from '@/lib/club/memberArchiveStatus';
 
 const MEMBERSHIP_LIST_OPTIONS: Array<{
   value: MemberArchiveStatus;
@@ -241,7 +244,7 @@ export default function AddMemberModal({
                 : `a ${entityType === 'team' ? 'team' : 'club'} member`}
               .{' '}
               <span className="text-gray-500">
-                Only Single Users and Coaches can be added.
+                {NOT_ADDABLE_MEMBER_USER_TYPE_ERROR}
               </span>
             </p>
             <div>

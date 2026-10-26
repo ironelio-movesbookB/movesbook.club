@@ -4313,6 +4313,7 @@ model ClubMemberOnlinePaymentRow {
   status          String    @db.VarChar(16)
   providerMode    String?   @map("provider_mode") @db.VarChar(16)
   providerRef     String?   @map("provider_ref") @db.VarChar(255)
+  settlementJson  String?   @map("settlement_json") @db.LongText
   createdAt       DateTime? @default(now()) @map("created_at")
   paidAt          DateTime? @map("paid_at")
 

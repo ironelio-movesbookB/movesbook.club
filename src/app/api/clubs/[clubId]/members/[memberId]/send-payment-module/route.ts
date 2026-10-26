@@ -12,6 +12,7 @@ import {
 } from '@/lib/procedures/payModes';
 import {
   createMemberOnlinePayment,
+  emailMemberPayLink,
   onlineProviderForMethod,
   parseMemberEuroAmount,
 } from '@/lib/club/memberOnlinePayments';
@@ -110,6 +111,7 @@ export async function POST(
   ];
 
   let payUrl = '';
+  let emailed = false;
   const provider = onlineProviderForMethod(method);
   if (provider) {
     const amount =
@@ -136,7 +138,20 @@ export async function POST(
         description: `${entityName} — ${label}`,
       });
       payUrl = `${registrationOrigin(request)}/pay/club/${payment.id}`;
-      lines.push('', `Pay online: ${payUrl}`);
+      emailed = await emailMemberPayLink({
+        memberUserId: params.memberId,
+        entityName,
+        amountEur: amount,
+        payUrl,
+        description: payment.description,
+      }).catch(() => false);
+      lines.push(
+        '',
+        `Pay online: ${payUrl}`,
+        emailed
+          ? 'An email with this link was sent to the member.'
+          : 'No email was sent because this member has no email address.',
+      );
     } else if (!connected) {
       lines.push(
         '',
@@ -179,5 +194,6 @@ export async function POST(
     conversationId: conversation.id,
     messageId: message.id,
     payUrl: payUrl || null,
+    emailed,
   });
 }

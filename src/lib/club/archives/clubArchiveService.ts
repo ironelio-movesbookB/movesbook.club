@@ -1174,6 +1174,50 @@ export async function listCashMovements(
   await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
   await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
+  if (direction === 'all' || direction === 'IN') {
+    try {
+      const online = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          member_name: string;
+          description: string;
+          amount_eur: number | string;
+          provider: string;
+          paid_at: Date | string | null;
+        }>
+      >(
+        `SELECT id, member_name, description, amount_eur, provider, paid_at
+         FROM club_member_online_payments
+         WHERE entity_id = ? AND status = 'paid'
+           AND (settlement_json IS NULL OR settlement_json = '')
+         ORDER BY paid_at DESC
+         LIMIT 500`,
+        ctx.club.id,
+      );
+      for (const row of online) {
+        const paidAt = row.paid_at instanceof Date ? row.paid_at : row.paid_at ? new Date(row.paid_at) : null;
+        const insertDate =
+          paidAt && !Number.isNaN(paidAt.getTime())
+            ? `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}-${String(paidAt.getDate()).padStart(2, '0')}`
+            : '-';
+        items.push({
+          id: `online-${row.id}`,
+          name: row.member_name || '-',
+          typology: 'Payment',
+          service: row.description || '-',
+          insertDate,
+          paid: Number(row.amount_eur) || 0,
+          direction: 'IN',
+          payMod: row.provider === 'paypal' ? 'PayPal' : 'Credit card',
+          casual: row.description || '',
+          operator: 'Online',
+        });
+      }
+    } catch {
+      /* The online-payment table is created the first time a pay link is sent. */
+    }
+  }
+
   items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);
 }

@@ -131,6 +131,7 @@ import {
   userHasClubProfile,
 } from '@/lib/club/clubSidebarLabel';
 import { formatCreatableCompaniesSidebarLabel } from '@/lib/club/creatableCompaniesQuota.shared';
+import MyCompaniesPanel from '@/components/sidebar/MyCompaniesPanel';
 import CommunitiesSharingLists from '@/components/sharing/CommunitiesSharingLists';
 import type { SharePartyKind } from '@/lib/sharing/sharingTypes';
 import { useSharingSummary } from '@/hooks/useSharingSummary';
@@ -362,6 +363,8 @@ interface DarkSidebarProps {
   clubProfileLoaded?: boolean;
   /** Club admin — companies creatable vs already created (from subscription version). */
   creatableCompaniesQuota?: import('@/lib/club/creatableCompaniesQuota.shared').CreatableCompaniesQuota | null;
+  /** Member view of a structure: tab title (My Club, My Team, My Group, Trained Group). */
+  entityTabLabel?: string;
 }
 
 export default function DarkSidebar({
@@ -396,17 +399,14 @@ export default function DarkSidebar({
   onTabChange,
   profileImageFromDb,
   onProfileImageSaved,
-  onCreateClubClick,
   onBecomeMemberClick,
   athleteTeams = [],
   onAthleteTeamSelect,
-  onCreateGroupTrainedClick,
-  onCreateTeamClick,
-  onCreateGroupClick,
   clubMyClubTabVisible = false,
   hideMyPageTab = false,
   clubProfileLoaded = true,
   creatableCompaniesQuota = null,
+  entityTabLabel,
 }: DarkSidebarProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -1422,6 +1422,7 @@ export default function DarkSidebar({
     ) : null;
 
   const getEntityLabel = () => {
+    if (entityTabLabel) return entityTabLabel;
     if (isClubAccountUserType(userType)) return t('sidebar_my_club');
     if (isTeamManagerUser) return t('sidebar_my_team');
     if (isGroupAdminUser) return t('sidebar_my_group');
@@ -1889,13 +1890,15 @@ export default function DarkSidebar({
                   <Mail className="h-5 w-5 shrink-0" />
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span>
-                      {isCoachUser
-                        ? t('sidebar_my_groups_trained')
-                        : isTeamManagerUser
-                          ? t('sidebar_my_teams')
-                          : isGroupAdminUser
-                            ? t('sidebar_my_group')
-                            : t('sidebar_my_clubs')}
+                      {isManagedEntityWorkspaceUser
+                        ? 'My Companies'
+                        : isCoachUser
+                          ? t('sidebar_my_groups_trained')
+                          : isTeamManagerUser
+                            ? t('sidebar_my_teams')
+                            : isGroupAdminUser
+                              ? t('sidebar_my_group')
+                              : t('sidebar_my_clubs')}
                     </span>
                     {isManagedEntityWorkspaceUser && companyQuota ? (
                       <span className="text-[11px] font-semibold normal-case text-yellow-300">
@@ -1915,48 +1918,34 @@ export default function DarkSidebar({
                   />
                 </button>
               </div>
-              {myClubsOpen && isClubAccountUserType(userType) && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateClubClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a club
-                  </button>
-                  {formCreatedClubs.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedClubs.map((club: { id: string; name: string; description?: string | null }) => {
-                          const label = formatMyClubsSidebarLabel(club);
-                          const isSelected = selectedEntityId === club.id;
-                          return (
-                            <li key={club.id}>
-                              <button
-                                type="button"
-                                onClick={() => handleMyPageClubSelect(club.id)}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
+              {myClubsOpen && isManagedEntityWorkspaceUser && (
+                <MyCompaniesPanel
+                  userType={userType}
+                  adminUsername={user?.username || user?.name || 'username'}
+                  companyLimitReached={companyLimitReached}
+                  selectedEntityId={selectedEntityId}
+                  onOpenTopics={openMyTopicsClubPicker}
+                  onBecomeMemberClick={onBecomeMemberClick}
+                  onOpenOwnedHere={(row) => {
+                    if (row.kind === 'club' && isClubAccountUserType(userType)) {
+                      handleMyPageClubSelect(row.id);
+                      return;
+                    }
+                    if (typeof window !== 'undefined') {
+                      if (row.kind === 'club' || row.kind === 'team') {
+                        localStorage.setItem('selectedClub', row.id);
+                      }
+                      if (row.kind === 'team') localStorage.setItem('selectedTeam', row.id);
+                    }
+                    writeClubWorkspaceTab('my-entity');
+                    onEntitySelect?.(row.id);
+                    setCurrentTab('my-entity');
+                    if (row.kind === 'team') onMyTeamClick?.();
+                    else if (row.kind === 'group') onMyGroupClick?.();
+                    else if (row.kind === 'coaching-group') onMyCoachingGroupClick?.();
+                    else if (row.kind === 'club') onMyClubClick?.();
+                  }}
+                />
               )}
               {myClubsOpen && isAthleteUser && (
                 <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
@@ -1993,155 +1982,6 @@ export default function DarkSidebar({
                             </li>
                           );
                         })}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isCoachUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateGroupTrainedClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    {t('create_group_trained')}
-                  </button>
-                  {formCreatedEntities.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (group: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === group.id;
-                          const label = formatEntitySidebarLabel(group);
-                          return (
-                            <li key={group.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onEntitySelect?.(group.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isTeamManagerUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateTeamClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a team
-                  </button>
-                  {formCreatedEntities.length > 0 ? (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (team: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === team.id;
-                          const label = formatEntitySidebarLabel(team);
-                          return (
-                            <li key={team.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (typeof window !== 'undefined') {
-                                    localStorage.setItem('selectedClub', team.id);
-                                    localStorage.setItem('selectedTeam', team.id);
-                                  }
-                                  writeClubWorkspaceTab('my-entity');
-                                  onEntitySelect?.(team.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
-                      </ul>
-                    </>
-                  ) : null}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isGroupAdminUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateGroupClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a group
-                  </button>
-                  {formCreatedEntities.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (group: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === group.id;
-                          const label = formatEntitySidebarLabel(group);
-                          return (
-                            <li key={group.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onEntitySelect?.(group.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
                       </ul>
                     </>
                   )}

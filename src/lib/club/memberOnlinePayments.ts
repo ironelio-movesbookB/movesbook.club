@@ -1,4 +1,7 @@
 import { prisma } from '@/lib/prisma';
+import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
+import { sendIonosEmail } from '@/lib/ionosEmail';
+import { toMediaApiPath } from '@/lib/uploadMediaUrl';
 import type { ActivePaypalCredentials, ActiveStripeCredentials } from '@/lib/payments/paymentSettings';
 import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
 import {
@@ -7,6 +10,7 @@ import {
   stripeKeysForMode,
 } from '@/lib/club/memberPaymentMethods';
 import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
+import { procedureService } from '@/lib/procedures';
 
 export type MemberOnlineProvider = 'stripe' | 'paypal';
 
@@ -41,6 +45,7 @@ type Row = {
 };
 
 const TABLE = 'club_member_online_payments';
+let settlementReady = false;
 
 export function parseMemberEuroAmount(raw: string): number {
   let s = String(raw ?? '').replace(/[^\d.,-]/g, '');
@@ -57,11 +62,30 @@ export function parseMemberEuroAmount(raw: string): number {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
 }
 
+/** One deadline this online payment should settle once the member pays. */
+export type OnlineSettlementLine = {
+  procedureType: string;
+  recordId: string;
+  amount: number;
+  payMode: string;
+  operatorId: string;
+  paymentDate: string;
+  description: string;
+};
+
 /** Card methods are collected on the club's Stripe account. PayPal uses the club's PayPal account. */
 export function onlineProviderForMethod(method: string): MemberOnlineProvider | null {
   if (method === 'paypal') return 'paypal';
-  if (method === 'credit_card' || method === 'debit_card') return 'stripe';
+  if (method === 'credit_card' || method === 'debit_card' || method === 'stripe') return 'stripe';
   return null;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 async function ensureTable() {
@@ -85,6 +109,21 @@ async function ensureTable() {
       INDEX idx_club_member_online_member (member_user_id)
     )
   `);
+  if (settlementReady) return;
+  const rows = await prisma.$queryRawUnsafe<Array<{ c: number | bigint }>>(
+    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'settlement_json'`,
+    TABLE,
+  );
+  if (Number(rows[0]?.c ?? 0) === 0) {
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE \`${TABLE}\` ADD COLUMN settlement_json LONGTEXT NULL`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!/duplicate|exists/i.test(message)) throw error;
+    }
+  }
+  settlementReady = true;
 }
 
 function mapRow(row: Row): MemberOnlinePayment {
@@ -126,18 +165,21 @@ export async function createMemberOnlinePayment(input: {
   provider: MemberOnlineProvider;
   amountEur: number;
   description: string;
+  settlement?: OnlineSettlementLine[];
 }): Promise<MemberOnlinePayment> {
   await ensureTable();
   const id = crypto.randomUUID();
   const description = input.description.slice(0, 255);
+  const settlement =
+    input.settlement && input.settlement.length > 0 ? JSON.stringify({ lines: input.settlement }) : null;
   await prisma.$executeRaw`
     INSERT INTO club_member_online_payments (
       id, entity_id, entity_name, member_user_id, member_name, created_by_user_id,
-      provider, amount_eur, description, status
+      provider, amount_eur, description, status, settlement_json
     ) VALUES (
       ${id}, ${input.entityId}, ${input.entityName.slice(0, 255)}, ${input.memberUserId},
       ${input.memberName.slice(0, 255)}, ${input.createdByUserId}, ${input.provider},
-      ${input.amountEur}, ${description}, 'pending'
+      ${input.amountEur}, ${description}, 'pending', ${settlement}
     )
   `;
   const created = await getMemberOnlinePayment(id);
@@ -186,4 +228,101 @@ export async function credentialsForMemberPayment(
     clientId: keys.clientId,
     secret: keys.secret,
   };
+}
+
+function cashPayModeLabel(payMode: string, provider: MemberOnlineProvider): string {
+  if (payMode === 'paypal' || provider === 'paypal') return 'PayPal';
+  if (payMode === 'debit_card') return 'Debit card';
+  if (payMode === 'stripe') return 'Stripe';
+  return 'Credit card';
+}
+
+/** Writes the deadline payment after the member pays a link that was started from the reception form. */
+export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): Promise<void> {
+  await ensureTable();
+  const rows = await prisma.$queryRawUnsafe<Array<{ settlement_json: string | null }>>(
+    `SELECT settlement_json FROM \`${TABLE}\` WHERE id = ? LIMIT 1`,
+    payment.id,
+  );
+  const raw = rows[0]?.settlement_json;
+  if (!raw) return;
+  let lines: OnlineSettlementLine[] = [];
+  try {
+    const parsed = JSON.parse(raw) as { lines?: OnlineSettlementLine[] };
+    lines = Array.isArray(parsed.lines) ? parsed.lines : [];
+  } catch {
+    return;
+  }
+  const ctx = {
+    userId: payment.createdByUserId,
+    club: { id: payment.entityId, name: payment.entityName },
+  };
+  for (const line of lines) {
+    if (!line.recordId || !(Number(line.amount) > 0) || !line.procedureType) continue;
+    if (line.procedureType === 'expense') continue;
+    try {
+      await procedureService.addPayment(ctx, line.procedureType, line.recordId, {
+        amount: Number(line.amount),
+        paymentDate: line.paymentDate || new Date().toISOString().slice(0, 10),
+        notes: line.description || payment.description,
+        operatorId: line.operatorId || payment.createdByUserId,
+        payMode: cashPayModeLabel(line.payMode, payment.provider),
+        skipOperatorPassword: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('exceeds remaining balance') || message.includes('Record not found')) continue;
+      throw error;
+    }
+  }
+}
+
+/** Emails the pay link to the member's account address. Returns false when there is no email. */
+export async function emailMemberPayLink(input: {
+  memberUserId: string;
+  entityName: string;
+  amountEur: number;
+  payUrl: string;
+  description: string;
+}): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: input.memberUserId },
+    select: { email: true },
+  });
+  const to = user?.email?.trim();
+  if (!to) return false;
+  const amount = input.amountEur.toFixed(2);
+  const entity = input.entityName.trim() || 'the club';
+  const description = input.description.trim();
+  await sendIonosEmail({
+    to,
+    subject: `Payment of €${amount} to ${entity}`,
+    text: `${entity} asks you to pay €${amount}.\n${description}\n\nPay here: ${input.payUrl}`,
+    html: `<p>${escapeHtml(entity)} asks you to pay <strong>€${amount}</strong>.</p>${
+      description ? `<p>${escapeHtml(description)}</p>` : ''
+    }<p><a href="${escapeHtml(input.payUrl)}">Pay now</a></p><p>${escapeHtml(input.payUrl)}</p>`,
+  });
+  return true;
+}
+
+/** Banner and logo used on the public club site, for the pay page. */
+export async function memberPaymentBranding(entityId: string): Promise<{
+  logoUrl: string | null;
+  bannerUrl: string | null;
+}> {
+  const org = await findPublicOrg(entityId);
+  if (!org) return { logoUrl: null, bannerUrl: null };
+  const card = publicOrgCard(org);
+  let bannerUrl = card.bannerUrl;
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ cover_path: string | null }>>(
+      `SELECT cover_path FROM org_websites WHERE workspace_id = ? LIMIT 1`,
+      entityId,
+    );
+    const cover = rows[0]?.cover_path?.trim();
+    if (cover) bannerUrl = toMediaApiPath(cover);
+  } catch {
+    /* The website table is created when a club opens its site settings. */
+  }
+  return { logoUrl: card.logoUrl, bannerUrl };
 }

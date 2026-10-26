@@ -97,6 +97,7 @@ const LEGACY_ALIASES: Record<string, PaymentTypeValue> = {
 
 export function payModeLabel(value: string | null | undefined): string {
   if (!value) return '-';
+  if (value === 'stripe') return 'Stripe';
   const found =
     PAYMENT_TYPE_OPTIONS.find((o) => o.value === value) ??
     RETIRED_PAYMENT_TYPES.find((o) => o.value === value);
