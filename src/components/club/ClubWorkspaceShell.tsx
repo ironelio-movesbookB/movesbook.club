@@ -79,6 +79,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const gridShareMode = searchParams?.get('share') === 'grid';
   const { user, loading } = useAuth();
   const { t } = useLanguage();
   const { showAlert } = usePcuAlert();
@@ -154,6 +155,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const isTeamWorkspaceUser = Boolean(user && isTeamAccountUserType(user.userType));
   /** Coach / Group admins: their own coaching group / group is the workspace entity (never stored as selectedClub). */
   const ownEntityWorkspace = useMemo(() => {
+    if (pathname === '/club/dashboard') return null;
     if (user?.userType === 'COACH') {
       return {
         listPath: '/api/coaching-groups/my-coaching-groups',
@@ -173,7 +175,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       };
     }
     return null;
-  }, [user]);
+  }, [user, pathname]);
 
   const formClubs = useMemo(() => {
     // Teams are not "form-created clubs"; show all owned teams in the shell sidebar.
@@ -214,7 +216,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      if (user && isTeamAccountUserType(user.userType)) {
+      if (user && isTeamAccountUserType(user.userType) && pathname !== '/club/dashboard') {
         const response = await fetch('/api/teams/my-teams', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -276,7 +278,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     } finally {
       setClubsLoaded(true);
     }
-  }, [user, ownEntityWorkspace]);
+  }, [user, ownEntityWorkspace, pathname]);
 
   const loadBannerProfile = useCallback(async () => {
     try {
@@ -434,7 +436,13 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     if (savedTab) setActiveTab(savedTab);
   }, [pathname, selectedClubId]);
 
-  const canUseClubShell = Boolean(user && canAccessClubWorkspace(user.userType));
+  const onClubDashboard = pathname === '/club/dashboard';
+  /** A team, coach, or group admin who created a club opens it here. */
+  const canUseClubShell = Boolean(
+    user &&
+      (canAccessClubWorkspace(user.userType) ||
+        (onClubDashboard && isManagedEntityAdminUserType(user.userType))),
+  );
   const onMembersArchivePath = Boolean(pathname?.startsWith('/clubMembers'));
   const onManagedArchiveShell = Boolean(
     user && canAccessManagedArchiveShell(user.userType, pathname),
@@ -617,7 +625,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     setMyPageNewsPanel(null);
     showMyClubTab();
 
-    if (isTeamWorkspaceUser) {
+    if (isTeamWorkspaceUser && !onClubDashboard) {
       localStorage.setItem('selectedTeam', entityId);
       // Stay on current archive route when already in Archives; otherwise open My Team.
       if (
@@ -778,6 +786,24 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  if (gridShareMode) {
+    return (
+      <ClubWorkspaceContext.Provider
+        value={{
+          activeTab: shellActiveTab,
+          selectedClubId,
+          myPageNewsPanel,
+          setMyPageNewsPanel,
+          selectedMember,
+          setSelectedMember,
+          sharingScope,
+        }}
+      >
+        <main className="min-h-screen w-full bg-white">{children}</main>
+      </ClubWorkspaceContext.Provider>
+    );
+  }
+
   return (
     <ClubWorkspaceContext.Provider
       value={{
@@ -846,7 +872,13 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
           {showLeftSidebar && (
             <aside className="w-80 flex-shrink-0 sticky top-0 self-start">
               <DarkSidebar
-                userType={user.userType}
+                userType={
+                  onClubDashboard &&
+                  activeTab === 'my-entity' &&
+                  !canAccessClubWorkspace(user.userType)
+                    ? 'CLUB'
+                    : user.userType
+                }
                 entities={formClubs}
                 selectedEntityId={selectedClubId}
                 clubProfileLoaded={clubsLoaded}

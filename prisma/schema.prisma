@@ -3461,6 +3461,8 @@ model ProcedurePayment {
   procedureRecordId String
   amount            Decimal  @db.Decimal(12, 2)
   balanceAfter      Decimal? @db.Decimal(12, 2)
+  cancelledAt       DateTime? @db.DateTime(3)
+  reversalOfId      String?  @db.VarChar(191)
   paymentDate       DateTime @db.Date
   operatorId        String?
   payMode           String?
@@ -3475,6 +3477,7 @@ model ProcedurePayment {
   receipts        ProcedureReceipt[]
 
   @@index([procedureRecordId, paymentDate])
+  @@index([reversalOfId])
   @@map("procedure_payments")
 }
 
@@ -4251,6 +4254,8 @@ model LegacyExpenses {
   userId String @db.VarChar(191) @map("user_id")
   name String @db.VarChar(250)
   parentId BigInt @map("parent_id")
+  icon String? @db.VarChar(50)
+  imageUrl String? @db.VarChar(255) @map("image_url")
   created DateTime?
   modified DateTime?
   @@index([name], map: "idx_expenses_name")
@@ -4318,6 +4323,7 @@ model ClubMemberOnlinePaymentRow {
   status          String    @db.VarChar(16)
   providerMode    String?   @map("provider_mode") @db.VarChar(16)
   providerRef     String?   @map("provider_ref") @db.VarChar(255)
+  settlementJson  String?   @map("settlement_json") @db.LongText
   createdAt       DateTime? @default(now()) @map("created_at")
   paidAt          DateTime? @map("paid_at")
 

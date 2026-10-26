@@ -11,6 +11,8 @@ type PaymentView = {
   entityName: string;
   memberName: string;
   provider: 'stripe' | 'paypal';
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
 };
 
 type PageProps = {
@@ -103,26 +105,48 @@ export default function ClubMemberPayPage({ params, searchParams }: PageProps) {
     }
   };
 
+  const banner = payment?.bannerUrl || '';
+  const logo = payment?.logoUrl || '';
+
   return (
-    <div className="min-h-screen bg-[#f4f4f5] px-4 py-10">
-      <div className="mx-auto max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-950">Pay your club</h1>
+    <div className="min-h-screen bg-white text-slate-900">
+      <header
+        className="relative bg-gradient-to-br from-indigo-900 via-indigo-800 to-sky-700 text-white"
+        style={
+          banner
+            ? {
+                backgroundImage: `linear-gradient(rgba(15,23,42,.55), rgba(15,23,42,.75)), url(${banner})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
+        <div className="mx-auto flex max-w-lg flex-col items-center px-5 py-12 text-center">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt="" className="mb-4 h-20 w-20 rounded-full bg-white object-contain p-1 shadow-lg" />
+          ) : null}
+          <h1 className="text-3xl font-extrabold">{payment?.entityName || 'Payment'}</h1>
+        </div>
+      </header>
+      <div className="mx-auto max-w-lg px-4 py-8">
         {loading ? (
-          <p className="mt-6 flex items-center text-sm text-gray-500">
+          <p className="flex items-center text-sm text-gray-500">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Loading the payment
           </p>
         ) : !payment ? (
-          <p className="mt-6 text-sm text-red-700">{error || 'Payment not found'}</p>
+          <p className="text-sm text-red-700">{error || 'Payment not found'}</p>
         ) : payment.status === 'paid' ? (
-          <div className="mt-6">
+          <div>
             <p className="text-lg font-semibold text-green-800">Payment received</p>
             <p className="mt-2 text-sm text-gray-700">
               {euro(payment.amountEur)} is paid to {payment.entityName}. You can close this page.
             </p>
           </div>
         ) : (
-          <div className="mt-6">
+          <div>
             <p className="text-sm text-gray-600">{payment.description}</p>
             <p className="mt-1 text-sm text-gray-600">Paying to {payment.entityName}</p>
             <p className="mt-4 text-3xl font-semibold text-gray-950">{euro(payment.amountEur)}</p>

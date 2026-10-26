@@ -99,17 +99,26 @@ export function memberArchiveStatusShortLabel(status: MemberArchiveStatus): stri
 }
 
 /**
- * Only Single Users (legacy role ID5 → ATHLETE) and Coaches (legacy role ID6 → COACH)
- * can be inserted as club / team members.
+ * Single Users (ID5), Coaches (ID6), and admins of a Team (ID7), Club (ID8),
+ * or Group (ID9) can be inserted as members — including of a structure they own.
  */
-export const ADDABLE_MEMBER_USER_TYPES = ['ATHLETE', 'COACH'] as const;
+export const ADDABLE_MEMBER_USER_TYPES = [
+  'ATHLETE',
+  'COACH',
+  'TEAM',
+  'TEAM_MANAGER',
+  'CLUB',
+  'CLUB_TRAINER',
+  'GROUP',
+  'GROUP_ADMIN',
+] as const;
 
 export function isAddableMemberUserType(userType: string | null | undefined): boolean {
   return (ADDABLE_MEMBER_USER_TYPES as readonly string[]).includes(String(userType ?? ''));
 }
 
 export const NOT_ADDABLE_MEMBER_USER_TYPE_ERROR =
-  'Only Single Users (ID5) and Coaches (ID6) can be added as members.';
+  'Only Single Users (ID5), Coaches (ID6), Team admins (ID7), Club admins (ID8) and Group admins (ID9) can be added as members.';
 
 /** Coaches show the status circle half filled. */
 export function memberArchiveStatusDotStyle(isCoach: boolean): CSSProperties | undefined {

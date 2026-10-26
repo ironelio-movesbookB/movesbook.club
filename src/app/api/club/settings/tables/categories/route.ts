@@ -1,6 +1,9 @@
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { extname, join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { getServerPublicDir } from '@/lib/serverPublicDir';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,12 +17,15 @@ type AuthorizedContext = {
 type CategoryPayload = {
   name: string;
   parentId: string;
+  removeImage: boolean;
+  image: File | null;
 };
 
 type CategoryRow = {
   id: string | number | bigint;
   user_id?: string | number | bigint | null;
   name?: string | null;
+  category_img?: string | null;
   created?: string | Date | null;
   modified?: string | Date | null;
 };
@@ -29,6 +35,7 @@ type SubCategoryRow = {
   user_id?: string | number | bigint | null;
   cat_id?: string | number | bigint | null;
   name?: string | null;
+  sub_category_img?: string | null;
   created?: string | Date | null;
   modified?: string | Date | null;
 };
@@ -37,10 +44,15 @@ const CATEGORY_TABLE_CANDIDATES = ['product_categories', 'product_category'];
 const SUB_CATEGORY_TABLE_CANDIDATES = ['product_sub_categories', 'product_sub_category'];
 const CATEGORY_TABLE = 'product_categories';
 const SUB_CATEGORY_TABLE = 'product_sub_categories';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const CATEGORY_IMAGE_DIR = ['img', 'categories'];
+const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
+const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
 
 const CATEGORY_COLUMN_DEFINITIONS: Record<string, string> = {
   user_id: 'VARCHAR(191) NULL',
   name: 'VARCHAR(250) NOT NULL',
+  category_img: 'VARCHAR(255) NULL',
   created: 'DATETIME DEFAULT CURRENT_TIMESTAMP',
   modified: 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
 };
@@ -49,12 +61,79 @@ const SUB_CATEGORY_COLUMN_DEFINITIONS: Record<string, string> = {
   user_id: 'VARCHAR(191) NULL',
   cat_id: 'BIGINT NOT NULL',
   name: 'VARCHAR(250) NOT NULL',
+  sub_category_img: 'VARCHAR(255) NULL',
   created: 'DATETIME DEFAULT CURRENT_TIMESTAMP',
   modified: 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
 };
 
 function text(value: unknown): string {
   return String(value ?? '').trim();
+}
+
+function normalizeExtension(fileName: string): '.png' | '.jpg' | '.gif' | '.webp' | null {
+  const extension = extname(fileName).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(extension)) return null;
+  if (extension === '.png') return '.png';
+  if (extension === '.gif') return '.gif';
+  if (extension === '.webp') return '.webp';
+  return '.jpg';
+}
+
+function hasValidImageSignature(buffer: Buffer, extension: '.png' | '.jpg' | '.gif' | '.webp'): boolean {
+  if (extension === '.png') {
+    return buffer.length > 8
+      && buffer[0] === 0x89
+      && buffer[1] === 0x50
+      && buffer[2] === 0x4e
+      && buffer[3] === 0x47;
+  }
+
+  if (extension === '.jpg') {
+    return buffer.length > 3
+      && buffer[0] === 0xff
+      && buffer[1] === 0xd8
+      && buffer[2] === 0xff;
+  }
+
+  if (extension === '.gif') {
+    return buffer.length > 6
+      && buffer[0] === 0x47
+      && buffer[1] === 0x49
+      && buffer[2] === 0x46;
+  }
+
+  return buffer.length > 12
+    && buffer.toString('ascii', 0, 4) === 'RIFF'
+    && buffer.toString('ascii', 8, 12) === 'WEBP';
+}
+
+function safeBaseName(fileName: string) {
+  const base = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+  return base.slice(0, 48) || 'category';
+}
+
+function normalizeCategoryImagePath(value: unknown): string | null {
+  const image = text(value);
+  if (!image) return null;
+  if (/^https?:\/\//i.test(image)) return image;
+  if (image.startsWith('/api/media/img/categories/')) return image;
+  if (image.startsWith('/img/categories/')) return `/api/media${image}`;
+  if (image.startsWith('img/categories/')) return `/api/media/${image}`;
+  if (image.startsWith('/')) return image;
+  return `/api/media/img/categories/${image.replace(/^\/+/, '')}`;
+}
+
+function getCategoryImageDiskPath(value: unknown): string | null {
+  const imagePath = normalizeCategoryImagePath(value);
+  if (!imagePath) return null;
+  let publicRelative: string | null = null;
+  if (imagePath.startsWith('/api/media/img/categories/')) {
+    publicRelative = 'img/categories/' + imagePath.slice('/api/media/img/categories/'.length);
+  } else if (imagePath.startsWith('/img/categories/')) {
+    publicRelative = imagePath.slice(1);
+  }
+  if (!publicRelative) return null;
+  return join(getServerPublicDir(), publicRelative);
 }
 
 function normalizeParentId(value: unknown): string {
@@ -249,15 +328,27 @@ function userFilterClause(columns: Set<string>, context: AuthorizedContext, alia
   };
 }
 
+function fileFromForm(formData: FormData): File | null {
+  const value = formData.get('image');
+  if (!(value instanceof File) || value.size === 0) return null;
+  return value;
+}
+
 function parsePayload(body: unknown): CategoryPayload {
   const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  const formData = body instanceof FormData ? body : null;
+  const removeImageValue = formData ? formData.get('removeImage') : data.removeImage;
+  const imageValue = formData ? fileFromForm(formData) : data.image instanceof File ? data.image : null;
+
   return {
-    name: text(data.name),
-    parentId: normalizeParentId(data.parentId)
+    name: text(formData ? formData.get('name') : data.name),
+    parentId: normalizeParentId(formData ? formData.get('parentId') : data.parentId),
+    removeImage: removeImageValue === '1' || removeImageValue === 'true' || removeImageValue === true || removeImageValue === 1,
+    image: imageValue
   };
 }
 
-function validatePayload(payload: CategoryPayload): Record<string, string> {
+async function validatePayload(payload: CategoryPayload): Promise<Record<string, string>> {
   const fieldErrors: Record<string, string> = {};
 
   if (!payload.name) {
@@ -266,7 +357,45 @@ function validatePayload(payload: CategoryPayload): Record<string, string> {
     fieldErrors.name = 'Category name must be 250 characters or fewer.';
   }
 
+  if (payload.image) {
+    if (payload.image.size > MAX_IMAGE_BYTES) {
+      fieldErrors.image = 'Category image must be 5MB or smaller.';
+    } else if (!normalizeExtension(payload.image.name)) {
+      fieldErrors.image = 'Only PNG, JPG, GIF, or WEBP images are allowed.';
+    } else if (payload.image.type && !ALLOWED_MIME_TYPES.has(payload.image.type)) {
+      fieldErrors.image = 'Only PNG, JPG, GIF, or WEBP images are allowed.';
+    }
+  }
+
   return fieldErrors;
+}
+
+async function saveCategoryImage(file: File): Promise<{ path: string } | { error: string }> {
+  const extension = normalizeExtension(file.name);
+  if (!extension) return { error: 'Only PNG, JPG, GIF, or WEBP images are allowed.' };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (!hasValidImageSignature(buffer, extension)) {
+    return { error: 'The selected file is not a valid category image.' };
+  }
+
+  const uploadDir = join(getServerPublicDir(), ...CATEGORY_IMAGE_DIR);
+  await mkdir(uploadDir, { recursive: true });
+
+  const fileName = `Category_${Date.now()}_${Math.round(Math.random() * 1_000_000)}_${safeBaseName(file.name)}${extension}`;
+  await writeFile(join(uploadDir, fileName), buffer, { flag: 'wx' });
+  return { path: `/img/categories/${fileName}` };
+}
+
+async function deleteCategoryImage(value: unknown) {
+  const diskPath = getCategoryImageDiskPath(value);
+  if (!diskPath) return;
+
+  try {
+    await unlink(diskPath);
+  } catch {
+    // Missing old images should not block the table update.
+  }
 }
 
 function normalizeCategory(row: CategoryRow) {
@@ -274,6 +403,7 @@ function normalizeCategory(row: CategoryRow) {
     id: String(row.id),
     name: text(row.name),
     parentId: '0',
+    imageUrl: normalizeCategoryImagePath(row.category_img),
     created: toIsoDate(row.created),
     modified: toIsoDate(row.modified)
   };
@@ -284,6 +414,7 @@ function normalizeSubCategory(row: SubCategoryRow) {
     id: String(row.id),
     name: text(row.name),
     parentId: String(row.cat_id ?? ''),
+    imageUrl: normalizeCategoryImagePath(row.sub_category_img),
     created: toIsoDate(row.created),
     modified: toIsoDate(row.modified)
   };
@@ -357,7 +488,7 @@ async function assertOwnedCategory(
 ) {
   const userFilter = userFilterClause(tables.categoryColumns, context);
   const rows = await prisma.$queryRawUnsafe<CategoryRow[]>(
-    `SELECT id, user_id, name, created, modified
+  `SELECT id, user_id, name, category_img, created, modified
      FROM \`${tables.categoryTable}\`
      WHERE id = ?
        AND ${userFilter.clause}
@@ -376,7 +507,7 @@ async function assertOwnedSubCategory(
 ) {
   const userFilter = userFilterClause(tables.subCategoryColumns, context);
   const rows = await prisma.$queryRawUnsafe<SubCategoryRow[]>(
-    `SELECT id, user_id, cat_id, name, created, modified
+    `SELECT id, user_id, cat_id, name, sub_category_img, created, modified
      FROM \`${tables.subCategoryTable}\`
      WHERE id = ?
        AND ${userFilter.clause}
@@ -407,7 +538,7 @@ export async function GET(request: NextRequest) {
     const subFilter = userFilterClause(tables.subCategoryColumns, context);
 
     const categoryRows = await prisma.$queryRawUnsafe<CategoryRow[]>(
-      `SELECT id, user_id, name, created, modified
+      `SELECT id, user_id, name, category_img, created, modified
        FROM \`${tables.categoryTable}\`
        WHERE ${categoryFilter.clause}
        ORDER BY id DESC`,
@@ -415,7 +546,7 @@ export async function GET(request: NextRequest) {
     );
 
     const subRows = await prisma.$queryRawUnsafe<SubCategoryRow[]>(
-      `SELECT id, user_id, cat_id, name, created, modified
+      `SELECT id, user_id, cat_id, name, sub_category_img, created, modified
        FROM \`${tables.subCategoryTable}\`
        WHERE ${subFilter.clause}
        ORDER BY cat_id ASC, id DESC`,
@@ -443,8 +574,8 @@ export async function POST(request: NextRequest) {
     if ('error' in context) return context.error;
 
     const tables = await ensureCategoryTables();
-    const payload = parsePayload(await request.json());
-    const fieldErrors = validatePayload(payload);
+    const payload = parsePayload(await request.formData().catch(() => new FormData()));
+    const fieldErrors = await validatePayload(payload);
     if (Object.keys(fieldErrors).length > 0) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors }, { status: 400 });
     }
@@ -463,22 +594,33 @@ export async function POST(request: NextRequest) {
       }, { status: 409 });
     }
 
+    let imagePath: string | null = null;
+    if (payload.image) {
+      const imageResult = await saveCategoryImage(payload.image);
+      if ('error' in imageResult) {
+        return NextResponse.json({ error: imageResult.error, fieldErrors: { image: imageResult.error } }, { status: 400 });
+      }
+      imagePath = imageResult.path;
+    }
+
     const storageUserId = context.legacyUserId ?? context.userId;
 
     if (isTopLevel(payload.parentId)) {
       await prisma.$executeRawUnsafe(
-        `INSERT INTO \`${tables.categoryTable}\` (user_id, name)
-         VALUES (?, ?)`,
+        `INSERT INTO \`${tables.categoryTable}\` (user_id, name, category_img)
+         VALUES (?, ?, ?)`,
         storageUserId,
-        payload.name
+        payload.name,
+        imagePath
       );
     } else {
       await prisma.$executeRawUnsafe(
-        `INSERT INTO \`${tables.subCategoryTable}\` (user_id, cat_id, name)
-         VALUES (?, ?, ?)`,
+        `INSERT INTO \`${tables.subCategoryTable}\` (user_id, cat_id, name, sub_category_img)
+         VALUES (?, ?, ?, ?)`,
         storageUserId,
         payload.parentId,
-        payload.name
+        payload.name,
+        imagePath
       );
     }
 
@@ -490,7 +632,10 @@ export async function POST(request: NextRequest) {
       success: true,
       item: {
         id: String(idRows[0]?.id ?? ''),
-        ...payload
+        name: payload.name,
+        parentId: payload.parentId,
+        imageUrl: imagePath,
+        isSubCategory: !isTopLevel(payload.parentId)
       }
     }, { status: 201 });
   } catch (error) {
@@ -500,14 +645,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  let uploadedImagePath: string | null = null;
+
   try {
     const context = await getAuthorizedContext(request);
     if ('error' in context) return context.error;
 
     const tables = await ensureCategoryTables();
-    const body = await request.json() as Record<string, unknown>;
-    const id = text(body.id);
-    const isSub = isSubCategoryFlag(body.isSubCategory);
+    const formData = await request.formData();
+    const id = text(formData.get('id'));
+    const isSub = isSubCategoryFlag(formData.get('isSubCategory'));
 
     if (!id) {
       return NextResponse.json({ error: 'Category id is required' }, { status: 400 });
@@ -522,11 +669,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const payload = parsePayload({
-      ...body,
+      ...Object.fromEntries(formData.entries()),
       parentId: isSub ? existing.parentId : '0'
     });
 
-    const fieldErrors = validatePayload(payload);
+    const fieldErrors = await validatePayload(payload);
     if (Object.keys(fieldErrors).length > 0) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors }, { status: 400 });
     }
@@ -538,31 +685,60 @@ export async function PUT(request: NextRequest) {
       }, { status: 409 });
     }
 
+    let imagePath = isSub ? normalizeCategoryImagePath((existing as ReturnType<typeof normalizeSubCategory>).imageUrl) : normalizeCategoryImagePath((existing as ReturnType<typeof normalizeCategory>).imageUrl);
+    if (payload.image) {
+      const imageResult = await saveCategoryImage(payload.image);
+      if ('error' in imageResult) {
+        return NextResponse.json({ error: imageResult.error, fieldErrors: { image: imageResult.error } }, { status: 400 });
+      }
+      uploadedImagePath = imageResult.path;
+      imagePath = imageResult.path;
+    } else if (payload.removeImage) {
+      imagePath = null;
+    }
+
     if (isSub) {
       await prisma.$executeRawUnsafe(
         `UPDATE \`${tables.subCategoryTable}\`
          SET name = ?,
+             sub_category_img = ?,
              modified = CURRENT_TIMESTAMP
          WHERE id = ?`,
         payload.name,
+        imagePath,
         id
       );
     } else {
       await prisma.$executeRawUnsafe(
         `UPDATE \`${tables.categoryTable}\`
          SET name = ?,
+             category_img = ?,
              modified = CURRENT_TIMESTAMP
          WHERE id = ?`,
         payload.name,
+        imagePath,
         id
       );
     }
 
+    if (uploadedImagePath || payload.removeImage) {
+      const oldValue = isSub
+        ? (existing as ReturnType<typeof normalizeSubCategory>).imageUrl
+        : (existing as ReturnType<typeof normalizeCategory>).imageUrl;
+      if (oldValue) {
+        await deleteCategoryImage(oldValue);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      item: { id, ...payload, isSubCategory: isSub }
+      item: { id, name: payload.name, parentId: payload.parentId, imageUrl: imagePath, isSubCategory: isSub }
     });
   } catch (error) {
+    if (uploadedImagePath) {
+      await deleteCategoryImage(uploadedImagePath);
+    }
+
     console.error('PUT /api/club/settings/tables/categories:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -581,20 +757,24 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Category id is required' }, { status: 400 });
     }
 
-    if (isSub) {
-      if (!(await assertOwnedSubCategory(tables, context, id))) {
-        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
-      }
+    const existing = isSub
+      ? await assertOwnedSubCategory(tables, context, id)
+      : await assertOwnedCategory(tables, context, id);
 
+    if (!existing) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+    }
+
+    if (existing.imageUrl) {
+      await deleteCategoryImage(existing.imageUrl);
+    }
+
+    if (isSub) {
       await prisma.$executeRawUnsafe(
         `DELETE FROM \`${tables.subCategoryTable}\` WHERE id = ?`,
         id
       );
     } else {
-      if (!(await assertOwnedCategory(tables, context, id))) {
-        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
-      }
-
       await prisma.$executeRawUnsafe(
         `DELETE FROM \`${tables.categoryTable}\` WHERE id = ?`,
         id

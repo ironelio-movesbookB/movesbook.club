@@ -9,6 +9,7 @@ import {
 } from '@/lib/procedures/installmentService';
 import { DeadlineDeleteError, deleteSingleDeadline } from '@/lib/procedures/deleteDeadline';
 import { prisma } from '@/lib/prisma';
+import { verifyOperatorPassword } from '@/lib/procedures/operatorAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,6 +109,19 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (request.nextUrl.searchParams.get('mode') === 'archive') {
       if (!isKnownProcedureType(params.type)) {
         return NextResponse.json({ error: 'Unknown procedure type' }, { status: 400 });
+      }
+      const body = (await request.json().catch(() => null)) as { adminPassword?: string } | null;
+      if (!body?.adminPassword?.trim()) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is required' },
+          { status: 400 }
+        );
+      }
+      if (!(await verifyOperatorPassword(auth.ctx.userId, body.adminPassword))) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is incorrect' },
+          { status: 401 }
+        );
       }
       try {
         const result = await deleteSingleDeadline(auth.ctx, params.type, params.id, installmentId);

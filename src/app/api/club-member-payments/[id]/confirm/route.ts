@@ -4,6 +4,7 @@ import {
   credentialsForMemberPayment,
   getMemberOnlinePayment,
   markMemberOnlinePaymentPaid,
+  settleMemberOnlinePayment,
 } from '@/lib/club/memberOnlinePayments';
 import { euroCents, retrieveStripeCheckoutSession } from '@/lib/payments/stripeRest';
 import { capturePaypalOrder, euroValue } from '@/lib/payments/paypalRest';
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
+      await settleMemberOnlinePayment(payment);
       await markMemberOnlinePaymentPaid(payment.id, session.paymentIntent || sessionId);
     } else {
       const orderId = (body.orderId || payment.providerRef || '').trim();
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
+      await settleMemberOnlinePayment(payment);
       await markMemberOnlinePaymentPaid(payment.id, capture.captureId || orderId);
     }
 
