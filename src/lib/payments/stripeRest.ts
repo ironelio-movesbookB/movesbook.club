@@ -38,7 +38,7 @@ export async function createStripeCheckoutSession(
     customerEmail?: string;
     successUrl: string;
     cancelUrl: string;
-    /** Klarna installments. The card checkout leaves the methods to the Stripe account. */
+    /** Klarna installments. Card checkout does not set this, so Stripe keeps the Dashboard method list. */
     installment?: boolean;
     locale?: string;
   },
@@ -55,7 +55,7 @@ export async function createStripeCheckoutSession(
     'line_items[0][price_data][product_data][name]': input.productName.slice(0, 250),
   };
   if (input.installment) {
-    form['payment_method_types[0]'] = 'klarna';
+    form['allowed_payment_method_types[0]'] = 'klarna';
     form.billing_address_collection = 'required';
     form['metadata[payment_method]'] = 'klarna';
     const locale = (input.locale ?? '').toLowerCase();
