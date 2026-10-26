@@ -4284,6 +4284,16 @@ model LegacyUnits {
   @@ignore
 }
 
+/// src/lib/club/paymentFrequentSettingsStore.ts
+model ClubPaymentFrequentSettings {
+  clubId       String    @id @map("club_id") @db.VarChar(191)
+  settingsJson String    @map("settings_json") @db.LongText
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.DateTime(0)
+
+  @@map("club_payment_frequent_settings")
+  @@ignore
+}
+
 /// src/lib/club/memberPaymentMethodsStore.ts
 model ClubMemberPaymentMethodsRow {
   entityId     String   @id @map("entity_id") @db.VarChar(191)
