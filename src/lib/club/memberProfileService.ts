@@ -574,6 +574,8 @@ async function loadTeamMemberProfileBundle(opts: {
   clubId: string;
   memberUserId: string;
   viewerUserId: string;
+  /** QR / shared link: anyone with the link may read. Editing stays with the admin or the member. */
+  viewOnly?: boolean;
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const team = await prisma.team.findUnique({
     where: { id: opts.clubId },
@@ -606,7 +608,8 @@ async function loadTeamMemberProfileBundle(opts: {
 
   const isClubAdmin = team.adminId === opts.viewerUserId;
   const isSelf = teamMember.athleteId === opts.viewerUserId;
-  if (!isClubAdmin && !isSelf) {
+  const sharedView = Boolean(opts.viewOnly) && !isClubAdmin && !isSelf;
+  if (!isClubAdmin && !isSelf && !sharedView) {
     return { error: 'Access denied', status: 403 };
   }
 
@@ -843,6 +846,8 @@ export async function loadMemberProfileBundle(opts: {
   clubId: string;
   memberUserId: string;
   viewerUserId: string;
+  /** QR / shared link: anyone with the link may read. Editing stays with the admin or the member. */
+  viewOnly?: boolean;
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const club = await prisma.club.findUnique({
     where: { id: opts.clubId },
@@ -877,7 +882,8 @@ export async function loadMemberProfileBundle(opts: {
 
   const isClubAdmin = club.adminId === opts.viewerUserId;
   const isSelf = clubMember.memberId === opts.viewerUserId;
-  if (!isClubAdmin && !isSelf) {
+  const sharedView = Boolean(opts.viewOnly) && !isClubAdmin && !isSelf;
+  if (!isClubAdmin && !isSelf && !sharedView) {
     return { error: 'Access denied', status: 403 };
   }
 

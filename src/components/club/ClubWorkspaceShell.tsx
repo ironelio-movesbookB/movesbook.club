@@ -444,6 +444,10 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         (onClubDashboard && isManagedEntityAdminUserType(user.userType))),
   );
   const onMembersArchivePath = Boolean(pathname?.startsWith('/clubMembers'));
+  /** QR link: /clubMembers/memberProfile/…?mode=view is readable without that club's login. */
+  const isSharedProfileView =
+    Boolean(pathname?.includes('/clubMembers/memberProfile/')) &&
+    searchParams?.get('mode') === 'view';
   const onManagedArchiveShell = Boolean(
     user && canAccessManagedArchiveShell(user.userType, pathname),
   );
@@ -482,16 +486,18 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [archiveOnlyMembersAccess, clubsLoaded, selectedClubId, activeTab]);
 
   useEffect(() => {
+    if (isSharedProfileView) return;
     if (!loading && !user) {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isSharedProfileView]);
 
   useEffect(() => {
+    if (isSharedProfileView) return;
     if (!user || loading) return;
     if (canUseMembersArchive) return;
     router.push('/my-page');
-  }, [user, loading, router, canUseMembersArchive]);
+  }, [user, loading, router, canUseMembersArchive, isSharedProfileView]);
 
   /**
    * Team / Coach / Group on shared archive routes must stay on My Team (my-entity)
@@ -781,6 +787,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     showEntityBanner ? bannerClub?.id : null,
     bannerClub?.description,
   );
+
+  if (isSharedProfileView && !canUseMembersArchive) {
+    if (loading) return null;
+    return <main className="min-h-screen w-full bg-white">{children}</main>;
+  }
 
   if (loading || !user || !canUseMembersArchive) {
     return null;
