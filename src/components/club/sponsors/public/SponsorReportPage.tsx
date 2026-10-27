@@ -4,12 +4,30 @@ import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, Eye, Image as ImageIcon, Layers, MousePointerClick, Printer, type LucideIcon } from 'lucide-react';
 import type { SponsorReportData } from '@/lib/club/sponsors/sponsorPublicService';
 import { SPONSOR_SECTIONS, type SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
+import { sponsorHeaderBackground } from '@/lib/club/sponsors/sponsorKitSettings';
 import {
   SponsorLanguageSelect,
   initialSponsorPageLanguage,
   makeSponsorT,
   sectionLabel,
 } from '@/components/club/sponsors/public/sponsorPublicShared';
+
+/**
+ * Print / "save as PDF": keep the colors of the bars and cards (browsers drop backgrounds by default),
+ * print the header on white with black text, and never split a card between two pages.
+ */
+const PRINT_CSS = `
+@page { size: A4; margin: 12mm; }
+@media print {
+  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+  .spr-root { display: block !important; min-height: 0 !important; background: #fff !important; }
+  .spr-root, .spr-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .spr-header { background: #fff !important; background-image: none !important; color: #000 !important; border-bottom: 2px solid #1e40af; }
+  .spr-header * { color: #000 !important; }
+  .spr-root section, .spr-root tr { break-inside: avoid; page-break-inside: avoid; }
+  .spr-root .shadow-sm { box-shadow: none !important; border: 1px solid #e2e8f0; }
+}
+`;
 
 function formatDate(ymd: string, lang: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -88,8 +106,12 @@ export default function SponsorReportPage({ token }: { token: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 print:bg-white">
-      <header className="bg-gradient-to-r from-slate-900 to-indigo-800 text-white print:bg-none print:text-slate-900">
+    <div className="spr-root min-h-screen bg-slate-100 text-slate-900 print:block print:min-h-0 print:bg-white">
+      <style>{PRINT_CSS}</style>
+      <header
+        className="spr-header text-white print:block print:bg-white print:text-black"
+        style={sponsorHeaderBackground(data.header, org.bannerUrl, 'linear-gradient(rgba(15,23,42,.7), rgba(30,58,138,.75))')}
+      >
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
             {org.logoUrl ? (
@@ -111,7 +133,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
           </div>
         </div>
         <div className="mx-auto max-w-5xl px-5 pb-8 pt-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-blue-200 print:text-slate-500">
+          <div className="text-xs font-semibold uppercase tracking-wider text-blue-200 print:text-black">
             {t('spr_title')}
           </div>
           <div className="mt-2 flex items-center gap-4">
@@ -121,13 +143,13 @@ export default function SponsorReportPage({ token }: { token: string }) {
             ) : null}
             <div>
               <h1 className="text-3xl font-extrabold">{sponsor.name}</h1>
-              <p className="text-blue-100 print:text-slate-600">{t('spr_with_club', { club: org.name })}</p>
+              <p className="text-blue-100 print:text-black">{t('spr_with_club', { club: org.name })}</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-5 py-6">
+      <main className="mx-auto block max-w-5xl space-y-6 px-5 py-6 print:block print:max-w-none print:px-0">
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
           <div className="mr-auto">
             <div className="text-xs font-semibold uppercase text-slate-500">{t('spr_period')}</div>

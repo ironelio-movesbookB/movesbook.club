@@ -38,6 +38,11 @@ export const SPONSOR_PUBLIC_TEXTS: Record<string, { en: string; it: string }> = 
   spk_touch_email: { en: 'Automatic emails', it: 'Email automatiche' },
   spk_views_30: { en: 'Sponsor views in the last 30 days', it: 'Visualizzazioni sponsor negli ultimi 30 giorni' },
   spk_clicks_30: { en: 'Sponsor clicks in the last 30 days', it: 'Clic sugli sponsor negli ultimi 30 giorni' },
+  spk_where_title: { en: 'Where your brand will be displayed', it: 'Dove sarà mostrato il tuo brand' },
+  spk_where_text: {
+    en: 'Choose one or more of these sections, with your logo or your banner.',
+    it: 'Scegli una o più di queste sezioni, con il tuo logo o il tuo banner.',
+  },
   spk_transparency_title: { en: 'Total transparency', it: 'Trasparenza totale' },
   spk_transparency_text: {
     en: 'You always know where your brand appears, how many people see it and how many click it.',
