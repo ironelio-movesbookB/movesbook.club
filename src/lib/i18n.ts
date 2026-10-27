@@ -1163,6 +1163,7 @@ export interface LanguageStrings {
         'news_related_articles': 'Related Articles',
         'news_share': 'Share',
         'news_share_article': 'Share Article',
+        'news_edit_article_btn': 'Edit article',
         'news_post_to_movesbook': 'Post on Movesbook',
         'news_back_to_list': 'Back to News List',
         'news_back_to_news': 'Back to News',

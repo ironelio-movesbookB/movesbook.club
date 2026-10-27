@@ -13,6 +13,7 @@ import {
   clampStartRow,
   findOgpArticleForSponsor,
   resolveSponsorImage,
+  toSponsorDateInput,
   type OgpSponsor,
   type OgpSponsorLinkTarget,
   type OgpSponsorSettings,
@@ -108,6 +109,8 @@ export default function OgpSponsorsSettingsModal({
   const [intervalRows, setIntervalRows] = useState(12);
   const [delaySeconds, setDelaySeconds] = useState(5);
   const [enabled, setEnabled] = useState(true);
+  const [enabledFrom, setEnabledFrom] = useState('');
+  const [enabledTo, setEnabledTo] = useState('');
   const [drafts, setDrafts] = useState<DraftSponsor[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +122,8 @@ export default function OgpSponsorsSettingsModal({
     setIntervalRows(clampIntervalRows(initial?.intervalRows ?? 12));
     setDelaySeconds(Math.round(clampDelayMs(initial?.delayMs ?? SPONSOR_DELAY_MS_DEFAULT) / 1000));
     setEnabled(initial?.enabled !== false);
+    setEnabledFrom(toSponsorDateInput(initial?.enabledFrom));
+    setEnabledTo(toSponsorDateInput(initial?.enabledTo));
     setDrafts(toDrafts(initial?.sponsors ?? [], ogpArticles));
     setError(null);
     setSaving(false);
@@ -164,6 +169,9 @@ export default function OgpSponsorsSettingsModal({
     setSaving(true);
     setError(null);
     try {
+      if (enabledFrom && enabledTo && enabledFrom > enabledTo) {
+        throw new Error('Enabled from must be on or before Enabled to.');
+      }
       const sponsors = [];
       for (const draft of drafts) {
         let image = draft.file ? await uploadSponsorImage(draft.file) : draft.image.trim();
@@ -206,6 +214,8 @@ export default function OgpSponsorsSettingsModal({
           intervalRows: clampIntervalRows(intervalRows),
           delayMs: clampDelayMs(delaySeconds * 1000),
           enabled,
+          enabledFrom: enabledFrom || null,
+          enabledTo: enabledTo || null,
           sponsors,
         }),
       });
@@ -234,12 +244,12 @@ export default function OgpSponsorsSettingsModal({
         className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center p-4 border-b border-gray-200 gap-3">
-          <h2 id="ogp-sponsors-title" className="text-lg font-semibold text-gray-900">
-            Sponsored News
-          </h2>
-          <div className="flex items-center gap-3 shrink-0">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+        <div className="relative p-4 pr-12 border-b border-gray-200 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h2 id="ogp-sponsors-title" className="text-lg font-semibold text-gray-900 shrink-0">
+              Sponsored News
+            </h2>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none mr-1">
               <input
                 type="checkbox"
                 checked={enabled}
@@ -247,15 +257,34 @@ export default function OgpSponsorsSettingsModal({
               />
               Display all sponsors
             </label>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 rounded-lg text-gray-500 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
+          <div className="inline-flex flex-wrap items-center gap-1.5 text-sm text-gray-700">
+            <span className="font-medium whitespace-nowrap">Enabled from</span>
+            <input
+              type="date"
+              value={enabledFrom}
+              onChange={(e) => setEnabledFrom(e.target.value)}
+              className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white"
+              aria-label="Sponsors enabled from date"
+            />
+            <span className="whitespace-nowrap">to</span>
+            <input
+              type="date"
+              value={enabledTo}
+              onChange={(e) => setEnabledTo(e.target.value)}
+              min={enabledFrom || undefined}
+              className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white"
+              aria-label="Sponsors enabled to date"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 p-1 rounded-lg text-gray-500 hover:bg-gray-100"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-5">

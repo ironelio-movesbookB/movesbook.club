@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { ArrowLeft, Share2, Globe, Calendar, User, Facebook, Twitter, Linkedin, MessageCircle, Send, Link2, Check } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { deserializeMultiLanguageContent, getContentForLanguage } from '@/lib/news/contentParser';
+import { resolveIsSuperAdminFromStorage } from '@/lib/panelSession';
 import SocialShareModal from './SocialShareModal';
 import PostToMovesbookModal from './PostToMovesbookModal';
 import NewsComments from './NewsComments';
@@ -85,11 +86,20 @@ export default function NewsDetail({ newsId }: NewsDetailProps) {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [postToMovesbookModalOpen, setPostToMovesbookModalOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const hasFetchedLanguagesRef = useRef(false);
   const hasFetchedNewsRef = useRef(false);
   const fetchingNewsRef = useRef(false);
   const currentNewsIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    try {
+      setIsSuperAdmin(resolveIsSuperAdminFromStorage());
+    } catch {
+      setIsSuperAdmin(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (hasFetchedLanguagesRef.current) return;
@@ -306,6 +316,16 @@ export default function NewsDetail({ newsId }: NewsDetailProps) {
                   ))}
                 </select>
               </div>
+            )}
+
+            {isSuperAdmin && (
+              <Link
+                href={`/news-by-movesbook/edit/${news.id}`}
+                className="flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors w-full sm:w-auto"
+                aria-label={t('news_edit_article_btn')}
+              >
+                {t('news_edit_article_btn')}
+              </Link>
             )}
 
             {news.settings[0]?.reshare && !news.reshareDisabled && (

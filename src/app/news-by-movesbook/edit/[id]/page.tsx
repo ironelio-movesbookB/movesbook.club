@@ -7,7 +7,8 @@ import dynamic from 'next/dynamic';
 import { ArrowLeft, Save, Upload, X, CheckCircle, AlertCircle, Settings, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { SPORTS_LIST } from '@/constants/moveframe.constants';
+import { PROFILE_SPORT_OPTIONS } from '@/lib/profileSports';
+import { resolveIsSuperAdminFromStorage } from '@/lib/panelSession';
 import { phpUnserialize } from '@/lib/news/phpUnserialize';
 import { DOCUMENT_TYPES, PRIORITY_OPTIONS, DISPLAY_MODE_OPTIONS } from '@/lib/news/mappings';
 import { COUNTRIES_WITH_CODES } from '@/lib/news/countries';
@@ -197,14 +198,21 @@ export default function EditNewsPage() {
       try {
         let token: string | null = null;
         let currentUserId: string | null = null;
+        let canEditAnyArticle = false;
         try {
           token = localStorage.getItem('token') || localStorage.getItem('adminToken');
           const adminUserData = localStorage.getItem('adminUser');
           if (adminUserData) {
             const adminUser = JSON.parse(adminUserData);
             currentUserId = adminUser.id;
+            canEditAnyArticle =
+              resolveIsSuperAdminFromStorage(adminUser) || adminUser.userType === 'ADMIN';
           } else if (user) {
             currentUserId = user.id;
+            canEditAnyArticle = user.userType === 'ADMIN';
+          }
+          if (!canEditAnyArticle) {
+            canEditAnyArticle = resolveIsSuperAdminFromStorage();
           }
         } catch (error) {
           console.error('Error accessing localStorage:', error);
@@ -235,7 +243,13 @@ export default function EditNewsPage() {
 
         const newsData = await res.json();
         
-        if (currentUserId && newsData.userId !== currentUserId) {
+        // Super Admin / Admin can edit any article from News Archive
+        if (
+          !canEditAnyArticle &&
+          currentUserId &&
+          newsData.userId &&
+          newsData.userId !== currentUserId
+        ) {
           setLoadingNews(false);
           router.push('/news-by-movesbook/indexall');
           return;
@@ -419,7 +433,10 @@ export default function EditNewsPage() {
     }
   }, [ogData]);
 
-  const handleFetchOGTags = async (e?: React.MouseEvent | React.FormEvent) => {
+  const handleFetchOGTags = async (
+    e?: React.MouseEvent | React.FormEvent,
+    urlOverride?: string,
+  ) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -428,7 +445,8 @@ export default function EditNewsPage() {
       }
     }
 
-    const url = formData.internetLink.trim();
+    // Prefer explicit URL (e.g. from paste) — formData can be stale in setTimeout closures
+    const url = (urlOverride ?? formData.internetLink).trim();
     if (!url) {
       setOgError('Please enter a URL first');
       return;
@@ -439,10 +457,12 @@ export default function EditNewsPage() {
     setOgData(null);
 
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
       const res = await fetch('/api/news/fetch-og-tags', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ url }),
       });
@@ -454,7 +474,9 @@ export default function EditNewsPage() {
         } catch {
           errorData = { message: `HTTP ${res.status}: ${res.statusText}` };
         }
-        throw new Error(errorData.message || `HTTP ${res.status}: ${res.statusText}`);
+        throw new Error(
+          errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`,
+        );
       }
 
       const data = await res.json();
@@ -1332,15 +1354,21 @@ export default function EditNewsPage() {
                         type="url"
                         value={formData.internetLink}
                         onChange={(e) => {
-                          setFormData({ ...formData, internetLink: e.target.value });
+                          setFormData((prev) => ({ ...prev, internetLink: e.target.value }));
                           setOgError(null);
                           setOgData(null);
                         }}
-                        onPaste={async (e) => {
-                          const pastedText = e.clipboardData.getData('text');
+                        onPaste={(e) => {
+                          const pastedText = e.clipboardData.getData('text').trim();
                           if (pastedText && (pastedText.startsWith('http://') || pastedText.startsWith('https://'))) {
+                            // Prevent browser append (avoids duplicated URL when field already has a value)
+                            e.preventDefault();
+                            setFormData((prev) => ({ ...prev, internetLink: pastedText }));
+                            setOgError(null);
+                            setOgData(null);
+                            // Pass pasted URL directly — avoid stale formData from the delayed auto-fetch
                             setTimeout(() => {
-                              handleFetchOGTags();
+                              void handleFetchOGTags(undefined, pastedText);
                             }, 200);
                           }
                         }}
@@ -1371,7 +1399,7 @@ export default function EditNewsPage() {
                               setOgError('Please enter a URL first');
                               return;
                             }
-                            handleFetchOGTags(e).catch((err) => {
+                            handleFetchOGTags(e, url).catch((err) => {
                               console.error('Error in handleFetchOGTags:', err);
                               setOgError('An error occurred while fetching OG tags. Please try again.');
                             });
@@ -1881,12 +1909,12 @@ export default function EditNewsPage() {
                       <label className="flex items-center gap-2 mb-2">
                         <input
                           type="checkbox"
-                          checked={formData.settings.sports.length === SPORTS_LIST.length}
+                          checked={formData.settings.sports.length === PROFILE_SPORT_OPTIONS.length}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setFormData(prev => ({
                                 ...prev,
-                                settings: { ...prev.settings, sports: [...SPORTS_LIST] }
+                                settings: { ...prev.settings, sports: [...PROFILE_SPORT_OPTIONS] }
                               }));
                             } else {
                               setFormData(prev => ({
@@ -1901,7 +1929,7 @@ export default function EditNewsPage() {
                       </label>
                       <div className="border border-gray-300 rounded-lg p-4 max-h-48 overflow-y-auto bg-white">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {SPORTS_LIST.map((sport) => {
+                          {PROFILE_SPORT_OPTIONS.map((sport) => {
                             const isChecked = formData.settings.sports.includes(sport);
                             return (
                               <label key={sport} className="flex items-center gap-2 text-sm">

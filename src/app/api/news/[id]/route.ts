@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SportType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { requireAuthWithUser } from '@/app/api/news/auth';
+import { isValidSportType } from '@/lib/profileSports';
 import * as serialize from 'php-serialize';
 
 export async function GET(
@@ -275,12 +278,17 @@ export async function PUT(
       });
 
       if (settings.sports && Array.isArray(settings.sports)) {
-        await prisma.newsSettingSport.createMany({
-          data: settings.sports.map((sport: string) => ({
-            newsSettingId: newsSetting.id,
-            sport: sport as any,
-          })),
-        });
+        const validSports = settings.sports.filter(
+          (sport: string): sport is SportType => isValidSportType(sport)
+        );
+        if (validSports.length > 0) {
+          await prisma.newsSettingSport.createMany({
+            data: validSports.map((sport) => ({
+              newsSettingId: newsSetting.id,
+              sport,
+            })),
+          });
+        }
       }
 
       if (settings.roles && Array.isArray(settings.roles)) {
@@ -391,19 +399,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const decoded = verifyToken(token);
-    if (!decoded || !decoded.userId) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const auth = await requireAuthWithUser(request);
+    if (auth instanceof NextResponse) return auth;
 
     const { id } = await params;
-    const userId = decoded.userId;
 
     const existingNews = await prisma.news.findUnique({
       where: { id },
@@ -414,7 +413,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'News not found' }, { status: 404 });
     }
 
-    if (existingNews.userId !== userId) {
+    const isOwner = existingNews.userId === auth.userId;
+    if (!isOwner && !auth.isAdmin && !auth.isSuperAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

@@ -294,7 +294,7 @@ function ClubDashboardContent() {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <ClubNewsArchivePanel
-          title="News"
+          title="My News"
           onClose={() => setMyPageNewsPanel(null)}
         />
       </div>
@@ -402,7 +402,7 @@ function ClubDashboardContent() {
             <ClubNewsArchivePanel
               clubId={(selectedClubId ?? activeClub?.id)!}
               sharedWithClubOnly
-              title="News"
+              title="My News"
               onClose={() => setClubMainPanel('default')}
             />
           ) : (
@@ -459,7 +459,7 @@ function ClubDashboardContent() {
       ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'mb-news' ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <ClubNewsArchivePanel
-            title="News"
+            title="My News"
             onClose={() => setClubMainPanel('default')}
           />
         </div>

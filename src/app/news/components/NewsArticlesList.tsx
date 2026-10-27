@@ -29,6 +29,7 @@ import OgpSponsoredCard from './OgpSponsoredCard';
 import OgpSponsorsSettingsModal from './OgpSponsorsSettingsModal';
 import {
   OGP_CARDS_PER_ROW,
+  isSponsorDisplayActive,
   maxSponsorCols,
   paginateWithSponsors,
   type OgpSponsorSettings,
@@ -194,29 +195,25 @@ function getExpiresAtMs(a: ArticlePasted): number | null {
   }
 }
 
+/** No Duration (= null/empty) means unlimited — not expired. */
 function isNotExpired(a: ArticlePasted): boolean {
   const expMs = getExpiresAtMs(a);
   if (expMs == null) return true;
   return expMs >= Date.now();
 }
 
-function isExpiredOrNoExpiry(a: ArticlePasted): boolean {
-  const expMs = getExpiresAtMs(a);
-  if (expMs == null) return true;
-  return expMs < Date.now();
-}
-
 function hasExpirationDateSet(a: ArticlePasted): boolean {
   return getExpiresAtMs(a) != null;
 }
 
-/** True when an expiration date is set and that date is in the past. */
+/** True only when an expiration date is set and that date is in the past. */
 function isPastExpired(a: ArticlePasted): boolean {
   return hasExpirationDateSet(a) && !isNotExpired(a);
 }
 
+/** Active for normal viewers: has News Settings, not deleted, and not past expiry (unlimited OK). */
 function isActiveForNormalUser(a: ArticlePasted): boolean {
-  return hasExpirationDateSet(a) && isNotExpired(a) && !a.deletedAt && hasAnyVisibilitySettings(a);
+  return isNotExpired(a) && !a.deletedAt && hasAnyVisibilitySettings(a);
 }
 
 function groupToFeedItem(g: OgpNewsGroupCard): ArticlePasted {
@@ -401,7 +398,7 @@ interface NewsArticlesListProps {
   hideOgpGroups?: boolean;
   /** Start with Single News checked so the default feed is singles only. */
   preferSingleNewsDefault?: boolean;
-  /** Club member OGP News: checkbox reads "Show deleted by me" instead of "Show also deleted". */
+  /** Normal user / club member: checkbox reads "Show deleted by me" (own deleted only). */
   showDeletedByMeLabel?: boolean;
   /**
    * Club OGP News: checkbox to show/hide Club Global News shares and OGPs
@@ -615,6 +612,7 @@ export default function NewsArticlesList({
   const [globalNewsLoadingId, setGlobalNewsLoadingId] = useState<string | null>(null);
   const [featuredLoadingId, setFeaturedLoadingId] = useState<string | null>(null);
   const [showFeaturedInEvidence, setShowFeaturedInEvidence] = useState(true);
+  const [showNewsHeadlines, setShowNewsHeadlines] = useState(true);
   const [viewingHeadlines, setViewingHeadlines] = useState(false);
   const [headlinesDisplayPicture, setHeadlinesDisplayPicture] = useState(true);
   const [viewCountOverrides, setViewCountOverrides] = useState<Record<string, number>>({});
@@ -647,6 +645,11 @@ export default function NewsArticlesList({
     try {
       const stored = localStorage.getItem('ogpShowFeaturedInEvidence');
       if (stored === 'false') setShowFeaturedInEvidence(false);
+      const headlinesStored = localStorage.getItem('ogpShowNewsHeadlines');
+      if (headlinesStored === 'false') {
+        setShowNewsHeadlines(false);
+        setViewingHeadlines(false);
+      }
     } catch {
       /* ignore */
     }
@@ -695,6 +698,16 @@ export default function NewsArticlesList({
     setShowFeaturedInEvidence(checked);
     try {
       localStorage.setItem('ogpShowFeaturedInEvidence', checked ? 'true' : 'false');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleShowNewsHeadlinesChange = useCallback((checked: boolean) => {
+    setShowNewsHeadlines(checked);
+    if (!checked) setViewingHeadlines(false);
+    try {
+      localStorage.setItem('ogpShowNewsHeadlines', checked ? 'true' : 'false');
     } catch {
       /* ignore */
     }
@@ -1007,17 +1020,17 @@ export default function NewsArticlesList({
   ]);
 
   const filtered = useMemo(() => {
-    const isClubGlobalOrOtherClubShare = (a: ArticlePasted) =>
-      a.inClubGlobalNews === true || a.isFromOtherClub === true;
-
     const applyArticleFilters = (source: ArticlePasted[]) => {
       let list = source;
+      // When "Club Global & other clubs" is off, hide other clubs' OGPs only.
+      // Do NOT hide this club's own items that were also promoted to Club Global News
+      // (inClubGlobalNews) — they must stay in their topic/list position.
       if (
         enableClubGlobalAndOtherClubsToggle &&
         !showClubGlobalAndOtherClubs &&
         postedByFilter !== 'clubGlobalNews'
       ) {
-        list = list.filter((a) => !isClubGlobalOrOtherClubShare(a));
+        list = list.filter((a) => a.isFromOtherClub !== true);
       }
       if (postedByFilter === 'me' && canFilterByMyOgNews) {
         list = list.filter(canEditAsCreator);
@@ -1038,7 +1051,7 @@ export default function NewsArticlesList({
           list = list.filter((a) => !a.deletedAt && isNotExpired(a));
         } else {
           if (showExpired) {
-            list = list.filter(isExpiredOrNoExpiry);
+            list = list.filter(isPastExpired);
             if (!showDeletedTemporarily) {
               list = list.filter((a) => !a.deletedAt);
             }
@@ -1058,7 +1071,7 @@ export default function NewsArticlesList({
             return true;
           }
           const isActive = isActiveForNormalUser(a);
-          const includeExpired = showExpired && isExpiredOrNoExpiry(a) && !a.deletedAt;
+          const includeExpired = showExpired && isPastExpired(a) && !a.deletedAt;
           const includeDeleted =
             showDeletedTemporarily && !!a.deletedAt && !showDeletedByMeLabel;
           return isActive || includeExpired || includeDeleted;
@@ -1175,9 +1188,8 @@ export default function NewsArticlesList({
         !showClubGlobalAndOtherClubs &&
         postedByFilter !== 'clubGlobalNews'
       ) {
-        groups = groups.filter(
-          (a) => !(a.inClubGlobalNews === true || a.isFromOtherClub === true),
-        );
+        // Same as articles: other-club shares only; keep promoted Club Global items.
+        groups = groups.filter((a) => a.isFromOtherClub !== true);
       }
       if (postedByFilter === 'me' && canFilterByMyOgNews) {
         groups = groups.filter(canEditAsCreator);
@@ -1190,7 +1202,7 @@ export default function NewsArticlesList({
           groups = groups.filter((a) => !a.deletedAt && isNotExpired(a));
         } else {
           if (showExpired) {
-            groups = groups.filter(isExpiredOrNoExpiry);
+            groups = groups.filter(isPastExpired);
             if (!showDeletedTemporarily) {
               groups = groups.filter((a) => !a.deletedAt);
             }
@@ -1211,7 +1223,7 @@ export default function NewsArticlesList({
             return true;
           }
           const isActive = isActiveForNormalUser(a);
-          const includeExpired = showExpired && isExpiredOrNoExpiry(a) && !a.deletedAt;
+          const includeExpired = showExpired && isPastExpired(a) && !a.deletedAt;
           const includeDeleted =
             showDeletedTemporarily && !!a.deletedAt && !showDeletedByMeLabel;
           return isActive || includeExpired || includeDeleted;
@@ -1343,6 +1355,7 @@ export default function NewsArticlesList({
     !viewingOgpGroup &&
     !isAddingToGroup &&
     !viewingHeadlines &&
+    showNewsHeadlines &&
     headlinesArticles.length > 0;
 
   const showSponsors =
@@ -1350,7 +1363,7 @@ export default function NewsArticlesList({
     !viewingOgpGroup &&
     !isAddingToGroup &&
     !viewingHeadlines &&
-    sponsorSettings?.enabled !== false &&
+    isSponsorDisplayActive(sponsorSettings) &&
     (sponsorSettings?.sponsors.length ?? 0) > 0;
 
   const getHeadlineViewCount = useCallback(
@@ -2348,18 +2361,32 @@ export default function NewsArticlesList({
               </span>
             </label>
             {isNewsOgp && (
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showFeaturedInEvidence}
-                  onChange={(e) => handleShowFeaturedInEvidenceChange(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-lime-400 focus:ring-lime-500"
-                  aria-label="Display news card"
-                />
-                <span className="text-lime-300 text-sm whitespace-nowrap font-medium">
-                  Display news card
-                </span>
-              </label>
+              <>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showFeaturedInEvidence}
+                    onChange={(e) => handleShowFeaturedInEvidenceChange(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-lime-400 focus:ring-lime-500"
+                    aria-label="Display news card"
+                  />
+                  <span className="text-lime-300 text-sm whitespace-nowrap font-medium">
+                    Display news card
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showNewsHeadlines}
+                    onChange={(e) => handleShowNewsHeadlinesChange(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-lime-400 focus:ring-lime-500"
+                    aria-label="Display news headlines"
+                  />
+                  <span className="text-lime-300 text-sm whitespace-nowrap font-medium">
+                    Display news headlines
+                  </span>
+                </label>
+              </>
             )}
             {enableClubGlobalAndOtherClubsToggle && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2521,7 +2548,7 @@ export default function NewsArticlesList({
                       ? 'border-2 border-blue-500 bg-sky-100 hover:bg-sky-100/90'
                       : a.deletedAt
                       ? 'border-amber-400 bg-amber-200 hover:bg-amber-300'
-                      : isExpiredOrNoExpiry(a)
+                      : isPastExpired(a)
                         ? 'border-[rgb(255,38,0)] bg-[rgb(255,38,0)]/10 hover:bg-[rgb(255,38,0)]/15'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}

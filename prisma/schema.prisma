@@ -316,6 +316,10 @@ model OgpNewsSponsorSettings {
   delayMs      Int              @default(5000)
   /// When false, all sponsored cards are hidden from the news feed.
   enabled      Boolean          @default(true)
+  /// Inclusive calendar start (date-only); null = no start bound.
+  enabledFrom  DateTime?
+  /// Inclusive calendar end (date-only); null = no end bound.
+  enabledTo    DateTime?
   updatedAt    DateTime         @updatedAt
   sponsors     OgpNewsSponsor[]
 

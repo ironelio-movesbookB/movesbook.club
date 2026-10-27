@@ -9,12 +9,14 @@ import {
   isHttpUrl,
   isSponsorLinkTarget,
   isSponsorSize,
+  parseSponsorDateInput,
   type OgpSponsorLinkTarget,
   type OgpSponsorSize,
 } from '@/lib/news/ogpSponsors';
 import {
   ensureSponsorSettings,
-  serializeSponsorSettings,
+  loadSerializedSponsorSettings,
+  writeSponsorEnabledDates,
 } from '@/lib/news/ogpSponsorStore';
 
 export const dynamic = 'force-dynamic';
@@ -83,8 +85,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireTableSuperAdmin(request);
   if (auth instanceof NextResponse) return auth;
   try {
-    const row = await ensureSponsorSettings();
-    return NextResponse.json(serializeSponsorSettings(row));
+    return NextResponse.json(await loadSerializedSponsorSettings());
   } catch (e) {
     console.error('GET /api/admin/ogp-sponsors', e);
     return NextResponse.json({ error: 'Failed to load sponsored news' }, { status: 500 });
@@ -107,6 +108,35 @@ export async function PUT(request: NextRequest) {
     const intervalRows = clampIntervalRows(body.intervalRows);
     const delayMs = clampDelayMs(body.delayMs ?? (Number(body.delaySeconds) || 0) * 1000);
     const enabled = body.enabled !== false && body.enabled !== 0 && body.enabled !== '0';
+
+    const fromRaw =
+      body.enabledFrom === null || body.enabledFrom === ''
+        ? null
+        : typeof body.enabledFrom === 'string'
+          ? body.enabledFrom.trim()
+          : '';
+    const toRaw =
+      body.enabledTo === null || body.enabledTo === ''
+        ? null
+        : typeof body.enabledTo === 'string'
+          ? body.enabledTo.trim()
+          : '';
+    if (fromRaw !== null && fromRaw !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(fromRaw)) {
+      return NextResponse.json({ error: 'Enabled from must be a valid date (YYYY-MM-DD)' }, { status: 400 });
+    }
+    if (toRaw !== null && toRaw !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(toRaw)) {
+      return NextResponse.json({ error: 'Enabled to must be a valid date (YYYY-MM-DD)' }, { status: 400 });
+    }
+    const enabledFromYmd = fromRaw || null;
+    const enabledToYmd = toRaw || null;
+    if (enabledFromYmd && enabledToYmd && enabledFromYmd > enabledToYmd) {
+      return NextResponse.json(
+        { error: 'Enabled from must be on or before Enabled to' },
+        { status: 400 },
+      );
+    }
+    const enabledFrom = parseSponsorDateInput(enabledFromYmd);
+    const enabledTo = parseSponsorDateInput(enabledToYmd);
 
     const missingImage = parsed.sponsors.filter((s) => !s.image);
     if (missingImage.length > 0) {
@@ -190,8 +220,8 @@ export async function PUT(request: NextRequest) {
       }
     });
 
-    const row = await ensureSponsorSettings();
-    return NextResponse.json(serializeSponsorSettings(row));
+    await writeSponsorEnabledDates(enabledFrom, enabledTo);
+    return NextResponse.json(await loadSerializedSponsorSettings());
   } catch (e) {
     console.error('PUT /api/admin/ogp-sponsors', e);
     return NextResponse.json({ error: 'Failed to save sponsored news' }, { status: 500 });

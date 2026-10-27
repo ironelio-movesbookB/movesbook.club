@@ -641,7 +641,12 @@ export default function NewsOGPPanel({
           clubAdminUsername={user?.username ?? null}
           onArticleSharedClubIdsChange={handleArticleSharedClubIdsChange}
           onArticleClubAudienceModeChange={handleArticleClubAudienceModeChange}
-          showDeletedByMeLabel={filterToClubShared && !isClubAdmin}
+          showDeletedByMeLabel={
+            // Club member on club OGP, or normal user on personal OGP News
+            filterToClubShared
+              ? !isClubAdmin
+              : user?.userType !== 'ADMIN'
+          }
           enableClubGlobalAndOtherClubsToggle={filterToClubShared}
         />
       </div>

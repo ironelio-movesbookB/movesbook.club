@@ -36,8 +36,68 @@ export type OgpSponsorSettings = {
   intervalRows: number;
   delayMs: number;
   enabled: boolean;
+  /** Inclusive YYYY-MM-DD; null/empty = no start bound. */
+  enabledFrom: string | null;
+  /** Inclusive YYYY-MM-DD; null/empty = no end bound. */
+  enabledTo: string | null;
   sponsors: OgpSponsor[];
 };
+
+/** Normalize ISO / Date / YYYY-MM-DD to `YYYY-MM-DD` for `<input type="date">`. */
+export function toSponsorDateInput(value: string | Date | null | undefined): string {
+  if (value == null || value === '') return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const s = String(value).trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  try {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return '';
+    return toSponsorDateInput(d);
+  } catch {
+    return '';
+  }
+}
+
+/** Parse `YYYY-MM-DD` (or empty) to a UTC midnight Date, or null. */
+export function parseSponsorDateInput(value: unknown): Date | null {
+  if (value == null) return null;
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function todayYmd(now = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Whether sponsored cards should appear in the feed right now.
+ * `enabled` must be true; optional from/to are inclusive calendar days (local).
+ */
+export function isSponsorDisplayActive(
+  settings: Pick<OgpSponsorSettings, 'enabled' | 'enabledFrom' | 'enabledTo'> | null | undefined,
+  now = new Date(),
+): boolean {
+  if (!settings || settings.enabled === false) return false;
+  const today = todayYmd(now);
+  const from = toSponsorDateInput(settings.enabledFrom);
+  const to = toSponsorDateInput(settings.enabledTo);
+  if (from && today < from) return false;
+  if (to && today > to) return false;
+  return true;
+}
 
 export type SponsoredPageCell<T> =
   | { kind: 'news'; item: T }

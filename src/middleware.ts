@@ -53,6 +53,8 @@ const publicApiRoutes = [
   '/api/outcome-messages',
   /** Public read APIs (editorial news, shared OGP groups, etc.) */
   '/api/public/',
+  /** OGP News sponsored cards placement — loaded by the news grid without an Authorization header */
+  '/api/news/ogp-sponsors',
   /** Used by admin editors (Settings, subscriptions, recipes) — token is often in localStorage only */
   '/api/translate',
   /** Site texts per language (section languages) — read by every visitor, logged in or not */

@@ -100,21 +100,39 @@ export default function NewsSettingModal({
   useEffect(() => {
     if (isOpen) {
       const s = initialSettings ?? defaultSettings;
+      const nextUserTypes = s.userTypes ?? [];
       const nextCountries = s.countries ?? [];
-      setUserTypes(s.userTypes ?? []);
+      const nextLanguages = s.languages ?? [];
+      const nextSports = s.sports ?? [];
+      setUserTypes(nextUserTypes);
       setCountries(nextCountries);
-      setLanguages(s.languages ?? []);
-      setSports(s.sports ?? []);
+      setLanguages(nextLanguages);
+      setSports(nextSports);
       setExpiresAt(toDateInputValue(s.expiresAt ?? null));
-      setEnableUserTypes((s.userTypes?.length ?? 0) > 0);
-      // Country master = "all selected"; partial/manual picks keep it off.
+      // Masters = "all selected"; partial/manual picks keep them off.
+      const userTypeValues = (options?.userTypes ?? []).map((t) => t.value);
+      const languageValues = (options?.languages ?? []).map((l) => l.value);
+      const sportValues = (options?.sports ?? []).map((sp) => sp.value);
+      setEnableUserTypes(
+        userTypeValues.length > 0 &&
+          nextUserTypes.length === userTypeValues.length &&
+          userTypeValues.every((v) => nextUserTypes.includes(v))
+      );
       setEnableCountries(
         !!options?.countries.length &&
           nextCountries.length === options.countries.length &&
           options.countries.every((c) => nextCountries.includes(c))
       );
-      setEnableLanguages((s.languages?.length ?? 0) > 0);
-      setEnableSports((s.sports?.length ?? 0) > 0);
+      setEnableLanguages(
+        languageValues.length > 0 &&
+          nextLanguages.length === languageValues.length &&
+          languageValues.every((v) => nextLanguages.includes(v))
+      );
+      setEnableSports(
+        sportValues.length > 0 &&
+          nextSports.length === sportValues.length &&
+          sportValues.every((v) => nextSports.includes(v))
+      );
       setClubAudienceMode(
         isClubOgpAudienceMode(s.clubAudienceMode)
           ? s.clubAudienceMode
@@ -125,15 +143,54 @@ export default function NewsSettingModal({
 
   const handleSave = () => {
     onSave({
-      userTypes: enableUserTypes ? userTypes : [],
-      // Persist whatever countries are checked (including manual picks while master is off).
+      // Persist whatever is checked (including manual picks while master is off).
+      userTypes,
       countries,
-      languages: enableLanguages ? languages : [],
-      sports: enableSports ? sports : [],
+      languages,
+      sports,
       expiresAt: expiresAt.trim() || null,
       ...(showClubAudienceRadios ? { clubAudienceMode } : {}),
     });
     onClose();
+  };
+
+  const syncSportsMaster = (next: string[]) => {
+    if (!options) {
+      setEnableSports(false);
+      return;
+    }
+    const all = (options.sports ?? []).map((s) => s.value);
+    setEnableSports(
+      all.length > 0 &&
+        next.length === all.length &&
+        all.every((v) => next.includes(v))
+    );
+  };
+
+  const syncUserTypesMaster = (next: string[]) => {
+    if (!options) {
+      setEnableUserTypes(false);
+      return;
+    }
+    const all = (options.userTypes ?? []).map((t) => t.value);
+    setEnableUserTypes(
+      all.length > 0 &&
+        next.length === all.length &&
+        all.every((v) => next.includes(v))
+    );
+  };
+
+  const syncLanguagesMaster = (next: string[]) => {
+    if (!options) {
+      setEnableLanguages(false);
+      return;
+    }
+    const all = (options.languages ?? []).map((l) => l.value);
+    setEnableLanguages(
+      all.length > 0 &&
+        next.length === all.length &&
+        all.every((v) => next.includes(v))
+    );
   };
 
   const syncCountryMaster = (next: string[]) => {
@@ -146,6 +203,33 @@ export default function NewsSettingModal({
         next.length === options.countries.length &&
         options.countries.every((c) => next.includes(c))
     );
+  };
+
+  const toggleSport = (value: string) => {
+    if (!filtersEnabled) return;
+    const next = sports.includes(value)
+      ? sports.filter((x) => x !== value)
+      : [...sports, value];
+    setSports(next);
+    syncSportsMaster(next);
+  };
+
+  const toggleUserType = (value: string) => {
+    if (!filtersEnabled) return;
+    const next = userTypes.includes(value)
+      ? userTypes.filter((x) => x !== value)
+      : [...userTypes, value];
+    setUserTypes(next);
+    syncUserTypesMaster(next);
+  };
+
+  const toggleLanguage = (value: string) => {
+    if (!filtersEnabled) return;
+    const next = languages.includes(value)
+      ? languages.filter((x) => x !== value)
+      : [...languages, value];
+    setLanguages(next);
+    syncLanguagesMaster(next);
   };
 
   const toggleCountry = (value: string) => {
@@ -166,12 +250,6 @@ export default function NewsSettingModal({
     });
     onDeleteSettings?.();
     onClose();
-  };
-
-  const toggle = (list: string[], value: string, set: (v: string[]) => void) => {
-    if (!filtersEnabled) return;
-    if (list.includes(value)) set(list.filter((x) => x !== value));
-    else set([...list, value]);
   };
 
   if (!isOpen) return null;
@@ -274,7 +352,7 @@ export default function NewsSettingModal({
               }`}
               aria-disabled={!filtersEnabled}
             >
-              {/* Users Sports */}
+              {/* Users Sports: master selects/clears all; individuals stay editable when master is off */}
               <div>
                 <label className="flex items-center gap-2 mb-2">
                   <input
@@ -284,7 +362,7 @@ export default function NewsSettingModal({
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setEnableSports(checked);
-                      if (checked) setSports((options.sports ?? []).map((s) => s.value));
+                      setSports(checked ? (options.sports ?? []).map((s) => s.value) : []);
                     }}
                     className="rounded border-gray-300"
                   />
@@ -297,8 +375,8 @@ export default function NewsSettingModal({
                         <input
                           type="checkbox"
                           checked={sports.includes(s.value)}
-                          onChange={() => toggle(sports, s.value, setSports)}
-                          disabled={!filtersEnabled || !enableSports}
+                          onChange={() => toggleSport(s.value)}
+                          disabled={!filtersEnabled}
                           className="rounded border-gray-300"
                         />
                         {s.label}
@@ -308,7 +386,7 @@ export default function NewsSettingModal({
                 </div>
               </div>
 
-              {/* Users Type */}
+              {/* Users Type: master selects/clears all; individuals stay editable when master is off */}
               <div>
                 <label className="flex items-center gap-2 mb-2">
                   <input
@@ -318,7 +396,7 @@ export default function NewsSettingModal({
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setEnableUserTypes(checked);
-                      if (checked) setUserTypes((options.userTypes ?? []).map((t) => t.value));
+                      setUserTypes(checked ? (options.userTypes ?? []).map((t) => t.value) : []);
                     }}
                     className="rounded border-gray-300"
                   />
@@ -331,8 +409,8 @@ export default function NewsSettingModal({
                         <input
                           type="checkbox"
                           checked={userTypes.includes(t.value)}
-                          onChange={() => toggle(userTypes, t.value, setUserTypes)}
-                          disabled={!filtersEnabled || !enableUserTypes}
+                          onChange={() => toggleUserType(t.value)}
+                          disabled={!filtersEnabled}
                           className="rounded border-gray-300"
                         />
                         {t.label}
@@ -342,7 +420,7 @@ export default function NewsSettingModal({
                 </div>
               </div>
 
-              {/* Language */}
+              {/* Language: master selects/clears all; individuals stay editable when master is off */}
               <div>
                 <label className="flex items-center gap-2 mb-2">
                   <input
@@ -352,7 +430,7 @@ export default function NewsSettingModal({
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setEnableLanguages(checked);
-                      if (checked) setLanguages((options.languages ?? []).map((l) => l.value));
+                      setLanguages(checked ? (options.languages ?? []).map((l) => l.value) : []);
                     }}
                     className="rounded border-gray-300"
                   />
@@ -365,8 +443,8 @@ export default function NewsSettingModal({
                         <input
                           type="checkbox"
                           checked={languages.includes(l.value)}
-                          onChange={() => toggle(languages, l.value, setLanguages)}
-                          disabled={!filtersEnabled || !enableLanguages}
+                          onChange={() => toggleLanguage(l.value)}
+                          disabled={!filtersEnabled}
                           className="rounded border-gray-300"
                         />
                         {l.label}
