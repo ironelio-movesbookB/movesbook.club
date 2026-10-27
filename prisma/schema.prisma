@@ -2543,6 +2543,10 @@ model OrgSponsorContractRow {
   notes            String?   @db.Text
   pdf_name         String?   @db.VarChar(191)
   pdf_path         String?   @db.VarChar(255)
+  invoice_number   String    @default("") @db.VarChar(64)
+  invoice_date     DateTime? @db.Date
+  invoice_name     String?   @db.VarChar(191)
+  invoice_path     String?   @db.VarChar(255)
   reminder_sent_at DateTime? @db.DateTime(0)
   created_at       DateTime  @default(now()) @db.DateTime(3)
 
@@ -2552,15 +2556,18 @@ model OrgSponsorContractRow {
 }
 
 model OrgSponsorPaymentRow {
-  id               String    @id @db.VarChar(191)
-  sponsor_id       String    @db.VarChar(191)
-  amount           Decimal   @default(0) @db.Decimal(12, 2)
-  due_date         DateTime  @db.Date
-  reminder_days    Int       @default(7)
-  note             String    @default("") @db.VarChar(255)
-  paid_at          DateTime? @db.Date
-  reminder_sent_at DateTime? @db.DateTime(0)
-  created_at       DateTime  @default(now()) @db.DateTime(3)
+  id                 String    @id @db.VarChar(191)
+  sponsor_id         String    @db.VarChar(191)
+  amount             Decimal   @default(0) @db.Decimal(12, 2)
+  due_date           DateTime  @db.Date
+  reminder_days      Int       @default(7)
+  note               String    @default("") @db.VarChar(255)
+  paid_at            DateTime? @db.Date
+  pay_mode           String    @default("") @db.VarChar(64)
+  operator_username  String    @default("") @db.VarChar(191)
+  annotations        String?   @db.Text
+  reminder_sent_at   DateTime? @db.DateTime(0)
+  created_at         DateTime  @default(now()) @db.DateTime(3)
 
   @@index([sponsor_id], map: "org_sponsor_payments_sponsor_idx")
   @@map("org_sponsor_payments")
@@ -2579,6 +2586,30 @@ model OrgSponsorEventRow {
   @@ignore
 }
 
+/// Kit/report header + report cadence (Marketing → Sponsors settings).
+model OrgSponsorSettingsRow {
+  workspace_kind       String   @db.VarChar(10)
+  workspace_id         String   @db.VarChar(191)
+  use_banner           Boolean  @default(true)
+  gradient_from        String   @default("#0f172a") @db.VarChar(9)
+  gradient_to          String   @default("#1e40af") @db.VarChar(9)
+  report_interval_days Int      @default(0)
+  updated_at           DateTime @default(now()) @db.DateTime(3)
+
+  @@id([workspace_kind, workspace_id])
+  @@map("org_sponsor_settings")
+  @@ignore
+}
+
+/// Last auto-report send timestamp per sponsor.
+model OrgSponsorReportLogRow {
+  sponsor_id   String    @id @db.VarChar(191)
+  last_sent_at DateTime? @db.DateTime(3)
+
+  @@map("org_sponsor_report_log")
+  @@ignore
+}
+
 /// Club / team public website (Marketing → Website). Raw SQL in `src/lib/club/website/websiteService.ts`.
 model OrgWebsiteRow {
   workspace_kind    String   @db.VarChar(10)
@@ -2592,6 +2623,7 @@ model OrgWebsiteRow {
   donation_enabled  Boolean  @default(false)
   donation_text     String?  @db.Text
   donation_tax_code String   @default("") @db.VarChar(32)
+  donation_image    String   @default("") @db.VarChar(500)
   socials_json      String?  @db.Text
   updated_at        DateTime @default(now()) @db.DateTime(3)
 
