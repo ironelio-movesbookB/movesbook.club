@@ -64,7 +64,6 @@ export default function QuickRegisterForm() {
   const [sport, setSport] = useState('');
   const [promocode, setPromocode] = useState(initialPromocode);
   const [inviterUsername, setInviterUsername] = useState(inviterFromUrl);
-  const [confirmInviterUsername, setConfirmInviterUsername] = useState(inviterFromUrl);
   const [movesbookOfficialEmail, setMovesbookOfficialEmail] = useState('admin@movesbook.com');
 
   const [versions, setVersions] = useState<VersionOption[]>([]);
@@ -408,7 +407,6 @@ export default function QuickRegisterForm() {
         if (data.movesbookOfficialEmail) setMovesbookOfficialEmail(data.movesbookOfficialEmail);
         if (data.inviterUsername) {
           setInviterUsername(data.inviterUsername);
-          setConfirmInviterUsername(data.inviterUsername);
         }
         if (typeof data.inviterReadonly === 'boolean') setInviterReadonly(data.inviterReadonly);
         if (data.promocodeAllowedVersionIds) setPromocodeVersionIds(data.promocodeAllowedVersionIds);
@@ -705,7 +703,7 @@ export default function QuickRegisterForm() {
           sport,
           promocode: code,
           inviter_username: inviterUsername.trim() || undefined,
-          confirm_inviter_username: confirmInviterUsername.trim() || undefined,
+          confirm_inviter_username: inviterUsername.trim() || undefined,
           invite_by_movesbook: inviteByMovesbook,
           origin_email: originEmail || undefined,
           disccount_hidden: discountHidden,
@@ -1205,7 +1203,7 @@ export default function QuickRegisterForm() {
                   </>
                 ) : (
                   <>
-                    <div className="qr-aligned-row">
+                    <div className="qr-aligned-row qr-inviter-row">
                       <span className="qr-row-label">{t.usernameOfWhoInvitedYou}</span>
                       <input
                         type="text"
@@ -1216,17 +1214,6 @@ export default function QuickRegisterForm() {
                         id="inviter_username"
                         readOnly={inviterReadonly}
                         onChange={(e) => setInviterUsername(e.target.value)}
-                      />
-                      <span className="qr-row-label">{t.retypeUsername}</span>
-                      <input
-                        type="text"
-                        name="confirm_inviter_username"
-                        className="qr-row-input input-highlight"
-                        style={{ background: inviterReadonly ? '#eee' : undefined }}
-                        value={confirmInviterUsername}
-                        id="confirm_inviter_username"
-                        readOnly={inviterReadonly}
-                        onChange={(e) => setConfirmInviterUsername(e.target.value)}
                       />
                     </div>
                     {inviterReadonly ? (

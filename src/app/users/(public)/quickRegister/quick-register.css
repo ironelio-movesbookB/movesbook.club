@@ -545,11 +545,17 @@
 
 .quick-register-body .qr-aligned-row {
   display: grid;
-  grid-template-columns: var(--qr-label-w) var(--qr-control-w) var(--qr-label-w) var(--qr-control-w);
+  grid-template-columns: var(--qr-label-w) var(--qr-control-w);
   align-items: center;
   column-gap: var(--qr-col-gap);
   row-gap: 10px;
   margin-bottom: 10px;
+}
+
+.quick-register-body .qr-inviter-row {
+  grid-template-columns: max-content minmax(140px, var(--qr-control-w));
+  column-gap: 8px;
+  justify-content: start;
 }
 
 .quick-register-body .qr-row-label {
@@ -572,8 +578,12 @@
   font-weight: normal;
   color: #0d47a1;
   font-size: 14px;
-  margin: 0 0 12px 0;
-  padding-left: calc(var(--qr-label-w) + var(--qr-col-gap));
+  margin: 4px 0 12px 0;
+  padding-left: 0;
+}
+
+.quick-register-body .qr-inviter-row + .qr-note {
+  margin-top: 2px;
 }
 
 .quick-register-body .qr-payment-label {
@@ -588,11 +598,11 @@
 }
 
 .quick-register-body .btn-register-lg {
-  font-size: 18px !important;
+  font-size: 16px !important;
   font-weight: bold;
-  padding: 14px 32px !important;
-  min-width: 140px;
-  min-height: 48px;
+  padding: 10px 22px !important;
+  min-width: 110px;
+  min-height: 40px;
   line-height: 1.2 !important;
 }
 
@@ -617,15 +627,6 @@
 
   .quick-register-body .qr-field-row .qr-hint {
     grid-column: 2;
-  }
-
-  .quick-register-body .qr-aligned-row {
-    grid-template-columns: var(--qr-label-w) var(--qr-control-w);
-  }
-
-  .quick-register-body .qr-aligned-row .qr-row-label:nth-child(3),
-  .quick-register-body .qr-aligned-row .qr-row-input:nth-of-type(2) {
-    grid-column: auto;
   }
 
   .quick-register-body .qr-promo-intro-row {
@@ -750,38 +751,54 @@
 }
 
 .quick-register-body #total-payment-row {
-  padding: 20px;
+  padding: 12px 16px;
   border: 1px solid #000;
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: center;
-  gap: 30px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 16px;
   width: 100%;
   box-sizing: border-box;
   margin-top: 16px;
+  overflow-x: auto;
 }
 
 .quick-register-body #total-payment-row .payment-row-item {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.quick-register-body #total-payment-row .payment-logos {
+  gap: 8px;
+}
+
+.quick-register-body #total-payment-row .payment-logos label {
+  margin-right: 0 !important;
+  white-space: nowrap;
 }
 
 .quick-register-body #total-payment-row .payment-total-input {
   border: 1px solid #000;
-  margin-left: 10px;
+  margin-left: 6px;
   padding: 4px 6px;
   font-weight: normal;
   color: #000;
 }
 
 .quick-register-body #total-payment-row .payment-logos img {
-  width: 45px;
+  width: 40px;
   height: auto;
+  flex: 0 0 auto;
+}
+
+.quick-register-body #total-payment-row .payment-actions {
+  margin-left: auto;
 }
 
 .quick-register-body .btnRed {
