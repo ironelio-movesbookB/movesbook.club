@@ -30,13 +30,21 @@ import {
   buildWhatsAppShareUrl,
   buildTelegramSharePickerUrl,
   buildSmsShareUrl,
+  shareViaFacebook,
+  shareViaInstagram,
   ensureShareLinkInMessage,
   openExternalShareUrl,
+  FACEBOOK_SHARE_NOTICE,
+  INSTAGRAM_SHARE_NOTICE,
 } from '@/utils/socialShareUrls';
+import {
+  buildInviteLandingUrl,
+  DEFAULT_INVITE_SECTIONS,
+} from '@/lib/promocodes/inviteLanding';
 
 type TabId = 'suggest' | 'invitations' | 'registered' | 'credits' | 'connections';
 type InvitationsSubTab = 'generated' | 'recipients' | 'allRecipients';
-type ShareChannel = 'WhatsApp' | 'Telegram' | 'SMS';
+type ShareChannel = 'WhatsApp' | 'Telegram' | 'SMS' | 'Facebook' | 'Instagram';
 
 function paginateRows<T>(rows: T[], page: number, pageSize: number): T[] {
   const start = (page - 1) * pageSize;
@@ -59,6 +67,11 @@ function formatRoleName(roleName: string, roleId?: number | null): string {
   return roleName.charAt(0).toUpperCase() + roleName.slice(1);
 }
 
+function introSectionsEnabledText(introMessage: string, introEnabled: boolean): string {
+  if (!introEnabled) return '';
+  return introMessage.trim();
+}
+
 function validateInviteForm(receiverEmail: string, promocodeId: string): string | null {
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!receiverEmail.trim()) {
@@ -73,21 +86,21 @@ function validateInviteForm(receiverEmail: string, promocodeId: string): string 
   return null;
 }
 
-function buildSendInvitePreviewUrl(
-  email: string,
-  option: PromocodeOption,
-  introMessage?: string
-): string {
-  const params = new URLSearchParams({
-    email_address: email.trim(),
-    promocode: option.code,
-    other_info: '',
-    adv_page: '',
-    html_page_id: option.helpHtmlPagesId != null ? String(option.helpHtmlPagesId) : '',
-    language_id: String(option.languageId ?? 1),
+function buildInviteLandingPreviewUrl(input: {
+  code: string;
+  inviter: string;
+  lang?: string;
+  sections: { intro: boolean; doc: boolean; links: boolean };
+  userEmail?: string;
+}): string {
+  if (typeof window === 'undefined') return '';
+  return buildInviteLandingUrl(window.location.origin, {
+    promocode: input.code,
+    inviter: input.inviter || null,
+    lang: input.lang || null,
+    sections: { ...input.sections, body: true },
+    userEmail: input.userEmail || null,
   });
-  if (introMessage?.trim()) params.set('intro_message', introMessage.trim());
-  return `/promocodes/send-invite?${params.toString()}`;
 }
 
 export default function NotificationByPromocodeDashboardView() {
@@ -114,6 +127,11 @@ export default function NotificationByPromocodeDashboardView() {
   const [shareChannel, setShareChannel] = useState<ShareChannel>('WhatsApp');
   const [smsPhone, setSmsPhone] = useState('');
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [inviteSections, setInviteSections] = useState({
+    intro: DEFAULT_INVITE_SECTIONS.intro,
+    doc: DEFAULT_INVITE_SECTIONS.doc,
+    links: DEFAULT_INVITE_SECTIONS.links,
+  });
   const { currentLanguage, setLanguage } = useLanguage();
   const invitePopupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -228,20 +246,26 @@ export default function NotificationByPromocodeDashboardView() {
   };
 
   const openInvitePreview = () => {
-    const validationError = validateInviteForm(receiverEmail, promocodeId);
-    if (validationError) {
-      window.alert(validationError);
+    const selected = promocodeOptions.find((p) => String(p.id) === promocodeId);
+    const code = selected?.code || data?.promocode.code || '';
+    if (!code) {
+      window.alert('Please select a promocode to use for the invite.');
       return;
     }
-
-    const selected = promocodeOptions.find((p) => String(p.id) === promocodeId);
-    if (!selected?.code) {
-      window.alert('Please select a promocode to use for the invite.');
+    const inviter = data?.connectionChart.currentUserUsername?.trim() || '';
+    if (!inviter) {
+      window.alert('Unable to determine your username for the invite link. Please refresh and try again.');
       return;
     }
 
     const popup = window.open(
-      buildSendInvitePreviewUrl(receiverEmail, selected, introMessage),
+      buildInviteLandingPreviewUrl({
+        code,
+        inviter,
+        lang: currentLanguage || undefined,
+        sections: inviteSections,
+        userEmail: receiverEmail.trim() || undefined,
+      }),
       '_blank',
       'noopener,noreferrer'
     );
@@ -321,18 +345,25 @@ export default function NotificationByPromocodeDashboardView() {
       window.alert('Unable to determine your username for the invite link. Please refresh and try again.');
       return null;
     }
-    const params = new URLSearchParams({ promocode: code, inviter });
-    if (currentLanguage) params.set('lang', currentLanguage);
-    const registerUrl = `${window.location.origin}/users/quickRegister?${params.toString()}`;
+    const registerUrl = buildInviteLandingUrl(window.location.origin, {
+      promocode: code,
+      inviter,
+      lang: currentLanguage || null,
+      sections: { ...inviteSections, body: true },
+    });
 
-    const body = [introMessage.trim(), introText, `Promocode: ${code}`]
+    const body = [
+      introSectionsEnabledText(introMessage, inviteSections.intro),
+      `You are invited to Movesbook. Open this invite to learn more and register free.`,
+      `Promocode: ${code}`,
+    ]
       .filter(Boolean)
       .join('\n\n');
     const text = ensureShareLinkInMessage(body, registerUrl);
     return { registerUrl, text, code };
   };
 
-  const shareInvite = (mode: ShareChannel = shareChannel) => {
+  const shareInvite = async (mode: ShareChannel = shareChannel) => {
     const payload = buildInviteSharePayload();
     if (!payload) return;
 
@@ -354,6 +385,24 @@ export default function NotificationByPromocodeDashboardView() {
       return;
     }
 
+    if (mode === 'Facebook') {
+      const { copiedToClipboard } = await shareViaFacebook(payload.registerUrl, payload.text);
+      if (copiedToClipboard) window.alert(FACEBOOK_SHARE_NOTICE);
+      void recordLinkShare(selectedId);
+      return;
+    }
+
+    if (mode === 'Instagram') {
+      const { copiedToClipboard } = await shareViaInstagram(payload.registerUrl);
+      window.alert(
+        copiedToClipboard
+          ? INSTAGRAM_SHARE_NOTICE
+          : `Open Instagram and paste this invite link:\n\n${payload.registerUrl}`,
+      );
+      void recordLinkShare(selectedId);
+      return;
+    }
+
     const url =
       mode === 'WhatsApp'
         ? buildWhatsAppShareUrl(undefined, payload.text)
@@ -370,11 +419,13 @@ export default function NotificationByPromocodeDashboardView() {
     const inviter =
       data?.connectionChart.currentUserUsername?.trim() ||
       '';
-    const params = new URLSearchParams({ promocode: code });
-    if (inviter) params.set('inviter', inviter);
-    if (currentLanguage) params.set('lang', currentLanguage);
-    return `${window.location.origin}/users/quickRegister?${params.toString()}`;
-  }, [promocodeOptions, promocodeId, data, currentLanguage]);
+    return buildInviteLandingUrl(window.location.origin, {
+      promocode: code,
+      inviter: inviter || null,
+      lang: currentLanguage || null,
+      sections: { ...inviteSections, body: true },
+    });
+  }, [promocodeOptions, promocodeId, data, currentLanguage, inviteSections]);
 
   const copyInviteLink = async () => {
     if (!inviteShareLink) {
@@ -597,7 +648,7 @@ export default function NotificationByPromocodeDashboardView() {
 
           <div className="invite-row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
             <span>{copy.shareVia}</span>
-            {(['WhatsApp', 'Telegram', 'SMS'] as const).map((channel) => (
+            {(['WhatsApp', 'Telegram', 'SMS', 'Facebook', 'Instagram'] as const).map((channel) => (
               <button
                 key={channel}
                 type="button"
@@ -609,7 +660,7 @@ export default function NotificationByPromocodeDashboardView() {
                 }
                 onClick={() => {
                   setShareChannel(channel);
-                  if (channel !== 'SMS') shareInvite(channel);
+                  if (channel !== 'SMS') void shareInvite(channel);
                 }}
               >
                 {channel}
@@ -627,11 +678,49 @@ export default function NotificationByPromocodeDashboardView() {
                 placeholder="+39 333 1234567"
                 style={{ width: '30%', minWidth: 200 }}
               />
-              <button type="button" className="button-black-promocode" onClick={() => shareInvite('SMS')}>
+              <button type="button" className="button-black-promocode" onClick={() => void shareInvite('SMS')}>
                 Send Invite
               </button>
             </div>
           ) : null}
+
+          <div
+            className="invite-row"
+            style={{ marginTop: 16, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+          >
+            <span style={{ fontWeight: 700 }}>Sections to include in the invite</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={inviteSections.intro}
+                onChange={(e) => setInviteSections((s) => ({ ...s, intro: e.target.checked }))}
+              />
+              Message of intro (default YES)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85 }}>
+              <input type="checkbox" checked disabled readOnly />
+              Text of the invite (Dear user….) — mandatory
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={inviteSections.doc}
+                onChange={(e) => setInviteSections((s) => ({ ...s, doc: e.target.checked }))}
+              />
+              Document HTML in attachment (default YES)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={inviteSections.links}
+                onChange={(e) => setInviteSections((s) => ({ ...s, links: e.target.checked }))}
+              />
+              Links in attachment (default YES)
+            </label>
+            <button type="button" className="button-preview-promocode" onClick={openInvitePreview}>
+              Preview
+            </button>
+          </div>
 
           <div className="invite-row" style={{ marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <span>Share the invite using this link</span>
