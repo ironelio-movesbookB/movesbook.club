@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart3,
+  Bell,
+  CalendarCheck,
+  CalendarDays,
   Check,
+  CreditCard,
+  Megaphone,
+  ShoppingBag,
+  Stethoscope,
+  UserPlus,
+  Wallet,
   Eye,
   Globe,
   HeartHandshake,
@@ -23,11 +32,31 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { SponsorKitData } from '@/lib/club/sponsors/sponsorPublicService';
+import { SPONSOR_SECTIONS } from '@/lib/club/sponsors/sponsorConstants';
+import { sponsorHeaderBackground } from '@/lib/club/sponsors/sponsorKitSettings';
 import {
   SponsorLanguageSelect,
   initialSponsorPageLanguage,
+  mailtoHref,
   makeSponsorT,
+  openMailOnClick,
+  sectionLabel,
 } from '@/components/club/sponsors/public/sponsorPublicShared';
+
+/** Icon of each sponsor section, shown in "Where your brand will be displayed". */
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  online_registrations: UserPlus,
+  medical_visit: Stethoscope,
+  shared_calendar: CalendarDays,
+  online_payments: CreditCard,
+  events_page: CalendarCheck,
+  fee_payments: Wallet,
+  members_app: Smartphone,
+  online_shop: ShoppingBag,
+  email_medical_expiry: Mail,
+  email_payment_reminder: Bell,
+  email_membership_reminder: Megaphone,
+};
 
 export default function SponsorKitPage({ orgId }: { orgId: string }) {
   const [lang, setLang] = useState<string | null>(null);
@@ -81,6 +110,7 @@ export default function SponsorKitPage({ orgId }: { orgId: string }) {
     { Icon: TrendingUp, n: 2 },
     { Icon: SlidersHorizontal, n: 3 },
   ];
+  const contactHref = org.email ? mailtoHref(org.email, t('spk_title')) : `tel:${org.phone}`;
   const comparison = ['spk_cmp_1', 'spk_cmp_2', 'spk_cmp_3', 'spk_cmp_4', 'spk_cmp_5'];
 
   return (
@@ -88,11 +118,7 @@ export default function SponsorKitPage({ orgId }: { orgId: string }) {
       {/* Hero */}
       <header
         className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-blue-800 text-white"
-        style={
-          org.bannerUrl
-            ? { backgroundImage: `linear-gradient(rgba(15,23,42,.82), rgba(30,58,138,.85)), url(${org.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : undefined
-        }
+        style={sponsorHeaderBackground(data.header, org.bannerUrl)}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -114,8 +140,9 @@ export default function SponsorKitPage({ orgId }: { orgId: string }) {
           <p className="mt-4 max-w-2xl text-base text-blue-100 md:text-lg">{t('spk_hero_text')}</p>
           {org.email || org.phone ? (
             <a
-              href={org.email ? `mailto:${org.email}` : `tel:${org.phone}`}
-              className="mt-8 inline-flex items-center gap-2 rounded-lg bg-amber-400 px-6 py-3 font-bold text-slate-900 shadow-lg hover:bg-amber-300"
+              href={contactHref}
+              onClick={openMailOnClick(contactHref)}
+              className="relative z-10 mt-8 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-amber-400 px-6 py-3 font-bold text-slate-900 shadow-lg hover:bg-amber-300"
             >
               <HeartHandshake className="h-5 w-5" />
               {t('spk_contact_us')}
@@ -184,6 +211,23 @@ export default function SponsorKitPage({ orgId }: { orgId: string }) {
             ) : null}
           </div>
         </div>
+      </Section>
+
+      {/* Where your brand will be displayed */}
+      <Section title={t('spk_where_title')} text={t('spk_where_text')}>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {SPONSOR_SECTIONS.map((s) => {
+            const Icon = SECTION_ICONS[s.key] ?? Layers;
+            return (
+              <li key={s.key} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-semibold">{sectionLabel(t, s.key)}</span>
+              </li>
+            );
+          })}
+        </ul>
       </Section>
 
       {/* Total transparency */}
@@ -335,7 +379,11 @@ export default function SponsorKitPage({ orgId }: { orgId: string }) {
           <p className="mx-auto mt-3 max-w-xl text-blue-100">{t('spk_cta_text')}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {org.email ? (
-              <a href={`mailto:${org.email}`} className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 font-bold text-indigo-800 hover:bg-blue-50">
+              <a
+                href={mailtoHref(org.email, t('spk_title'))}
+                onClick={openMailOnClick(mailtoHref(org.email, t('spk_title')))}
+                className="relative z-10 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-5 py-3 font-bold text-indigo-800 hover:bg-blue-50"
+              >
                 <Mail className="h-5 w-5" />
                 {t('spk_contact_us')}
               </a>

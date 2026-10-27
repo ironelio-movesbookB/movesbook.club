@@ -18,6 +18,8 @@ import {
 } from '@/lib/club/sponsors/sponsorConstants';
 import { SPONSOR_PUBLIC_TEXTS, SPONSOR_TEXTS_CATEGORY } from '@/lib/club/sponsors/sponsorPublicTexts';
 import { ensureSponsorTables, getSponsorStatsById } from '@/lib/club/sponsors/sponsorService';
+import { getSponsorKitSettings } from '@/lib/club/sponsors/sponsorKitSettingsService';
+import type { SponsorHeaderStyle } from '@/lib/club/sponsors/sponsorKitSettings';
 
 export type SponsorOrgCard = PublicOrgCard;
 
@@ -26,12 +28,17 @@ const orgCard = publicOrgCard;
 const resolveLanguage = resolvePublicLanguage;
 const loadTexts = (language: string) => loadPublicTexts(SPONSOR_PUBLIC_TEXTS, SPONSOR_TEXTS_CATEGORY, language);
 
+function headerOf(s: SponsorHeaderStyle): SponsorHeaderStyle {
+  return { useBanner: s.useBanner, gradientFrom: s.gradientFrom, gradientTo: s.gradientTo };
+}
+
 // ---------- sponsorship kit ----------
 
 export type SponsorKitData = {
   language: string;
   texts: Record<string, string>;
   org: SponsorOrgCard;
+  header: SponsorHeaderStyle;
   community: { members: number; staff: number; groups: number; years: number };
   demographics: {
     male: number;
@@ -88,12 +95,13 @@ export async function getSponsorKit(orgId: string, requestedLang: string | null)
         });
   const people = members.map((m) => ('member' in m ? m.member : m.athlete));
 
-  const [staff, groups, texts] = await Promise.all([
+  const [staff, groups, texts, kitSettings] = await Promise.all([
     org.kind === 'club'
       ? prisma.clubStaff.count({ where: { clubId: org.id } })
       : prisma.teamStaff.count({ where: { teamId: org.id } }),
     org.kind === 'club' ? prisma.clubMemberGroup.count({ where: { clubId: org.id } }) : Promise.resolve(0),
     loadTexts(language),
+    getSponsorKitSettings({ kind: org.kind, id: org.id }),
   ]);
 
   const now = new Date();
@@ -140,6 +148,7 @@ export async function getSponsorKit(orgId: string, requestedLang: string | null)
     language,
     texts,
     org: orgCard(org),
+    header: headerOf(kitSettings),
     community: {
       members: people.length,
       staff,
@@ -171,6 +180,7 @@ export type SponsorReportData = {
   language: string;
   texts: Record<string, string>;
   org: SponsorOrgCard;
+  header: SponsorHeaderStyle;
   sponsor: { name: string; logoUrl: string | null; bannerUrl: string | null; landingUrl: string };
   placements: SponsorPlacements;
   contract: { startDate: string; endDate: string } | null;
@@ -238,15 +248,17 @@ export async function getSponsorReport(
   }
 
   const language = await resolveLanguage(requestedLang, org.ownerId);
-  const [texts, stats] = await Promise.all([
+  const [texts, stats, kitSettings] = await Promise.all([
     loadTexts(language),
     getSponsorStatsById(row.id, from <= to ? from : to, from <= to ? to : from),
+    getSponsorKitSettings({ kind: org.kind, id: org.id }),
   ]);
 
   return {
     language,
     texts,
     org: orgCard(org),
+    header: headerOf(kitSettings),
     sponsor: {
       name: row.name,
       logoUrl: row.logo_path ? toMediaApiPath(row.logo_path) : null,

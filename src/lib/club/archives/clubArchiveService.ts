@@ -1176,6 +1176,19 @@ export async function listCashMovements(
 
   if (direction === 'all' || direction === 'IN') {
     try {
+      const { listSponsorArchiveCash } = await import('@/lib/club/sponsors/sponsorService');
+      const sponsorCash = await listSponsorArchiveCash({
+        kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
+        id: ctx.club.id,
+      });
+      items.push(...sponsorCash);
+    } catch {
+      /* sponsor tables may be unavailable */
+    }
+  }
+
+  if (direction === 'all' || direction === 'IN') {
+    try {
       const online = await prisma.$queryRawUnsafe<
         Array<{
           id: string;
@@ -1411,6 +1424,20 @@ export async function listUnifiedDeadlines(
         Boolean(params.includePaid)
       )
     );
+  }
+
+  try {
+    const { listSponsorArchiveDeadlines } = await import('@/lib/club/sponsors/sponsorService');
+    let sponsorDeadlines = await listSponsorArchiveDeadlines({
+      kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
+      id: ctx.club.id,
+    });
+    if (!params.includePaid) {
+      sponsorDeadlines = sponsorDeadlines.filter((row) => Number(row.rest) > 0.005);
+    }
+    items.push(...sponsorDeadlines);
+  } catch {
+    /* sponsor tables may be unavailable */
   }
 
   // Stable sort keeps the deadlines of one record together, oldest expire date first.

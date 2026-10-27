@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processSponsorReminders } from '@/lib/club/sponsors/sponsorService';
+import { processSponsorReportCadence } from '@/lib/club/sponsors/sponsorKitSettingsService';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    return NextResponse.json({ sent: await processSponsorReminders() });
+    const sent = await processSponsorReminders();
+    const reports = await processSponsorReportCadence();
+    return NextResponse.json({ sent, reportsDue: reports.length });
   } catch (error) {
     console.error('POST /api/club/sponsors/reminders', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });

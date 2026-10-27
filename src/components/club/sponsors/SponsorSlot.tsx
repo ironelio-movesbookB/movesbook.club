@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
 import type { SponsorSlotItem } from '@/lib/club/sponsors/sponsorSlotTypes';
 
@@ -62,7 +62,7 @@ export function useSectionSponsors(orgId: string | null | undefined, sections: S
 
 /** Sponsor logos / banners with view counting and tracked clicks. Renders nothing without items. */
 export default function SponsorSlot({
-  items,
+  items: rawItems,
   title,
   className,
   compact,
@@ -73,6 +73,16 @@ export default function SponsorSlot({
   /** Smaller logos for cards and sidebars. */
   compact?: boolean;
 }) {
+  // The same sponsor image placed in two sections of one slot must show once, not twice.
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return rawItems.filter((i) => {
+      const key = `${i.id}|${i.kind}|${i.imageUrl}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rawItems]);
   useSponsorViews(items);
 
   if (items.length === 0) return null;
