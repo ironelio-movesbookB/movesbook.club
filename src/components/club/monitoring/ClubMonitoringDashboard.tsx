@@ -73,17 +73,21 @@ function escapeHtml(value: string): string {
   );
 }
 
+function cell(value: string | undefined): string {
+  return value && value.trim() ? value : '—';
+}
+
 function printRows(title: string, rows: PreviewRow[]) {
   const popup = window.open('', '_blank', 'noopener,noreferrer');
   if (!popup) return;
   const body = rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(row.detail)}</td><td>${escapeHtml(row.date)}</td></tr>`,
+        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(cell(row.typology))}</td><td>${escapeHtml(cell(row.detail))}</td><td>${escapeHtml(cell(row.date))}</td><td>${escapeHtml(cell(row.paymentIn))}</td><td>${escapeHtml(cell(row.paymentOut))}</td><td>${escapeHtml(cell(row.paidTotal))}</td><td>${escapeHtml(cell(row.rest))}</td><td>${escapeHtml(cell(row.nr))}</td></tr>`,
     )
     .join('');
   popup.document.write(
-    `<!doctype html><title>${escapeHtml(title)}</title><body><h1>${escapeHtml(title)}</h1><table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Name</th><th>Detail</th><th>Date</th></tr></thead><tbody>${body}</tbody></table><script>window.print()</script></body>`,
+    `<!doctype html><title>${escapeHtml(title)}</title><style>body{font-family:sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#0f766e;color:#fff}button{margin:0 0 12px;padding:8px 12px}</style><body><button type="button" onclick="window.print()">Print or save as PDF</button><h1>${escapeHtml(title)}</h1><table><thead><tr><th>Full name</th><th>Typology</th><th>Detail</th><th>Date</th><th>Payment IN</th><th>Payment OUT</th><th>Paid / Total</th><th>Rest</th><th>Nr.</th></tr></thead><tbody>${body || '<tr><td colspan="9">No records.</td></tr>'}</tbody></table></body>`,
   );
   popup.document.close();
 }
@@ -336,13 +340,28 @@ export default function ClubMonitoringDashboard({
                   className="px-2 py-2 text-sm text-gray-700 hover:underline"
                   onClick={() => router.push(def.readAllPath)}
                 >
-                  Read all
+                  Save as current
                 </button>
                 <button
                   type="button"
                   className="px-3 py-2 text-gray-600"
                   aria-label={`Print ${def.label}`}
-                  onClick={() => printRows(def.label, (sectionRows[section.id] ?? []).slice(0, visibleCount || PREVIEW_LIMIT))}
+                  onClick={() => {
+                    void (async () => {
+                      let rows = sectionRows[section.id] ?? [];
+                      if (rows.length === 0) {
+                        try {
+                          const preview = await loadPreview(section.id);
+                          rows = preview.items;
+                          setSectionRows((current) => ({ ...current, [section.id]: preview.items }));
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Could not load this archive');
+                          return;
+                        }
+                      }
+                      printRows(def.label, rows.slice(0, visibleCount || rows.length || PREVIEW_LIMIT));
+                    })();
+                  }}
                 >
                   <Printer className="h-4 w-4" />
                 </button>
@@ -367,7 +386,7 @@ export default function ClubMonitoringDashboard({
                       ) : null}
                       {rows.length >= PREVIEW_LIMIT ? (
                         <p className="mt-2 text-xs text-gray-500">
-                          Showing the latest {PREVIEW_LIMIT} records. Read all opens the full archive.
+                          Showing the latest {PREVIEW_LIMIT} records. Save as current opens the full archive.
                         </p>
                       ) : null}
                     </>
@@ -413,24 +432,49 @@ function PreviewTable({
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-500">No records.</p>;
   }
+  const headers = [
+    'Full name',
+    'Typology',
+    'Detail',
+    'Date',
+    'Payment IN',
+    'Payment OUT',
+    'Paid / Total',
+    'Rest',
+    'Nr.',
+    'Edit',
+    'Delete',
+  ];
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="bg-gray-100 text-left text-gray-700">
-          <th className="px-2 py-1.5 font-semibold">Name</th>
-          <th className="px-2 py-1.5 font-semibold">Detail</th>
-          <th className="px-2 py-1.5 font-semibold">Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, visibleCount).map((row, index) => (
-          <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
-            <td className="px-2 py-1.5">{row.title}</td>
-            <td className="px-2 py-1.5">{row.detail || '—'}</td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[880px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-teal-800 text-left text-white">
+            {headers.map((header) => (
+              <th key={header} className="px-2 py-1.5 font-semibold whitespace-nowrap">
+                {header}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.slice(0, visibleCount).map((row, index) => (
+            <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
+              <td className="px-2 py-1.5">{row.title}</td>
+              <td className="px-2 py-1.5">{row.typology || '—'}</td>
+              <td className="px-2 py-1.5">{row.detail || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.paymentIn || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.paymentOut || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.paidTotal || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.rest || '—'}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.nr || '—'}</td>
+              <td className="px-2 py-1.5">—</td>
+              <td className="px-2 py-1.5">—</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

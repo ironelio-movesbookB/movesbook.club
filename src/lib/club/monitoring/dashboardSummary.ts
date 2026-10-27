@@ -29,6 +29,12 @@ export type PreviewRow = {
   title: string;
   detail: string;
   date: string;
+  typology?: string;
+  paymentIn?: string;
+  paymentOut?: string;
+  paidTotal?: string;
+  rest?: string;
+  nr?: string;
 };
 
 export type DashboardSnapshot = {
@@ -380,15 +386,29 @@ function todayRange(): { fromDate: string; toDate: string } {
   return { fromDate: iso, toDate: iso };
 }
 
+function money(value: unknown): string {
+  if (value == null || value === '') return '';
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : '';
+}
+
 function mapArchiveRows(items: Record<string, unknown>[]): PreviewRow[] {
-  return items.slice(0, PREVIEW_LIMIT).map((row, index) => ({
-    id: String(row.id ?? index),
-    title: String(row.name ?? row.fullName ?? '-'),
-    detail: String(
-      row.service ?? row.typology ?? row.course ?? row.casual ?? row.outcome ?? row.status ?? '',
-    ),
-    date: String(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate ?? '').slice(0, 10),
-  }));
+  return items.slice(0, PREVIEW_LIMIT).map((row, index) => {
+    const paid = money(row.paid ?? row.payed);
+    const total = money(row.value ?? row.originalDebt ?? row.debt);
+    return {
+      id: String(row.id ?? index),
+      title: String(row.name ?? row.fullName ?? '-'),
+      typology: String(row.typology ?? row.memberType ?? ''),
+      detail: String(row.service ?? row.course ?? row.casual ?? row.outcome ?? row.status ?? ''),
+      date: String(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate ?? '').slice(0, 10),
+      paymentIn: paid,
+      paymentOut: money(row.cost),
+      paidTotal: paid || total ? `${paid || '0.00'} / ${total || '0.00'}` : '',
+      rest: money(row.rest ?? row.balanceAmount),
+      nr: String(row.deadlineNo ?? ''),
+    };
+  });
 }
 
 async function previewMembers(ctx: ClubAuthContext, activeOnly: boolean): Promise<PreviewRow[]> {
@@ -449,8 +469,11 @@ async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
     id: row.id,
     title:
       [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-',
-    detail: `${row.procedureType.name} · ${Number(row.balanceAmount).toFixed(2)}`,
+    detail: `${row.procedureType.name}`,
     date: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '',
+    typology: row.procedureType.name,
+    rest: Number(row.balanceAmount).toFixed(2),
+    paidTotal: `0.00 / ${Number(row.balanceAmount).toFixed(2)}`,
   }));
 }
 
@@ -532,6 +555,10 @@ async function previewProcedure(
       title: row.memberName || '-',
       detail,
       date: row.recordDate,
+      typology: row.procedureTypeCode,
+      paymentIn: Number(row.paidAmount).toFixed(2),
+      paidTotal: `${Number(row.paidAmount).toFixed(2)} / ${Number(row.totalAmount).toFixed(2)}`,
+      rest: Number(row.balanceAmount).toFixed(2),
     };
   });
 }

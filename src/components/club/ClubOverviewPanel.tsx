@@ -18,6 +18,7 @@ import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
 import ClubInfoContactsForm from '@/components/club/ClubInfoContactsForm';
 import ClubReferencesDisplay from '@/components/club/ClubReferencesDisplay';
 import ManagedEntitySidebarAvatar from '@/components/entity/ManagedEntitySidebarAvatar';
+import ClubMonitoringDashboard from '@/components/club/monitoring/ClubMonitoringDashboard';
 import {
   getClubProfileDisplayRows,
   parseClubDescriptionMeta,
@@ -86,7 +87,7 @@ type DashboardPageSettings = {
   showRecentMembers: boolean;
 };
 
-type DashboardLowerPanel = 'profiles' | null;
+type DashboardLowerPanel = 'profiles' | 'archives' | null;
 
 const DEFAULT_DASHBOARD_SETTINGS: DashboardPageSettings = {
   showStatistics: true,
@@ -112,11 +113,27 @@ function readDashboardSettings(clubId: string | undefined): DashboardPageSetting
   }
 }
 
-function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
+function MemberSilhouetteCard({
+  member,
+  clubId,
+}: {
+  member?: ClubMember;
+  clubId?: string;
+}) {
+  const router = useRouter();
   if (member) {
     const initial = member.member.name.charAt(0).toUpperCase();
     return (
-      <div className="flex-shrink-0 w-[140px] rounded-xl border-2 border-gray-200 bg-white p-3 shadow-sm">
+      <button
+        type="button"
+        onClick={() => {
+          if (!clubId) return;
+          router.push(
+            `/clubMembers/memberProfile/${encodeURIComponent(member.member.id)}?clubId=${encodeURIComponent(clubId)}&mode=edit`,
+          );
+        }}
+        className="w-[140px] shrink-0 rounded-xl border-2 border-gray-200 bg-white p-3 text-left shadow-sm hover:border-blue-400"
+      >
         <div className="mx-auto mb-2 flex h-24 w-full items-center justify-center rounded-lg bg-gradient-to-br from-slate-100 to-slate-200">
           <span className="text-3xl font-bold text-slate-500">{initial}</span>
         </div>
@@ -126,7 +143,7 @@ function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
         <p className="truncate text-center text-[10px] text-gray-500">
           @{member.member.username}
         </p>
-      </div>
+      </button>
     );
   }
 
@@ -142,9 +159,11 @@ function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
 
 function HorizontalMemberCarousel({
   members,
+  clubId,
   slotCount = 5,
 }: {
   members: ClubMember[];
+  clubId?: string;
   slotCount?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -175,7 +194,7 @@ function HorizontalMemberCarousel({
         className="flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2 overscroll-x-contain scrollbar-thin scrollbar-thumb-gray-300"
       >
         {slots.map((m, i) => (
-          <MemberSilhouetteCard key={m?.id ?? `empty-${i}`} member={m} />
+          <MemberSilhouetteCard key={m?.id ?? `empty-${i}`} member={m} clubId={clubId} />
         ))}
       </div>
       <button
@@ -375,7 +394,6 @@ export default function ClubOverviewPanel({
   clubProfileEditHref,
   onAddMembers,
 }: ClubOverviewPanelProps) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ClubOverviewTabId>('admin-profile');
   const [lowerPanel, setLowerPanel] = useState<DashboardLowerPanel>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -490,6 +508,7 @@ export default function ClubOverviewPanel({
         <h3 className="text-lg font-bold text-gray-900 mb-3">Recent Members</h3>
         <HorizontalMemberCarousel
           members={members.length > 0 ? members.slice(0, 20) : []}
+          clubId={club?.id}
           slotCount={5}
         />
       </section>
@@ -509,17 +528,22 @@ export default function ClubOverviewPanel({
         </button>
         <button
           type="button"
-          onClick={() => {
-            if (club?.id && typeof window !== 'undefined') {
-              localStorage.setItem('selectedClub', club.id);
-            }
-            router.push('/clubMembers/memberList?section=athletes&nav=archive');
-          }}
-          className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          onClick={() => setLowerPanel((panel) => (panel === 'archives' ? null : 'archives'))}
+          className={`rounded-full px-4 py-2 text-sm font-semibold text-white ${
+            lowerPanel === 'archives'
+              ? 'bg-purple-700'
+              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'
+          }`}
         >
           Overview archives
         </button>
       </div>
+
+      {lowerPanel === 'archives' ? (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-3">
+          <ClubMonitoringDashboard />
+        </div>
+      ) : null}
 
       {lowerPanel === 'profiles' ? (
       <>
