@@ -102,6 +102,27 @@ export default function QuickRegisterForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const [pageTheme, setPageTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('qr-page-theme');
+      if (saved === 'dark' || saved === 'light') setPageTheme(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const body = document.querySelector('.quick-register-body');
+    if (!body) return;
+    body.classList.toggle('qr-theme-dark', pageTheme === 'dark');
+    try {
+      window.localStorage.setItem('qr-page-theme', pageTheme);
+    } catch {
+      /* ignore */
+    }
+  }, [pageTheme]);
 
   const initDone = useRef(false);
   const usernameEditedRef = useRef(false);
@@ -733,22 +754,23 @@ export default function QuickRegisterForm() {
   };
 
   return (
-    <div className="quickregistration" style={{ marginTop: 20 }}>
-      <div className="qr-register-head">
-        <img
-          className="qr-register-badge"
-          src="/img/register-now.png"
-          alt="REGISTER NOW"
-        />
-        <div className="qr-register-head-copy">
-          <div className="quickregi-title">{t.registerYourself}</div>
-          <div className="quickregi-subtitle">
-            {t.alreadyHaveAccount}{' '}
-            <Link href="/login" target="_blank">
-              {t.logIn}
-            </Link>
-          </div>
-        </div>
+    <div className="quickregistration">
+      <div className="qr-theme-toolbar">
+        <span className="qr-theme-label">Appearance</span>
+        <button
+          type="button"
+          className={`qr-theme-btn${pageTheme === 'light' ? ' is-active' : ''}`}
+          onClick={() => setPageTheme('light')}
+        >
+          {t.themeLight}
+        </button>
+        <button
+          type="button"
+          className={`qr-theme-btn${pageTheme === 'dark' ? ' is-active' : ''}`}
+          onClick={() => setPageTheme('dark')}
+        >
+          {t.themeDark}
+        </button>
       </div>
 
       {successMessage ? (
@@ -786,9 +808,17 @@ export default function QuickRegisterForm() {
           readOnly
         />
 
-        <div className="quickregi-form">
-          <div className="quickregi-left" style={{ border: 'none', paddingRight: 0 }}>
-            {error ? <div className="red">{error}</div> : null}
+        <div className="qr-register-split">
+          <div className="qr-register-split-left">
+            <img
+              className="qr-register-badge"
+              src="/img/register-now.png"
+              alt="REGISTER NOW"
+            />
+
+            <div className="quickregi-form">
+              <div className="quickregi-left" style={{ border: 'none', paddingRight: 0 }}>
+                {error ? <div className="red">{error}</div> : null}
 
             <div className="div-row">
               <span className="span-label-title">{t.typeHereYourUsername}</span>
@@ -922,7 +952,33 @@ export default function QuickRegisterForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
+              </div>
+            </div>
+          </div>
 
+          <aside className="qr-register-split-right">
+            <div className="quickregi-title">{t.registerYourself}</div>
+            <div className="quickregi-subtitle">
+              {t.alreadyHaveAccount}{' '}
+              <Link href="/login" target="_blank">
+                {t.logIn}
+              </Link>
+            </div>
+            <div className="qr-intro-video">
+              <video
+                className="qr-intro-video-el"
+                controls
+                playsInline
+                preload="metadata"
+                src="/video/Video_Movesbook_intro.mp4"
+              >
+                <track kind="captions" />
+              </video>
+            </div>
+          </aside>
+        </div>
+
+        <div className="qr-register-full">
             <div className="div-line" />
 
             <div className="div-row">
@@ -1235,7 +1291,6 @@ export default function QuickRegisterForm() {
                 </div>
               </div>
             </div>
-          </div>
         </div>
       </form>
     </div>

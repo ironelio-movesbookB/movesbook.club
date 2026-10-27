@@ -27,6 +27,7 @@ import { languageIdForLegacyUser } from './promocodeSenderLanguage';
 import { coercePublicOrigin } from '@/lib/siteUrl';
 import { resolveInviteExpiryDate, userOwnsOrReceivedPromocode } from './childPromocode';
 import { incrementInviteStat } from './promocodeMonthlyStatsService';
+import { buildInviteLandingUrl } from '@/lib/promocodes/inviteLanding';
 
 export type SendInvitePreview = {
   emailAddress: string;
@@ -187,7 +188,7 @@ async function fetchHelpPageLangId(helpPageId: string, query: QueryFn = runQuery
 }
 
 /** PHP: LanguageParagraph[lang_name] + help_html_pages content (no separator). */
-async function buildPromocodeInviteEmailBody(params: {
+export async function buildPromocodeInviteEmailBody(params: {
   htmlPageId: string;
   languageId: string;
 }): Promise<{ body: string; resolvedHtmlPageId: string }> {
@@ -229,6 +230,23 @@ export function buildRegisterUrl(
     params.set('lang', languageName);
   }
   return `${publicOrigin}/users/quickRegister?${params.toString()}`;
+}
+
+/** Public invite page shown before registration. */
+export function buildInvitePageUrl(
+  origin: string,
+  email: string,
+  promocode: string,
+  languageName: string,
+  options: { isStaff: boolean; inviterUsername?: string | null },
+): string {
+  return buildInviteLandingUrl(origin, {
+    promocode,
+    inviter: options.isStaff ? null : options.inviterUsername,
+    inviteByMovesbook: options.isStaff,
+    lang: languageName || null,
+    userEmail: email || null,
+  });
 }
 
 export function buildInviteEmailHtml(data: {
@@ -277,7 +295,16 @@ export function buildInviteEmailHtml(data: {
     </div>
   </div>
   ${data.expiresAt ? `<p><span style="font-weight:bold;">Promocode expires on:</span> ${escapeHtml(data.expiresAt)}</p>` : ''}
-  <p><a href="${data.registrationUrl}" target="_blank">Click here to register</a></p>
+  <p style="margin:24px 0;text-align:center;">
+    <a href="${data.registrationUrl}" target="_blank"
+       style="display:inline-block;background:#7d0e1f;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:8px;">
+      Open your invitation
+    </a>
+  </p>
+  <p style="text-align:center;font-size:12px;color:#666;">
+    Or copy this invite link:<br/>
+    <a href="${data.registrationUrl}" target="_blank">${escapeHtml(data.registrationUrl)}</a>
+  </p>
 </div>`;
 }
 
@@ -327,7 +354,7 @@ export async function loadSendInvitePreview(
     promocodeId,
   });
 
-  const registerUrl = buildRegisterUrl(
+  const registerUrl = buildInvitePageUrl(
     params.origin,
     params.emailAddress,
     params.promocode,
@@ -605,7 +632,7 @@ export async function sendPromocodeInvite(params: {
     }
 
     try {
-      const registrationUrl = buildRegisterUrl(
+      const registrationUrl = buildInvitePageUrl(
         params.origin,
         email,
         params.promocode.trim(),
