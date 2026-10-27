@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPublicDirCandidates } from '@/lib/serverPublicDir';
 import { verifyToken } from '@/lib/auth';
 import { canViewMemberMedical, MEMBER_MEDICAL_FOLDER } from '@/lib/club/memberMedicalAccess';
+import {
+  MEDIA_SIBLING_FALLBACK_PARAM,
+  requestBareHost,
+  siblingMediaFallbackUrl,
+  siblingMediaOrigins,
+} from '@/lib/mediaSiblingOrigin';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +78,41 @@ async function memberMedicalAccessError(
   return allowed ? null : NextResponse.json({ error: 'Not found' }, { status: 404 });
 }
 
+/** Prefer local disk; if missing, redirect once to a sibling Movesbook domain that may have the file. */
+async function redirectToSiblingIfPresent(
+  request: NextRequest,
+  segments: string[],
+): Promise<NextResponse | null> {
+  // Private medical files must never cross domains.
+  if (isMemberMedicalPath(segments)) return null;
+  // One hop only — sibling serves locally or 404s.
+  if (request.nextUrl.searchParams.get(MEDIA_SIBLING_FALLBACK_PARAM) === '1') return null;
+
+  const siblings = siblingMediaOrigins(requestBareHost(request));
+  if (!siblings.length) return null;
+
+  for (const origin of siblings) {
+    const target = siblingMediaFallbackUrl(origin, segments);
+    try {
+      const res = await fetch(target, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: { Range: 'bytes=0-0' },
+        signal: AbortSignal.timeout(4000),
+      });
+      // 200 / 206 = file exists on sibling; do not follow further redirects.
+      if (res.ok || res.status === 206) {
+        await res.body?.cancel().catch(() => undefined);
+        return NextResponse.redirect(target, 302);
+      }
+      await res.body?.cancel().catch(() => undefined);
+    } catch {
+      // try next sibling
+    }
+  }
+  return null;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -86,6 +127,8 @@ export async function GET(
 
     const filePath = await resolveExistingFilePath(segments);
     if (!filePath) {
+      const redirected = await redirectToSiblingIfPresent(request, segments);
+      if (redirected) return redirected;
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
