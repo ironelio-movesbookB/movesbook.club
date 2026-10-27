@@ -90,11 +90,15 @@ export async function GET(
     }
 
     const body = await readFile(filePath);
+    const contentType = contentTypeForPath(filePath);
+    const fileName = segments[segments.length - 1] || 'file';
     return new NextResponse(body, {
       status: 200,
       headers: {
-        'Content-Type': contentTypeForPath(filePath),
+        'Content-Type': contentType,
         'Content-Length': String(body.length),
+        // Open PDFs in the browser tab instead of forcing a download.
+        'Content-Disposition': contentType === 'application/pdf' ? `inline; filename="${fileName}"` : 'inline',
         'Cache-Control': isPrivate ? 'private, no-store' : 'public, max-age=86400, immutable',
       },
     });

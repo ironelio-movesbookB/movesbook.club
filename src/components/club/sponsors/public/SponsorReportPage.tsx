@@ -19,11 +19,33 @@ import {
 const PRINT_CSS = `
 @page { size: A4; margin: 12mm; }
 @media print {
-  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
-  .spr-root { display: block !important; min-height: 0 !important; background: #fff !important; }
-  .spr-root, .spr-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .spr-header { background: #fff !important; background-image: none !important; color: #000 !important; border-bottom: 2px solid #1e40af; }
+  html, body {
+    background: #fff !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .spr-root {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+  .spr-root, .spr-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .spr-header {
+    background: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
+    border-bottom: 2px solid #1e40af;
+  }
   .spr-header * { color: #000 !important; }
+  .spr-no-print { display: none !important; }
   .spr-root section, .spr-root tr { break-inside: avoid; page-break-inside: avoid; }
   .spr-root .shadow-sm { box-shadow: none !important; border: 1px solid #e2e8f0; }
 }
@@ -96,6 +118,10 @@ export default function SponsorReportPage({ token }: { token: string }) {
   const { org, sponsor, stats } = data;
   const placements = SPONSOR_SECTIONS.filter((s) => data.placements[s.key as SponsorSectionKey]);
   const maxViews = Math.max(1, ...stats.bySection.map((r) => r.views));
+  const landing =
+    sponsor.landingUrl && !/^https?:\/\//i.test(sponsor.landingUrl)
+      ? `https://${sponsor.landingUrl}`
+      : sponsor.landingUrl;
 
   const applyPeriod = () => {
     const url = new URL(window.location.href);
@@ -112,7 +138,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
         className="spr-header text-white print:block print:bg-white print:text-black"
         style={sponsorHeaderBackground(data.header, org.bannerUrl, 'linear-gradient(rgba(15,23,42,.7), rgba(30,58,138,.75))')}
       >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-3">
           <div className="flex items-center gap-3">
             {org.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -120,7 +146,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
             ) : null}
             <span className="font-bold">{org.name}</span>
           </div>
-          <div className="flex items-center gap-3 print:hidden">
+          <div className="spr-no-print flex items-center gap-3 print:hidden">
             <SponsorLanguageSelect value={data.language} label={t('spk_language')} onChange={setLang} />
             <button
               type="button"
@@ -132,18 +158,42 @@ export default function SponsorReportPage({ token }: { token: string }) {
             </button>
           </div>
         </div>
-        <div className="mx-auto max-w-5xl px-5 pb-8 pt-4">
+        <div className="mx-auto max-w-5xl px-5 pb-5 pt-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-blue-200 print:text-black">
             {t('spr_title')}
           </div>
-          <div className="mt-2 flex items-center gap-4">
+          <div className="mt-2 flex flex-wrap items-center gap-4">
             {sponsor.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={sponsor.logoUrl} alt="" className="h-16 w-16 rounded-xl bg-white object-contain p-1" />
+              landing ? (
+                <a href={landing} target="_blank" rel="noopener noreferrer sponsored" title={sponsor.name}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={sponsor.logoUrl} alt="" className="h-14 w-14 rounded-xl bg-white object-contain p-1" />
+                </a>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={sponsor.logoUrl} alt="" className="h-14 w-14 rounded-xl bg-white object-contain p-1" />
+              )
             ) : null}
-            <div>
-              <h1 className="text-3xl font-extrabold">{sponsor.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-extrabold md:text-3xl">{sponsor.name}</h1>
               <p className="text-blue-100 print:text-black">{t('spr_with_club', { club: org.name })}</p>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-blue-50 print:text-black">
+                {sponsor.phone ? (
+                  <a href={`tel:${sponsor.phone}`} className="hover:underline">
+                    {t('spr_phone')}: {sponsor.phone}
+                  </a>
+                ) : null}
+                {sponsor.email ? (
+                  <a href={`mailto:${sponsor.email}`} className="hover:underline">
+                    {t('spr_email')}: {sponsor.email}
+                  </a>
+                ) : null}
+                {landing ? (
+                  <a href={landing} target="_blank" rel="noopener noreferrer sponsored" className="hover:underline">
+                    {t('spr_website')}
+                  </a>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -157,18 +207,18 @@ export default function SponsorReportPage({ token }: { token: string }) {
               {formatDate(stats.from, data.language)} – {formatDate(stats.to, data.language)}
             </div>
           </div>
-          <label className="text-sm print:hidden">
+          <label className="spr-no-print text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_from')}</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
-          <label className="text-sm print:hidden">
+          <label className="spr-no-print text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_to')}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
           <button
             type="button"
             onClick={applyPeriod}
-            className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
+            className="spr-no-print rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
           >
             {t('spr_update')}
           </button>

@@ -182,6 +182,13 @@ export default function SponsorEditPage({ id }: { id: string }) {
           key={sponsor.updatedAt}
           initial={sponsor}
           submitLabel="Save profile"
+          bannerUrl={sponsor.bannerUrl}
+          onLoadBanner={async (file) => {
+            const body = new FormData();
+            body.append('kind', 'banner');
+            body.append('file', file);
+            await run('/media', { method: 'POST', body }, 'Banner loaded from local');
+          }}
           onSubmit={async (profile) => {
             await run('', { method: 'PATCH', body: JSON.stringify({ profile }) }, 'Profile saved');
           }}
@@ -230,11 +237,16 @@ function ProfileTab({
   initial,
   submitLabel,
   onSubmit,
+  bannerUrl,
+  onLoadBanner,
 }: {
   initial: SponsorProfile;
   submitLabel: string;
   onSubmit: (profile: SponsorProfile) => Promise<void>;
+  bannerUrl?: string | null;
+  onLoadBanner?: (file: File) => Promise<void>;
 }) {
+  const bannerInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<SponsorProfile>(() => ({
     name: initial.name,
     visible: initial.visible,
@@ -247,6 +259,7 @@ function ProfileTab({
     address: initial.address,
   }));
   const [saving, setSaving] = useState(false);
+  const [loadingBanner, setLoadingBanner] = useState(false);
   const set = <K extends keyof SponsorProfile>(key: K, value: SponsorProfile[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -274,15 +287,52 @@ function ProfileTab({
               <option value="0">Hidden</option>
             </select>
           </Field>
-          <Field label="Banner landing URL" className="md:col-span-2">
-            <input
-              className={inputClass}
-              placeholder="https://www.sponsor-website.com"
-              value={form.landingUrl}
-              onChange={(e) => set('landingUrl', e.target.value)}
-            />
-            <span className="mt-1 block text-xs text-gray-500">Page opened when people click the logo or banner.</span>
-          </Field>
+          <div className="md:col-span-2">
+            <span className={labelClass}>Banner landing URL</span>
+            <div className="flex flex-wrap items-stretch gap-2">
+              <input
+                className={`${inputClass} min-w-0 flex-1`}
+                placeholder="https://www.sponsor-website.com"
+                value={form.landingUrl}
+                onChange={(e) => set('landingUrl', e.target.value)}
+              />
+              {onLoadBanner ? (
+                <>
+                  <input
+                    ref={bannerInput}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!file) return;
+                      setLoadingBanner(true);
+                      try {
+                        await onLoadBanner(file);
+                      } finally {
+                        setLoadingBanner(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={secondaryButton}
+                    disabled={loadingBanner}
+                    title="Load the sponsor banner image from your computer"
+                    onClick={() => bannerInput.current?.click()}
+                  >
+                    {loadingBanner ? 'Loading…' : 'Load from local'}
+                  </button>
+                </>
+              ) : null}
+            </div>
+            <span className="mt-1 block text-xs text-gray-500">
+              Website opened when people click the logo or banner. Use <strong>Load from local</strong> to upload the
+              banner image from your computer
+              {bannerUrl ? ' (banner already set — you can replace it).' : '.'}
+            </span>
+          </div>
         </div>
       </Card>
 
@@ -301,7 +351,13 @@ function ProfileTab({
             <input type="email" className={inputClass} value={form.email} onChange={(e) => set('email', e.target.value)} />
           </Field>
           <Field label="Phone">
-            <input className={inputClass} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+            <input
+              className={inputClass}
+              placeholder="+39 …"
+              value={form.phone}
+              onChange={(e) => set('phone', e.target.value)}
+            />
+            <span className="mt-1 block text-xs text-gray-500">Shown on the public sponsor report.</span>
           </Field>
           <Field label="Address">
             <input className={inputClass} value={form.address} onChange={(e) => set('address', e.target.value)} />
@@ -410,6 +466,13 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
       invoiceNumber: c.invoiceNumber || '',
       invoiceDate: c.invoiceDate || '',
     });
+    setPdf(null);
+    setInvoiceFile(null);
+    if (pdfInput.current) pdfInput.current.value = '';
+    if (invoiceInput.current) invoiceInput.current.value = '';
+    window.requestAnimationFrame(() => {
+      document.getElementById('sponsor-contract-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const current = sponsor.currentContract;
@@ -430,7 +493,7 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
         </Card>
       ) : null}
 
-      <form onSubmit={submit}>
+      <form id="sponsor-contract-form" onSubmit={submit}>
         <Card
           title={editingId ? 'Edit contract' : sponsor.contracts.length ? 'Renew contract' : 'New contract'}
           actions={
@@ -488,9 +551,15 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                 ref={pdfInput}
                 type="file"
                 accept="application/pdf,.pdf"
-                className="block w-full text-sm"
+                className="hidden"
                 onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
               />
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={secondaryButton} onClick={() => pdfInput.current?.click()}>
+                  Load from local
+                </button>
+                <span className="text-sm text-gray-600">{pdf ? pdf.name : 'No file selected'}</span>
+              </div>
             </Field>
             <Field label="Number of your invoice">
               <input
@@ -583,7 +652,13 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                     <td className="py-2 pr-3">
                       {c.pdfUrl ? (
                         <div className="flex items-center gap-2">
-                          <a href={c.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">
+                          <a
+                            href={c.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-700 hover:underline"
+                            title="Open PDF"
+                          >
                             {c.pdfName || 'contract.pdf'}
                           </a>
                           <button
@@ -606,7 +681,7 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                             rowPdfInput.current?.click();
                           }}
                         >
-                          Upload PDF
+                          Load from local
                         </button>
                       )}
                     </td>
@@ -645,8 +720,12 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                       )}
                     </td>
                     <td className="space-x-2 whitespace-nowrap py-2 text-right">
-                      <button type="button" className={secondaryButton} onClick={() => edit(c)}>
-                        Edit
+                      <button
+                        type="button"
+                        className={editingId === c.id ? primaryButton : secondaryButton}
+                        onClick={() => edit(c)}
+                      >
+                        {editingId === c.id ? 'Editing…' : 'Edit'}
                       </button>
                       <button
                         type="button"
@@ -1179,7 +1258,7 @@ function MediaCard({
       />
       <div className="mt-3 flex gap-2">
         <button type="button" className={primaryButton} disabled={busy} onClick={() => input.current?.click()}>
-          {busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
+          {busy ? 'Uploading…' : url ? 'Replace' : 'Load from local'}
         </button>
         {url ? (
           <button
