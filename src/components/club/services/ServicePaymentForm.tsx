@@ -119,9 +119,13 @@ function toYmd(iso: string | null | undefined): string {
   return "";
 }
 
-function formatAmountPaidInput(value: number, isMemberCreditPayment: boolean): string {
+function formatAmountPaidInput(
+  value: number,
+  isMemberCreditPayment: boolean,
+): string {
   const rounded = Math.round(value * 100) / 100;
-  if (isMemberCreditPayment && Number.isInteger(rounded)) return rounded.toFixed(1);
+  if (isMemberCreditPayment && Number.isInteger(rounded))
+    return rounded.toFixed(1);
   return String(rounded);
 }
 
@@ -308,6 +312,7 @@ export default function ServicePaymentForm({
     paymentDate: "",
     expireDate: "",
     description: "",
+    confirmPassword: "",
   });
   const [newFormOpen, setNewFormOpen] = useState(false);
   const [newFormSaving, setNewFormSaving] = useState(false);
@@ -317,9 +322,10 @@ export default function ServicePaymentForm({
     description: "",
   });
   const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"new" | "delete" | "modify" | null>(
-    null,
-  );
+  const [verifiedAdminPassword, setVerifiedAdminPassword] = useState("");
+  const [pendingAction, setPendingAction] = useState<
+    "new" | "delete" | "modify" | null
+  >(null);
   /** Which "new" flow triggered the admin-password gate: split the selected deadline, or add an independent one. */
   const [newAction, setNewAction] = useState<"divide" | "add">("add");
 
@@ -496,10 +502,16 @@ export default function ServicePaymentForm({
     onSelectedRecordIdsChange,
   ]);
 
+  const selectedTotalValue = useMemo(() => {
+    return installmentRows
+      .filter((r) => selectedInstallmentIds.has(r.id))
+      .reduce((sum, r) => sum + Math.max(0, r.balance + r.paid), 0);
+  }, [installmentRows, selectedInstallmentIds]);
+
   const selectedTotalRest = useMemo(() => {
     return installmentRows
       .filter((r) => selectedInstallmentIds.has(r.id))
-      .reduce((sum, r) => sum + r.balance, 0);
+      .reduce((sum, r) => sum + Math.max(0, r.balance), 0);
   }, [installmentRows, selectedInstallmentIds]);
 
   function computeTotalRestForIds(ids: Set<string>): number {
@@ -542,6 +554,14 @@ export default function ServicePaymentForm({
     });
   }, [installmentRows, selectedInstallmentIds, paidAmount]);
 
+  const restAfterTotal = useMemo(
+    () =>
+      Math.round(
+        nextRests.reduce((sum, row) => sum + Math.max(0, row.newRest), 0) * 100,
+      ) / 100,
+    [nextRests],
+  );
+
   function buildWaterfallDistributions(amount: number): PaymentDistribution[] {
     const sorted = [...installmentRows]
       .filter((r) => selectedInstallmentIds.has(r.id))
@@ -574,7 +594,10 @@ export default function ServicePaymentForm({
 
   function handleAmountPaidBlur(raw: string) {
     setAmountPaid(
-      formatAmountPaidInput(Number(clampAmountPaid(raw)), isMemberCreditPayment),
+      formatAmountPaidInput(
+        Number(clampAmountPaid(raw)),
+        isMemberCreditPayment,
+      ),
     );
   }
 
@@ -734,9 +757,29 @@ export default function ServicePaymentForm({
       paymentDate: row.paymentDate.slice(0, 10),
       expireDate: row.expireDate?.slice(0, 10) ?? "",
       description: row.description ?? "",
+      confirmPassword: "",
     });
     setPendingAction("modify");
     setShowAdminPasswordModal(true);
+  }
+
+  function getReversePasswordRequired(
+    row:
+      | { balance: number; paid: number; expireDate: string | null }
+      | undefined,
+    form: { balance: string; expireDate: string },
+  ): boolean {
+    const nextBalance = Number(form.balance) || 0;
+    const currentCost = row ? row.balance + row.paid : 0;
+    const currentDate = new Date().toISOString().slice(0, 10);
+    const nextExpireDate = form.expireDate || "";
+
+    const lowerCost =
+      nextBalance > 0 && currentCost > 0 && nextBalance < currentCost;
+    const earlierExpiry =
+      Boolean(nextExpireDate) && nextExpireDate < currentDate;
+
+    return lowerCost || earlierExpiry;
   }
 
   async function handleSaveModifyInstallment(e: React.FormEvent) {
@@ -754,8 +797,34 @@ export default function ServicePaymentForm({
     }
 
     const row = installments.find((r) => r.id === id);
+    const reversePasswordRequired = getReversePasswordRequired(row, {
+      balance: modifyForm.balance,
+      expireDate: modifyForm.expireDate,
+    });
+
+    if (reversePasswordRequired) {
+      const trimmedPassword = modifyForm.confirmPassword.trim();
+      if (!trimmedPassword) {
+        setModifyError(
+          "Type the reverse of the current password before lowering this deadline.",
+        );
+        return;
+      }
+
+      const expectedPassword = verifiedAdminPassword
+        ? [...verifiedAdminPassword].reverse().join("")
+        : "";
+
+      if (!expectedPassword || trimmedPassword !== expectedPassword) {
+        setModifyError(
+          "Incorrect reverse password. Type the reverse of the current password.",
+        );
+        return;
+      }
+    }
+
     const oldDeadlineTotal = row ? row.balance + row.paid : deadlineTotal;
-    const increase = Math.round((deadlineTotal - oldDeadlineTotal) * 100) / 100;
+    const delta = Math.round((deadlineTotal - oldDeadlineTotal) * 100) / 100;
     const otherTotal = installments
       .filter((r) => r.id !== id)
       .reduce((sum, r) => sum + r.balance + r.paid, 0);
@@ -765,10 +834,10 @@ export default function ServicePaymentForm({
     setModifyError("");
     setInstallmentError("");
     try {
-      // Like New deadline: allow raising Deadline above current cost by bumping record total.
-      if (increase > 0 && onAddToRecordTotal) {
-        await onAddToRecordTotal(increase);
-      } else if (increase > 0.001 && !onAddToRecordTotal) {
+      // Keep the parent record total in sync when a deadline is edited upward or downward.
+      if (onAddToRecordTotal && Math.abs(delta) > 0.005) {
+        await onAddToRecordTotal(delta);
+      } else if (delta > 0.001 && !onAddToRecordTotal) {
         setModifyError(
           `Total of all deadlines (€${newGrandTotal.toFixed(2)}) would exceed original cost (€${purchase.value.toFixed(2)}).`,
         );
@@ -806,11 +875,15 @@ export default function ServicePaymentForm({
     setInstallmentError("");
 
     if (isMemberCreditPayment && !taxDocument) {
-      setInstallmentError("Prepare the signed receipt before confirming this payment.");
+      setInstallmentError(
+        "Prepare the signed receipt before confirming this payment.",
+      );
       return;
     }
     if (isExpensePayment && !purchase.expenseInvoice) {
-      setInstallmentError("Load the invoice picture before confirming this expense payment.");
+      setInstallmentError(
+        "Load the invoice picture before confirming this expense payment.",
+      );
       return;
     }
     if (selectedInstallmentIds.size === 0) {
@@ -937,7 +1010,9 @@ export default function ServicePaymentForm({
   async function handleExpenseInvoiceUpload(file: File | undefined) {
     if (!file) return;
     if (!onUploadExpenseInvoice) {
-      setInvoiceError("Invoice upload is unavailable. Please refresh and try again.");
+      setInvoiceError(
+        "Invoice upload is unavailable. Please refresh and try again.",
+      );
       return;
     }
     setInvoiceBusy(true);
@@ -945,7 +1020,9 @@ export default function ServicePaymentForm({
     try {
       await onUploadExpenseInvoice(file);
     } catch (err) {
-      setInvoiceError(err instanceof Error ? err.message : "Invoice upload failed.");
+      setInvoiceError(
+        err instanceof Error ? err.message : "Invoice upload failed.",
+      );
     } finally {
       setInvoiceBusy(false);
       if (invoiceInputRef.current) invoiceInputRef.current.value = "";
@@ -954,7 +1031,9 @@ export default function ServicePaymentForm({
 
   async function handleExpenseInvoiceRemove() {
     if (!onRemoveExpenseInvoice) {
-      setInvoiceError("Invoice removal is unavailable. Please refresh and try again.");
+      setInvoiceError(
+        "Invoice removal is unavailable. Please refresh and try again.",
+      );
       return;
     }
     setInvoiceBusy(true);
@@ -962,7 +1041,9 @@ export default function ServicePaymentForm({
     try {
       await onRemoveExpenseInvoice();
     } catch (err) {
-      setInvoiceError(err instanceof Error ? err.message : "Invoice removal failed.");
+      setInvoiceError(
+        err instanceof Error ? err.message : "Invoice removal failed.",
+      );
     } finally {
       setInvoiceBusy(false);
     }
@@ -1064,7 +1145,10 @@ export default function ServicePaymentForm({
                           amountPaidTouchedRef.current = false;
                           setAmountPaid(
                             nextTotalRest > 0
-                              ? formatAmountPaidInput(nextTotalRest, isMemberCreditPayment)
+                              ? formatAmountPaidInput(
+                                  nextTotalRest,
+                                  isMemberCreditPayment,
+                                )
                               : formatAmountPaidInput(0, isMemberCreditPayment),
                           );
                           setPayWith("0");
@@ -1168,6 +1252,12 @@ export default function ServicePaymentForm({
           </div>
           <p className="text-xs text-gray-500 mt-1">
             Selected total:{" "}
+            <strong className={selectedTotalValue > 0 ? "text-red-700" : ""}>
+              {formatEuro(selectedTotalValue)}
+            </strong>
+          </p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            Remaining rest:{" "}
             <strong className={selectedTotalRest > 0 ? "text-red-700" : ""}>
               {formatEuro(selectedTotalRest)}
             </strong>
@@ -1268,11 +1358,17 @@ export default function ServicePaymentForm({
                 Pay mode
               </label>
               {isExpensePayment ? (
-                <span className="mb-1 block min-w-0 text-gray-600">Invoice</span>
+                <span className="mb-1 block min-w-0 text-gray-600">
+                  Invoice
+                </span>
               ) : (
                 <>
-                  <span className="mb-1 block min-w-0" aria-hidden>&nbsp;</span>
-                  <span className="mb-1 block min-w-0" aria-hidden>&nbsp;</span>
+                  <span className="mb-1 block min-w-0" aria-hidden>
+                    &nbsp;
+                  </span>
+                  <span className="mb-1 block min-w-0" aria-hidden>
+                    &nbsp;
+                  </span>
                 </>
               )}
             </div>
@@ -1303,11 +1399,13 @@ export default function ServicePaymentForm({
                   <input
                     ref={invoiceInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.odt,.pages,.txt,.rtf,.md,.pdf,.html,.xhtml,image/jpeg,image/png,image/gif,image/bmp,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.apple.pages,text/plain,text/rtf,text/markdown,text/html,application/xhtml+xml"
                     className="hidden"
                     disabled={invoiceBusy || saving}
                     onChange={(event) => {
-                      void handleExpenseInvoiceUpload(event.currentTarget.files?.[0]);
+                      void handleExpenseInvoiceUpload(
+                        event.currentTarget.files?.[0],
+                      );
                     }}
                   />
                   <div className="flex flex-wrap items-center gap-2">
@@ -1317,7 +1415,11 @@ export default function ServicePaymentForm({
                       disabled={invoiceBusy || saving}
                       className="h-9 rounded bg-gray-200 px-3 text-sm hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {invoiceBusy ? "Saving invoice..." : purchase.expenseInvoice ? "Load new" : "Load invoice"}
+                      {invoiceBusy
+                        ? "Saving invoice..."
+                        : purchase.expenseInvoice
+                          ? "Load new"
+                          : "Load invoice"}
                     </button>
                     {purchase.expenseInvoice && (
                       <button
@@ -1352,14 +1454,20 @@ export default function ServicePaymentForm({
                       <p className="mt-1 break-all text-xs text-gray-600">
                         {purchase.expenseInvoice.name}
                       </p>
-                      <p className="text-xs text-gray-500">Select the picture to enlarge it.</p>
+                      <p className="text-xs text-gray-500">
+                        Select the picture to enlarge it.
+                      </p>
                     </div>
                   ) : (
                     <p className="text-xs text-amber-700">
                       An invoice picture is required before saving this payment.
                     </p>
                   )}
-                  {invoiceError && <p role="alert" className="text-sm text-red-600">{invoiceError}</p>}
+                  {invoiceError && (
+                    <p role="alert" className="text-sm text-red-600">
+                      {invoiceError}
+                    </p>
+                  )}
                 </div>
               ) : showTaxDocument ? (
                 <div className="flex h-10 min-w-0 items-center gap-2">
@@ -1373,7 +1481,9 @@ export default function ServicePaymentForm({
                       if (!checked) setTaxDocument(null);
                     }}
                   />
-                  <span>{isMemberCreditPayment ? "Receipt to sign" : "Tax doc"}</span>
+                  <span>
+                    {isMemberCreditPayment ? "Receipt to sign" : "Tax doc"}
+                  </span>
                   {taxDocument && (
                     <span className="text-xs text-teal-700">
                       · receipt ready at Confirm
@@ -1390,21 +1500,23 @@ export default function ServicePaymentForm({
               )}
               {!isExpensePayment && (
                 <div className="min-w-0">
-                {showTaxDocument ? (
-                  <button
-                    type="button"
-                    onClick={() => setTaxModalOpen(true)}
-                    disabled={!taxDoc}
-                    className="h-10 rounded bg-gray-200 px-3 text-sm hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {isMemberCreditPayment ? "Open signed receipt" : "Open form"}
-                  </button>
-                ) : (
-                  <span className="text-xs text-gray-500" aria-hidden>
-                    -
-                  </span>
-                )}
-              </div>
+                  {showTaxDocument ? (
+                    <button
+                      type="button"
+                      onClick={() => setTaxModalOpen(true)}
+                      disabled={!taxDoc}
+                      className="h-10 rounded bg-gray-200 px-3 text-sm hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isMemberCreditPayment
+                        ? "Open signed receipt"
+                        : "Open form"}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-500" aria-hidden>
+                      -
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -1501,15 +1613,14 @@ export default function ServicePaymentForm({
             </label>
             <label className="flex min-w-0 flex-col">
               <span className="mb-1 block min-h-[1.25rem] text-gray-600">
-                Resto to give
+                Rest after
               </span>
-              <input
-                type="text"
-                readOnly
-                className={`h-10 ${procedureInputClass}`}
+              <div
+                className={`flex h-10 items-center rounded-md border border-gray-300 px-3 ${procedureInputClass}`}
                 style={{ backgroundColor: "#d3f07b" }}
-                value={restGive.toFixed(2)}
-              />
+              >
+                {formatEuro(restAfterTotal)}
+              </div>
             </label>
           </div>
 
@@ -1572,8 +1683,12 @@ export default function ServicePaymentForm({
         <TaxDocumentModal
           open={taxModalOpen}
           memberName={purchase.memberName}
-          title={isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined}
-          fixedDocumentType={isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined}
+          title={
+            isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined
+          }
+          fixedDocumentType={
+            isMemberCreditPayment ? SIGNED_RECEIPT_DOCUMENT_TYPE : undefined
+          }
           defaultCausal={description}
           defaultTotal={paidAmount}
           defaultResidual={overallNewRest}
@@ -1687,6 +1802,29 @@ export default function ServicePaymentForm({
                 }
               />
             </label>
+            {getReversePasswordRequired(
+              installments.find((r) => r.id === firstSelectedId()),
+              {
+                balance: modifyForm.balance,
+                expireDate: modifyForm.expireDate,
+              },
+            ) && (
+              <label className="block">
+                <span className="text-gray-600">Reverse current password</span>
+                <input
+                  type="password"
+                  className={`mt-1 ${procedureInputClass}`}
+                  value={modifyForm.confirmPassword}
+                  onChange={(e) =>
+                    setModifyForm((f) => ({
+                      ...f,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
+                  placeholder="Type the reverse of the current password"
+                />
+              </label>
+            )}
             <label className="block">
               <span className="text-gray-600">Description</span>
               <textarea
@@ -1811,11 +1949,14 @@ export default function ServicePaymentForm({
           setShowAdminPasswordModal(false);
           setPendingAction(null);
         }}
-        onVerified={() => {
+        onVerified={(password) => {
+          setVerifiedAdminPassword(password);
           setShowAdminPasswordModal(false);
           if (pendingAction === "delete") void performDeleteInstallment();
           if (pendingAction === "new") openNewFormAfterAdminAuth();
-          if (pendingAction === "modify") setModifyOpen(true);
+          if (pendingAction === "modify") {
+            setModifyOpen(true);
+          }
           setPendingAction(null);
         }}
       />
