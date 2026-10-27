@@ -1,30 +1,30 @@
-'use client';
+"use client";
 
 /**
  * Cash movements archive with PHP-style drill-down tabs:
  * Historical | Details deadline | Totals about payments
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
-import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
-import ProcedurePagination from '@/components/procedures/ProcedurePagination';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import ProcedureArchiveShell from "@/components/procedures/ProcedureArchiveShell";
+import ProcedureArchiveTable from "@/components/procedures/ProcedureArchiveTable";
+import ProcedurePagination from "@/components/procedures/ProcedurePagination";
 import {
   CancelRowButton,
   DeleteRowButton,
   EditRowButton,
   usePasswordGate,
-} from '@/components/procedures/ArchiveRowActions';
-import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
-import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
-import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
-import { createProcedureClient } from '@/lib/club/procedureClient';
-import { parseCashMovementId } from '@/lib/club/cashMovementClient';
-import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
-import type { ProcedureTypeCode } from '@/lib/procedures/types';
-import type { Column, Member } from '@/types/clubTable';
+} from "@/components/procedures/ArchiveRowActions";
+import ArchiveListToolbar from "@/components/procedures/ArchiveListToolbar";
+import { useArchiveListFilters } from "@/components/procedures/useArchiveListFilters";
+import { fetchClubArchive } from "@/lib/club/archives/clubArchiveClient";
+import { createProcedureClient } from "@/lib/club/procedureClient";
+import { parseCashMovementId } from "@/lib/club/cashMovementClient";
+import { formatDate, formatEuro } from "@/lib/club/servicePurchasesClient";
+import type { ProcedureTypeCode } from "@/lib/procedures/types";
+import type { Column, Member } from "@/types/clubTable";
 
-type ViewMode = 'historical' | 'details_deadline' | 'totals_payments';
+type ViewMode = "historical" | "details_deadline" | "totals_payments";
 
 type CashRow = Member & {
   id: string;
@@ -40,7 +40,7 @@ type PaymentsScope = {
 
 type Props = {
   title: string;
-  direction: 'all' | 'IN' | 'OUT';
+  direction: "all" | "IN" | "OUT";
   columns: Column[];
   footerHint?: string;
   onEditItem?: (item: Member) => void;
@@ -49,36 +49,40 @@ type Props = {
 };
 
 const deadlineColumns: Column[] = [
-  { key: 'name', header: 'Full Name' },
-  { key: 'typology', header: 'Typology' },
-  { key: 'service', header: 'Service / Product' },
-  { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
-  { key: 'expirationDate', header: 'Expiration Date', render: (v) => formatDate(v) },
-  { key: 'value', header: 'Cost', render: (v) => formatEuro(v) },
-  { key: 'paid', header: 'Paid', render: (v) => formatEuro(v) },
-  { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
-  { key: 'dateEnd', header: 'Last payment', render: (v) => formatDate(v) },
-  { key: 'casual', header: 'Description' },
-  { key: 'operator', header: 'Operator' },
+  { key: "name", header: "Full Name" },
+  { key: "typology", header: "Typology" },
+  { key: "service", header: "Service / Product" },
+  { key: "insertDate", header: "Date", render: (v) => formatDate(v) },
+  {
+    key: "expirationDate",
+    header: "Expiration Date",
+    render: (v) => formatDate(v),
+  },
+  { key: "value", header: "Cost", render: (v) => formatEuro(v) },
+  { key: "paid", header: "Paid", render: (v) => formatEuro(v) },
+  { key: "rest", header: "Rest", render: (v) => formatEuro(v) },
+  { key: "dateEnd", header: "Last payment", render: (v) => formatDate(v) },
+  { key: "casual", header: "Description" },
+  { key: "operator", header: "Operator" },
 ];
 
 const totalsColumns: Column[] = [
-  { key: 'name', header: 'Full Name' },
-  { key: 'typology', header: 'Typology' },
-  { key: 'service', header: 'Service / Product' },
-  { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
-  { key: 'paid', header: 'Payment IN', render: (v) => formatEuro(v) },
-  { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
-  { key: 'payMod', header: 'Pay mode' },
-  { key: 'casual', header: 'Causal Payment' },
-  { key: 'operator', header: 'Operator' },
+  { key: "name", header: "Full Name" },
+  { key: "typology", header: "Typology" },
+  { key: "service", header: "Service / Product" },
+  { key: "insertDate", header: "Date", render: (v) => formatDate(v) },
+  { key: "paid", header: "Payment IN", render: (v) => formatEuro(v) },
+  { key: "rest", header: "Rest", render: (v) => formatEuro(v) },
+  { key: "payMod", header: "Pay mode" },
+  { key: "casual", header: "Causal Payment" },
+  { key: "operator", header: "Operator" },
 ];
 
 function tabClass(active: boolean) {
   if (active) {
-    return 'mb-[-1px] rounded-t border border-b-0 border-teal-600 bg-white px-3 py-2 text-sm font-medium text-teal-700';
+    return "mb-[-1px] rounded-t border border-b-0 border-teal-600 bg-white px-3 py-2 text-sm font-medium text-teal-700";
   }
-  return 'mb-[-1px] rounded-t border border-b-0 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-gray-600 hover:text-teal-700';
+  return "mb-[-1px] rounded-t border border-b-0 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-gray-600 hover:text-teal-700";
 }
 
 export default function CashMovementsArchive({
@@ -92,30 +96,32 @@ export default function CashMovementsArchive({
 }: Props) {
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
   const filters = useArchiveListFilters();
-  const [view, setView] = useState<ViewMode>('historical');
+  const [view, setView] = useState<ViewMode>("historical");
   const [historical, setHistorical] = useState<CashRow[]>([]);
   const [detailRows, setDetailRows] = useState<Member[]>([]);
-  const [paymentsScope, setPaymentsScope] = useState<PaymentsScope | null>(null);
+  const [paymentsScope, setPaymentsScope] = useState<PaymentsScope | null>(
+    null,
+  );
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
 
   const selectedRow = useMemo(
     () => historical.find((r) => r.id === selectedId) ?? null,
-    [historical, selectedId]
+    [historical, selectedId],
   );
 
   const loadHistorical = useCallback(async () => {
     setLoading(true);
-    setError('');
+    setError("");
     try {
-      const res = await fetchClubArchive('cash-movements', {
+      const res = await fetchClubArchive("cash-movements", {
         page,
         pageSize,
         direction,
@@ -142,18 +148,22 @@ export default function CashMovementsArchive({
           enriched.cancel = item.reversalOfId ? (
             <span className="text-xs text-gray-500">Reversal</span>
           ) : item.cancelled ? (
-            <span className="text-xs font-semibold text-gray-500">Cancelled</span>
+            <span className="text-xs font-semibold text-gray-500">
+              Cancelled
+            </span>
           ) : (
             <CancelRowButton
               onClick={() =>
                 requestPassword(() => {
                   if (
                     window.confirm(
-                      'Cancel this payment? An opposite transaction will be recorded and the related deadline balance restored.'
+                      "Cancel this payment? An opposite transaction will be recorded and the related deadline balance restored.",
                     )
                   ) {
                     void Promise.resolve(onCancelItem(item)).catch((e) => {
-                      setError(e instanceof Error ? e.message : 'Cancel failed');
+                      setError(
+                        e instanceof Error ? e.message : "Cancel failed",
+                      );
                     });
                   }
                 })
@@ -173,11 +183,20 @@ export default function CashMovementsArchive({
       setHistorical(items);
       setCheckedIds(new Set());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [filters.applied, direction, onCancelItem, onDeleteItem, onEditItem, page, pageSize, requestPassword]);
+  }, [
+    filters.applied,
+    direction,
+    onCancelItem,
+    onDeleteItem,
+    onEditItem,
+    page,
+    pageSize,
+    requestPassword,
+  ]);
 
   useEffect(() => {
     loadHistorical();
@@ -189,13 +208,15 @@ export default function CashMovementsArchive({
 
   async function loadDetailsDeadline(row: CashRow) {
     if (!row.procedureRecordId || !row.procedureType) {
-      window.alert('Please select at least one record');
+      window.alert("Please select at least one record");
       return;
     }
     setDetailLoading(true);
-    setError('');
+    setError("");
     try {
-      const client = createProcedureClient(row.procedureType as ProcedureTypeCode);
+      const client = createProcedureClient(
+        row.procedureType as ProcedureTypeCode,
+      );
       const { record } = await client.fetchRecord(row.procedureRecordId);
       setDetailRows([
         {
@@ -215,9 +236,11 @@ export default function CashMovementsArchive({
           dateEnd: record.lastPaymentDate ?? undefined,
         },
       ]);
-      setView('details_deadline');
+      setView("details_deadline");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load deadline details');
+      setError(
+        e instanceof Error ? e.message : "Failed to load deadline details",
+      );
     } finally {
       setDetailLoading(false);
     }
@@ -225,11 +248,13 @@ export default function CashMovementsArchive({
 
   async function loadPaymentsForScope(scope: PaymentsScope, showAll: boolean) {
     setDetailLoading(true);
-    setError('');
+    setError("");
     try {
       const client = createProcedureClient(scope.procedureType);
       const res = await client.fetchPayments({
-        ...(showAll ? { memberId: scope.memberId } : { recordId: scope.recordId }),
+        ...(showAll
+          ? { memberId: scope.memberId }
+          : { recordId: scope.recordId }),
         page: 1,
         pageSize: 100,
       });
@@ -245,13 +270,15 @@ export default function CashMovementsArchive({
           payMod: p.payMode ?? undefined,
           casual: p.description,
           operator: p.operatorName,
-        }))
+        })),
       );
       setPaymentsScope(scope);
       setShowAllPayments(showAll);
-      setView('totals_payments');
+      setView("totals_payments");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load payment totals');
+      setError(
+        e instanceof Error ? e.message : "Failed to load payment totals",
+      );
     } finally {
       setDetailLoading(false);
     }
@@ -259,20 +286,28 @@ export default function CashMovementsArchive({
 
   async function loadTotalsPayments(row: CashRow) {
     if (!row.procedureRecordId || !row.procedureType) {
-      window.alert('Please select at least one record');
+      window.alert("Please select at least one record");
       return;
     }
     setDetailLoading(true);
-    setError('');
+    setError("");
     try {
       const procedureType = row.procedureType as ProcedureTypeCode;
-      const { record } = await createProcedureClient(procedureType).fetchRecord(row.procedureRecordId);
+      const { record } = await createProcedureClient(procedureType).fetchRecord(
+        row.procedureRecordId,
+      );
       await loadPaymentsForScope(
-        { procedureType, recordId: row.procedureRecordId, memberId: record.userId },
-        false
+        {
+          procedureType,
+          recordId: row.procedureRecordId,
+          memberId: record.userId,
+        },
+        false,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load payment totals');
+      setError(
+        e instanceof Error ? e.message : "Failed to load payment totals",
+      );
       setDetailLoading(false);
     }
   }
@@ -284,7 +319,7 @@ export default function CashMovementsArchive({
 
   function handleDetailsDeadline() {
     if (!selectedRow) {
-      window.alert('Please select at least one record');
+      window.alert("Please select at least one record");
       return;
     }
     void loadDetailsDeadline(selectedRow);
@@ -292,14 +327,14 @@ export default function CashMovementsArchive({
 
   function handleTotalsPayments() {
     if (!selectedRow) {
-      window.alert('Please select at least one record');
+      window.alert("Please select at least one record");
       return;
     }
     void loadTotalsPayments(selectedRow);
   }
 
   function handleHistorical() {
-    setView('historical');
+    setView("historical");
     setDetailRows([]);
     setPaymentsScope(null);
     setShowAllPayments(false);
@@ -308,18 +343,20 @@ export default function CashMovementsArchive({
   function applyFilterForm() {
     if (!filters.apply()) return;
     setPage(1);
-    setView('historical');
+    setView("historical");
   }
 
   function clearFilters() {
     filters.clear();
     setPage(1);
-    setView('historical');
+    setView("historical");
   }
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;
-    const items = historical.filter((r) => checkedIds.has(r.id) && !r.reversalOfId);
+    const items = historical.filter(
+      (r) => checkedIds.has(r.id) && !r.reversalOfId,
+    );
     if (items.length === 0) return;
     requestPassword(async () => {
       try {
@@ -329,51 +366,57 @@ export default function CashMovementsArchive({
         setCheckedIds(new Set());
         loadHistorical();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Delete failed');
+        setError(e instanceof Error ? e.message : "Delete failed");
       }
     });
   }
 
-  const showingHistorical = view === 'historical';
+  const showingHistorical = view === "historical";
   const tableColumns = showingHistorical
     ? columns
-    : view === 'details_deadline'
+    : view === "details_deadline"
       ? deadlineColumns
       : totalsColumns;
   const tableRows = showingHistorical ? historical : detailRows;
   const tableLoading = showingHistorical ? loading : detailLoading;
+  const getDirectionRowClassName = (row: Member) => {
+    const rowDirection = row.direction ?? direction;
+    if (rowDirection === "IN") return "text-[#0b5d3c] font-semibold";
+    if (rowDirection === "OUT") return "text-red-700 font-semibold";
+    return "";
+  };
 
   const tabActions = (
     <>
       <button
         type="button"
-        className={tabClass(view === 'historical')}
+        className={tabClass(view === "historical")}
         onClick={handleHistorical}
       >
         Historical
       </button>
       <button
         type="button"
-        className={tabClass(view === 'details_deadline')}
+        className={tabClass(view === "details_deadline")}
         onClick={handleDetailsDeadline}
       >
         Details deadline selected
       </button>
       <button
         type="button"
-        className={tabClass(view === 'totals_payments')}
+        className={tabClass(view === "totals_payments")}
         onClick={handleTotalsPayments}
       >
         Payments record selected
       </button>
-      {view === 'totals_payments' && (
+      {view === "totals_payments" && (
         <button
           type="button"
           className="ml-auto px-3 py-2 text-sm font-medium text-teal-700 hover:text-teal-900"
           onClick={toggleAllPayments}
           disabled={detailLoading || !paymentsScope}
         >
-          {showAllPayments ? 'Show selected record' : 'Show all'}
+          {showAllPayments ? "Show selected record" : "Show all"}
         </button>
       )}
     </>
@@ -388,13 +431,13 @@ export default function CashMovementsArchive({
       error={error || undefined}
       footerHint={
         showingHistorical
-          ? footerHint ??
-            'Select a payment, then open Details deadline or Totals about payments. Check rows to delete selected.'
-          : view === 'details_deadline'
-            ? 'Parent deadline / debt related to the selected payment. Click Historical to go back.'
+          ? (footerHint ??
+            "Select a payment, then open Details deadline or Totals about payments. Check rows to delete selected.")
+          : view === "details_deadline"
+            ? "Parent deadline / debt related to the selected payment. Click Historical to go back."
             : showAllPayments
-              ? 'All payments of the current member (same typology) as the selected row. Click Historical to go back.'
-              : 'Payments related to the selected record. Use Show all to view all payments of this member.'
+              ? "All payments of the current member (same typology) as the selected row. Click Historical to go back."
+              : "Payments related to the selected record. Use Show all to view all payments of this member."
       }
     >
       {showingHistorical && (
@@ -430,12 +473,13 @@ export default function CashMovementsArchive({
         selectOnlyOpenRest={false}
         selectedIds={showingHistorical ? checkedIds : undefined}
         loading={tableLoading}
+        getRowClassName={getDirectionRowClassName}
         emptyMessage={
           showingHistorical
-            ? 'No cash movements found.'
-            : view === 'details_deadline'
-              ? 'No related deadline found.'
-              : 'No related payments found.'
+            ? "No cash movements found."
+            : view === "details_deadline"
+              ? "No related deadline found."
+              : "No related payments found."
         }
         onRowClick={
           showingHistorical
@@ -466,7 +510,12 @@ export default function CashMovementsArchive({
                   return;
                 }
                 setCheckedIds(
-                  new Set(historical.filter((r) => !r.reversalOfId).map((r) => r.id).filter(Boolean))
+                  new Set(
+                    historical
+                      .filter((r) => !r.reversalOfId)
+                      .map((r) => r.id)
+                      .filter(Boolean),
+                  ),
                 );
               }
             : undefined

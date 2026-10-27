@@ -82,6 +82,7 @@ export type Member = {
   residual?: number;
 
   // movement
+  direction?: "IN" | "OUT" | "all";
   payMod?: string;
   casual?: string;
   originalDebt?: number;
@@ -105,7 +106,7 @@ export type Member = {
    * Archive of Users A/B/C/D:
    * member | pending | not_member | archived
    */
-  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived';
+  membershipStatus?: "member" | "pending" | "not_member" | "archived";
   /** Staff-only archive rows (no pending/not-member actions). */
   isStaffOnly?: boolean;
   /** Member account is a Coach (ID6) — status circle is half filled. */
