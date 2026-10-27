@@ -40,6 +40,14 @@ export class SponsorError extends Error {
 const UPLOAD_SUBDIR = 'club_sponsors';
 let tablesReady = false;
 
+async function ensureColumn(table: string, ddl: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE \`${table}\` ADD COLUMN ${ddl}`);
+  } catch {
+    /* column already exists */
+  }
+}
+
 export async function ensureSponsorTables(): Promise<void> {
   if (tablesReady) return;
   await prisma.$executeRawUnsafe(`
@@ -110,6 +118,13 @@ export async function ensureSponsorTables(): Promise<void> {
       KEY org_sponsor_events_sponsor_idx (sponsor_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  await ensureColumn('org_sponsor_contracts', `invoice_number VARCHAR(64) NOT NULL DEFAULT ''`);
+  await ensureColumn('org_sponsor_contracts', `invoice_date DATE NULL`);
+  await ensureColumn('org_sponsor_contracts', `invoice_name VARCHAR(191) NULL`);
+  await ensureColumn('org_sponsor_contracts', `invoice_path VARCHAR(255) NULL`);
+  await ensureColumn('org_sponsor_payments', `pay_mode VARCHAR(64) NOT NULL DEFAULT ''`);
+  await ensureColumn('org_sponsor_payments', `operator_username VARCHAR(191) NOT NULL DEFAULT ''`);
+  await ensureColumn('org_sponsor_payments', `annotations TEXT NULL`);
   tablesReady = true;
 }
 
@@ -220,6 +235,10 @@ type ContractRow = {
   notes: string | null;
   pdf_name: string | null;
   pdf_path: string | null;
+  invoice_number?: string | null;
+  invoice_date?: Date | string | null;
+  invoice_name?: string | null;
+  invoice_path?: string | null;
   created_at: Date;
 };
 
@@ -231,6 +250,9 @@ type PaymentRow = {
   reminder_days: number;
   note: string;
   paid_at: Date | string | null;
+  pay_mode?: string | null;
+  operator_username?: string | null;
+  annotations?: string | null;
   created_at: Date;
 };
 
@@ -244,6 +266,10 @@ function toContract(r: ContractRow): SponsorContract {
     notes: r.notes ?? '',
     pdfName: r.pdf_name,
     pdfUrl: mediaUrl(r.pdf_path),
+    invoiceNumber: r.invoice_number ?? '',
+    invoiceDate: r.invoice_date ? dbYmd(r.invoice_date) : '',
+    invoiceName: r.invoice_name ?? null,
+    invoiceUrl: mediaUrl(r.invoice_path ?? null),
     createdAt: r.created_at.toISOString(),
   };
 }
@@ -256,6 +282,9 @@ function toPayment(r: PaymentRow): SponsorPayment {
     reminderDays: Number(r.reminder_days) || 0,
     note: r.note,
     paidAt: r.paid_at ? dbYmd(r.paid_at) : null,
+    payMode: r.pay_mode ?? '',
+    operatorUsername: r.operator_username ?? '',
+    annotations: r.annotations ?? '',
     createdAt: r.created_at.toISOString(),
   };
 }
@@ -497,12 +526,15 @@ function cleanContract(input: Record<string, unknown>) {
   const endDate = ymd(input.endDate);
   if (!startDate || !endDate) throw new SponsorError('Enter the contract start and end dates', 400);
   if (startDate > endDate) throw new SponsorError('The contract must end after it starts', 400);
+  const invoiceDateRaw = ymd(input.invoiceDate);
   return {
     startDate,
     endDate,
     value: money(input.value),
     reminderDays: intIn(input.reminderDays, 0, 365, 30),
     notes: str(input.notes, 2000),
+    invoiceNumber: str(input.invoiceNumber, 64),
+    invoiceDate: invoiceDateRaw,
   };
 }
 
@@ -528,18 +560,21 @@ export async function saveContract(
     await getContractRow(sponsorId, contractId);
     await prisma.$executeRawUnsafe(
       `UPDATE org_sponsor_contracts SET start_date = ?, end_date = ?, value = ?, reminder_days = ?, notes = ?,
-         reminder_sent_at = NULL WHERE id = ?`,
+         invoice_number = ?, invoice_date = ?, reminder_sent_at = NULL WHERE id = ?`,
       c.startDate,
       c.endDate,
       c.value,
       c.reminderDays,
       c.notes,
+      c.invoiceNumber,
+      c.invoiceDate,
       contractId,
     );
   } else {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO org_sponsor_contracts (id, sponsor_id, start_date, end_date, value, reminder_days, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO org_sponsor_contracts
+         (id, sponsor_id, start_date, end_date, value, reminder_days, notes, invoice_number, invoice_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       randomUUID(),
       sponsorId,
       c.startDate,
@@ -547,6 +582,8 @@ export async function saveContract(
       c.value,
       c.reminderDays,
       c.notes,
+      c.invoiceNumber,
+      c.invoiceDate,
     );
   }
   return getSponsor(ws, sponsorId);
@@ -557,6 +594,7 @@ export async function deleteContract(ws: SponsorWorkspace, sponsorId: string, co
   const row = await getContractRow(sponsorId, contractId);
   await prisma.$executeRawUnsafe(`DELETE FROM org_sponsor_contracts WHERE id = ?`, contractId);
   await removeStoredFile(row.pdf_path);
+  await removeStoredFile(row.invoice_path ?? null);
   return getSponsor(ws, sponsorId);
 }
 
@@ -577,6 +615,28 @@ export async function setContractPdf(
     contractId,
   );
   await removeStoredFile(row.pdf_path);
+  return getSponsor(ws, sponsorId);
+}
+
+export async function setContractInvoice(
+  ws: SponsorWorkspace,
+  sponsorId: string,
+  contractId: string,
+  file: Blob | null,
+  originalName = '',
+): Promise<Sponsor> {
+  await getSponsorRow(ws, sponsorId);
+  const row = await getContractRow(sponsorId, contractId);
+  const path = file
+    ? await storeFile(file, originalName, [...SPONSOR_IMAGE_EXTENSIONS, 'pdf'], SPONSOR_MAX_PDF_BYTES)
+    : null;
+  await prisma.$executeRawUnsafe(
+    `UPDATE org_sponsor_contracts SET invoice_name = ?, invoice_path = ? WHERE id = ?`,
+    file ? str(originalName, 191) || 'invoice' : null,
+    path,
+    contractId,
+  );
+  await removeStoredFile(row.invoice_path ?? null);
   return getSponsor(ws, sponsorId);
 }
 
@@ -647,11 +707,258 @@ export async function setPaymentPaid(
   return getSponsor(ws, sponsorId);
 }
 
+/** Generate N deadlines from contract value (first amount + equal split of remainder). */
+export async function generateDeadlines(
+  ws: SponsorWorkspace,
+  sponsorId: string,
+  input: {
+    count: number;
+    firstAmount: number;
+    firstDate: string;
+    intervalDays: number;
+  },
+): Promise<Sponsor> {
+  const sponsor = await getSponsor(ws, sponsorId);
+  const contract = sponsor.currentContract;
+  if (!contract) throw new SponsorError('Add a contract before generating deadlines', 400);
+  const count = intIn(input.count, 1, 36, 1);
+  const firstDate = ymd(input.firstDate);
+  if (!firstDate) throw new SponsorError('Enter the date of the first deadline', 400);
+  const intervalDays = intIn(input.intervalDays, 1, 365, 30);
+  const firstAmount = money(input.firstAmount);
+  if (firstAmount <= 0) throw new SponsorError('Enter the value of the first deadline', 400);
+  if (firstAmount > contract.value + 0.001) {
+    throw new SponsorError('The first deadline cannot exceed the contract value', 400);
+  }
+  const remainingCount = count - 1;
+  const remainingTotal = Math.max(0, Math.round((contract.value - firstAmount) * 100) / 100);
+  const otherAmount =
+    remainingCount > 0 ? Math.round((remainingTotal / remainingCount) * 100) / 100 : 0;
+
+  const rows: Array<{ amount: number; dueDate: string }> = [{ amount: firstAmount, dueDate: firstDate }];
+  let allocated = firstAmount;
+  for (let i = 1; i < count; i += 1) {
+    const isLast = i === count - 1;
+    const amount = isLast
+      ? Math.round((contract.value - allocated) * 100) / 100
+      : otherAmount;
+    allocated = Math.round((allocated + amount) * 100) / 100;
+    rows.push({ amount, dueDate: addDaysYmd(firstDate, intervalDays * i) });
+  }
+
+  for (const row of rows) {
+    if (row.amount <= 0) continue;
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO org_sponsor_payments (id, sponsor_id, amount, due_date, reminder_days, note)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      randomUUID(),
+      sponsorId,
+      row.amount,
+      row.dueDate,
+      7,
+      'Sponsoring',
+    );
+  }
+  return getSponsor(ws, sponsorId);
+}
+
+export type SettlePaymentInput = {
+  mode: 'whole' | 'partial' | 'unpaid';
+  paidAmount?: number;
+  payMode?: string;
+  annotations?: string;
+  operatorUsername?: string;
+  paymentDate?: string;
+};
+
+/** Mark as paid (whole/partial) or reopen unpaid. Partial splits the deadline. */
+export async function settlePayment(
+  ws: SponsorWorkspace,
+  sponsorId: string,
+  paymentId: string,
+  input: SettlePaymentInput,
+): Promise<Sponsor> {
+  const sponsor = await getSponsorRow(ws, sponsorId);
+  const payment = await getPaymentRow(sponsorId, paymentId);
+
+  if (input.mode === 'unpaid') {
+    await prisma.$executeRawUnsafe(
+      `UPDATE org_sponsor_payments
+       SET paid_at = NULL, pay_mode = '', operator_username = '', annotations = NULL
+       WHERE id = ?`,
+      paymentId,
+    );
+    return getSponsor(ws, sponsorId);
+  }
+
+  const payMode = str(input.payMode, 64);
+  if (!payMode) throw new SponsorError('Select the payment method', 400);
+  const annotations = str(input.annotations, 2000);
+  const operatorUsername = str(input.operatorUsername, 191);
+  const paymentDate = ymd(input.paymentDate) || todayYmd();
+  const total = Number(payment.amount) || 0;
+
+  if (input.mode === 'whole') {
+    await prisma.$executeRawUnsafe(
+      `UPDATE org_sponsor_payments
+       SET paid_at = ?, pay_mode = ?, operator_username = ?, annotations = ?, note = CASE WHEN note = '' THEN 'Sponsoring' ELSE note END
+       WHERE id = ?`,
+      paymentDate,
+      payMode,
+      operatorUsername,
+      annotations || null,
+      paymentId,
+    );
+    return getSponsor(ws, sponsorId);
+  }
+
+  const paidAmount = money(input.paidAmount);
+  if (paidAmount <= 0) throw new SponsorError('Enter the amount paid', 400);
+  if (paidAmount >= total - 0.001) {
+    return settlePayment(ws, sponsorId, paymentId, {
+      mode: 'whole',
+      payMode,
+      annotations,
+      operatorUsername,
+      paymentDate,
+    });
+  }
+
+  const remainder = Math.round((total - paidAmount) * 100) / 100;
+  const open = await prisma.$queryRawUnsafe<PaymentRow[]>(
+    `SELECT * FROM org_sponsor_payments
+     WHERE sponsor_id = ? AND paid_at IS NULL AND id <> ?
+     ORDER BY due_date ASC`,
+    sponsorId,
+    paymentId,
+  );
+  const nextDue = open[0] ? dbYmd(open[0].due_date) : dbYmd(payment.due_date);
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE org_sponsor_payments
+     SET amount = ?, paid_at = ?, pay_mode = ?, operator_username = ?, annotations = ?,
+         note = CASE WHEN note = '' THEN 'Sponsoring' ELSE note END
+     WHERE id = ?`,
+    paidAmount,
+    paymentDate,
+    payMode,
+    operatorUsername,
+    annotations || null,
+    paymentId,
+  );
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO org_sponsor_payments (id, sponsor_id, amount, due_date, reminder_days, note)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    randomUUID(),
+    sponsorId,
+    remainder,
+    nextDue,
+    payment.reminder_days || 7,
+    payment.note || 'Sponsoring',
+  );
+  void sponsor;
+  return getSponsor(ws, sponsorId);
+}
+
 export async function deletePayment(ws: SponsorWorkspace, sponsorId: string, paymentId: string) {
   await getSponsorRow(ws, sponsorId);
   await getPaymentRow(sponsorId, paymentId);
   await prisma.$executeRawUnsafe(`DELETE FROM org_sponsor_payments WHERE id = ?`, paymentId);
   return getSponsor(ws, sponsorId);
+}
+
+/** Deadlines for Archive of Deadlines (Advertising / Sponsoring). */
+export async function listSponsorArchiveDeadlines(ws: SponsorWorkspace): Promise<Record<string, unknown>[]> {
+  await ensureSponsorTables();
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      payment_id: string;
+      sponsor_id: string;
+      sponsor_name: string;
+      amount: unknown;
+      due_date: Date | string;
+      paid_at: Date | string | null;
+      note: string;
+      operator_username: string | null;
+      annotations: string | null;
+    }>
+  >(
+    `SELECT p.id AS payment_id, s.id AS sponsor_id, s.name AS sponsor_name,
+            p.amount, p.due_date, p.paid_at, p.note, p.operator_username, p.annotations
+     FROM org_sponsor_payments p
+     INNER JOIN org_sponsors s ON s.id = p.sponsor_id
+     WHERE s.workspace_kind = ? AND s.workspace_id = ?
+     ORDER BY p.due_date DESC`,
+    ws.kind,
+    ws.id,
+  );
+  return rows.map((r) => {
+    const amount = Number(r.amount) || 0;
+    const paid = r.paid_at ? amount : 0;
+    return {
+      id: `sponsor-dl-${r.payment_id}`,
+      name: r.sponsor_name,
+      typology: 'Advertising',
+      procedureType: 'sponsor_advertising',
+      service: 'Sponsoring',
+      detail: 'Sponsoring',
+      insertDate: dbYmd(r.due_date),
+      expirationDate: dbYmd(r.due_date),
+      value: amount,
+      paid,
+      rest: Math.max(0, amount - paid),
+      casual: r.note || r.annotations || 'Sponsoring',
+      operator: r.operator_username || '',
+      sponsorId: r.sponsor_id,
+      sponsorPaymentId: r.payment_id,
+    };
+  });
+}
+
+/** Paid sponsor deadlines for Cash In / movement_cash_details. */
+export async function listSponsorArchiveCash(ws: SponsorWorkspace): Promise<Record<string, unknown>[]> {
+  await ensureSponsorTables();
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      payment_id: string;
+      sponsor_id: string;
+      sponsor_name: string;
+      amount: unknown;
+      paid_at: Date | string;
+      pay_mode: string | null;
+      operator_username: string | null;
+      annotations: string | null;
+      note: string;
+    }>
+  >(
+    `SELECT p.id AS payment_id, s.id AS sponsor_id, s.name AS sponsor_name,
+            p.amount, p.paid_at, p.pay_mode, p.operator_username, p.annotations, p.note
+     FROM org_sponsor_payments p
+     INNER JOIN org_sponsors s ON s.id = p.sponsor_id
+     WHERE s.workspace_kind = ? AND s.workspace_id = ? AND p.paid_at IS NOT NULL
+     ORDER BY p.paid_at DESC`,
+    ws.kind,
+    ws.id,
+  );
+  return rows.map((r) => {
+    const amount = Number(r.amount) || 0;
+    return {
+      id: `sponsor-cash-${r.payment_id}`,
+      name: r.sponsor_name,
+      typology: 'Advertising',
+      service: 'Sponsoring',
+      insertDate: dbYmd(r.paid_at),
+      paid: amount,
+      value: amount,
+      rest: 0,
+      direction: 'IN',
+      payMod: r.pay_mode || '-',
+      casual: r.annotations || r.note || 'Sponsoring',
+      operator: r.operator_username || '',
+      sponsorId: r.sponsor_id,
+      sponsorPaymentId: r.payment_id,
+    };
+  });
 }
 
 // ---------- statistics ----------
