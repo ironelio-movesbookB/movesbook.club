@@ -4237,23 +4237,27 @@ export default function DarkSidebar({
                                     <Star className="h-4 w-4 shrink-0 text-white" strokeWidth={1.75} />
                                     <span className="text-[13px] font-medium text-yellow-300">Dashboard</span>
                                   </button>
-                                  <div className="flex shrink-0 items-center gap-1.5">
+                                  <div className="flex shrink-0 items-center gap-1">
                                     <button
                                       type="button"
-                                      onClick={() => openClubDashboardPage(true)}
-                                      className="text-white opacity-90 hover:opacity-100"
-                                      aria-label="Dashboard setting"
-                                      title="Dashboard setting"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openClubDashboardPage(true);
+                                      }}
+                                      className="inline-flex h-8 items-center gap-1 rounded border border-white/40 bg-white/10 px-2 text-[12px] font-semibold text-white hover:bg-white/20"
+                                      aria-label="Dashboard settings"
+                                      title="Dashboard settings"
                                     >
-                                      <Settings className="h-3.5 w-3.5" />
+                                      <Settings className="h-4 w-4" />
+                                      Settings
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => openClubDashboardPage(false)}
-                                      className="text-white opacity-90"
+                                      className="inline-flex h-8 w-8 items-center justify-center text-white opacity-90 hover:bg-white/10"
                                       aria-label="Open dashboard"
                                     >
-                                      <ChevronRight className="h-3.5 w-3.5" />
+                                      <ChevronRight className="h-4 w-4" />
                                     </button>
                                   </div>
                                 </div>

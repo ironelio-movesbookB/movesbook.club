@@ -26,7 +26,7 @@ type Props = {
   clubId?: string | null;
   /** Prefer this team when the admin is a Team Admin. */
   teamId?: string | null;
-  /** Scope to one member (Member Overview → Mngmnt). Falls back to ?memberId=. */
+  /** Scope to one member (Member Overview → Management data). Falls back to ?memberId=. */
   memberId?: string | null;
   headerAction?: ReactNode;
   /** Bump to force a reload (e.g. after adding a member). */
