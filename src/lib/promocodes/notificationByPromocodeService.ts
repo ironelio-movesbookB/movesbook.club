@@ -19,7 +19,7 @@ import {
 import type { LegacyUserSnippet } from '@/lib/promocodes/types';
 import {
   buildInviteEmailHtml,
-  buildRegisterUrl,
+  buildInvitePageUrl,
 } from '@/lib/promocodes/sendInviteService';
 import { buildPromocodeSettingsSelectSql } from '@/lib/promocodes/promocodeSettingsQuery';
 import { loadPromocodeInviteLanguageParagraph } from '@/lib/promocodes/promocodeInviteLanguage';
@@ -1317,7 +1317,7 @@ export async function sendNotificationByPromocodeInvite(params: {
   const senderName = [nameParts.firstname, nameParts.lastname].filter(Boolean).join(' ').trim() || params.senderUsername;
 
   const promocodeCode = rowStr(promocode, 'code');
-  const registrationUrl = buildRegisterUrl(
+  const registrationUrl = buildInvitePageUrl(
     params.origin,
     receiverEmail,
     promocodeCode,

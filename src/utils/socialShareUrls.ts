@@ -183,6 +183,24 @@ export async function shareViaFacebook(
 export const FACEBOOK_SHARE_NOTICE =
   'Facebook does not allow pre-filled post text. Your message was copied to the clipboard — paste it (Ctrl+V) into the post. The link preview comes from the shared Movesbook page.';
 
+export const INSTAGRAM_SHARE_NOTICE =
+  'Instagram has no web share dialog. Your invite link was copied — open Instagram and paste it in a post, story, or message.';
+
+/** Instagram has no desktop share URL; copy the invite and open Instagram. */
+export async function shareViaInstagram(shareLink: string): Promise<{ copiedToClipboard: boolean }> {
+  let copiedToClipboard = false;
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      copiedToClipboard = true;
+    } catch {
+      copiedToClipboard = false;
+    }
+  }
+  openExternalShareUrl('https://www.instagram.com/');
+  return { copiedToClipboard };
+}
+
 /** Prefer anchor navigation — more reliable for tg:// and t.me on desktop. */
 export function openExternalShareUrl(url: string): void {
   if (typeof window === 'undefined') return;
