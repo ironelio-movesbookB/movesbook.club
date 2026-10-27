@@ -16,6 +16,11 @@ import {
  * Print / "save as PDF": keep the colors of the bars and cards (browsers drop backgrounds by default),
  * print the header on white with black text, and never split a card between two pages.
  */
+/**
+ * Global `globals.css` hides everything in print except `.print-area`.
+ * The report root must use that class; override absolute positioning so multi-page
+ * reports are not clipped.
+ */
 const PRINT_CSS = `
 @page { size: A4; margin: 12mm; }
 @media print {
@@ -27,14 +32,22 @@ const PRINT_CSS = `
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .spr-root {
+  .spr-root.print-area {
     display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
     min-height: 0 !important;
     height: auto !important;
     background: #fff !important;
     overflow: visible !important;
+    color: #111 !important;
   }
-  .spr-root, .spr-root * {
+  .spr-root.print-area,
+  .spr-root.print-area * {
+    visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -45,8 +58,17 @@ const PRINT_CSS = `
     border-bottom: 2px solid #1e40af;
   }
   .spr-header * { color: #000 !important; }
-  .spr-no-print { display: none !important; }
-  .spr-root section, .spr-root tr { break-inside: avoid; page-break-inside: avoid; }
+  .spr-no-print,
+  .spr-no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  .spr-root section,
+  .spr-root tr,
+  .spr-root .rounded-2xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
   .spr-root .shadow-sm { box-shadow: none !important; border: 1px solid #e2e8f0; }
 }
 `;
@@ -132,7 +154,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
   };
 
   return (
-    <div className="spr-root min-h-screen bg-slate-100 text-slate-900 print:block print:min-h-0 print:bg-white">
+    <div className="spr-root print-area min-h-screen bg-slate-100 text-slate-900 print:block print:min-h-0 print:bg-white">
       <style>{PRINT_CSS}</style>
       <header
         className="spr-header text-white print:block print:bg-white print:text-black"
@@ -146,7 +168,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
             ) : null}
             <span className="font-bold">{org.name}</span>
           </div>
-          <div className="spr-no-print flex items-center gap-3 print:hidden">
+          <div className="spr-no-print no-print flex items-center gap-3 print:hidden">
             <SponsorLanguageSelect value={data.language} label={t('spk_language')} onChange={setLang} />
             <button
               type="button"
@@ -207,18 +229,18 @@ export default function SponsorReportPage({ token }: { token: string }) {
               {formatDate(stats.from, data.language)} – {formatDate(stats.to, data.language)}
             </div>
           </div>
-          <label className="spr-no-print text-sm print:hidden">
+          <label className="spr-no-print no-print text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_from')}</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
-          <label className="spr-no-print text-sm print:hidden">
+          <label className="spr-no-print no-print text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_to')}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
           <button
             type="button"
             onClick={applyPeriod}
-            className="spr-no-print rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
+            className="spr-no-print no-print rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
           >
             {t('spr_update')}
           </button>
