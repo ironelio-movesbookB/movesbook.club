@@ -2481,6 +2481,7 @@ model SubscriptionSpecialOfferRow {
   id               Int      @id @default(autoincrement())
   versionId        Int      @unique(map: "uq_special_offer_version")
   enabled          Boolean  @default(false)
+  offerCode        String   @default("") @db.VarChar(32)
   titlesJson       String?  @db.Text
   descriptionsJson String?  @db.MediumText
   counterLangsJson String?  @db.Text
@@ -2494,6 +2495,59 @@ model SubscriptionSpecialOfferRow {
   updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
 
   @@map("subscription_special_offers")
+  @@ignore
+}
+
+/// Registration device mode for admin/all Mode column. Raw SQL in register + registered-users routes.
+model UserRegistrationMetaRow {
+  userId           String   @id @db.VarChar(191)
+  registrationMode String   @default("desk") @db.VarChar(20)
+  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("user_registration_meta")
+  @@ignore
+}
+
+/// src/lib/subscriptions/specialUpgrades.ts
+model SubscriptionSpecialUpgradeRow {
+  id                 Int       @id @default(autoincrement())
+  versionId          Int       @unique(map: "uq_special_upgrade_version")
+  enabled            Boolean   @default(false)
+  titlesJson         String?   @db.Text
+  descriptionsJson   String?   @db.MediumText
+  buttonLabelsJson   String?   @db.Text
+  validFrom          DateTime? @db.Date
+  validTo            DateTime? @db.Date
+  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
+  daysOfSubscription Int       @default(365)
+  analyzeWithinDays  Int       @default(60)
+  logoUrl            String?   @db.VarChar(512)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("subscription_special_upgrades")
+  @@ignore
+}
+
+model SubscriptionSpecialUpgradeRegistrationRow {
+  id                 Int       @id @default(autoincrement())
+  upgradeId          Int
+  versionId          Int
+  versionName        String    @db.VarChar(255)
+  upgradeTitle       String?   @db.VarChar(255)
+  userId             String    @db.VarChar(191)
+  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
+  dateStart          DateTime  @db.Date
+  dateEnd            DateTime? @db.Date
+  checkDeadline      DateTime? @db.Date
+  checkCleared       Boolean   @default(false)
+  softwareCompany    String    @default("") @db.VarChar(255)
+  softwareVersion    String    @default("") @db.VarChar(255)
+  softwareExpiration String    @default("") @db.VarChar(32)
+  createdAt          DateTime  @default(now()) @db.DateTime(0)
+
+  @@index([upgradeId], map: "idx_sur_upgrade")
+  @@index([userId], map: "idx_sur_user")
+  @@map("subscription_special_upgrade_registrations")
   @@ignore
 }
 
