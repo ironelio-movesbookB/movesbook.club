@@ -1185,6 +1185,16 @@ export async function listCashMovements(
     } catch {
       /* sponsor tables may be unavailable */
     }
+    try {
+      const { listEventArchiveCash } = await import('@/lib/club/events/eventService');
+      const eventCash = await listEventArchiveCash({
+        kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
+        id: ctx.club.id,
+      });
+      items.push(...eventCash);
+    } catch {
+      /* event tables may be unavailable */
+    }
   }
 
   if (direction === 'all' || direction === 'IN') {
