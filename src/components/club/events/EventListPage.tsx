@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PublicLinkBanner from '@/components/club/sponsors/PublicLinkBanner';
 import EventSettingsCard from '@/components/club/events/EventSettingsCard';
+import ArchiveListToolbar, {
+  emptyArchiveFilterValues,
+  type ArchiveListFilterValues,
+} from '@/components/procedures/ArchiveListToolbar';
 import {
   dangerButton,
   formatYmd,
@@ -16,15 +20,32 @@ import {
   clubEventSubscribePath,
   eventApi,
 } from '@/lib/club/events/eventClient';
-import { formatEventEuro, type ClubEventListItem, type ClubEventRegistration } from '@/lib/club/events/eventConstants';
+import {
+  CLUB_EVENT_TYPES,
+  formatEventEuro,
+  type ClubEventListItem,
+  type ClubEventRegistration,
+} from '@/lib/club/events/eventConstants';
 import { sponsorWorkspaceId } from '@/lib/club/sponsors/sponsorClient';
+
+function isExpired(endDate: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
+  const today = new Date();
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return endDate < ymd;
+}
 
 export default function EventListPage() {
   const [events, setEvents] = useState<ClubEventListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [workspaceId, setWorkspaceId] = useState('');
-  const [search, setSearch] = useState('');
+  const [draft, setDraft] = useState<ArchiveListFilterValues>(emptyArchiveFilterValues());
+  const [applied, setApplied] = useState<ArchiveListFilterValues>(emptyArchiveFilterValues());
+  const [eventTypeFilter, setEventTypeFilter] = useState('all');
+  const [appliedType, setAppliedType] = useState('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<{
     event: ClubEventListItem;
     registrations: ClubEventRegistration[];
@@ -39,6 +60,7 @@ export default function EventListPage() {
     try {
       const data = await eventApi<{ events: ClubEventListItem[] }>('');
       setEvents(data.events);
+      setSelectedIds(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load events');
     } finally {
@@ -52,12 +74,25 @@ export default function EventListPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return events;
-    return events.filter((e) =>
-      `${e.name} ${e.location} ${e.eventType}`.toLowerCase().includes(q),
-    );
-  }, [events, search]);
+    const q = applied.search.trim().toLowerCase();
+    let list = [...events];
+    if (q) {
+      list = list.filter((e) => `${e.name} ${e.location} ${e.eventType}`.toLowerCase().includes(q));
+    }
+    if (applied.fromDate) list = list.filter((e) => e.startDate >= applied.fromDate);
+    if (applied.toDate) list = list.filter((e) => e.startDate <= applied.toDate);
+    if (appliedType !== 'all') list = list.filter((e) => e.eventType === appliedType);
+    list.sort((a, b) => {
+      const cmp = a.startDate.localeCompare(b.startDate);
+      return applied.orderBy === 'old' ? cmp : -cmp;
+    });
+    return list;
+  }, [events, applied, appliedType]);
+
+  const selectedEvent = useMemo(
+    () => (selectedId ? events.find((e) => e.id === selectedId) || null : null),
+    [events, selectedId],
+  );
 
   const openDetail = async (ev: ClubEventListItem) => {
     try {
@@ -76,23 +111,47 @@ export default function EventListPage() {
     }
   };
 
-  const remove = async (ev: ClubEventListItem) => {
-    const msg =
-      ev.registered > 0
-        ? `This event has ${ev.registered} subscriber(s). Delete is blocked until they are removed.`
-        : `Delete “${ev.name}”?`;
-    if (ev.registered > 0) {
-      window.alert(msg);
+  const canDelete = (ev: ClubEventListItem) => isExpired(ev.endDate) || ev.registered === 0;
+
+  const removeOne = async (ev: ClubEventListItem) => {
+    if (!canDelete(ev)) {
+      window.alert(
+        `Cannot delete: ${ev.registered} subscriber(s) registered and the event is not expired.`,
+      );
       return;
     }
-    if (!window.confirm(msg)) return;
+    if (!window.confirm(`Delete “${ev.name}”?`)) return;
     try {
       await eventApi(`/${ev.id}`, { method: 'DELETE' });
       setMenuId(null);
+      if (selectedId === ev.id) setSelectedId(null);
       await load();
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Delete failed');
     }
+  };
+
+  const deleteSelected = async () => {
+    const targets = filtered.filter((e) => selectedIds.has(e.id));
+    if (!targets.length) return;
+    const blocked = targets.filter((e) => !canDelete(e));
+    if (blocked.length) {
+      window.alert(
+        `${blocked.length} event(s) have subscribers and are not expired. Remove them from the selection or wait until they expire.`,
+      );
+      return;
+    }
+    if (!window.confirm(`Delete ${targets.length} selected event(s)?`)) return;
+    for (const ev of targets) {
+      try {
+        await eventApi(`/${ev.id}`, { method: 'DELETE' });
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : `Could not delete ${ev.name}`);
+        break;
+      }
+    }
+    setSelectedId(null);
+    await load();
   };
 
   const copyLink = async (ev: ClubEventListItem) => {
@@ -106,9 +165,25 @@ export default function EventListPage() {
     }
   };
 
+  const toggleCheck = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((e) => e.id)));
+  };
+
   const income = detail
     ? detail.registrations.reduce((sum, r) => sum + (Number(r.amountPaid) || 0), 0)
     : 0;
+
+  const orgId = workspaceId || sponsorWorkspaceId();
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6">
@@ -124,25 +199,63 @@ export default function EventListPage() {
         </Link>
       </div>
 
-      {workspaceId ? (
+      {orgId ? (
         <PublicLinkBanner
           title="Page of our events"
           description="Insert this link on your website, share it on socials, WhatsApp or Telegram and promote all your club/team events."
-          path={clubEventPublicPath(workspaceId)}
+          path={clubEventPublicPath(orgId)}
           qrFileName="club-events-qr"
+          postBodyHtml="<p>Discover all our club/team events and subscribe online.</p>"
+        />
+      ) : null}
+
+      {selectedEvent && orgId ? (
+        <PublicLinkBanner
+          title="BANNER OF PROMOTION OF THE SELECTED EVENT"
+          description="Send this page to potential subscribers"
+          path={clubEventSubscribePath(orgId, selectedEvent.publicToken)}
+          qrFileName={`event-${selectedEvent.id}-qr`}
+          postBodyHtml={`<p>You are invited to <strong>${selectedEvent.name}</strong>.</p><p>${selectedEvent.location || ''}</p>`}
         />
       ) : null}
 
       <EventSettingsCard />
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <input
-          className={inputClass}
-          placeholder="Search by title, location or type"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <ArchiveListToolbar
+        title="Filter"
+        values={draft}
+        onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+        onApply={() => {
+          setApplied(draft);
+          setAppliedType(eventTypeFilter);
+        }}
+        onClear={() => {
+          const empty = emptyArchiveFilterValues();
+          setDraft(empty);
+          setApplied(empty);
+          setEventTypeFilter('all');
+          setAppliedType('all');
+        }}
+        selectedCount={selectedIds.size}
+        onDeleteSelected={() => void deleteSelected()}
+        additionalFilter={
+          <label className="flex min-w-[150px] flex-col">
+            <span className="mb-1 block text-[12px] font-semibold text-gray-800">Type of event</span>
+            <select
+              className={inputClass}
+              value={eventTypeFilter}
+              onChange={(e) => setEventTypeFilter(e.target.value)}
+            >
+              <option value="all">All types</option>
+              {CLUB_EVENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      />
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {loading ? <p className="text-sm text-gray-500">Loading…</p> : null}
@@ -151,6 +264,14 @@ export default function EventListPage() {
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
             <tr>
+              <th className="px-2 py-2">
+                <input
+                  type="checkbox"
+                  checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                  onChange={toggleAll}
+                  aria-label="Select all"
+                />
+              </th>
               <th className="px-3 py-2">Title</th>
               <th className="px-3 py-2">Location</th>
               <th className="px-3 py-2">Start</th>
@@ -164,70 +285,82 @@ export default function EventListPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((ev) => (
-              <tr
-                key={ev.id}
-                className="cursor-pointer border-t border-gray-100 hover:bg-blue-50/40"
-                onDoubleClick={() => void openDetail(ev)}
-              >
-                <td className="px-3 py-2 font-medium text-gray-900">{ev.name}</td>
-                <td className="px-3 py-2 text-gray-600">{ev.location || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{formatYmd(ev.startDate)}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{formatYmd(ev.endDate)}</td>
-                <td className="px-3 py-2">{ev.eventType}</td>
-                <td className="px-3 py-2">{ev.subeventCount}</td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {ev.cost > 0 ? formatEventEuro(ev.cost) : 'Free'}
-                </td>
-                <td className="px-3 py-2">{ev.seats > 0 ? ev.seats : '∞'}</td>
-                <td className="px-3 py-2">{ev.registered}</td>
-                <td className="relative px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className={secondaryButton}
-                    onClick={() => setMenuId((m) => (m === ev.id ? null : ev.id))}
-                  >
-                    Options
-                  </button>
-                  {menuId === ev.id ? (
-                    <div className="absolute right-2 z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                      <Link
-                        href={`/clubs/events/${ev.id}`}
-                        className="block px-3 py-1.5 text-sm hover:bg-gray-50"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50"
-                        onClick={() => void copyLink(ev)}
-                      >
-                        Get link
-                      </button>
-                      <a
-                        href={clubEventSubscribePath(workspaceId || sponsorWorkspaceId(), ev.publicToken)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block px-3 py-1.5 text-sm hover:bg-gray-50"
-                      >
-                        Open
-                      </a>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-1.5 text-left text-sm text-red-700 hover:bg-red-50"
-                        onClick={() => void remove(ev)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
+            {filtered.map((ev) => {
+              const checked = selectedIds.has(ev.id);
+              const active = selectedId === ev.id;
+              return (
+                <tr
+                  key={ev.id}
+                  className={`cursor-pointer border-t border-gray-100 ${
+                    checked ? 'bg-amber-50' : active ? 'bg-amber-100' : 'hover:bg-blue-50/40'
+                  }`}
+                  onClick={() => setSelectedId(ev.id)}
+                  onDoubleClick={() => void openDetail(ev)}
+                >
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCheck(ev.id)}
+                      aria-label={`Select ${ev.name}`}
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-medium text-gray-900">{ev.name}</td>
+                  <td className="px-3 py-2 text-gray-600">{ev.location || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatYmd(ev.startDate)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatYmd(ev.endDate)}</td>
+                  <td className="px-3 py-2">{ev.eventType}</td>
+                  <td className="px-3 py-2">{ev.subeventCount}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {ev.cost > 0 ? formatEventEuro(ev.cost) : 'Free'}
+                  </td>
+                  <td className="px-3 py-2">{ev.seats > 0 ? ev.seats : '∞'}</td>
+                  <td className="px-3 py-2">{ev.registered}</td>
+                  <td className="relative px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className={secondaryButton}
+                      onClick={() => setMenuId((m) => (m === ev.id ? null : ev.id))}
+                    >
+                      Options
+                    </button>
+                    {menuId === ev.id ? (
+                      <div className="absolute right-2 z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                        <Link href={`/clubs/events/${ev.id}`} className="block px-3 py-1.5 text-sm hover:bg-gray-50">
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50"
+                          onClick={() => void copyLink(ev)}
+                        >
+                          Get link
+                        </button>
+                        <a
+                          href={clubEventSubscribePath(orgId, ev.publicToken)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block px-3 py-1.5 text-sm hover:bg-gray-50"
+                        >
+                          Open
+                        </a>
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-1.5 text-left text-sm text-red-700 hover:bg-red-50"
+                          onClick={() => void removeOne(ev)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
             {!loading && !filtered.length ? (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
-                  No events yet. Create your first internal event.
+                <td colSpan={11} className="px-3 py-8 text-center text-gray-500">
+                  No events match the filter. Create your first internal event.
                 </td>
               </tr>
             ) : null}
@@ -265,7 +398,10 @@ export default function EventListPage() {
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <Stat label="Subscribers" value={String(detail.registrations.length)} />
               <Stat label="Total income" value={formatEventEuro(income)} />
-              <Stat label="Cost" value={detail.event.cost > 0 ? formatEventEuro(detail.event.cost) : 'Free'} />
+              <Stat
+                label="Cost"
+                value={detail.event.cost > 0 ? formatEventEuro(detail.event.cost) : 'Free'}
+              />
               <Stat label="Sub-events" value={String(detail.event.subeventCount)} />
             </div>
             <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-gray-600">Subscribers</h3>
@@ -287,7 +423,7 @@ export default function EventListPage() {
               <Link href={`/clubs/events/${detail.event.id}`} className={primaryButton}>
                 Edit
               </Link>
-              <button type="button" className={dangerButton} onClick={() => void remove(detail.event)}>
+              <button type="button" className={dangerButton} onClick={() => void removeOne(detail.event)}>
                 Delete
               </button>
             </div>

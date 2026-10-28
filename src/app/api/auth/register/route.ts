@@ -19,6 +19,12 @@ import {
   versionDurationDays,
   type SpecialOfferRegistration,
 } from '@/lib/subscriptions/specialOffers';
+import {
+  ensureSpecialUpgradeTables,
+  reserveSpecialUpgradeSlot,
+  SpecialUpgradeUnavailableError,
+  type SpecialUpgradeRegistration,
+} from '@/lib/subscriptions/specialUpgrades';
 import { getCountryPriceInfo } from '@/lib/countries/countryPricingDb';
 import {
   localAmount,
@@ -55,6 +61,9 @@ export async function POST(request: NextRequest) {
       language,
       subscriptionVersionId,
       useSpecialOffer,
+      useSpecialUpgrade,
+      specialUpgradeSoftware,
+      registrationMode,
     } = await request.json();
 
     await hydrateVersionSettings();
@@ -63,9 +72,22 @@ export async function POST(request: NextRequest) {
     const selectedVersion =
       requestedVersion && requestedVersion.userType === userType ? requestedVersion : undefined;
     const withSpecialOffer = Boolean(useSpecialOffer && selectedVersion);
+    const withSpecialUpgrade = Boolean(useSpecialUpgrade && selectedVersion);
     if (useSpecialOffer && !selectedVersion) {
       return NextResponse.json(
         { error: 'Select the version of the special offer' },
+        { status: 400 },
+      );
+    }
+    if (useSpecialUpgrade && !selectedVersion) {
+      return NextResponse.json(
+        { error: 'Select the version of the special upgrade' },
+        { status: 400 },
+      );
+    }
+    if (withSpecialOffer && withSpecialUpgrade) {
+      return NextResponse.json(
+        { error: 'Choose either the special offer or the special upgrade, not both' },
         { status: 400 },
       );
     }
@@ -147,6 +169,7 @@ export async function POST(request: NextRequest) {
 
     await ensureUserSettingsColumns();
     if (withSpecialOffer) await ensureSpecialOfferTables();
+    if (withSpecialUpgrade) await ensureSpecialUpgradeTables();
 
     // Accounts that pick a version go through payment (or the test/free skip) and activation.
     const usesPaymentFlow = Boolean(selectedVersion);
@@ -243,22 +266,58 @@ export async function POST(request: NextRequest) {
       });
 
       let offerRegistration: SpecialOfferRegistration | null = null;
+      let upgradeRegistration: SpecialUpgradeRegistration | null = null;
       if (withSpecialOffer && selectedVersion) {
         offerRegistration = await reserveSpecialOfferSlot(tx, {
           versionId: selectedVersion.id,
           userId: created.id,
         });
       }
+      if (withSpecialUpgrade && selectedVersion) {
+        upgradeRegistration = await reserveSpecialUpgradeSlot(tx, {
+          versionId: selectedVersion.id,
+          userId: created.id,
+          softwareCompany: String(specialUpgradeSoftware?.company || ''),
+          softwareVersion: String(specialUpgradeSoftware?.version || ''),
+          softwareExpiration: String(specialUpgradeSoftware?.expiration || ''),
+        });
+      }
+
+      // Persist registration device mode for admin/all Mode column (best-effort).
+      try {
+        const mode = ['desk', 'mobile', 'tablet', 'notebook'].includes(String(registrationMode))
+          ? String(registrationMode)
+          : 'desk';
+        await tx.$executeRawUnsafe(
+          `CREATE TABLE IF NOT EXISTS user_registration_meta (
+             userId VARCHAR(191) NOT NULL PRIMARY KEY,
+             registrationMode VARCHAR(20) NOT NULL DEFAULT 'desk',
+             updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+           )`,
+        );
+        await tx.$executeRawUnsafe(
+          `INSERT INTO user_registration_meta (userId, registrationMode) VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE registrationMode = VALUES(registrationMode)`,
+          created.id,
+          mode,
+        );
+      } catch {
+        /* ignore meta table failures */
+      }
 
       let adminSettings = '{}';
       let paymentId: string | null = null;
       let paymentStatus: RegistrationPaymentStatus | null = null;
       if (selectedVersion) {
-        const dateStart = offerRegistration?.dateStart ?? todayYmd();
+        const dateStart =
+          upgradeRegistration?.dateStart ?? offerRegistration?.dateStart ?? todayYmd();
         const dateEnd =
+          upgradeRegistration?.dateEnd ??
           offerRegistration?.dateEnd ??
           addDaysYmd(dateStart, versionDurationDays(selectedVersion.id));
-        const basePriceEur = Number(offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0);
+        const basePriceEur = Number(
+          upgradeRegistration?.costEuro ?? offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0,
+        );
         const amountEur = priceForCountry(basePriceEur, countryPrice.factor);
         const amountLocalValue =
           countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR'
@@ -397,6 +456,9 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (error instanceof SpecialOfferUnavailableError) {
       return NextResponse.json({ error: error.message, specialOfferUnavailable: true }, { status: 409 });
+    }
+    if (error instanceof SpecialUpgradeUnavailableError) {
+      return NextResponse.json({ error: error.message, specialUpgradeUnavailable: true }, { status: 409 });
     }
 
     console.error('Registration error:', error);

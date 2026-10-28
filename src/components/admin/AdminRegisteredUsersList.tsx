@@ -77,6 +77,8 @@ export interface AdminRegisteredUsersListProps {
   onClearStatsBar?: () => void;
   /** Only users registered with the special offer of this subscription version. */
   specialOfferVersionId?: number | null;
+  /** Only users registered with the special upgrade of this subscription version. */
+  specialUpgradeVersionId?: number | null;
   /** subscriptions = /admin/all. payments = List of payments. products = products purchased. */
   listPurpose?: 'subscriptions' | 'payments' | 'products';
 }
@@ -150,16 +152,119 @@ interface RowUser {
   imageUrl?: string | null;
   specialOffer?: boolean;
   specialOfferTitle?: string;
+  specialUpgrade?: boolean;
+  specialUpgradeTitle?: string;
   offerPrice?: boolean;
+  registrationMode?: 'desk' | 'mobile' | 'tablet' | 'notebook' | string | null;
+  versionType?: 'standard' | 'special_offer' | 'special_upgrade' | string | null;
+  specialOfferCode?: string | null;
+  checkDeadline?: string | null;
+  checkCleared?: boolean;
+  upgradeSoftwareCompany?: string | null;
+  upgradeSoftwareVersion?: string | null;
+  upgradeSoftwareExpiration?: string | null;
+  upgradeId?: number | null;
 }
 
 function VersionCell({ row }: { row: RowUser }) {
   return (
     <td
-      className={`px-3 py-2 border-t border-gray-300 ${row.specialOffer ? 'text-blue-600 font-semibold' : ''}`}
-      title={row.specialOffer ? `Special offer${row.specialOfferTitle ? `: ${row.specialOfferTitle}` : ''}` : undefined}
+      className={`px-3 py-2 border-t border-gray-300 ${row.specialOffer ? 'text-blue-600 font-semibold' : row.specialUpgrade ? 'text-indigo-700 font-semibold' : ''}`}
+      title={
+        row.specialOffer
+          ? `Special offer${row.specialOfferTitle ? `: ${row.specialOfferTitle}` : ''}`
+          : row.specialUpgrade
+            ? `Special upgrade${row.specialUpgradeTitle ? `: ${row.specialUpgradeTitle}` : ''}`
+            : undefined
+      }
     >
       {row.version}
+    </td>
+  );
+}
+
+function ModeCell({ row }: { row: RowUser }) {
+  const mode = String(row.registrationMode || 'desk').toLowerCase();
+  const src =
+    mode === 'mobile'
+      ? '/images/registration-mode/mobile.jpg'
+      : mode === 'tablet'
+        ? '/images/registration-mode/tablet.jpg'
+        : mode === 'notebook'
+          ? '/images/registration-mode/pc_notebook.jpg'
+          : '/images/registration-mode/pc_desk.jpg';
+  return (
+    <td className="px-3 py-2 border-t border-gray-300">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={mode} title={mode} className="h-8 w-8 object-contain" />
+    </td>
+  );
+}
+
+function VersionTypeCell({ row }: { row: RowUser }) {
+  const kind = row.versionType || (row.specialUpgrade ? 'special_upgrade' : row.specialOffer ? 'special_offer' : 'standard');
+  const label =
+    kind === 'special_upgrade' ? 'Special Upgrade' : kind === 'special_offer' ? 'SpecialOffer' : 'Standard';
+  const cls =
+    kind === 'special_upgrade'
+      ? 'font-bold text-blue-700'
+      : kind === 'special_offer'
+        ? 'font-bold text-red-600'
+        : 'text-gray-900';
+  return (
+    <td className={`px-3 py-2 border-t border-gray-300 ${cls}`}>
+      {kind === 'special_upgrade' ? (
+        <button
+          type="button"
+          className="underline"
+          onClick={() => {
+            window.alert(
+              [
+                `Company: ${row.upgradeSoftwareCompany || '—'}`,
+                `Version: ${row.upgradeSoftwareVersion || '—'}`,
+                `Expiration: ${row.upgradeSoftwareExpiration || '—'}`,
+              ].join('\n'),
+            );
+          }}
+        >
+          {label}
+        </button>
+      ) : (
+        label
+      )}
+    </td>
+  );
+}
+
+function CheckCell({
+  row,
+  onClearCheck,
+}: {
+  row: RowUser;
+  onClearCheck?: (row: RowUser) => void;
+}) {
+  const value =
+    row.versionType === 'special_offer' || row.specialOffer
+      ? row.specialOfferCode || ''
+      : row.checkCleared
+        ? ''
+        : row.checkDeadline || '';
+  return (
+    <td
+      className="px-3 py-2 border-t border-gray-300 font-semibold text-red-600"
+      onDoubleClick={() => {
+        if (row.specialUpgrade && row.checkDeadline && !row.checkCleared) onClearCheck?.(row);
+      }}
+      title={row.specialUpgrade && row.checkDeadline ? 'Double-click to clear Check (Super Admin password)' : undefined}
+    >
+      {value
+        ? row.specialOffer
+          ? value
+          : (() => {
+              const [y, m, d] = value.split('-');
+              return y && m && d ? `${Number(d)}-${Number(m)}-${y}` : value;
+            })()
+        : ''}
     </td>
   );
 }
@@ -399,6 +504,7 @@ export default function AdminRegisteredUsersList({
   statsBarScope = null,
   onClearStatsBar,
   specialOfferVersionId = null,
+  specialUpgradeVersionId = null,
   listPurpose = 'subscriptions',
 }: AdminRegisteredUsersListProps) {
   const router = useRouter();
@@ -469,6 +575,8 @@ export default function AdminRegisteredUsersList({
   const [msgSending, setMsgSending] = useState(false);
   const [msgError, setMsgError] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
+  const [excludeSpecialOffer, setExcludeSpecialOffer] = useState(false);
+  const [excludeSpecialUpgrade, setExcludeSpecialUpgrade] = useState(false);
   const [profileTagged, setProfileTagged] = useState(false);
   const [profileFavouritePriority, setProfileFavouritePriority] =
     useState<FavouritePriority>('not_selected');
@@ -614,6 +722,9 @@ export default function AdminRegisteredUsersList({
       }
       params.set('membership', membershipTab);
       if (specialOfferVersionId) params.set('specialOfferVersionId', String(specialOfferVersionId));
+      if (specialUpgradeVersionId) params.set('specialUpgradeVersionId', String(specialUpgradeVersionId));
+      if (excludeSpecialOffer) params.set('excludeSpecialOffer', '1');
+      if (excludeSpecialUpgrade) params.set('excludeSpecialUpgrade', '1');
       if (statsBarActive) {
         params.set('statsBar', '1');
         if (statsBarCountry) params.set('country', statsBarCountry);
@@ -654,6 +765,9 @@ export default function AdminRegisteredUsersList({
     statsBarKind,
     statsBarVersion,
     specialOfferVersionId,
+    specialUpgradeVersionId,
+    excludeSpecialOffer,
+    excludeSpecialUpgrade,
   ]);
 
   useEffect(() => {
@@ -2140,6 +2254,32 @@ export default function AdminRegisteredUsersList({
           >
             Delete Subscriptions
           </button>
+          {listPurpose === 'subscriptions' ? (
+            <>
+              <label className="ml-2 inline-flex items-center gap-1 text-sm text-gray-800 no-underline">
+                <input
+                  type="checkbox"
+                  checked={excludeSpecialOffer}
+                  onChange={(e) => {
+                    setExcludeSpecialOffer(e.target.checked);
+                    setPage(1);
+                  }}
+                />
+                Exclude Special Offer
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm text-gray-800 no-underline">
+                <input
+                  type="checkbox"
+                  checked={excludeSpecialUpgrade}
+                  onChange={(e) => {
+                    setExcludeSpecialUpgrade(e.target.checked);
+                    setPage(1);
+                  }}
+                />
+                Exclude Special Upgrade
+              </label>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -2226,6 +2366,9 @@ export default function AdminRegisteredUsersList({
             <thead>
               <tr className="bg-[#4a8f96] text-white">
                 <th className="w-10 px-2 py-2 text-left font-semibold border-r border-[#3d7a80]" />
+                {listPurpose === 'subscriptions' ? (
+                  <th className="px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14">Mode</th>
+                ) : null}
                 {isAllSegment && (
                   <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80] min-w-[7rem]">
                     Type of User
@@ -2246,6 +2389,8 @@ export default function AdminRegisteredUsersList({
                   <>
                     <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date Start</th>
                     <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date End</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version type</th>
+                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Check</th>
                     <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version</th>
                   </>
                 )}
@@ -2296,6 +2441,7 @@ export default function AdminRegisteredUsersList({
                         className="rounded border-gray-500"
                       />
                     </td>
+                    {listPurpose === 'subscriptions' ? <ModeCell row={r} /> : null}
                     {isAllSegment && (
                       <td className="px-3 py-2 border-t border-gray-300">
                         {typeBadgeLabel(r.userType as UserType)}
@@ -2322,6 +2468,36 @@ export default function AdminRegisteredUsersList({
                         <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
                           {r.dateEnd ?? '—'}
                         </td>
+                        <VersionTypeCell row={r} />
+                        <CheckCell
+                          row={r}
+                          onClearCheck={(row) => {
+                            const pw = window.prompt('Super Admin password to clear the Check deadline');
+                            if (!pw) return;
+                            void (async () => {
+                              try {
+                                const token = localStorage.getItem('adminToken');
+                                const res = await fetch('/api/admin/registered-users/clear-upgrade-check', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                  },
+                                  body: JSON.stringify({
+                                    userId: row.id,
+                                    upgradeId: row.upgradeId,
+                                    password: pw,
+                                  }),
+                                });
+                                const data = await res.json().catch(() => ({}));
+                                if (!res.ok) throw new Error(data.error || 'Could not clear check');
+                                await load();
+                              } catch (e) {
+                                window.alert(e instanceof Error ? e.message : 'Could not clear check');
+                              }
+                            })();
+                          }}
+                        />
                         <VersionCell row={r} />
                       </>
                     )}
