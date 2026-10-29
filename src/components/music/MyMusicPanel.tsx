@@ -89,9 +89,60 @@ const REGISTRATION_TYPE_BY_NAV: Partial<Record<MusicFilterNavKey, string>> = {
   'songs-loaded': 'Song',
 };
 
+/** Per-tab search label + match fields (shown next to the section heading). */
+type MusicSectionSearchMode =
+  | 'author-title'
+  | 'publisher'
+  | 'publisher-title'
+  | 'author';
+
+const MUSIC_SECTION_SEARCH: Partial<
+  Record<MusicFilterNavKey, { label: string; mode: MusicSectionSearchMode }>
+> = {
+  recent: { label: 'Search author/title', mode: 'author-title' },
+  'songs-loaded': { label: 'Search author/title', mode: 'author-title' },
+  albums: { label: 'Search author/title', mode: 'author-title' },
+  favourites: { label: 'Search user who published', mode: 'publisher' },
+  playlist: { label: 'Search user who published/title', mode: 'publisher-title' },
+  artists: { label: 'Search author', mode: 'author' },
+};
+
 function isMusicFilterNavKey(key: MusicNavKey): key is MusicFilterNavKey {
   return (MUSIC_FILTER_NAV_KEYS as readonly string[]).includes(key);
 }
+
+function includesQuery(value: string | null | undefined, q: string): boolean {
+  return (value ?? '').toLowerCase().includes(q);
+}
+
+function matchesMusicSectionSearch(
+  article: MusicOgpItem,
+  query: string,
+  mode: MusicSectionSearchMode
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  switch (mode) {
+    case 'author-title':
+      return (
+        includesQuery(article.title, q) ||
+        includesQuery(article.artist, q) ||
+        includesQuery(article.siteName, q) ||
+        includesQuery(article.creatorUsername, q)
+      );
+    case 'publisher':
+      return includesQuery(article.creatorUsername, q);
+    case 'publisher-title':
+      return includesQuery(article.creatorUsername, q) || includesQuery(article.title, q);
+    case 'author':
+      return includesQuery(article.artist, q);
+    default:
+      return true;
+  }
+}
+
+const SECTION_SEARCH_INPUT_CLASS =
+  'min-w-0 flex-1 h-7 px-2 text-xs text-white bg-[#0f1a2e] border border-sky-600/70 rounded-sm outline-none focus:border-sky-400 placeholder:text-white/40';
 
 type HomeSectionKey =
   | 'suggested'
@@ -110,13 +161,18 @@ const HOME_SECTIONS: {
   /** Gear icon on each tile (Favorite Playlist / My Playlist) */
   tileGear?: boolean;
 }[] = [
+  { key: 'my-playlist', label: 'My Playlist', icon: List, tileCount: 8 },
+  { key: 'listen-again', label: 'Listen Again', icon: RotateCcw, tileCount: 8 },
   { key: 'suggested', label: 'Suggested', icon: Music2, tileCount: 10 },
   { key: 'mix-to-listen', label: 'Mixed to Listen', icon: Headphones, tileCount: 8 },
-  { key: 'listen-again', label: 'Listen Again', icon: RotateCcw, tileCount: 8 },
   { key: 'last-insertion', label: 'Last Insertion', icon: Clock, tileCount: 8 },
   { key: 'favourite-playlist', label: 'Favorite Playlist', icon: Heart, tileCount: 8, tileGear: true },
-  { key: 'my-playlist', label: 'My Playlist', icon: List, tileCount: 8, tileGear: true },
-  { key: 'from-the-community', label: 'From the Community', icon: Users, tileCount: 8 },
+  {
+    key: 'from-the-community',
+    label: 'The most listened in the community',
+    icon: Users,
+    tileCount: 8,
+  },
 ];
 
 const TILE_SIZE = 112;
@@ -142,6 +198,10 @@ type MusicOgpItem = {
   topic?: string | null;
   savedAt: string;
   creatorUsername: string | null;
+  /** Publisher's country (for Suggested Language/Country filter). */
+  creatorCountry?: string | null;
+  /** OGP content language code e.g. "en", "it". */
+  languageCode?: string | null;
   deletedAt?: string | null;
   expiresAt?: string | null;
   createdByCurrentUser?: boolean;
@@ -169,6 +229,8 @@ function mapMusicOgpFromApi(a: Record<string, unknown>): MusicOgpItem {
     topic: (a.topic as string | null) ?? null,
     savedAt: String(a.savedAt ?? ''),
     creatorUsername: (a.creatorUsername as string | null) ?? null,
+    creatorCountry: (a.creatorCountry as string | null) ?? null,
+    languageCode: (a.languageCode as string | null) ?? null,
     deletedAt: (a.deletedAt as string | null) ?? null,
     expiresAt: (a.expiresAt as string | null) ?? null,
     createdByCurrentUser: a.createdByCurrentUser === true,
@@ -184,6 +246,26 @@ function mapMusicOgpFromApi(a: Record<string, unknown>): MusicOgpItem {
       expiresAt: (a.expiresAt as string | null) ?? null,
     },
   };
+}
+
+function normalizeLangCode(code: string | null | undefined): string {
+  return (code ?? '').trim().slice(0, 2).toLowerCase();
+}
+
+function matchesSuggestedLangCountry(
+  article: MusicOgpItem,
+  language: string,
+  country: string
+): boolean {
+  if (language) {
+    const code = normalizeLangCode(article.languageCode);
+    if (!code || code !== normalizeLangCode(language)) return false;
+  }
+  if (country) {
+    const c = (article.creatorCountry ?? '').trim().toLowerCase();
+    if (!c || c !== country.trim().toLowerCase()) return false;
+  }
+  return true;
 }
 
 /** Same filter rules as NewsArticlesList Music library nav (Recent = last 30 days). */
@@ -235,7 +317,9 @@ type HomeFeedSectionKey =
   | 'mix-to-listen'
   | 'listen-again'
   | 'last-insertion'
-  | 'favourite-playlist';
+  | 'favourite-playlist'
+  | 'my-playlist'
+  | 'from-the-community';
 
 const HOME_FEED_SECTION_KEYS: readonly HomeFeedSectionKey[] = [
   'suggested',
@@ -243,7 +327,17 @@ const HOME_FEED_SECTION_KEYS: readonly HomeFeedSectionKey[] = [
   'listen-again',
   'last-insertion',
   'favourite-playlist',
+  'my-playlist',
+  'from-the-community',
 ];
+
+/** Home carousel sections that show a publisher/title search beside the heading. */
+const HOME_SECTION_SEARCH: Partial<
+  Record<HomeFeedSectionKey, { label: string; mode: MusicSectionSearchMode }>
+> = {
+  'favourite-playlist': { label: 'Search user who published', mode: 'publisher' },
+  'my-playlist': { label: 'Search author/title', mode: 'author-title' },
+};
 
 function isHomeFeedSectionKey(key: HomeSectionKey): key is HomeFeedSectionKey {
   return (HOME_FEED_SECTION_KEYS as readonly string[]).includes(key);
@@ -256,13 +350,15 @@ function isHomeFeedSectionKey(key: HomeSectionKey): key is HomeFeedSectionKey {
  * - Listen Again: last listened songs/albums/playlists
  * - Last Insertion: newest savedAt first
  * - Favorite Playlist: registrationType Playlist, higher likes
+ * - My Playlist: current user's playlists only (newest first)
+ * - Most listened in the community: other users' tracks, highest viewCount first
  */
 function buildHomeSectionArticles(
   articles: MusicOgpItem[],
   section: HomeFeedSectionKey,
   likesMap: LikesMap,
   listenOrderIds: string[],
-  opts?: { publicOwnerView?: boolean }
+  opts?: { publicOwnerView?: boolean; currentUserId?: string | null }
 ): MusicOgpItem[] {
   switch (section) {
     case 'suggested':
@@ -292,7 +388,7 @@ function buildHomeSectionArticles(
       if (listenOrderIds.length === 0) {
         // Public share has no listen history — show newest instead of empty black tiles.
         if (opts?.publicOwnerView) {
-          return buildHomeSectionArticles(articles, 'last-insertion', likesMap, []);
+          return buildHomeSectionArticles(articles, 'last-insertion', likesMap, [], opts);
         }
         return [];
       }
@@ -314,6 +410,39 @@ function buildHomeSectionArticles(
       return articles
         .filter((a) => (a.registrationType ?? '').trim() === 'Playlist')
         .sort((a, b) => (likesMap[b.id]?.count ?? 0) - (likesMap[a.id]?.count ?? 0));
+    case 'my-playlist': {
+      const currentUserId = opts?.currentUserId ?? null;
+      return articles
+        .filter((a) => {
+          if ((a.registrationType ?? '').trim() !== 'Playlist') return false;
+          if (opts?.publicOwnerView) return a.createdByCurrentUser === true;
+          return (
+            a.createdByCurrentUser === true ||
+            (currentUserId != null && a.userId === currentUserId)
+          );
+        })
+        .sort((a, b) => {
+          const ta = a.savedAt ? new Date(a.savedAt).getTime() : 0;
+          const tb = b.savedAt ? new Date(b.savedAt).getTime() : 0;
+          return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+        });
+    }
+    case 'from-the-community': {
+      const currentUserId = opts?.currentUserId ?? null;
+      // Community = other users' music, ranked by global listens (viewCount).
+      return articles
+        .filter((a) => {
+          if (opts?.publicOwnerView) return a.createdByCurrentUser !== true;
+          if (a.createdByCurrentUser === true) return false;
+          if (currentUserId != null && a.userId === currentUserId) return false;
+          return true;
+        })
+        .sort((a, b) => {
+          const views = (b.viewCount ?? 0) - (a.viewCount ?? 0);
+          if (views !== 0) return views;
+          return (likesMap[b.id]?.count ?? 0) - (likesMap[a.id]?.count ?? 0);
+        });
+    }
     default:
       return articles;
   }
@@ -889,8 +1018,36 @@ function MusicSuggestedSection({
   const [editTopicArticleId, setEditTopicArticleId] = useState<string | null>(null);
   const [editTopicValue, setEditTopicValue] = useState('');
   const [editTopicDescription, setEditTopicDescription] = useState('');
+  const [sectionSearch, setSectionSearch] = useState('');
+  /** Suggested section Language/Country filter (gear). */
+  const [suggestedFilterOpen, setSuggestedFilterOpen] = useState(false);
+  const [suggestedFilterLanguage, setSuggestedFilterLanguage] = useState('');
+  const [suggestedFilterCountry, setSuggestedFilterCountry] = useState('');
+  const [suggestedFilterOptions, setSuggestedFilterOptions] = useState<{
+    countries: string[];
+    languages: { value: string; label: string }[];
+  } | null>(null);
+  const suggestedFilterRef = useRef<HTMLDivElement>(null);
 
   const isPublicView = Boolean(publicUserKey);
+  const sectionSearchConfig =
+    filterNav != null
+      ? MUSIC_SECTION_SEARCH[filterNav] ?? null
+      : homeSection != null
+        ? HOME_SECTION_SEARCH[homeSection] ?? null
+        : null;
+  /** Home feed carousels that share Language+Country gear filters. */
+  const supportsLangCountryFilter =
+    homeSection === 'suggested' ||
+    homeSection === 'mix-to-listen' ||
+    homeSection === 'listen-again' ||
+    homeSection === 'last-insertion' ||
+    homeSection === 'favourite-playlist' ||
+    homeSection === 'from-the-community';
+  const suggestedFiltersActive = Boolean(
+    suggestedFilterLanguage.trim() || suggestedFilterCountry.trim()
+  );
+  const sectionSearchActive = Boolean(sectionSearchConfig && sectionSearch.trim());
   const currentUserId = adminContext ? (adminUser?.id ?? null) : (user?.id ?? null);
   const canDeleteOgp = !isPublicView && (adminContext || user?.userType === 'ADMIN');
   const canLike = !isPublicView && Boolean(getAuthToken(adminContext));
@@ -1124,6 +1281,7 @@ function MusicSuggestedSection({
 
   /** Suggested / Home sections / filter navs / Music Folder members. */
   const displayed = useMemo(() => {
+    let list: MusicOgpItem[];
     if (memberIdsFilter) {
       const byId = new Map(articles.map((a) => [a.id, a]));
       const ordered: MusicOgpItem[] = [];
@@ -1131,21 +1289,33 @@ function MusicSuggestedSection({
         const item = byId.get(id);
         if (item) ordered.push(item);
       }
-      return ordered;
-    }
-    if (filterNav) {
-      return filterMusicByNav(articles, filterNav, currentUserId, {
+      list = ordered;
+    } else if (filterNav) {
+      list = filterMusicByNav(articles, filterNav, currentUserId, {
         publicOwnerView: isPublicView,
       });
-    }
-    if (homeSection) {
-      return buildHomeSectionArticles(articles, homeSection, likesMap, listenOrderIds, {
+    } else if (homeSection) {
+      list = buildHomeSectionArticles(articles, homeSection, likesMap, listenOrderIds, {
         publicOwnerView: isPublicView,
+        currentUserId,
+      });
+    } else {
+      list = buildHomeSectionArticles(articles, 'suggested', likesMap, listenOrderIds, {
+        publicOwnerView: isPublicView,
+        currentUserId,
       });
     }
-    return buildHomeSectionArticles(articles, 'suggested', likesMap, listenOrderIds, {
-      publicOwnerView: isPublicView,
-    });
+    if (sectionSearchConfig && sectionSearch.trim()) {
+      list = list.filter((a) =>
+        matchesMusicSectionSearch(a, sectionSearch, sectionSearchConfig.mode)
+      );
+    }
+    if (supportsLangCountryFilter && suggestedFiltersActive) {
+      list = list.filter((a) =>
+        matchesSuggestedLangCountry(a, suggestedFilterLanguage, suggestedFilterCountry)
+      );
+    }
+    return list;
   }, [
     articles,
     likesMap,
@@ -1155,7 +1325,64 @@ function MusicSuggestedSection({
     currentUserId,
     isPublicView,
     memberIdsFilter,
+    sectionSearchConfig,
+    sectionSearch,
+    supportsLangCountryFilter,
+    suggestedFiltersActive,
+    suggestedFilterLanguage,
+    suggestedFilterCountry,
   ]);
+
+  // Reset search when switching tabs / home sections.
+  useEffect(() => {
+    setSectionSearch('');
+  }, [filterNav, homeSection]);
+
+  // Load Language/Country options when the section filter panel opens.
+  useEffect(() => {
+    if (!suggestedFilterOpen || suggestedFilterOptions) return;
+    let cancelled = false;
+    const empty = { countries: [] as string[], languages: [] as { value: string; label: string }[] };
+    fetch('/api/news/ogp-settings-options', {
+      headers: isPublicView ? undefined : getAuthHeaders(adminContext),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (!data) {
+          setSuggestedFilterOptions(empty);
+          return;
+        }
+        setSuggestedFilterOptions({
+          countries: Array.isArray(data.countries) ? data.countries : [],
+          languages: Array.isArray(data.languages) ? data.languages : [],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestedFilterOptions(empty);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [suggestedFilterOpen, suggestedFilterOptions, adminContext, isPublicView]);
+
+  // Close Suggested filter panel on outside click / Escape.
+  useEffect(() => {
+    if (!suggestedFilterOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = suggestedFilterRef.current;
+      if (el && !el.contains(e.target as Node)) setSuggestedFilterOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSuggestedFilterOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [suggestedFilterOpen]);
 
   const recordListen = useCallback(
     async (articleId: string) => {
@@ -1342,33 +1569,129 @@ function MusicSuggestedSection({
   return (
     <section className={`border border-white/30 bg-[#1a2744] ${isFilterView ? 'm-3' : ''}`}>
       <div className="flex items-center justify-between gap-2 border-b border-white/30 px-3 py-2">
-        <div className="flex items-center gap-2 min-w-0">
-          {onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className="p-0.5 text-white/80 hover:text-white transition-colors shrink-0"
-              aria-label="Back"
-              title="Back"
-            >
-              <ChevronLeft className="w-4 h-4" strokeWidth={2} aria-hidden />
-            </button>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div
+            className={`flex items-center gap-2 min-w-0 ${
+              sectionSearchConfig ? 'shrink-0' : 'flex-1'
+            }`}
+          >
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-0.5 text-white/80 hover:text-white transition-colors shrink-0"
+                aria-label="Back"
+                title="Back"
+              >
+                <ChevronLeft className="w-4 h-4" strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+            {filterNav === 'artists' ? (
+              <Mic2 className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <SectionIcon className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
+            )}
+            <h3 className="text-sm font-semibold text-white truncate" title={sectionLabel}>
+              {sectionLabel}
+            </h3>
+          </div>
+          {sectionSearchConfig ? (
+            <label className="flex items-center gap-2 min-w-0 flex-1 max-w-md">
+              <span className="text-xs text-white/80 whitespace-nowrap shrink-0">
+                {sectionSearchConfig.label}
+              </span>
+              <input
+                type="search"
+                value={sectionSearch}
+                onChange={(e) => setSectionSearch(e.target.value)}
+                placeholder=""
+                aria-label={sectionSearchConfig.label}
+                className={SECTION_SEARCH_INPUT_CLASS}
+              />
+            </label>
           ) : null}
-          {filterNav === 'artists' ? (
-            <Mic2 className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
-          ) : (
-            <SectionIcon className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
-          )}
-          <h3 className="text-sm font-semibold text-white truncate">{sectionLabel}</h3>
         </div>
         {!isFilterView ? (
-          <button
-            type="button"
-            className="p-1 text-white/90 hover:text-white transition-colors shrink-0"
-            aria-label={`${sectionLabel} settings`}
-          >
-            <Settings className="w-3.5 h-3.5" strokeWidth={1.75} aria-hidden />
-          </button>
+          supportsLangCountryFilter ? (
+            <div className="relative shrink-0" ref={suggestedFilterRef}>
+              <button
+                type="button"
+                onClick={() => setSuggestedFilterOpen((open) => !open)}
+                className={`p-1 transition-colors shrink-0 ${
+                  suggestedFiltersActive || suggestedFilterOpen
+                    ? 'text-amber-400 hover:text-amber-300'
+                    : 'text-white/90 hover:text-white'
+                }`}
+                aria-label={`Filter ${sectionLabel} by language or country`}
+                aria-expanded={suggestedFilterOpen}
+                aria-haspopup="dialog"
+                title="Filter by Language / Country"
+              >
+                <Settings className="w-3.5 h-3.5" strokeWidth={1.75} aria-hidden />
+              </button>
+              {suggestedFilterOpen ? (
+                <div
+                  role="dialog"
+                  aria-label={`${sectionLabel} filters`}
+                  className="absolute right-0 top-full z-30 mt-1 w-64 rounded border border-white/25 bg-[#0f1a2e] p-3 shadow-xl"
+                >
+                  <p className="text-xs font-semibold text-white mb-2">Filter {sectionLabel}</p>
+                  <label className="block mb-2">
+                    <span className="block text-[11px] text-white/70 mb-1">Language</span>
+                    <select
+                      value={suggestedFilterLanguage}
+                      onChange={(e) => setSuggestedFilterLanguage(e.target.value)}
+                      className="w-full h-8 px-2 text-xs text-white bg-[#152038] border border-sky-600/70 rounded-sm outline-none focus:border-sky-400"
+                      aria-label="Filter by language"
+                    >
+                      <option value="">All languages</option>
+                      {(suggestedFilterOptions?.languages ?? []).map((lang) => (
+                        <option key={lang.value} value={lang.value}>
+                          {lang.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block mb-3">
+                    <span className="block text-[11px] text-white/70 mb-1">Country</span>
+                    <select
+                      value={suggestedFilterCountry}
+                      onChange={(e) => setSuggestedFilterCountry(e.target.value)}
+                      className="w-full h-8 px-2 text-xs text-white bg-[#152038] border border-sky-600/70 rounded-sm outline-none focus:border-sky-400"
+                      aria-label="Filter by country"
+                    >
+                      <option value="">All countries</option>
+                      {(suggestedFilterOptions?.countries ?? []).map((country) => (
+                        <option key={country} value={country}>
+                          {country}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSuggestedFilterLanguage('');
+                        setSuggestedFilterCountry('');
+                      }}
+                      className="text-xs text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                      disabled={!suggestedFiltersActive}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSuggestedFilterOpen(false)}
+                      className="px-2.5 py-1 text-xs font-medium text-[#0f1a2e] bg-amber-400 hover:bg-amber-300 rounded-sm transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null
         ) : (
           <span className="text-xs text-white/50 tabular-nums shrink-0">
             {showLoading ? '…' : `${displayed.length}`}
@@ -1390,11 +1713,13 @@ function MusicSuggestedSection({
             </div>
           ) : displayed.length === 0 ? (
             <p className="text-sm text-white/50 text-center py-12">
-              {filterNav === 'artists'
-                ? 'No artists found.'
-                : memberIdsFilter
-                  ? 'No OGP music in this folder.'
-                  : 'No music found for this view.'}
+              {sectionSearchConfig && sectionSearch.trim()
+                ? 'No matches for that search.'
+                : filterNav === 'artists'
+                  ? 'No artists found.'
+                  : memberIdsFilter
+                    ? 'No OGP music in this folder.'
+                    : 'No music found for this view.'}
             </p>
           ) : (
             <div className="flex flex-wrap gap-3 items-start">{displayed.map(renderTile)}</div>
@@ -1425,9 +1750,20 @@ function MusicSuggestedSection({
               ))
             : null}
 
+          {!showLoading &&
+            (suggestedFiltersActive || sectionSearchActive) &&
+            displayed.length === 0 ? (
+              <p className="text-sm text-white/50 py-6 px-2 w-full text-center">
+                {suggestedFiltersActive && !sectionSearchActive
+                  ? `No ${sectionLabel} music matches that language/country.`
+                  : 'No matches for that search.'}
+              </p>
+            ) : null}
+
           {!showLoading && displayed.map(renderTile)}
 
           {!showLoading &&
+            !((suggestedFiltersActive || sectionSearchActive) && displayed.length === 0) &&
             Array.from({ length: placeholderCount }).map((_, i) => (
               <div
                 key={`ph-${i}`}
@@ -1810,6 +2146,8 @@ type MusicFolderItem = {
   savedAt: string;
   deletedAt?: string | null;
   expiresAt?: string | null;
+  creatorUsername?: string | null;
+  creatorName?: string | null;
 };
 
 function isActiveMusicFolder(f: MusicFolderItem): boolean {
@@ -1834,7 +2172,17 @@ function mapMusicFolderFromApi(g: Record<string, unknown>): MusicFolderItem {
     savedAt: String(g.savedAt ?? ''),
     deletedAt: (g.deletedAt as string | null) ?? null,
     expiresAt: (g.expiresAt as string | null) ?? null,
+    creatorUsername: (g.creatorUsername as string | null) ?? null,
+    creatorName: (g.creatorName as string | null) ?? null,
   };
+}
+
+function matchesFolderCreator(folder: MusicFolderItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    includesQuery(folder.creatorUsername, q) || includesQuery(folder.creatorName, q)
+  );
 }
 
 /** Tile for Music Folders nav — cover + folder name + member count. */
@@ -1896,12 +2244,14 @@ function MusicFoldersSection({
   const [folders, setFolders] = useState<MusicFolderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFolder, setSelectedFolder] = useState<MusicFolderItem | null>(null);
+  const [folderCreatorSearch, setFolderCreatorSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setSelectedFolder(null);
+      setFolderCreatorSearch('');
       try {
         if (publicUserKey) {
           const res = await fetch(
@@ -1934,6 +2284,11 @@ function MusicFoldersSection({
     };
   }, [adminContext, publicUserKey]);
 
+  const displayedFolders = useMemo(() => {
+    if (!folderCreatorSearch.trim()) return folders;
+    return folders.filter((f) => matchesFolderCreator(f, folderCreatorSearch));
+  }, [folders, folderCreatorSearch]);
+
   if (selectedFolder) {
     return (
       <MusicSuggestedSection
@@ -1951,12 +2306,27 @@ function MusicFoldersSection({
   return (
     <section className="m-3 border border-white/30 bg-[#1a2744]">
       <div className="flex items-center justify-between gap-2 border-b border-white/30 px-3 py-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <FolderOpen className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
-          <h3 className="text-sm font-semibold text-white truncate">Music Folders</h3>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 shrink-0">
+            <FolderOpen className="w-4 h-4 shrink-0 text-white" strokeWidth={1.75} aria-hidden />
+            <h3 className="text-sm font-semibold text-white truncate">Music Folders</h3>
+          </div>
+          <label className="flex items-center gap-2 min-w-0 flex-1 max-w-md">
+            <span className="text-xs text-white/80 whitespace-nowrap shrink-0">
+              Search user who create folder
+            </span>
+            <input
+              type="search"
+              value={folderCreatorSearch}
+              onChange={(e) => setFolderCreatorSearch(e.target.value)}
+              placeholder=""
+              aria-label="Search user who create folder"
+              className={SECTION_SEARCH_INPUT_CLASS}
+            />
+          </label>
         </div>
         <span className="text-xs text-white/50 tabular-nums shrink-0">
-          {loading ? '…' : `${folders.length}`}
+          {loading ? '…' : `${displayedFolders.length}`}
         </span>
       </div>
       <div className="relative px-3 py-3">
@@ -1970,11 +2340,15 @@ function MusicFoldersSection({
               />
             ))}
           </div>
-        ) : folders.length === 0 ? (
-          <p className="text-sm text-white/50 text-center py-12">No music folders found.</p>
+        ) : displayedFolders.length === 0 ? (
+          <p className="text-sm text-white/50 text-center py-12">
+            {folderCreatorSearch.trim()
+              ? 'No matches for that search.'
+              : 'No music folders found.'}
+          </p>
         ) : (
           <div className="flex flex-wrap gap-3 items-start">
-            {folders.map((folder) => (
+            {displayedFolders.map((folder) => (
               <MusicFolderTile key={folder.id} folder={folder} onOpen={setSelectedFolder} />
             ))}
           </div>

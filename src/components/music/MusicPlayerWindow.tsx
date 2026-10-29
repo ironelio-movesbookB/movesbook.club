@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { extractYouTubeVideoId } from '@/constants/tools.constants';
+import MusicPlayerSponsorsBanner from '@/components/music/MusicPlayerSponsorsBanner';
 
 export type MusicPlayerTrack = {
   id: string;
@@ -565,9 +566,11 @@ export default function MusicPlayerWindow({
           <h2 id="music-player-title" className="text-lg font-bold tracking-wide shrink-0">
             My Music
           </h2>
-          <div className="mx-2 flex-1 flex items-center justify-center min-h-[72px] sm:min-h-[88px] rounded-sm border border-sky-300/40 bg-sky-200/90 px-3 py-4 text-center text-sm font-medium text-sky-950">
-            Advertising here
-          </div>
+          <MusicPlayerSponsorsBanner
+            tracks={playlist}
+            currentIndex={currentIndex}
+            onSelectTrack={(i) => loadTrackAt(i, true)}
+          />
           <button
             type="button"
             onClick={onClose}

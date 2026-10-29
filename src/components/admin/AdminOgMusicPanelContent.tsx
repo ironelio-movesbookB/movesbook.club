@@ -10,8 +10,8 @@ export interface AdminOgMusicPanelContentProps {
 }
 
 /**
- * Superadmin "OG Music panel" — same My Music UI as the athlete/user dashboard.
- * Embedded on /admin/dashboard when opened from Music → OG Music panel.
+ * Superadmin My Music UI (same as the athlete/user dashboard).
+ * Embedded on /admin/dashboard when opened from Music → Music Tracked.
  * Fills the full central column at a fixed height so tab changes do not resize it.
  */
 export default function AdminOgMusicPanelContent({

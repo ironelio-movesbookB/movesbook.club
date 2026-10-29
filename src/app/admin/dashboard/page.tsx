@@ -37,12 +37,13 @@ function AdminDashboardInner() {
     return null;
   }
 
+  // Music Tracked → My Music; OG Music panel → Music (OGP) section
   if (panel === 'music-tracked') {
-    return <AdminSuperAdminOGPMusicContent closeHref="/admin/dashboard" />;
+    return <AdminOgMusicPanelContent closeHref="/admin/dashboard" />;
   }
 
   if (panel === 'og-music') {
-    return <AdminOgMusicPanelContent closeHref="/admin/dashboard" />;
+    return <AdminSuperAdminOGPMusicContent closeHref="/admin/dashboard" />;
   }
 
   if (panel === 'my-feedbacks') {

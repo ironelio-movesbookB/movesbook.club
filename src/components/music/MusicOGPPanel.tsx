@@ -502,7 +502,7 @@ export default function MusicOGPPanel({
             aria-labelledby="music-ogp-modal-title"
           >
             <div
-              className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+              className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.key === 'Escape' && closeOgpForm()}
             >

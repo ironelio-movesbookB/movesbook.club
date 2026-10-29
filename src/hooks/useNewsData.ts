@@ -96,7 +96,12 @@ export interface UseNewsDataResult {
     coverImage?: string | null;
   }) => Promise<{ merged: boolean; group: OgpNewsGroupCard; exists?: boolean }>;
   removeOgpNewsGroup: (id: string) => Promise<void>;
-  updateOgpNewsGroup: (id: string, topic: string, customDescription?: string) => Promise<void>;
+  updateOgpNewsGroup: (
+    id: string,
+    topic: string,
+    customDescription?: string,
+    extras?: { name?: string; coverImage?: string | null }
+  ) => Promise<void>;
   updateOgpNewsGroupSettings: (id: string, settings: OgpVisibilitySettingsExport) => Promise<void>;
   addTypedArticle: (
     description: string,
@@ -809,15 +814,32 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
   );
 
   const updateOgpNewsGroup = useCallback(
-    async (id: string, topic: string, customDescription?: string) => {
+    async (
+      id: string,
+      topic: string,
+      customDescription?: string,
+      extras?: { name?: string; coverImage?: string | null }
+    ) => {
       if (!effectiveUserId) return;
       if (!supportsOgpGroups(apiBase)) return;
       const trimmed = topic.trim();
       if (!trimmed) return;
       const headers = { ...getHeaders(), 'Content-Type': 'application/json' };
-      const payload: { topic: string; customDescription?: string | null } = { topic: trimmed };
+      const payload: {
+        topic: string;
+        customDescription?: string | null;
+        name?: string;
+        coverImage?: string | null;
+      } = { topic: trimmed };
       if (customDescription !== undefined) {
         payload.customDescription = customDescription.trim() || null;
+      }
+      const trimmedName = extras?.name?.trim();
+      if (trimmedName) {
+        payload.name = trimmedName;
+      }
+      if (extras && 'coverImage' in extras) {
+        payload.coverImage = extras.coverImage ?? null;
       }
       const res = await fetch(`${apiBase}/ogp-groups/${id}`, {
         method: 'PATCH',
@@ -835,6 +857,13 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
                 ...(customDescription !== undefined && {
                   customDescription: customDescription.trim() || undefined,
                 }),
+                ...(trimmedName ? { name: trimmedName } : {}),
+                ...(extras && 'coverImage' in extras
+                  ? {
+                      coverImage: extras.coverImage ?? null,
+                      image: extras.coverImage || g.image || null,
+                    }
+                  : {}),
               }
         )
       );

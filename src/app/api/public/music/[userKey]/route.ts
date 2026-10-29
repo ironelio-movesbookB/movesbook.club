@@ -116,6 +116,7 @@ export async function GET(
       genre: true,
       registrationType: true,
       isFavourite: true,
+      languageCode: true,
       savedAt: true,
       expiresAt: true,
       deletedAt: true,
@@ -123,7 +124,7 @@ export async function GET(
       visibilityCountries: true,
       visibilityLanguages: true,
       visibilitySports: true,
-      user: { select: { username: true } },
+      user: { select: { username: true, country: true } },
     } as const;
 
     let list: Array<{
@@ -140,6 +141,7 @@ export async function GET(
       genre: string | null;
       registrationType: string | null;
       isFavourite: boolean;
+      languageCode: string | null;
       savedAt: Date;
       expiresAt: Date | null;
       deletedAt: Date | null;
@@ -147,7 +149,7 @@ export async function GET(
       visibilityCountries: string | null;
       visibilityLanguages: string | null;
       visibilitySports: string | null;
-      user: { username: string } | null;
+      user: { username: string; country: string | null } | null;
     }>;
 
     if (isPrivileged) {
@@ -216,9 +218,11 @@ export async function GET(
       genre: a.genre,
       registrationType: a.registrationType,
       isFavourite: a.isFavourite === true,
+      languageCode: a.languageCode ?? null,
       viewCount: viewById.get(a.id) ?? 0,
       savedAt: a.savedAt.toISOString(),
       creatorUsername: a.user?.username ?? null,
+      creatorCountry: a.user?.country ?? null,
       userId: a.userId,
       createdByCurrentUser: a.userId === owner.id,
     }));

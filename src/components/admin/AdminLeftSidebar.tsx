@@ -815,6 +815,13 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                   <span>OG Music panel</span>
                 </Link>
                 <Link
+                  href="/admin/dashboard?panel=mood-panel"
+                  className="flex items-center gap-3 px-3 py-2.5 bg-[#4f4f4f] border-b border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white"
+                >
+                  <Music className="w-4 h-4 shrink-0 text-white" />
+                  <span>Mood Panel</span>
+                </Link>
+                <Link
                   href="/admin/medias/settings"
                   className="flex items-center gap-3 px-3 py-2.5 bg-[#4f4f4f] hover:bg-[#3d3d3d] transition text-sm text-white"
                 >

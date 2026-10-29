@@ -171,8 +171,11 @@ export async function POST(request: NextRequest) {
     if (!topic) {
       return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
     }
-    if (articleIds.length === 0) {
-      return NextResponse.json({ error: 'Select at least one OGP Music' }, { status: 400 });
+    if (articleIds.length < 2) {
+      return NextResponse.json(
+        { error: 'Select at least two OGP Music items to create a group' },
+        { status: 400 }
+      );
     }
 
     const articles = await prisma.musicOgpArticle.findMany({

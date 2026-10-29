@@ -75,7 +75,7 @@ export interface AdminSuperAdminOGPMusicContentProps {
 
 /**
  * Superadmin OGP / Music admin UI.
- * Embedded on /admin/dashboard when opened from Music → Music Tracked.
+ * Embedded on /admin/dashboard when opened from Music → OG Music panel.
  */
 export default function AdminSuperAdminOGPMusicContent({
   closeHref = '/admin/dashboard',
@@ -598,7 +598,7 @@ export default function AdminSuperAdminOGPMusicContent({
               aria-labelledby="music-ogp-modal-title"
             >
               <div
-                className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.key === 'Escape' && closeOgpForm()}
               >

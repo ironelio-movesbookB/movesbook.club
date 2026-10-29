@@ -92,7 +92,10 @@ export default function CreateOgpNewsGroupModal({
   }, [coverFile]);
 
   const busy = saving || uploadingCover;
-  const canSubmit = name.trim().length > 0 && !!topic && selectedCount > 0 && !busy;
+  /** Music groups need 2+ items; news/other keep 1+. */
+  const minSelected = variant === 'music' ? 2 : 1;
+  const canSubmit =
+    name.trim().length > 0 && !!topic && selectedCount >= minSelected && !busy;
   const displayError = localError || error;
 
   const handleCreateTopic = async (newTopicName: string) => {
@@ -273,6 +276,9 @@ export default function CreateOgpNewsGroupModal({
             <p className="text-xs text-gray-500">
               {selectedCount} {ogpLabel} selected
               {topic ? ` · will be saved under “${topic}”` : ''}
+              {variant === 'music' && selectedCount < minSelected
+                ? ` · select at least ${minSelected} to create a group`
+                : ''}
             </p>
 
             {existingNameConflict && (

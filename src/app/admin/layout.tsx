@@ -21,11 +21,11 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const isChat = pathname?.startsWith('/admin/chat');
   const isStatistics = pathname?.startsWith('/admin/statistics');
   const isLogin = pathname?.startsWith('/admin/login');
-  /** Superadmin My Music panel — fill the central column at a fixed viewport height. */
-  const isOgMusicPanel =
-    pathname?.startsWith('/admin/dashboard') && searchParams?.get('panel') === 'og-music';
+  /** Superadmin My Music (Music Tracked panel) — fill the central column at a fixed viewport height. */
+  const isMyMusicPanel =
+    pathname?.startsWith('/admin/dashboard') && searchParams?.get('panel') === 'music-tracked';
   /** Fill viewport so left/right sidebars and main share one height (no short nested scroll). */
-  const fillViewport = isChat || isStatistics || isOgMusicPanel;
+  const fillViewport = isChat || isStatistics || isMyMusicPanel;
   /** OGP News needs the full main column; Current Users sidebar crowds the card grid. */
   const isOgpNewsPage = pathname?.startsWith('/admin/news/links');
   const isGlobalNewsPage = pathname?.startsWith('/admin/news/global');
