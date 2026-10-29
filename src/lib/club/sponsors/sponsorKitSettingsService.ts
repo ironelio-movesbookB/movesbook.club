@@ -8,6 +8,8 @@ import {
   cleanHexColor,
   type SponsorKitSettings,
 } from '@/lib/club/sponsors/sponsorKitSettings';
+import { sendIonosEmail } from '@/lib/ionosEmail';
+import { getSiteOrigin } from '@/lib/siteUrl';
 
 let tablesReady = false;
 
@@ -127,8 +129,8 @@ async function markReportSent(sponsorId: string, at: Date): Promise<void> {
 
 /**
  * Sponsors whose report is due: the workspace has a cadence (`reportIntervalDays` > 0) and the last
- * submission is older than that (or never happened). Their `last_sent_at` is set to now.
- * Call it from the daily reminder cron; sending the email is left to the mail helper once available.
+ * submission is older than that (or never happened). Emails the sponsor (or club owner as fallback)
+ * with the public report link, then sets `last_sent_at`.
  */
 export async function processSponsorReportCadence(
   ws?: SponsorWorkspace,
@@ -137,6 +139,8 @@ export async function processSponsorReportCadence(
   const rows = await prisma.$queryRawUnsafe<
     Array<{
       id: string;
+      name: string;
+      email: string;
       workspace_kind: string;
       workspace_id: string;
       report_token: string;
@@ -144,7 +148,7 @@ export async function processSponsorReportCadence(
       last_sent_at: Date | null;
     }>
   >(
-    `SELECT s.id, s.workspace_kind, s.workspace_id, s.report_token, c.report_interval_days, l.last_sent_at
+    `SELECT s.id, s.name, s.email, s.workspace_kind, s.workspace_id, s.report_token, c.report_interval_days, l.last_sent_at
      FROM org_sponsors s
      JOIN org_sponsor_settings c ON c.workspace_kind = s.workspace_kind AND c.workspace_id = s.workspace_id
      LEFT JOIN org_sponsor_report_log l ON l.sponsor_id = s.id
@@ -154,18 +158,56 @@ export async function processSponsorReportCadence(
   );
   const now = new Date();
   const due: Awaited<ReturnType<typeof processSponsorReportCadence>> = [];
+  const origin = getSiteOrigin();
+  const ownerCache = new Map<string, string | null>();
+
   for (const r of rows) {
     const dueAt = r.last_sent_at
       ? new Date(new Date(r.last_sent_at).getTime() + Number(r.report_interval_days) * 86_400_000)
       : null;
     if (dueAt && dueAt > now) continue;
-    await markReportSent(r.id, now);
-    due.push({
-      sponsorId: r.id,
-      workspaceKind: r.workspace_kind,
-      workspaceId: r.workspace_id,
-      reportToken: r.report_token,
-    });
+
+    let to = (r.email || '').trim();
+    if (!to) {
+      const key = `${r.workspace_kind}:${r.workspace_id}`;
+      if (!ownerCache.has(key)) {
+        const owner =
+          r.workspace_kind === 'team'
+            ? await prisma.team.findUnique({
+                where: { id: r.workspace_id },
+                select: { admin: { select: { email: true } } },
+              })
+            : await prisma.club.findUnique({
+                where: { id: r.workspace_id },
+                select: { admin: { select: { email: true } } },
+              });
+        ownerCache.set(key, owner?.admin?.email ?? null);
+      }
+      to = ownerCache.get(key) || '';
+    }
+    if (!to) continue;
+
+    const reportUrl = `${origin}/sponsor-report/${encodeURIComponent(r.report_token)}`;
+    try {
+      await sendIonosEmail({
+        to,
+        subject: `Sponsor report: ${r.name}`,
+        html: `<p>Your sponsorship performance report for <strong>${escapeHtml(r.name)}</strong> is ready.</p><p><a href="${reportUrl}">Open the report</a></p><p>You can print it or save it as PDF from the report page.</p>`,
+      });
+      await markReportSent(r.id, now);
+      due.push({
+        sponsorId: r.id,
+        workspaceKind: r.workspace_kind,
+        workspaceId: r.workspace_id,
+        reportToken: r.report_token,
+      });
+    } catch (e) {
+      console.error('sponsor report cadence', r.id, e);
+    }
   }
   return due;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }

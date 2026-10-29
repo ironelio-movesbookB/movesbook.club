@@ -157,6 +157,9 @@ export const SPONSOR_PUBLIC_TEXTS: Record<string, { en: string; it: string }> = 
   spr_print: { en: 'Print / save as PDF', it: 'Stampa / salva PDF' },
   spr_generated: { en: 'Generated on {date}', it: 'Generato il {date}' },
   spr_not_found: { en: 'This report is not available.', it: 'Questo report non è disponibile.' },
+  spr_phone: { en: 'Phone', it: 'Telefono' },
+  spr_email: { en: 'Email', it: 'Email' },
+  spr_website: { en: 'Website', it: 'Sito web' },
 };
 
 export type SponsorTextKey = keyof typeof SPONSOR_PUBLIC_TEXTS;
