@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Clock, FileText, LifeBuoy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, FileText, LifeBuoy, Monitor } from 'lucide-react';
+import DisplayModePanel from '@/components/display/DisplayModePanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import StaffMessagesExperience, { type MainTab } from '@/components/messages/StaffMessagesExperience';
 import styles from './MessagesHelpRail.module.css';
@@ -10,6 +11,7 @@ export default function MessagesHelpRail() {
   const { t } = useLanguage();
   const [stripOpen, setStripOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [sectionOpen, setSectionOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<MainTab>('support');
 
   const openPanel = (tab: MainTab) => {
@@ -50,9 +52,24 @@ export default function MessagesHelpRail() {
             <RailIconButton label={t('messages_rail_support')} onClick={() => openPanel('support')}>
               <LifeBuoy className="h-5 w-5" />
             </RailIconButton>
+            <RailIconButton
+              label={t('messages_rail_section')}
+              onClick={() => {
+                setPanelOpen(false);
+                setSectionOpen(true);
+              }}
+            >
+              <Monitor className="h-5 w-5" />
+            </RailIconButton>
           </div>
         </div>
       </div>
+
+      {sectionOpen && (
+        <div className="pointer-events-auto fixed right-14 z-[110]" style={{ top: '34%' }}>
+          <DisplayModePanel onClose={() => setSectionOpen(false)} />
+        </div>
+      )}
 
       {panelOpen && (
         <>
