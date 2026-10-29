@@ -1,0 +1,18 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireShopManager } from '@/lib/shop/auth';
+import { duplicateProduct } from '@/lib/shop/service';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const auth = await requireShopManager(request);
+  if ('error' in auth) return auth.error;
+  try {
+    const product = await duplicateProduct(auth.workspace, params.id);
+    return NextResponse.json(product);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not duplicate the product.';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

@@ -32,6 +32,7 @@ import {
   Server,
   ShoppingBasket,
   ShoppingCart,
+  Store,
   Timer,
   User,
   UserCog,
@@ -65,6 +66,7 @@ export const CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS: ClubAdminInsertItem[][] = [
   ],
   [
     { kind: 'icon', Icon: ShoppingCart, label: 'Sell products', path: '/ArchiveSeles/product_sale_list' },
+    { kind: 'icon', Icon: Store, label: 'Online shop', path: '/our-shop' },
     {
       kind: 'icon',
       Icon: ShoppingBasket,
@@ -232,6 +234,7 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
   ],
   [
     { kind: 'icon', Icon: ShoppingCart, label: 'Shop/Selling of products', path: '/ArchiveSeles/product_sale_list' },
+    { kind: 'icon', Icon: Store, label: 'Online shop', path: '/our-shop' },
     { kind: 'icon', Icon: Users2, label: 'Archive of Memberships', path: '/clubs/memberships/archive' },
     { kind: 'icon', Icon: BookOpen, label: 'Archive of Course Subs', path: '/clubs/courses/archive' },
     { kind: 'icon', Icon: FileText, label: 'Archive of Services', path: '/clubs/archive_service_list' },
