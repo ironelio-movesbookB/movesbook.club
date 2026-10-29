@@ -32,7 +32,7 @@ export default function ShareInMyClubsButton({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (sharedClubIdsProp) setSharedClubIds(sharedClubIdsProp);
+    if (sharedClubIdsProp !== undefined) setSharedClubIds(sharedClubIdsProp);
   }, [sharedClubIdsProp]);
 
   const fetchStatus = useCallback(async () => {

@@ -772,7 +772,7 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
 
                 <Link href="/admin/news/links" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                    <Globe className="w-4 h-4 text-white" />
-                   <span>OGP</span>
+                   <span>OGP News</span>
                 </Link>
 
                 <Link href="/news-by-movesbook/indexall" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">

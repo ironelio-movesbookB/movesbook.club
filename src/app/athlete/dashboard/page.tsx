@@ -111,7 +111,8 @@ type AthleteClubMainPanel =
   | 'club-news'
   | 'club-news-ogp'
   | 'club-global-news'
-  | 'club-movesbook-news';
+  | 'club-movesbook-news'
+  | 'club-movesbook-archive-news';
 
 function heroBannerStripBgUrl(p: AthleteLegacyBannerProfile | null): string {
   return getHeroBannerDisplayUrl(p);
@@ -961,6 +962,9 @@ function AthleteDashboardContent() {
                   setActiveSection('music');
                   setMusicExpanded(false);
                 }}
+                onClubMovesbookArchiveNewsSectionClick={() =>
+                  openClubNewsPanel('club-movesbook-archive-news')
+                }
                 onClubMovesbookNewsSectionClick={() => openClubNewsPanel('club-movesbook-news')}
                 onClubNewsSectionClick={() => openClubNewsPanel('club-news')}
                 onClubOgpNewsSectionClick={() => openClubNewsPanel('club-news-ogp')}
@@ -1005,7 +1009,7 @@ function AthleteDashboardContent() {
                 {activeSection === 'movesbook-news' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <ClubMovesbookNewsPanel
-                      title="Movesbook News"
+                      title="Movesbook Global News"
                       onClose={() => setActiveSection('overview')}
                     />
                   </div>
@@ -1169,9 +1173,21 @@ function AthleteDashboardContent() {
                     </div>
                   )}
                 </div>
+              ) : clubMainPanel === 'club-movesbook-archive-news' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <ClubNewsArchivePanel
+                    title="Movesbook News"
+                    clubId={selectedClubId ?? myClubs[0]?.id ?? null}
+                    enableMovesbookGlobalShare
+                    onClose={() => setClubMainPanel('default')}
+                  />
+                </div>
               ) : clubMainPanel === 'club-movesbook-news' ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <ClubMovesbookNewsPanel title="Movesbook News" />
+                  <ClubMovesbookNewsPanel
+                    title="Movesbook Global News"
+                    clubId={selectedClubId ?? myClubs[0]?.id ?? null}
+                  />
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border p-8 pt-12 flex-1 flex items-start justify-center">

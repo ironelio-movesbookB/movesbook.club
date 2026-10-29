@@ -9,6 +9,7 @@ import {
   type ClubSharedFeedItem,
 } from '@/lib/clubNewsShareAuth';
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
+import { getSuperAdminCreatorIds } from '@/app/api/news/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -499,7 +500,46 @@ export async function GET(request: NextRequest, context: RouteContext) {
         };
       });
 
-      return NextResponse.json({ news, items: news });
+      const [clubRow, staffRows, memberRows, movesbookUserIds] = await Promise.all([
+        prisma.club.findUnique({
+          where: { id: clubId },
+          select: { adminId: true },
+        }),
+        prisma.clubStaff.findMany({
+          where: { clubId },
+          select: { userId: true },
+        }),
+        prisma.clubMember.findMany({
+          where: { clubId },
+          select: { memberId: true },
+        }),
+        getSuperAdminCreatorIds(),
+      ]);
+      const adminStaffUserIds = [
+        ...new Set(
+          [clubRow?.adminId, ...staffRows.map((s) => s.userId)].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ];
+      const adminStaffSet = new Set(adminStaffUserIds);
+      const movesbookIdSet = new Set(movesbookUserIds);
+      const memberUserIds = [
+        ...new Set(
+          memberRows
+            .map((m) => m.memberId)
+            .filter((id) => id && !adminStaffSet.has(id) && !movesbookIdSet.has(id)),
+        ),
+      ];
+
+      return NextResponse.json({
+        news,
+        items: news,
+        currentUserId: decoded.userId,
+        adminStaffUserIds,
+        memberUserIds,
+        movesbookUserIds,
+      });
     }
 
     const items: ClubSharedFeedItem[] = [];
@@ -509,6 +549,39 @@ export async function GET(request: NextRequest, context: RouteContext) {
       ? { clubId, inClubGlobalNews: true }
       : { clubId };
 
+    const [clubRow, staffRows, memberRows, movesbookUserIds] = await Promise.all([
+      prisma.club.findUnique({
+        where: { id: clubId },
+        select: { adminId: true },
+      }),
+      prisma.clubStaff.findMany({
+        where: { clubId },
+        select: { userId: true },
+      }),
+      prisma.clubMember.findMany({
+        where: { clubId },
+        select: { memberId: true },
+      }),
+      getSuperAdminCreatorIds(),
+    ]);
+
+    const adminStaffUserIds = [
+      ...new Set(
+        [clubRow?.adminId, ...staffRows.map((s) => s.userId)].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    ];
+    const adminStaffSet = new Set(adminStaffUserIds);
+    const movesbookIdSet = new Set(movesbookUserIds);
+    const memberUserIds = [
+      ...new Set(
+        memberRows
+          .map((m) => m.memberId)
+          .filter((id) => id && !adminStaffSet.has(id) && !movesbookIdSet.has(id)),
+      ),
+    ];
+
     if (type === 'all' || type === 'news') {
       const newsShares = await prisma.clubSharedNews.findMany({
         where: shareWhere,
@@ -517,6 +590,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           news: {
             select: {
               id: true,
+              userId: true,
               title: true,
               date: true,
               author: true,
@@ -538,6 +612,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           title: row.news.title,
           date: row.news.date.toISOString(),
           author: row.news.author ?? row.news.originalAuthor,
+          posterUserId: row.news.userId ?? null,
           categoryName: row.news.category?.categoryName ?? null,
           method: row.news.method,
           image: row.news.image,
@@ -557,6 +632,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           ogpArticle: {
             select: {
               id: true,
+              userId: true,
               title: true,
               savedAt: true,
               topic: true,
@@ -603,10 +679,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
           date: row.ogpArticle.savedAt.toISOString(),
           topic: row.ogpArticle.topic,
           creatorUsername: row.ogpArticle.user?.username ?? null,
+          posterUserId: row.ogpArticle.userId ?? null,
           image: row.ogpArticle.image,
           url: row.ogpArticle.url,
           description: row.ogpArticle.description,
           customDescription: row.ogpArticle.customDescription,
+          languages: parseJsonStringArray(a.visibilityLanguages),
           sharedAt: row.createdAt.toISOString(),
           inClubGlobalNews: row.inClubGlobalNews === true,
         });
@@ -621,6 +699,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           ogpNewsGroup: {
             select: {
               id: true,
+              userId: true,
               name: true,
               topic: true,
               savedAt: true,
@@ -682,11 +761,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
           date: g.savedAt.toISOString(),
           topic: g.topic,
           creatorUsername: g.user?.username ?? null,
+          posterUserId: g.userId ?? null,
           image: g.coverImage ?? first?.image ?? null,
           url: first?.url ?? '',
           description: first?.description ?? null,
           customDescription: g.customDescription ?? first?.customDescription ?? null,
           memberCount: g._count.items,
+          languages: parseJsonStringArray(g.visibilityLanguages),
           sharedAt: row.createdAt.toISOString(),
           inClubGlobalNews: row.inClubGlobalNews === true,
         });
@@ -701,7 +782,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
         : new Date(b.sharedAt).getTime() - new Date(a.sharedAt).getTime(),
     );
 
-    return NextResponse.json({ items, isClubAdmin: access.isClubAdmin });
+    return NextResponse.json({
+      items,
+      isClubAdmin: access.isClubAdmin,
+      currentUserId: decoded.userId,
+      adminStaffUserIds,
+      memberUserIds,
+      movesbookUserIds,
+    });
   } catch (error) {
     console.error('Fetch club shared news:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

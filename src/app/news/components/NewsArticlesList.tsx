@@ -29,7 +29,7 @@ import OgpSponsoredCard from './OgpSponsoredCard';
 import OgpSponsorsSettingsModal from './OgpSponsorsSettingsModal';
 import {
   OGP_CARDS_PER_ROW,
-  isSponsorDisplayActive,
+  activeSponsorGroups,
   maxSponsorCols,
   paginateWithSponsors,
   type OgpSponsorSettings,
@@ -140,6 +140,8 @@ export type OgpNewsGroupCard = {
   sharedClubIds?: string[];
   /** Club admin: promoted into this club's Club Global News feed. */
   inClubGlobalNews?: boolean;
+  /** Super admin: included in the Global News merged feed. */
+  inGlobalNews?: boolean;
   sharedClubId?: string | null;
   sharedClubUsername?: string | null;
   isFromOtherClub?: boolean;
@@ -242,6 +244,7 @@ function groupToFeedItem(g: OgpNewsGroupCard): ArticlePasted {
     clubAudienceMode: g.clubAudienceMode ?? null,
     sharedClubIds: g.sharedClubIds,
     inClubGlobalNews: g.inClubGlobalNews === true,
+    inGlobalNews: g.inGlobalNews === true,
     sharedClubId: g.sharedClubId ?? null,
     sharedClubUsername: g.sharedClubUsername ?? null,
     isFromOtherClub: g.isFromOtherClub === true,
@@ -473,9 +476,11 @@ export default function NewsArticlesList({
   );
 
   const translateTopic = useCallback((topic: string) => {
+    // Superadmin OGP News section: show "OGP News" instead of the default topic label "News".
+    if (isSuperAdmin && topic === 'News') return 'OGP News';
     const key = NEWS_TOPIC_KEYS[topic];
     return key ? t(key) : topic;
-  }, [t]);
+  }, [t, isSuperAdmin]);
 
   const renderActiveTopicHeading = useCallback(
     (variant: 'light' | 'dark') => {
@@ -663,7 +668,7 @@ export default function NewsArticlesList({
         const res = await fetch('/api/news/ogp-sponsors');
         if (!res.ok) return;
         const data = (await res.json()) as OgpSponsorSettings;
-        if (!cancelled && data && Array.isArray(data.sponsors)) {
+        if (!cancelled && data && Array.isArray(data.groups)) {
           setSponsorSettings(data);
         }
       } catch {
@@ -1358,13 +1363,17 @@ export default function NewsArticlesList({
     showNewsHeadlines &&
     headlinesArticles.length > 0;
 
+  const feedSponsorGroups = useMemo(
+    () => activeSponsorGroups(sponsorSettings),
+    [sponsorSettings],
+  );
+
   const showSponsors =
     isNewsOgp &&
     !viewingOgpGroup &&
     !isAddingToGroup &&
     !viewingHeadlines &&
-    isSponsorDisplayActive(sponsorSettings) &&
-    (sponsorSettings?.sponsors.length ?? 0) > 0;
+    feedSponsorGroups.length > 0;
 
   const getHeadlineViewCount = useCallback(
     (article: ArticlePasted) => viewCountOverrides[article.id] ?? article.viewCount ?? 0,
@@ -1415,16 +1424,19 @@ export default function NewsArticlesList({
   }, [sorted, showFeaturedHero, featuredIdSet]);
 
   const sponsoredPages = useMemo(() => {
-    if (!showSponsors || !sponsorSettings) return null;
+    if (!showSponsors || feedSponsorGroups.length === 0) return null;
     return paginateWithSponsors(
       gridSorted,
       rowsPerPage,
-      OGPS_PER_ROW,
-      sponsorSettings.startRow,
-      sponsorSettings.intervalRows,
-      maxSponsorCols(sponsorSettings.sponsors),
+      OGP_CARDS_PER_ROW,
+      feedSponsorGroups.map((g) => ({
+        groupId: g.id,
+        startRow: g.startRow,
+        intervalRows: g.intervalRows,
+        sponsorCols: maxSponsorCols(g.sponsors),
+      })),
     );
-  }, [showSponsors, sponsorSettings, gridSorted, rowsPerPage]);
+  }, [showSponsors, feedSponsorGroups, gridSorted, rowsPerPage]);
 
   // Headlines expanded view: Top Stories stay fixed; toolbar paginates the list below.
   const headlinesListCount = Math.max(0, headlinesArticles.length - TOP_STORIES_COUNT);
@@ -1592,7 +1604,7 @@ export default function NewsArticlesList({
           onShare={() => setShareModalArticle(a)}
           viewCount={a.isOgpGroup ? 0 : getHeadlineViewCount(a)}
           showGlobalNewsButton={
-            showGlobalNewsButton && !a.isOgpGroup && !isMusic && !isExercise && !!onToggleGlobalNews
+            showGlobalNewsButton && !isMusic && !isExercise && !!onToggleGlobalNews
           }
           globalNewsLoading={globalNewsLoadingId === a.id}
           onToggleGlobalNews={() => void handleGlobalNewsToggle(a.id, a.inGlobalNews === true)}
@@ -2368,10 +2380,10 @@ export default function NewsArticlesList({
                     checked={showFeaturedInEvidence}
                     onChange={(e) => handleShowFeaturedInEvidenceChange(e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-lime-400 focus:ring-lime-500"
-                    aria-label="Display news card"
+                    aria-label="Display card"
                   />
                   <span className="text-lime-300 text-sm whitespace-nowrap font-medium">
-                    Display news card
+                    Display card
                   </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2380,10 +2392,10 @@ export default function NewsArticlesList({
                     checked={showNewsHeadlines}
                     onChange={(e) => handleShowNewsHeadlinesChange(e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-lime-400 focus:ring-lime-500"
-                    aria-label="Display news headlines"
+                    aria-label="Display headlines"
                   />
                   <span className="text-lime-300 text-sm whitespace-nowrap font-medium">
-                    Display news headlines
+                    Display headlines
                   </span>
                 </label>
               </>
@@ -2534,13 +2546,17 @@ export default function NewsArticlesList({
                   />
                 )}
                 {pageCells.map((cell, cellIndex) =>
-                cell.kind === 'sponsor' && sponsorSettings ? (
+                cell.kind === 'sponsor' ? ((groupId: string) => {
+                  const group = feedSponsorGroups.find((g) => g.id === groupId);
+                  if (!group) return null;
+                  return (
                   <OgpSponsoredCard
-                    key={`sponsor-${currentPage}-${cellIndex}`}
-                    sponsors={sponsorSettings.sponsors}
-                    delayMs={sponsorSettings.delayMs}
+                    key={`sponsor-${group.id}-${currentPage}-${cellIndex}`}
+                    sponsors={group.sponsors}
+                    delayMs={group.delayMs}
                   />
-                ) : cell.kind === 'news' ? ((a: ArticlePasted) => (
+                  );
+                })(cell.groupId) : cell.kind === 'news' ? ((a: ArticlePasted) => (
                 <article
                   key={a.isOgpGroup ? `group-${a.id}` : a.id}
                   className={`border rounded-lg p-3 group flex flex-col min-w-0 relative h-full min-h-0 ${
@@ -2810,7 +2826,7 @@ export default function NewsArticlesList({
                       >
                         <Share2 className="w-3.5 h-3.5" />
                       </button>
-                      {showGlobalNewsButton && !a.isOgpGroup && !isMusic && !isExercise && onToggleGlobalNews ? (
+                      {showGlobalNewsButton && !isMusic && !isExercise && onToggleGlobalNews ? (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -3174,7 +3190,7 @@ export default function NewsArticlesList({
               ? 'Group Setting'
               : apiBase === '/api/music'
                 ? 'Music Setting'
-                : 'News Setting'
+                : 'OGP News Setting'
           }
           showClubAudienceRadios={Boolean(clubGlobalNewsClubId)}
         />

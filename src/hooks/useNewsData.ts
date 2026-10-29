@@ -168,6 +168,7 @@ function mapGroupFromApi(g: any): OgpNewsGroupCard {
     type: g.type,
     customDescription: g.customDescription,
     deletedAt: g.deletedAt ?? null,
+    inGlobalNews: g.inGlobalNews === true,
     visibility: {
       userTypes: g.visibilityUserTypes ?? g.visibility?.userTypes ?? [],
       countries: g.visibilityCountries ?? g.visibility?.countries ?? [],
@@ -941,7 +942,11 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
     async (id: string, inGlobalNews: boolean) => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
       if (!token) throw new Error('Not authenticated');
-      const res = await fetch(`/api/admin/global-news/ogp/${id}`, {
+      const isGroup = ogpNewsGroups.some((g) => g.id === id);
+      const path = isGroup
+        ? `/api/admin/global-news/ogp-group/${encodeURIComponent(id)}`
+        : `/api/admin/global-news/ogp/${encodeURIComponent(id)}`;
+      const res = await fetch(path, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -950,11 +955,17 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         body: JSON.stringify({ inGlobalNews }),
       });
       if (!res.ok) throw new Error('Failed to update Global News');
-      setPastedArticles((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, inGlobalNews } : a)),
-      );
+      if (isGroup) {
+        setOgpNewsGroups((prev) =>
+          prev.map((g) => (g.id === id ? { ...g, inGlobalNews } : g)),
+        );
+      } else {
+        setPastedArticles((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, inGlobalNews } : a)),
+        );
+      }
     },
-    [],
+    [ogpNewsGroups],
   );
 
   const toggleOgpFeatured = useCallback(

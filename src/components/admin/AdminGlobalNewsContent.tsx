@@ -22,7 +22,7 @@ function formatDate(iso: string) {
 
 function itemTitle(item: GlobalNewsFeedItem) {
   if (item.title?.trim()) return item.title.trim();
-  if (item.kind === 'ogp') {
+  if (item.kind === 'ogp' || item.kind === 'ogp-group') {
     return item.customDescription?.trim() || item.description?.trim() || item.url;
   }
   return 'Untitled';
@@ -84,7 +84,9 @@ export default function AdminGlobalNewsContent({
       const path =
         item.kind === 'news'
           ? `/api/admin/global-news/news/${item.id}`
-          : `/api/admin/global-news/ogp/${item.id}`;
+          : item.kind === 'ogp-group'
+            ? `/api/admin/global-news/ogp-group/${item.id}`
+            : `/api/admin/global-news/ogp/${item.id}`;
       try {
         const res = await fetch(path, {
           method: 'PATCH',
@@ -131,7 +133,7 @@ export default function AdminGlobalNewsContent({
             <Globe className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-600 font-medium">No items in Global News yet</p>
             <p className="text-sm text-gray-500 mt-1">
-              Use &quot;Share in Global News&quot; in the News or OGP News sections to add items here.
+              Use &quot;Share in Global News&quot; on News, OGP News, or OGP groups to add items here.
             </p>
           </div>
         )}
@@ -142,7 +144,9 @@ export default function AdminGlobalNewsContent({
             const viewHref =
               item.kind === 'news'
                 ? `/news-by-movesbook/${item.id}`
-                : item.url || `/admin/news/links`;
+                : item.kind === 'ogp-group'
+                  ? `/news/group/${item.id}`
+                  : item.url || `/admin/news/links`;
 
             return (
               <li
@@ -170,10 +174,16 @@ export default function AdminGlobalNewsContent({
                       className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${
                         item.kind === 'news'
                           ? 'bg-blue-100 text-blue-800'
-                          : 'bg-teal-100 text-teal-800'
+                          : item.kind === 'ogp-group'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-teal-100 text-teal-800'
                       }`}
                     >
-                      {item.kind === 'news' ? 'News' : 'OGP News'}
+                      {item.kind === 'news'
+                        ? 'News'
+                        : item.kind === 'ogp-group'
+                          ? 'OGP Group'
+                          : 'OGP News'}
                     </span>
                     <span className="text-xs text-gray-500">{formatDate(item.date)}</span>
                   </div>
@@ -199,6 +209,8 @@ export default function AdminGlobalNewsContent({
                           Open link
                           <ExternalLink className="w-3.5 h-3.5" />
                         </>
+                      ) : item.kind === 'ogp-group' ? (
+                        'View group'
                       ) : (
                         'View article'
                       )}

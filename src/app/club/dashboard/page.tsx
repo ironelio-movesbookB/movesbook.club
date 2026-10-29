@@ -62,6 +62,7 @@ function ClubDashboardContent() {
     | 'club-news-ogp'
     | 'club-global-news'
     | 'club-movesbook-news'
+    | 'club-movesbook-archive-news'
     | 'mb-news'
   >('default');
   const [clubTopicId, setClubTopicId] = useState<string | null>(null);
@@ -204,6 +205,15 @@ function ClubDashboardContent() {
       setClubMainPanel('club-movesbook-news');
       router.replace('/club/dashboard', { scroll: false });
     }
+    if (panel === 'club-movesbook-archive-news') {
+      writeClubWorkspaceTab('my-entity');
+      setMyPageNewsPanel(null);
+      setShowWorkoutSection(false);
+      setClubAddSongsOgpOpen(false);
+      setClubAddSongsOgpExpanded(false);
+      setClubMainPanel('club-movesbook-archive-news');
+      router.replace('/club/dashboard', { scroll: false });
+    }
     if (panel === 'mb-news') {
       writeClubWorkspaceTab('my-entity');
       setMyPageNewsPanel(null);
@@ -283,7 +293,7 @@ function ClubDashboardContent() {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <ClubMovesbookNewsPanel
-          title="Movesbook News"
+          title="Movesbook Global News"
           onClose={() => setMyPageNewsPanel(null)}
         />
       </div>
@@ -402,7 +412,7 @@ function ClubDashboardContent() {
             <ClubNewsArchivePanel
               clubId={(selectedClubId ?? activeClub?.id)!}
               sharedWithClubOnly
-              title="My News"
+              title="Club News"
               onClose={() => setClubMainPanel('default')}
             />
           ) : (
@@ -452,9 +462,21 @@ function ClubDashboardContent() {
             </div>
           )}
         </div>
+      ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'club-movesbook-archive-news' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ClubNewsArchivePanel
+            title="Movesbook News"
+            clubId={selectedClubId ?? activeClub?.id ?? null}
+            enableMovesbookGlobalShare
+            onClose={() => setClubMainPanel('default')}
+          />
+        </div>
       ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'club-movesbook-news' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <ClubMovesbookNewsPanel title="Movesbook News" />
+          <ClubMovesbookNewsPanel
+            title="Movesbook Global News"
+            clubId={selectedClubId ?? activeClub?.id ?? null}
+          />
         </div>
       ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'mb-news' ? (
         <div className="flex min-h-0 flex-1 flex-col">

@@ -716,6 +716,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         | 'club-news-ogp'
         | 'club-global-news'
         | 'club-movesbook-news'
+        | 'club-movesbook-archive-news'
     ) => {
       if (!hasFormClub) return;
       const clubId = selectedClubId ?? formClubs[0]?.id ?? null;
@@ -853,6 +854,9 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
                 onClubChatClick={() => goToDashboardPanel('chat')}
                 onClubNewsSectionClick={() => goToDashboardPanel('club-news')}
+                onClubMovesbookArchiveNewsSectionClick={() =>
+                  goToDashboardPanel('club-movesbook-archive-news')
+                }
                 onClubMovesbookNewsSectionClick={() => goToDashboardPanel('club-movesbook-news')}
                 onClubOgpNewsSectionClick={() => goToDashboardPanel('club-news-ogp')}
                 onClubGlobalNewsSectionClick={() => goToDashboardPanel('club-global-news')}

@@ -1,4 +1,3 @@
-export const OGP_SPONSOR_SETTINGS_ID = 'default';
 export const OGP_CARDS_PER_ROW = 6;
 
 export const SPONSOR_START_ROW_MIN = 1;
@@ -31,7 +30,10 @@ export type OgpSponsor = {
   sortOrder: number;
 };
 
-export type OgpSponsorSettings = {
+/** One named group of rotating sponsors with its own placement + schedule. */
+export type OgpSponsorGroup = {
+  id: string;
+  name: string;
   startRow: number;
   intervalRows: number;
   delayMs: number;
@@ -40,8 +42,20 @@ export type OgpSponsorSettings = {
   enabledFrom: string | null;
   /** Inclusive YYYY-MM-DD; null/empty = no end bound. */
   enabledTo: string | null;
+  sortOrder: number;
   sponsors: OgpSponsor[];
 };
+
+/** Payload for the Sponsored News settings + feed. */
+export type OgpSponsorSettings = {
+  groups: OgpSponsorGroup[];
+};
+
+/** @deprecated Use OgpSponsorGroup fields via isSponsorDisplayActive. */
+export type OgpSponsorSchedule = Pick<
+  OgpSponsorGroup,
+  'enabled' | 'enabledFrom' | 'enabledTo'
+>;
 
 /** Normalize ISO / Date / YYYY-MM-DD to `YYYY-MM-DD` for `<input type="date">`. */
 export function toSponsorDateInput(value: string | Date | null | undefined): string {
@@ -83,11 +97,11 @@ function todayYmd(now = new Date()): string {
 }
 
 /**
- * Whether sponsored cards should appear in the feed right now.
+ * Whether a sponsor group should appear in the feed right now.
  * `enabled` must be true; optional from/to are inclusive calendar days (local).
  */
 export function isSponsorDisplayActive(
-  settings: Pick<OgpSponsorSettings, 'enabled' | 'enabledFrom' | 'enabledTo'> | null | undefined,
+  settings: OgpSponsorSchedule | null | undefined,
   now = new Date(),
 ): boolean {
   if (!settings || settings.enabled === false) return false;
@@ -99,9 +113,19 @@ export function isSponsorDisplayActive(
   return true;
 }
 
+export function activeSponsorGroups(
+  settings: OgpSponsorSettings | null | undefined,
+  now = new Date(),
+): OgpSponsorGroup[] {
+  if (!settings?.groups?.length) return [];
+  return settings.groups.filter(
+    (g) => isSponsorDisplayActive(g, now) && g.sponsors.length > 0,
+  );
+}
+
 export type SponsoredPageCell<T> =
   | { kind: 'news'; item: T }
-  | { kind: 'sponsor' };
+  | { kind: 'sponsor'; groupId: string };
 
 function toInt(value: unknown, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value);
@@ -231,25 +255,50 @@ export function clampToLastAvailableRow(localRow: number, actualRowsOnPage: numb
   return Math.min(Math.max(1, localRow), actualRowsOnPage);
 }
 
+export type SponsorPlacementInput = {
+  groupId: string;
+  startRow: number;
+  intervalRows: number;
+  sponsorCols: OgpSponsorColSpan;
+};
+
 /**
- * Split items into pages, inserting a sponsor slot at the configured rows.
- * If the selected row does not exist on a page, the slot is shown on the last available row.
+ * Split items into pages, inserting sponsor slots for each active group at its rows.
+ * If a selected row does not exist on a page, that group’s slot is shown on the last available row.
  */
 export function paginateWithSponsors<T>(
   items: T[],
   rowsPerPage: number,
   colsPerRow: number,
-  startRow: number,
-  intervalRows: number,
-  sponsorCols: OgpSponsorColSpan,
+  placements: SponsorPlacementInput[],
 ): SponsoredPageCell<T>[][] {
   const R = Math.max(1, rowsPerPage);
   const C = Math.max(1, colsPerRow);
-  const span = Math.min(C, Math.max(1, sponsorCols));
+  const groups = placements.filter((p) => !!p.groupId);
+  if (groups.length === 0) {
+    const pages: SponsoredPageCell<T>[][] = [];
+    for (let i = 0; i < items.length; i += R * C) {
+      pages.push(items.slice(i, i + R * C).map((item) => ({ kind: 'news' as const, item })));
+    }
+    return pages.length > 0 ? pages : [];
+  }
+
+  const maxSpan = groups.reduce(
+    (m, g) => Math.max(m, Math.min(C, Math.max(1, g.sponsorCols))),
+    1,
+  ) as OgpSponsorColSpan;
 
   if (items.length === 0) {
-    const locals = sponsorLocalRowsOnPage(1, startRow, intervalRows, R);
-    return locals.length > 0 ? [[{ kind: 'sponsor' }]] : [];
+    const locals = groups.flatMap((g) =>
+      sponsorLocalRowsOnPage(1, g.startRow, g.intervalRows, R).map((row) => ({
+        row,
+        groupId: g.groupId,
+      })),
+    );
+    if (locals.length === 0) return [];
+    return [
+      locals.map(({ groupId }) => ({ kind: 'sponsor' as const, groupId })),
+    ];
   }
 
   const pages: SponsoredPageCell<T>[][] = [];
@@ -257,13 +306,20 @@ export function paginateWithSponsors<T>(
   let page = 1;
 
   while (i < items.length) {
-    const intendedLocals = sponsorLocalRowsOnPage(page, startRow, intervalRows, R);
-    const slotCount = intendedLocals.length;
-    const capacityNews = Math.max(0, R * C - slotCount * span);
+    const intended = groups.flatMap((g) => {
+      const span = Math.min(C, Math.max(1, g.sponsorCols));
+      return sponsorLocalRowsOnPage(page, g.startRow, g.intervalRows, R).map((row) => ({
+        row,
+        groupId: g.groupId,
+        span,
+      }));
+    });
+    const slotCount = intended.length;
+    const capacityNews = Math.max(0, R * C - slotCount * maxSpan);
     const take = Math.min(items.length - i, capacityNews);
     if (take === 0) {
       if (slotCount > 0) {
-        pages.push([{ kind: 'sponsor' }]);
+        pages.push(intended.map(({ groupId }) => ({ kind: 'sponsor' as const, groupId })));
       }
       break;
     }
@@ -271,19 +327,27 @@ export function paginateWithSponsors<T>(
     i += take;
 
     const rowsWithoutSponsor = Math.max(1, Math.ceil(Math.max(slice.length, 1) / C));
-    const sponsorRows = new Set(
-      intendedLocals.map((row) => clampToLastAvailableRow(row, rowsWithoutSponsor)),
-    );
+    const byRow = new Map<number, { groupId: string; span: number }[]>();
+    for (const slot of intended) {
+      const row = clampToLastAvailableRow(slot.row, rowsWithoutSponsor);
+      const list = byRow.get(row) ?? [];
+      list.push({ groupId: slot.groupId, span: slot.span });
+      byRow.set(row, list);
+    }
 
     const cells: SponsoredPageCell<T>[] = [];
     let n = 0;
     let r = 1;
-    const maxRows = Math.max(rowsWithoutSponsor, sponsorRows.size > 0 ? Math.max(...sponsorRows) : 0);
+    const maxRows = Math.max(
+      rowsWithoutSponsor,
+      byRow.size > 0 ? Math.max(...byRow.keys()) : 0,
+    );
     while (n < slice.length || r <= maxRows) {
       let used = 0;
-      if (sponsorRows.has(r)) {
-        cells.push({ kind: 'sponsor' });
-        used += span;
+      const rowSlots = byRow.get(r) ?? [];
+      for (const slot of rowSlots) {
+        cells.push({ kind: 'sponsor', groupId: slot.groupId });
+        used += slot.span;
       }
       while (used < C && n < slice.length) {
         cells.push({ kind: 'news', item: slice[n++] });

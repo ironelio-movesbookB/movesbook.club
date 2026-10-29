@@ -474,6 +474,7 @@ export default function OGPForm({
         onSave={(s) => setVisibility(s)}
         onDeleteSettings={() => setVisibility(defaultVisibility(showClubAudienceRadios))}
         options={settingsOptions}
+        title={isMusic ? 'Music Setting' : 'OGP News Setting'}
         showClubAudienceRadios={showClubAudienceRadios}
       />
     </div>

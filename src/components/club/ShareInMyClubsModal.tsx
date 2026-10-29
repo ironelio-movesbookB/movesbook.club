@@ -39,6 +39,10 @@ type ShareInMyClubsModalProps = {
   sharedClubIds?: string[];
   onShared?: (clubId: string) => void;
   onUnshared?: (clubId: string) => void;
+  /** Pre-select club when opening (e.g. current club on Movesbook Global News). */
+  preferredClubId?: string | null;
+  /** Override default destinations when opening (club feed / Club Global News). */
+  initialDestinations?: Partial<ShareDestinations>;
 };
 
 export default function ShareInMyClubsModal({
@@ -51,6 +55,8 @@ export default function ShareInMyClubsModal({
   sharedClubIds = [],
   onShared,
   onUnshared,
+  preferredClubId = null,
+  initialDestinations,
 }: ShareInMyClubsModalProps) {
   const [clubs, setClubs] = useState<MyClubOption[]>([]);
   const [loadingClubs, setLoadingClubs] = useState(false);
@@ -82,13 +88,21 @@ export default function ShareInMyClubsModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedClubId(null);
-    setClubDestinations({});
+    const preferred =
+      preferredClubId && !sharedClubIds.includes(preferredClubId) ? preferredClubId : null;
+    const dest: ShareDestinations = {
+      clubFeed: initialDestinations?.clubFeed ?? DEFAULT_DESTINATIONS.clubFeed,
+      global: initialDestinations?.global ?? DEFAULT_DESTINATIONS.global,
+    };
+    setSelectedClubId(preferred);
+    setClubDestinations(preferred ? { [preferred]: dest } : {});
     setPassword('');
     setError(null);
     setSubmitting(false);
     setRemovingClubId(null);
     void loadClubs();
+    // Reset only when the dialog opens — not when parent re-renders share state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, loadClubs]);
 
   const destLabels = destinationLabels(kind);

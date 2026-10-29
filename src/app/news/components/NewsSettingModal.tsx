@@ -64,7 +64,7 @@ interface NewsSettingModalProps {
     languages: Option[];
     sports: Option[];
   } | null;
-  /** Modal heading; defaults to "News Setting". Music section passes "Music Setting". */
+  /** Modal heading; defaults to "OGP News Setting". Music section passes "Music Setting". */
   title?: string;
   /**
    * Club OGP News: show audience radios (Only me / club members / members + filters).
@@ -79,7 +79,7 @@ export default function NewsSettingModal({
   onSave,
   onDeleteSettings,
   options,
-  title = 'News Setting',
+  title = 'OGP News Setting',
   showClubAudienceRadios = false,
 }: NewsSettingModalProps) {
   const [userTypes, setUserTypes] = useState<string[]>([]);

@@ -51,11 +51,25 @@ export type GlobalNewsFeedItem =
       description: string | null;
       customDescription: string | null;
       inGlobalNews: true;
+    }
+  | {
+      kind: 'ogp-group';
+      id: string;
+      title: string | null;
+      date: string;
+      topic: string;
+      creatorUsername: string | null;
+      image: string | null;
+      url: string;
+      description: string | null;
+      customDescription: string | null;
+      memberCount: number;
+      inGlobalNews: true;
     };
 
-/** Merged News + OGP marked for Global News, newest first. */
+/** Merged News + OGP + OGP groups marked for Global News, newest first. */
 export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> {
-  const [newsRows, ogpRows] = await Promise.all([
+  const [newsRows, ogpRows, globalGroupIds] = await Promise.all([
     prisma.news.findMany({
       where: { inGlobalNews: true } as { inGlobalNews: boolean },
       orderBy: { date: 'desc' },
@@ -73,7 +87,39 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
         user: { select: { username: true } },
       },
     }),
+    // Raw id lookup so this works before/without a Prisma client regenerate for inGlobalNews.
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ogp_news_groups
+      WHERE inGlobalNews = true AND deletedAt IS NULL
+      ORDER BY savedAt DESC
+    `,
   ]);
+
+  const ogpGroupRows =
+    globalGroupIds.length > 0
+      ? await prisma.ogpNewsGroup.findMany({
+          where: { id: { in: globalGroupIds.map((r) => r.id) } },
+          orderBy: { savedAt: 'desc' },
+          include: {
+            user: { select: { username: true } },
+            items: {
+              orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
+              take: 1,
+              include: {
+                ogpArticle: {
+                  select: {
+                    title: true,
+                    image: true,
+                    description: true,
+                    customDescription: true,
+                  },
+                },
+              },
+            },
+            _count: { select: { items: true } },
+          },
+        })
+      : [];
 
   const items: GlobalNewsFeedItem[] = [
     ...newsRows.map((n) => ({
@@ -102,6 +148,23 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
       customDescription: a.customDescription,
       inGlobalNews: true as const,
     })),
+    ...ogpGroupRows.map((g) => {
+      const first = g.items[0]?.ogpArticle ?? null;
+      return {
+        kind: 'ogp-group' as const,
+        id: g.id,
+        title: first?.title ?? g.name,
+        date: g.savedAt.toISOString(),
+        topic: g.topic,
+        creatorUsername: g.user?.username ?? null,
+        image: g.coverImage ?? first?.image ?? null,
+        url: `/news/group/${g.id}`,
+        description: first?.description ?? null,
+        customDescription: g.customDescription ?? first?.customDescription ?? null,
+        memberCount: g._count.items,
+        inGlobalNews: true as const,
+      };
+    }),
   ];
 
   items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

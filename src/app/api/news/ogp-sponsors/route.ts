@@ -3,7 +3,7 @@ import { loadSerializedSponsorSettings } from '@/lib/news/ogpSponsorStore';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /api/news/ogp-sponsors — public placement + sponsor cards for the OGP News grid. */
+/** GET /api/news/ogp-sponsors — public placement + sponsor groups for the OGP News grid. */
 export async function GET() {
   try {
     return NextResponse.json(await loadSerializedSponsorSettings());

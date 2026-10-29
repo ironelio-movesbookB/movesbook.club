@@ -318,13 +318,15 @@ interface DarkSidebarProps {
   onClubChatClick?: () => void;
   /** My Club → Club News → News (shared editorial news) */
   onClubNewsSectionClick?: () => void;
-  /** My Club → Club News → Movesbook News (superadmin Global News, read-only) */
+  /** My Club → Club News → Movesbook News (public archive, credential-filtered) */
+  onClubMovesbookArchiveNewsSectionClick?: () => void;
+  /** My Club → Club News → Movesbook Global News (superadmin Global News feed) */
   onClubMovesbookNewsSectionClick?: () => void;
   /** My Club → Club News → OGP News (shared OGP news) */
   onClubOgpNewsSectionClick?: () => void;
   /** My Club → Club News → Club Global News (all shared) */
   onClubGlobalNewsSectionClick?: () => void;
-  /** My Page → News → Movesbook News (superadmin Global News, read-only) */
+  /** My Page → News → Movesbook Global News (superadmin Global News feed) */
   onMyPageMovesbookNewsClick?: () => void;
   /** My Page → News → News (same as top-nav MB News / news-by-movesbook) */
   onMyPageNewsClick?: () => void;
@@ -385,6 +387,7 @@ export default function DarkSidebar({
   onSuggestMovesbookClick,
   onClubChatClick,
   onClubNewsSectionClick,
+  onClubMovesbookArchiveNewsSectionClick,
   onClubMovesbookNewsSectionClick,
   onClubOgpNewsSectionClick,
   onClubGlobalNewsSectionClick,
@@ -2611,7 +2614,7 @@ export default function DarkSidebar({
                     className="mb-1.5 flex w-full items-center gap-2.5 border-b-2 border-gray-400/70 px-4 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                   >
                     <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
-                    <span className="min-w-0 leading-snug">Movesbook News</span>
+                    <span className="min-w-0 leading-snug">Movesbook Global News</span>
                   </button>
                   <button
                     type="button"
@@ -3339,7 +3342,7 @@ export default function DarkSidebar({
                       <div className="bg-[#4a4a4a] text-white">
                         <button
                           type="button"
-                          onClick={() => onClubMovesbookNewsSectionClick?.()}
+                          onClick={() => onClubMovesbookArchiveNewsSectionClick?.()}
                           className="mb-1.5 flex w-full items-center gap-2.5 border-b-2 border-gray-400/70 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                         >
                           <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
@@ -3347,11 +3350,19 @@ export default function DarkSidebar({
                         </button>
                         <button
                           type="button"
+                          onClick={() => onClubMovesbookNewsSectionClick?.()}
+                          className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
+                        >
+                          <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
+                          <span className="min-w-0 leading-snug">Movesbook Global News</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onClubNewsSectionClick?.()}
                           className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                         >
                           <Newspaper className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
-                          <span className="min-w-0 leading-snug">News</span>
+                          <span className="min-w-0 leading-snug">Club News</span>
                         </button>
                         <button
                           type="button"

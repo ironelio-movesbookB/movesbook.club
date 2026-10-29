@@ -6,6 +6,7 @@ import { SPORT_ID_TO_SPORT_TYPE } from '@/lib/news/mappings';
 import { verifyToken } from '@/lib/auth';
 import { SPORTS_LIST } from '@/constants/moveframe.constants';
 import { COUNTRIES_WITH_CODES } from '@/lib/news/countries';
+import { getSuperAdminCreatorIds } from '@/app/api/news/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -260,6 +261,7 @@ export async function GET(request: NextRequest) {
         internetLinkEditor: item.internetLinkEditor || null,
         inLastNews:         item.inLastNews  || 'N',
         feturedNews:        item.feturedNews || 'N',
+        inGlobalNews:       (item as { inGlobalNews?: boolean }).inGlobalNews === true,
         author:             item.author         || null,
         originalAuthor:     item.originalAuthor  || null,
         searchingKeywords:  item.searchingKeywords || null,
@@ -286,6 +288,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const movesbookUserIds = isLoggedIn ? await getSuperAdminCreatorIds() : [];
+
     return NextResponse.json({
       news: formattedNews,
       pagination: {
@@ -294,6 +298,7 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      movesbookUserIds,
     });
   } catch (error: any) {
     console.error('Error fetching news:', error);

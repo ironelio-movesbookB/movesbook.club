@@ -143,20 +143,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Club not found or access denied' }, { status: 403 });
     }
 
-    const existing = await prisma.clubSharedNews.findUnique({
-      where: { clubId_newsId: { clubId, newsId } },
+    const article = await prisma.news.findUnique({
+      where: { id: newsId },
       select: { id: true },
     });
-    if (!existing) {
-      return NextResponse.json(
-        { error: 'News article is not shared to this club' },
-        { status: 404 },
-      );
+    if (!article) {
+      return NextResponse.json({ error: 'News article not found' }, { status: 404 });
     }
 
-    const updated = await prisma.clubSharedNews.update({
+    // Upsert so audience mode still saves when the share row was missing.
+    const updated = await prisma.clubSharedNews.upsert({
       where: { clubId_newsId: { clubId, newsId } },
-      data: {
+      create: {
+        clubId,
+        newsId,
+        sharedById: auth.userId,
+        ...(hasGlobalFlag ? { inClubGlobalNews: body.inClubGlobalNews } : {}),
+        ...(audienceMode ? { audienceMode } : {}),
+      },
+      update: {
         ...(hasGlobalFlag ? { inClubGlobalNews: body.inClubGlobalNews } : {}),
         ...(audienceMode ? { audienceMode } : {}),
       },

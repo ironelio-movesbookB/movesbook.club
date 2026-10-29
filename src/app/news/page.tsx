@@ -279,7 +279,7 @@ export default function NewsPage() {
               aria-labelledby="ogp-modal-title"
             >
               <div
-                className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.key === 'Escape' && setShowOgpForm(false)}
               >

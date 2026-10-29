@@ -1137,6 +1137,7 @@ export interface LanguageStrings {
         // News Module
         'news_archive': 'News Archive',
         'news_add_article': 'Add News Article',
+        'news_preview_front_end_users': 'Preview front end users',
         'news_edit_article': 'Edit News Article',
         'news_search_placeholder': 'Search news articles...',
         'news_search': 'Search',

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuthWithUser, requireAuthForNews, getOrCreateUserForSuperAdmin } from '../auth';
 
@@ -18,6 +19,7 @@ function mapGroupResponse(
     visibilityLanguages: string | null;
     visibilitySports: string | null;
     audienceMode?: string | null;
+    inGlobalNews?: boolean;
     user: { username: string; name: string | null; country: string | null } | null;
     items: Array<{
       ogpArticleId: string;
@@ -85,6 +87,7 @@ function mapGroupResponse(
     visibilitySports: parseVis(g.visibilitySports),
     expiresAt: g.expiresAt?.toISOString() ?? null,
     audienceMode: g.audienceMode ?? 'me-and-club-members',
+    inGlobalNews: g.inGlobalNews === true,
     // Custom cover when set; otherwise preview from the 1st OGP News in the group
     title: first?.title ?? g.name,
     image: g.coverImage ?? first?.image ?? null,
@@ -133,8 +136,25 @@ export async function GET(request: NextRequest) {
       include: groupInclude,
     });
 
+    // Enrich with inGlobalNews (column may exist before Prisma client is regenerated).
+    const globalFlags = groups.length
+      ? await prisma.$queryRaw<Array<{ id: string; inGlobalNews: number | boolean }>>`
+          SELECT id, inGlobalNews FROM ogp_news_groups
+          WHERE id IN (${Prisma.join(groups.map((g) => g.id))})
+        `
+      : [];
+    const globalById = new Map(
+      globalFlags.map((r) => [r.id, r.inGlobalNews === true || r.inGlobalNews === 1]),
+    );
+
     return NextResponse.json(
-      groups.map((g) => mapGroupResponse(g, currentUserId, superAdminEffectiveUserId))
+      groups.map((g) =>
+        mapGroupResponse(
+          { ...g, inGlobalNews: globalById.get(g.id) === true },
+          currentUserId,
+          superAdminEffectiveUserId,
+        ),
+      ),
     );
   } catch (e) {
     console.error('GET /api/news/ogp-groups', e);
