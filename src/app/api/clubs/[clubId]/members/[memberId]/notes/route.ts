@@ -6,6 +6,7 @@ import {
   deleteMemberNotes,
   getClubMemberVisibility,
   getMemberNoteById,
+  updateMemberNote,
   type MemberNoteStore,
 } from '@/lib/club/memberProfileService';
 import { normalizeSupportImageUrls } from '@/lib/messages/supportImages';
@@ -158,6 +159,64 @@ function parseDateOnly(value: unknown): Date | null {
   });
 
   return NextResponse.json({ success: true, note });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { clubId: string; memberId: string } },
+) {
+  const viewerUserId = getUserId(request);
+  if (!viewerUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const access = await assertAccess(params.clubId, params.memberId, viewerUserId);
+  if ('error' in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+  if (!access.isAdmin) {
+    return NextResponse.json({ error: 'Only the club/team admin can edit notes' }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const noteId = String(body.noteId || '').trim();
+  const title = String(body.title || '').trim();
+  const noteBody = String(body.body || '').trim();
+  const imageUrls = normalizeSupportImageUrls(body.imageUrls);
+
+  if (!noteId) {
+    return NextResponse.json({ error: 'noteId is required' }, { status: 400 });
+  }
+  if (!noteBody) {
+    return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
+  }
+
+  function parseDateOnly(value: unknown): Date | null {
+    const raw = String(value ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const d = new Date(`${raw}T00:00:00.000Z`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const result = await updateMemberNote({
+    clubMemberId: access.membership.id,
+    store: access.store,
+    noteId,
+    title,
+    body:
+      /<[a-z][\s\S]*>/i.test(noteBody) ? sanitizeRichHtml(noteBody) : noteBody,
+    visibleToMember: Boolean(body.visibleToMember),
+    commentsEnabled: Boolean(body.commentsEnabled),
+    imageUrls,
+    enableFrom: parseDateOnly(body.enableFrom),
+    enableTo: parseDateOnly(body.enableTo),
+    showAtLogin: Boolean(body.showAtLogin),
+    showAtLogout: Boolean(body.showAtLogout),
+  });
+  if ('error' in result) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+  return NextResponse.json({ success: true, note: result });
 }
 
 export async function DELETE(

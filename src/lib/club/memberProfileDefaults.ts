@@ -12,6 +12,7 @@ import {
   TEAM_ATHLETE_STATUS_OPTIONS,
   TEAM_REGISTRATION_STATUS_OPTIONS,
 } from '@/lib/club/memberProfileTypes';
+import { normalizeClubAthleteStatus } from '@/lib/club/memberArchiveStatus';
 import {
   normalizePaymentTypeValue,
   PAYMENT_STATUS_OPTIONS,
@@ -561,6 +562,9 @@ export function mergeClubScoped(partial?: Partial<ClubMemberScopedData> | null):
     otherDetails: {
       ...base.otherDetails,
       ...(partial.otherDetails || {}),
+      athleteStatus: normalizeClubAthleteStatus(
+        partial.otherDetails?.athleteStatus ?? base.otherDetails.athleteStatus,
+      ),
       badges: (() => {
         const emptyBadge = { name: '', number: '', deadline: '' };
         const mapped =

@@ -422,6 +422,10 @@ export type MemberProfileBundle = {
   coachOptions: Array<{ id: string; label: string }>;
   /** Parents/tutors already filled on club members (for search + autofill). */
   clubParentsCatalog: import('@/lib/club/memberProfileTypes').ClubParentCatalogEntry[];
+  /** Archive → Groups list (for Group trained dropdown). */
+  memberGroups: Array<{ id: string; name: string }>;
+  /** Group ids from Archive → Groups that include this member. */
+  memberPresentGroupIds: string[];
   /** Club customized questions (admin-defined). */
   customQuestions: CustomQuestionDef[];
   staffNotes: Array<{
@@ -468,13 +472,19 @@ export const MAIN_SPORTS = [
   'Dance',
 ] as const;
 
-/** Club\Gym membership status (Other details → Athlete status). */
+/**
+ * Club\Gym membership status (Other details → Athlete status).
+ * Drives Archive of Users placement (see athleteStatus ↔ archive helpers).
+ * "Old Members" replaces legacy label "Not a member".
+ */
 export const ATHLETE_STATUS_OPTIONS = [
   'Member',
-  'Not a member',
+  'Old Members',
   'On probation',
   'Non-member Associate',
 ] as const;
+
+export type ClubAthleteStatus = (typeof ATHLETE_STATUS_OPTIONS)[number];
 
 /** Athlete status when the member belongs to a TEAM instead of a Club\Gym. */
 export const TEAM_ATHLETE_STATUS_OPTIONS = [

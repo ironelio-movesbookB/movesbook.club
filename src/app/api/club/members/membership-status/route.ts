@@ -6,12 +6,14 @@ import {
   roleValueForMemberArchiveStatus,
   type MemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
+import { syncProfileAthleteStatusFromArchive } from '@/lib/club/memberProfileService';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * PATCH body: { membershipStatus: 'member' | 'pending' | 'not_member' | 'archived' }
- * Updates ClubMember.role / TeamMember.role for Archive of Users buckets.
+ * Updates ClubMember.role / TeamMember.role for Archive of Users buckets
+ * and mirrors Athlete status on the member profile.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -50,6 +52,11 @@ export async function PATCH(request: NextRequest) {
         where: { id: existing.id },
         data: { role },
       });
+      await syncProfileAthleteStatusFromArchive({
+        workspaceKind: 'team',
+        membershipRowId: existing.id,
+        membershipStatus,
+      });
     } else {
       const existing = await prisma.clubMember.findFirst({
         where: { clubId: workspaceId, memberId },
@@ -61,6 +68,11 @@ export async function PATCH(request: NextRequest) {
       await prisma.clubMember.update({
         where: { id: existing.id },
         data: { role },
+      });
+      await syncProfileAthleteStatusFromArchive({
+        workspaceKind: 'club',
+        membershipRowId: existing.id,
+        membershipStatus,
       });
     }
 

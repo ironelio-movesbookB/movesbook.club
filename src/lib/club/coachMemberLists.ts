@@ -1,7 +1,9 @@
 import { prisma, prismaConnect } from '@/lib/prisma';
 import { verifyPassword } from '@/lib/auth';
 import {
+  adminAsMemberConfirmResponse,
   isAddableMemberUserType,
+  isAdminAddableMemberUserType,
   NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
 } from '@/lib/club/memberArchiveStatus';
 
@@ -186,7 +188,11 @@ export async function addCoachAthleteByCredentials(
   coachId: string,
   username: string,
   password: string,
-): Promise<{ ok: true; athleteId: string } | { error: string; status: number }> {
+  opts?: { confirmAdminAsMember?: boolean },
+): Promise<
+  | { ok: true; athleteId: string }
+  | { error: string; status: number; code?: string; question?: string }
+> {
   const athlete = await prisma.user.findUnique({
     where: { username },
     select: { id: true, password: true, userType: true },
@@ -198,6 +204,15 @@ export async function addCoachAthleteByCredentials(
   }
   if (!(await verifyPassword(password, athlete.password))) {
     return { error: 'Invalid password', status: 401 };
+  }
+  if (isAdminAddableMemberUserType(athlete.userType) && !opts?.confirmAdminAsMember) {
+    const confirm = adminAsMemberConfirmResponse();
+    return {
+      error: confirm.error,
+      status: 409,
+      code: confirm.code,
+      question: confirm.question,
+    };
   }
   const existing = await prisma.coachAthlete.findUnique({
     where: { coachId_athleteId: { coachId, athleteId: athlete.id } },
