@@ -729,6 +729,11 @@ model UserMessageThread {
   likeCount       Int                   @default(0)
   dislikeCount    Int                   @default(0)
   isPublic        Boolean               @default(false)
+  /// Club staff messaging (runtime ALTER in clubStaffMessages.ts; keep so db push does not drop).
+  recipientUserId    String?  @db.VarChar(191)
+  recipientType      String?  @db.VarChar(16)
+  senderType         String?  @db.VarChar(16)
+  deletedByRecipient Boolean  @default(false)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -802,14 +807,16 @@ model Language {
 }
 
 model Translation {
-  id        String   @id @default(cuid())
-  key       String
-  language  String   
-  value     String   @db.Text
-  category  String   @default("general") 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  id         String   @id @default(cuid())
+  key        String
+  language   String
+  value      String   @db.Text
+  category   String   @default("general")
+  isDeleted  Boolean  @default(false)
+  /// Language → Long Texts: keep short keys (e.g. email subjects) in Tab 3.
+  isLongText Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([key, language])
   @@map("translations")
