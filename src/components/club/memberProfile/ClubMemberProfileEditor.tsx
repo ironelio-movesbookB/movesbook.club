@@ -150,6 +150,19 @@ export default function ClubMemberProfileEditor({
     parent1: string;
     parent2: string;
   }>({ parent1: '', parent2: '' });
+  const [memberTypes, setMemberTypes] = useState<
+    Array<{
+      id: string;
+      name: string;
+      discountSubscription: string;
+      discountServices: string;
+      discountRest: string;
+      discountSupplement: string;
+      discountClothing: string;
+      discountOutfit: string;
+    }>
+  >([]);
+  const [memberTypesLoading, setMemberTypesLoading] = useState(false);
 
   const readOnlyOwner = mode === 'view' || !data.viewer.canEditOwner;
   const readOnlyMemberTabs =
@@ -180,6 +193,63 @@ export default function ClubMemberProfileEditor({
   useEffect(() => {
     setOrigin(typeof window !== 'undefined' ? window.location.origin : '');
   }, []);
+
+  /** Same catalog as Club management → Tables → Member type. */
+  useEffect(() => {
+    if (!data.clubId) {
+      setMemberTypes([]);
+      setMemberTypesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    async function loadMemberTypes() {
+      setMemberTypesLoading(true);
+      try {
+        const res = await fetch(
+          withSelectedClubId(
+            `/api/club/settings/tables/member-types?scope=profile&clubId=${encodeURIComponent(data.clubId)}`,
+          ),
+          { headers: getAuthHeaders() },
+        );
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const items = Array.isArray(json.items) ? json.items : [];
+        setMemberTypes(
+          items
+            .map(
+              (row: {
+                id?: string;
+                name?: string;
+                discountSubscription?: string;
+                discountServices?: string;
+                discountRest?: string;
+                discountSupplement?: string;
+                discountClothing?: string;
+                discountOutfit?: string;
+              }) => ({
+                id: String(row.id || ''),
+                name: String(row.name || '').trim(),
+                discountSubscription: String(row.discountSubscription || ''),
+                discountServices: String(row.discountServices || ''),
+                discountRest: String(row.discountRest || ''),
+                discountSupplement: String(row.discountSupplement || ''),
+                discountClothing: String(row.discountClothing || ''),
+                discountOutfit: String(row.discountOutfit || ''),
+              }),
+            )
+            .filter((row: { id: string; name: string }) => row.id && row.name),
+        );
+      } catch {
+        if (!cancelled) setMemberTypes([]);
+      } finally {
+        if (!cancelled) setMemberTypesLoading(false);
+      }
+    }
+    void loadMemberTypes();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.clubId]);
 
   /** View-only member profile — default payload encoded in the user QR. */
   const defaultProfileViewUrl = useMemo(() => {
@@ -2279,7 +2349,14 @@ export default function ClubMemberProfileEditor({
                     // different vocabulary (Active / Inactive / Injured / Suspended).
                     setClub((c) => ({
                       ...c,
-                      otherDetails: { ...c.otherDetails, athleteStatus: status },
+                      otherDetails: {
+                        ...c.otherDetails,
+                        athleteStatus: status,
+                        // Type of member applies only while status is Member.
+                        ...(status === 'Member'
+                          ? {}
+                          : { groupTrainedId: '' }),
+                      },
                     }))
                   }
                   className="border-gray-400"
@@ -2290,22 +2367,129 @@ export default function ClubMemberProfileEditor({
           </div>
         </SectionCard>
 
-        <SectionCard title={`Group trained (${byAdmin})`}>
-          <Field label="Connect member to a group trained">
-            <TextSelect
-              disabled={readOnlyClub}
-              value={od.groupTrainedId}
-              onChange={(e) =>
-                setClub((c) => ({
-                  ...c,
-                  otherDetails: { ...c.otherDetails, groupTrainedId: e.target.value },
-                }))
-              }
-            >
-              <option value="">—</option>
-            </TextSelect>
-          </Field>
-        </SectionCard>
+        {od.athleteStatus === 'Member' ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900">Type of member</h3>
+            <SectionCard title={`Member type (${byAdmin})`}>
+              <Field label="Member type">
+                <TextSelect
+                  disabled={readOnlyClub || memberTypesLoading}
+                  value={club.settings.memberTypeId}
+                  onChange={(e) => {
+                    const memberTypeId = e.target.value;
+                    const selected = memberTypes.find((item) => item.id === memberTypeId);
+                    setClub((c) => ({
+                      ...c,
+                      settings: {
+                        ...c.settings,
+                        memberTypeId,
+                        discounts: selected
+                          ? {
+                              subscript: selected.discountSubscription,
+                              service: selected.discountServices,
+                              barRest: selected.discountRest,
+                              supply: selected.discountSupplement,
+                              clothing: selected.discountClothing,
+                              outfit: selected.discountOutfit,
+                            }
+                          : c.settings.discounts,
+                      },
+                    }));
+                  }}
+                >
+                  <option value="">
+                    {memberTypesLoading
+                      ? 'Loading…'
+                      : memberTypes.length === 0
+                        ? 'No member types yet'
+                        : 'Select'}
+                  </option>
+                  {memberTypes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                  {club.settings.memberTypeId &&
+                  !memberTypes.some((item) => item.id === club.settings.memberTypeId) ? (
+                    <option value={club.settings.memberTypeId}>
+                      Saved type #{club.settings.memberTypeId}
+                    </option>
+                  ) : null}
+                </TextSelect>
+                {!memberTypesLoading && memberTypes.length === 0 ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Add types under{' '}
+                    <a
+                      href="/club/settings/tables/member_type"
+                      className="text-blue-800 underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Club management → General settings → Tables → Member type
+                    </a>
+                    .
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    List from Tables → Member type. Choosing a type also fills Discount % on Settings.
+                  </p>
+                )}
+              </Field>
+            </SectionCard>
+            <SectionCard title={`Group trained (${byAdmin})`}>
+              <Field label="Connect member to a group trained">
+                {(() => {
+                  const allGroups = data.memberGroups ?? [];
+                  const presentIds = new Set(data.memberPresentGroupIds ?? []);
+                  const presentGroups = allGroups.filter((g) => presentIds.has(g.id));
+                  // Prefer groups this member already belongs to; otherwise full Archive list.
+                  const groupOptions =
+                    presentGroups.length > 0 ? presentGroups : allGroups;
+                  return (
+                    <>
+                      <TextSelect
+                        disabled={readOnlyClub}
+                        value={od.groupTrainedId}
+                        onChange={(e) =>
+                          setClub((c) => ({
+                            ...c,
+                            otherDetails: {
+                              ...c.otherDetails,
+                              groupTrainedId: e.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="">
+                          {allGroups.length === 0 ? 'No groups yet' : 'Select'}
+                        </option>
+                        {groupOptions.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                        {od.groupTrainedId &&
+                        !groupOptions.some((g) => g.id === od.groupTrainedId) ? (
+                          <option value={od.groupTrainedId}>
+                            {allGroups.find((g) => g.id === od.groupTrainedId)?.name ||
+                              `Saved group #${od.groupTrainedId}`}
+                          </option>
+                        ) : null}
+                      </TextSelect>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {presentGroups.length > 0
+                          ? 'Only groups this member is already in (Archive → Groups).'
+                          : allGroups.length > 0
+                            ? 'Member is not in any group yet — showing all Archive groups.'
+                            : 'Create groups under Archive of Users → Groups, then add this member.'}
+                      </p>
+                    </>
+                  );
+                })()}
+              </Field>
+            </SectionCard>
+          </div>
+        ) : null}
 
         <SectionCard
           title={

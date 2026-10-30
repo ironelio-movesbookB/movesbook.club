@@ -9,6 +9,10 @@ import ClubMemberArchivePage, {
   type MemberArchiveViewMode,
 } from '@/components/club/members/ClubMemberArchivePage';
 import AddMemberModal from '@/components/AddMemberModal';
+import {
+  ADMIN_AS_MEMBER_CONFIRM_CODE,
+  AdminAsMemberConfirmError,
+} from '@/lib/club/memberArchiveStatus';
 import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import ClubMemberArchiveHeader from './components/status';
 import MemberArchiveTopNav, {
@@ -559,6 +563,7 @@ function MemberListPageContent() {
       username: string;
       password: string;
       membershipStatus?: MemberArchiveStatus;
+      confirmAdminAsMember?: boolean;
     }) => {
       setAddError('');
       const resolvedWorkspaceId =
@@ -579,10 +584,20 @@ function MemberListPageContent() {
         const response = await fetch('/api/coach/athletes/add', {
           method: 'POST',
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: data.username, password: data.password }),
+          body: JSON.stringify({
+            username: data.username,
+            password: data.password,
+            ...(data.confirmAdminAsMember ? { confirmAdminAsMember: true } : {}),
+          }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
+          if (payload.code === ADMIN_AS_MEMBER_CONFIRM_CODE) {
+            throw new AdminAsMemberConfirmError(
+              typeof payload.error === 'string' ? payload.error : undefined,
+              typeof payload.question === 'string' ? payload.question : undefined,
+            );
+          }
           throw new Error(
             typeof payload.error === 'string' ? payload.error : 'Failed to add athlete',
           );
@@ -600,16 +615,23 @@ function MemberListPageContent() {
             `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/add`,
           );
       const response = await fetch(url, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            username: data.username,
-            password: data.password,
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
           membershipStatus: data.membershipStatus,
-          }),
+          ...(data.confirmAdminAsMember ? { confirmAdminAsMember: true } : {}),
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (payload.code === ADMIN_AS_MEMBER_CONFIRM_CODE) {
+          throw new AdminAsMemberConfirmError(
+            typeof payload.error === 'string' ? payload.error : undefined,
+            typeof payload.question === 'string' ? payload.question : undefined,
+          );
+        }
         throw new Error(
           typeof payload.error === 'string' ? payload.error : 'Failed to add member',
         );
@@ -673,6 +695,7 @@ function MemberListPageContent() {
             onMembershipStatusChanged={() => setRefreshKey((k) => k + 1)}
             onViewModeChange={setArchiveViewMode}
             statusChangesEnabled={!isCoachWorkspace}
+            clubChannelMessaging={!isTeamWorkspace && !isCoachWorkspace}
             footerHint={
               isCoachWorkspace
                 ? 'Athletes trained by you: added directly or members of your groups trained. Groups and the Group of training filter use your groups trained.'

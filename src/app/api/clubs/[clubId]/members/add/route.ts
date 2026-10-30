@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken, verifyPassword } from '@/lib/auth';
 import {
+  adminAsMemberConfirmResponse,
   isAddableMemberArchiveStatus,
   isAddableMemberUserType,
+  isAdminAddableMemberUserType,
   NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
   roleValueForMemberArchiveStatus,
   type AddableMemberArchiveStatus,
@@ -36,10 +38,16 @@ export async function POST(
     const userId = decoded.userId;
     const clubId = params.clubId;
     const body = await request.json();
-    const { username, password, membershipStatus: rawStatus } = body as {
+    const {
+      username,
+      password,
+      membershipStatus: rawStatus,
+      confirmAdminAsMember,
+    } = body as {
       username?: string;
       password?: string;
       membershipStatus?: string;
+      confirmAdminAsMember?: boolean;
     };
 
     if (!username || !password) {
@@ -104,6 +112,11 @@ export async function POST(
         { error: 'Invalid password' },
         { status: 401 }
       );
+    }
+
+    // ID7/8/9 admins: require explicit confirm (“Do you want insert the user the same?”).
+    if (isAdminAddableMemberUserType(userToAdd.userType) && !confirmAdminAsMember) {
+      return NextResponse.json(adminAsMemberConfirmResponse(), { status: 409 });
     }
 
     // Check if user is already a member

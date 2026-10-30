@@ -724,6 +724,8 @@ model UserMessageThread {
   status          String?               @db.VarChar(32)
   /// Marked inappropriate by staff/admin (formerly "spam")
   isInappropriate Boolean               @default(false)
+  /// Club/staff thread: recipient soft-deleted their copy (raw SQL path also ensures this column).
+  deletedByRecipient Boolean            @default(false)
   /// JSON array of up to 3 public image URLs attached to the first post
   imageUrls       String?               @db.Text
   likeCount       Int                   @default(0)
@@ -802,17 +804,35 @@ model Language {
 }
 
 model Translation {
-  id        String   @id @default(cuid())
-  key       String
-  language  String   
-  value     String   @db.Text
-  category  String   @default("general") 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  id         String   @id @default(cuid())
+  key        String
+  language   String
+  value      String   @db.Text
+  category   String   @default("general")
+  isDeleted  Boolean  @default(false)
+  /// Long-text registry flag used by Language Settings / admin translation APIs.
+  isLongText Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([key, language])
   @@map("translations")
+}
+
+/// Lookup table for club identification devices (card readers).
+model ClubCardReaderType {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(191)
+
+  @@map("club_card_reader_types")
+}
+
+/// Lookup table for club card-reader control modes.
+model ClubCardControlMode {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(191)
+
+  @@map("club_card_control_modes")
 }
 
 model CoachAthlete {
