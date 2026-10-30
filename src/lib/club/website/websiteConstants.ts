@@ -42,8 +42,8 @@ export type WebsiteSettings = {
 };
 
 /** Static illustrations used when the club has not set its own image. */
-export const WEBSITE_DONATION_PLACEHOLDER = '/img/donation-promo.svg';
-export const WEBSITE_SHOP_PLACEHOLDER = '/img/shop-promo.svg';
+export const WEBSITE_DONATION_PLACEHOLDER = '/img/promo.jpg';
+export const WEBSITE_SHOP_PLACEHOLDER = '/img/shop_promo.jpg';
 
 export const WEBSITE_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,58}[a-z0-9])$/;
 export const WEBSITE_MAX_COVER_BYTES = 8 * 1024 * 1024;

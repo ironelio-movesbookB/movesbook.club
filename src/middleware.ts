@@ -51,6 +51,11 @@ const publicApiRoutes = [
   '/api/admin/promocodes/change-code',
   /** Outcome audio for <audio src> — no Authorization header on GET */
   '/api/outcome-messages',
+  /**
+   * Uploaded files (sponsor PDFs, banners, logos, …). Browser <a href>/<img src> have no
+   * Authorization header; member-medical paths stay gated inside the route handler.
+   */
+  '/api/media',
   /** Public read APIs (editorial news, shared OGP groups, etc.) */
   '/api/public/',
   /** Used by admin editors (Settings, subscriptions, recipes) — token is often in localStorage only */

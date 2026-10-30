@@ -17,7 +17,7 @@ import {
 import type { CountryPriceInfo } from '@/lib/countries/countryPriceFormula';
 
 export default function RegisterPage() {
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const [formData, setFormData] = useState({
     firstName: '',
     surname: '',
@@ -36,8 +36,20 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [specialOfferVersionId, setSpecialOfferVersionId] = useState<number | null>(null);
+  const [specialUpgradeVersionId, setSpecialUpgradeVersionId] = useState<number | null>(null);
+  const [specialUpgradeSoftware, setSpecialUpgradeSoftware] = useState({
+    company: '',
+    version: '',
+    expiration: '',
+  });
   const [countryPrice, setCountryPrice] = useState<CountryPriceInfo | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const lang = String(currentLanguage || 'en').toLowerCase().slice(0, 2);
+    if (!lang) return;
+    setFormData((prev) => (prev.language === lang ? prev : { ...prev, language: lang }));
+  }, [currentLanguage]);
 
   useEffect(() => {
     if (!formData.country) {
@@ -60,9 +72,25 @@ export default function RegisterPage() {
 
   const specialOfferConfirmed =
     specialOfferVersionId !== null && specialOfferVersionId === formData.subscriptionVersionId;
+  const specialUpgradeConfirmed =
+    specialUpgradeVersionId !== null && specialUpgradeVersionId === formData.subscriptionVersionId;
   const selectedVersionId = formData.subscriptionVersionId;
   const handleSpecialOfferConfirmChange = useCallback(
-    (confirmed: boolean) => setSpecialOfferVersionId(confirmed ? selectedVersionId : null),
+    (confirmed: boolean) => {
+      setSpecialOfferVersionId(confirmed ? selectedVersionId : null);
+      if (confirmed) setSpecialUpgradeVersionId(null);
+    },
+    [selectedVersionId],
+  );
+  const handleSpecialUpgradeConfirmChange = useCallback(
+    (
+      confirmed: boolean,
+      software?: { company: string; version: string; expiration: string },
+    ) => {
+      setSpecialUpgradeVersionId(confirmed ? selectedVersionId : null);
+      if (confirmed) setSpecialOfferVersionId(null);
+      if (software) setSpecialUpgradeSoftware(software);
+    },
     [selectedVersionId],
   );
 
@@ -105,6 +133,14 @@ export default function RegisterPage() {
           language: formData.language,
           subscriptionVersionId: formData.subscriptionVersionId ?? undefined,
           useSpecialOffer: specialOfferConfirmed,
+          useSpecialUpgrade: specialUpgradeConfirmed,
+          specialUpgradeSoftware: specialUpgradeConfirmed ? specialUpgradeSoftware : undefined,
+          registrationMode:
+            typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+              ? 'mobile'
+              : typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches
+                ? 'tablet'
+                : 'desk',
         }),
       });
 
@@ -112,6 +148,7 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         if (data.specialOfferUnavailable) setSpecialOfferVersionId(null);
+        if (data.specialUpgradeUnavailable) setSpecialUpgradeVersionId(null);
         if (data.resumePaymentId) {
           router.push(`/register/payment/${encodeURIComponent(data.resumePaymentId)}`);
           return;
@@ -270,6 +307,9 @@ export default function RegisterPage() {
               lang={formData.language}
               specialOfferConfirmed={specialOfferConfirmed}
               onSpecialOfferConfirmChange={handleSpecialOfferConfirmChange}
+              specialUpgradeConfirmed={specialUpgradeConfirmed}
+              specialUpgradeSoftware={specialUpgradeSoftware}
+              onSpecialUpgradeConfirmChange={handleSpecialUpgradeConfirmChange}
               countryPrice={countryPrice}
             />
 

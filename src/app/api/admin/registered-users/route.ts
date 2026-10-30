@@ -54,6 +54,10 @@ import {
   listSpecialOfferRegistrations,
   type SpecialOfferUserRegistration,
 } from '@/lib/subscriptions/specialOffers';
+import {
+  listSpecialUpgradeRegistrations,
+  type SpecialUpgradeUserRegistration,
+} from '@/lib/subscriptions/specialUpgrades';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,12 +166,22 @@ export async function GET(request: NextRequest) {
     Number.isInteger(specialOfferVersionRaw) && specialOfferVersionRaw > 0
       ? specialOfferVersionRaw
       : null;
+  const specialUpgradeVersionRaw = Number(url.searchParams.get('specialUpgradeVersionId') || '0');
+  const specialUpgradeVersionId =
+    Number.isInteger(specialUpgradeVersionRaw) && specialUpgradeVersionRaw > 0
+      ? specialUpgradeVersionRaw
+      : null;
   const specialOfferOnly =
     url.searchParams.get('specialOffer') === '1' || specialOfferVersionId !== null;
+  const specialUpgradeOnly =
+    url.searchParams.get('specialUpgrade') === '1' || specialUpgradeVersionId !== null;
+  const excludeSpecialOffer = url.searchParams.get('excludeSpecialOffer') === '1';
+  const excludeSpecialUpgrade = url.searchParams.get('excludeSpecialUpgrade') === '1';
   const fetchAllMatchingUsers =
     hasSubDateRange ||
     needsRowLevelSearchFilter ||
     specialOfferOnly ||
+    specialUpgradeOnly ||
     paymentStatus !== null ||
     paymentMode !== null;
   const userTypeCategory = (url.searchParams.get('userTypeCategory') || '').trim();
@@ -217,6 +231,13 @@ export async function GET(request: NextRequest) {
   if (specialOfferOnly) {
     const ids = [...new Set(offerFilterRegistrations.map((r) => r.userId))];
     andClauses.push({ id: { in: ids.length > 0 ? ids : ['__no_special_offer_match__'] } });
+  }
+  const upgradeFilterRegistrations: SpecialUpgradeUserRegistration[] = specialUpgradeOnly
+    ? await listSpecialUpgradeRegistrations({ versionId: specialUpgradeVersionId })
+    : [];
+  if (specialUpgradeOnly) {
+    const ids = [...new Set(upgradeFilterRegistrations.map((r) => r.userId))];
+    andClauses.push({ id: { in: ids.length > 0 ? ids : ['__no_special_upgrade_match__'] } });
   }
 
   if (search) {
@@ -647,6 +668,19 @@ export async function GET(request: NextRequest) {
         list.push(reg);
         regsByUser.set(reg.userId, list);
       }
+      const offerIds = [...new Set(offerRegs.map((r) => r.offerId))];
+      const offerCodeById = new Map<number, string>();
+      if (offerIds.length) {
+        try {
+          const codeRows = await prisma.$queryRawUnsafe<Array<{ id: number; offerCode: string | null }>>(
+            `SELECT id, offerCode FROM subscription_special_offers WHERE id IN (${offerIds.map(() => '?').join(',')})`,
+            ...offerIds,
+          );
+          for (const c of codeRows) offerCodeById.set(Number(c.id), String(c.offerCode || ''));
+        } catch {
+          /* offerCode column may be missing until ensure runs */
+        }
+      }
       users = users.map((row) => {
         if (row.entityId && row.entityId !== row.primaryClubId) return row;
         const rowStartMs = Date.parse(`${row.dateStart}T00:00:00Z`);
@@ -665,12 +699,97 @@ export async function GET(request: NextRequest) {
           offerPrice: !recordedPayment,
           specialOffer: true,
           specialOfferTitle: reg.offerTitle,
+          versionType: 'special_offer',
+          specialOfferCode: offerCodeById.get(reg.offerId) || '',
         };
       });
     }
     if (specialOfferOnly) {
       users = users.filter((row) => row.specialOffer);
     }
+
+    const upgradeRegs: SpecialUpgradeUserRegistration[] = specialUpgradeOnly
+      ? upgradeFilterRegistrations
+      : await listSpecialUpgradeRegistrations({ userIds }).catch(() => []);
+    if (upgradeRegs.length > 0) {
+      const regsByUser = new Map<string, SpecialUpgradeUserRegistration[]>();
+      for (const reg of upgradeRegs) {
+        const list = regsByUser.get(reg.userId) ?? [];
+        list.push(reg);
+        regsByUser.set(reg.userId, list);
+      }
+      users = users.map((row) => {
+        if (row.entityId && row.entityId !== row.primaryClubId) return row;
+        const rowStartMs = Date.parse(`${row.dateStart}T00:00:00Z`);
+        const reg = regsByUser
+          .get(row.id)
+          ?.find(
+            (r) =>
+              Math.abs(Date.parse(`${r.dateStart}T00:00:00Z`) - rowStartMs) <= 24 * 60 * 60 * 1000,
+          );
+        if (!reg) return row;
+        const recordedPayment = Boolean(row.amount && row.amount !== '—');
+        return {
+          ...row,
+          version: reg.versionName,
+          amount: recordedPayment ? row.amount : `€ ${reg.costEuro}`,
+          offerPrice: !recordedPayment,
+          specialUpgrade: true,
+          specialUpgradeTitle: reg.upgradeTitle,
+          versionType: 'special_upgrade',
+          checkDeadline: reg.checkCleared ? null : reg.checkDeadline,
+          checkCleared: reg.checkCleared,
+          upgradeSoftwareCompany: reg.softwareCompany,
+          upgradeSoftwareVersion: reg.softwareVersion,
+          upgradeSoftwareExpiration: reg.softwareExpiration,
+          upgradeId: reg.upgradeId,
+        };
+      });
+    }
+    if (specialUpgradeOnly) {
+      users = users.filter((row) => row.specialUpgrade);
+    }
+  }
+
+  // Attach registration mode icons + version type defaults
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS user_registration_meta (
+        userId VARCHAR(191) NOT NULL PRIMARY KEY,
+        registrationMode VARCHAR(20) NOT NULL DEFAULT 'desk',
+        updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    const metaRows =
+      userIds.length === 0
+        ? []
+        : await prisma.$queryRawUnsafe<Array<{ userId: string; registrationMode: string }>>(
+            `SELECT userId, registrationMode FROM user_registration_meta WHERE userId IN (${userIds.map(() => '?').join(',')})`,
+            ...userIds,
+          );
+    const modeByUser = new Map(metaRows.map((m) => [m.userId, m.registrationMode]));
+    users = users.map((row) => ({
+      ...row,
+      registrationMode: modeByUser.get(row.id) || row.registrationMode || 'desk',
+      versionType:
+        row.versionType ||
+        (row.specialUpgrade ? 'special_upgrade' : row.specialOffer ? 'special_offer' : 'standard'),
+    }));
+  } catch {
+    users = users.map((row) => ({
+      ...row,
+      registrationMode: row.registrationMode || 'desk',
+      versionType:
+        row.versionType ||
+        (row.specialUpgrade ? 'special_upgrade' : row.specialOffer ? 'special_offer' : 'standard'),
+    }));
+  }
+
+  if (excludeSpecialOffer) {
+    users = users.filter((row) => !row.specialOffer && row.versionType !== 'special_offer');
+  }
+  if (excludeSpecialUpgrade) {
+    users = users.filter((row) => !row.specialUpgrade && row.versionType !== 'special_upgrade');
   }
 
   const pendingUserIds = await listPendingActivationUserIds(userIds).catch(() => new Set<string>());

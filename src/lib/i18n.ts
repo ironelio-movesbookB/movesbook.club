@@ -363,6 +363,7 @@ export interface LanguageStrings {
         'messages_rail_version': 'Version history',
         'messages_rail_reviews': 'Reviews',
         'messages_rail_support': 'Your support',
+        'messages_rail_section': 'Section',
         'messages_panel_title': 'Messages & support',
         'messages_panel_close': 'Close',
         'messages_panel_loading': 'Loading…',

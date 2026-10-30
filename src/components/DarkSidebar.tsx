@@ -4812,6 +4812,14 @@ export default function DarkSidebar({
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => router.push('/clubs/marketing/website')}
                                   className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
@@ -5346,6 +5354,14 @@ export default function DarkSidebar({
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
                                   <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
                                 </button>
                                 <button
                                   type="button"
