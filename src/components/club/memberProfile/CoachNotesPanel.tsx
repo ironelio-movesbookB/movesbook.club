@@ -84,8 +84,21 @@ export default function CoachNotesPanel({
   const [composerEnableTo, setComposerEnableTo] = useState('');
   const [composerShowAtLogin, setComposerShowAtLogin] = useState(false);
   const [composerShowAtLogout, setComposerShowAtLogout] = useState(false);
+  /** When set, the composer updates this reflection instead of creating a new one. */
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [posting, setPosting] = useState(false);
+
+  const clearComposer = () => {
+    setEditingNoteId(null);
+    setComposerObject('');
+    setComposerBody('');
+    setComposerImages([]);
+    setComposerEnableFrom('');
+    setComposerEnableTo('');
+    setComposerShowAtLogin(false);
+    setComposerShowAtLogout(false);
+  };
 
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replySendingId, setReplySendingId] = useState<string | null>(null);
@@ -100,6 +113,24 @@ export default function CoachNotesPanel({
   const composerFileInputRef = useRef<HTMLInputElement>(null);
 
   const notes = data.coachNotes;
+
+  const startEditReflection = (note: MemberProfileBundle['coachNotes'][number]) => {
+    setEditingNoteId(note.id);
+    setComposerObject(note.title || '');
+    setComposerBody(note.body || '');
+    setComposerImages(
+      (note.imageUrls || []).map((url, index) => ({
+        id: `edit-${note.id}-${index}`,
+        url,
+        preview: url,
+      })),
+    );
+    setComposerEnableFrom(note.enableFrom || '');
+    setComposerEnableTo(note.enableTo || '');
+    setComposerShowAtLogin(Boolean(note.showAtLogin));
+    setComposerShowAtLogout(Boolean(note.showAtLogout));
+    setMessage('Editing this reflection — update the form and click Save.');
+  };
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -151,6 +182,7 @@ export default function CoachNotesPanel({
 
       const remaining = data.coachNotes.filter((n) => n.id !== noteId);
       onChange({ ...data, coachNotes: remaining });
+      if (editingNoteId === noteId) clearComposer();
       setReplyDrafts((prev) => {
         const next = { ...prev };
         delete next[noteId];
@@ -213,20 +245,22 @@ export default function CoachNotesPanel({
     const showAtLogin = composerShowAtLogin;
     const showAtLogout = composerShowAtLogout;
     const visibleToMember = Boolean(club.visibility.notesCoach);
+    const commentsEnabled = club.visibility.notesCoachComments;
+    const editingId = editingNoteId;
     try {
       const res = await fetch(
         withSelectedClubId(
           `/api/clubs/${encodeURIComponent(data.clubId)}/members/${encodeURIComponent(data.memberId)}/notes`,
         ),
         {
-          method: 'POST',
+          method: editingId ? 'PATCH' : 'POST',
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            kind: 'coach',
+            ...(editingId ? { noteId: editingId } : { kind: 'coach' }),
             title,
             body,
             visibleToMember,
-            commentsEnabled: club.visibility.notesCoachComments,
+            commentsEnabled,
             imageUrls,
             enableFrom: enableFrom || null,
             enableTo: enableTo || null,
@@ -236,44 +270,64 @@ export default function CoachNotesPanel({
         },
       );
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || 'Failed to post');
+      if (!res.ok) {
+        throw new Error(json.error || (editingId ? 'Failed to save' : 'Failed to post'));
+      }
 
-      const noteId = String(json.note?.id || `local-${Date.now()}`);
-      const author = getSessionAuthor();
+      if (editingId) {
+        onChange({
+          ...data,
+          coachNotes: data.coachNotes.map((n) =>
+            n.id === editingId
+              ? {
+                  ...n,
+                  title,
+                  body,
+                  visibleToMember,
+                  commentsEnabled,
+                  imageUrls,
+                  enableFrom,
+                  enableTo,
+                  showAtLogin,
+                  showAtLogout,
+                }
+              : n,
+          ),
+        });
+        clearComposer();
+        setMessage('Reflection updated.');
+      } else {
+        const noteId = String(json.note?.id || `local-${Date.now()}`);
+        const author = getSessionAuthor();
 
-      onChange({
-        ...data,
-        coachNotes: [
-          {
-            id: noteId,
-            title,
-            body,
-            createdAt: new Date().toISOString(),
-            authorLabel: author.label,
-            authorImage: author.image,
-            visibleToMember,
-            commentsEnabled: club.visibility.notesCoachComments,
-            imageUrls,
-            enableFrom,
-            enableTo,
-            showAtLogin,
-            showAtLogout,
-            replies: [],
-          },
-          ...data.coachNotes,
-        ],
-      });
+        onChange({
+          ...data,
+          coachNotes: [
+            {
+              id: noteId,
+              title,
+              body,
+              createdAt: new Date().toISOString(),
+              authorLabel: author.label,
+              authorImage: author.image,
+              visibleToMember,
+              commentsEnabled,
+              imageUrls,
+              enableFrom,
+              enableTo,
+              showAtLogin,
+              showAtLogout,
+              replies: [],
+            },
+            ...data.coachNotes,
+          ],
+        });
 
-      setComposerObject('');
-      setComposerBody('');
-      setComposerImages([]);
-      setComposerEnableFrom('');
-      setComposerEnableTo('');
-      setComposerShowAtLogin(false);
-      setComposerShowAtLogout(false);
-      setMessage('Reflection posted.');
+        clearComposer();
+        setMessage('Reflection posted.');
+      }
     } catch (e: unknown) {
-      setMessage(e instanceof Error ? e.message : 'Failed to post');
+      setMessage(e instanceof Error ? e.message : editingId ? 'Failed to save' : 'Failed to post');
     } finally {
       setPosting(false);
     }
@@ -488,17 +542,33 @@ export default function CoachNotesPanel({
                           ) : null}
                         </div>
                         {canPost ? (
-                          <button
-                            type="button"
-                            disabled={deletingId === item.id}
-                            onClick={() => setConfirmAction({ type: 'delete', noteId: item.id })}
-                            title="Delete reflection"
-                            aria-label="Delete reflection"
-                            className="shrink-0 self-start inline-flex items-center gap-1 rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            {deletingId === item.id ? 'Deleting…' : 'Delete'}
-                          </button>
+                          <div className="flex shrink-0 flex-col gap-1 self-start">
+                            <button
+                              type="button"
+                              disabled={posting || uploadingImages}
+                              onClick={() => startEditReflection(item)}
+                              title="Edit reflection"
+                              aria-label="Edit reflection"
+                              className={`inline-flex items-center justify-center rounded border px-2 py-1 text-xs font-medium ${
+                                editingNoteId === item.id
+                                  ? 'border-sky-600 bg-sky-100 text-sky-900'
+                                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                              } disabled:opacity-50`}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingId === item.id}
+                              onClick={() => setConfirmAction({ type: 'delete', noteId: item.id })}
+                              title="Delete reflection"
+                              aria-label="Delete reflection"
+                              className="inline-flex items-center gap-1 rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {deletingId === item.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
                         ) : null}
                       </div>
 
@@ -609,7 +679,24 @@ export default function CoachNotesPanel({
                 <ClipboardList className="w-8 h-8 text-sky-800" strokeWidth={1.75} />
               </div>
             </div>
-            <div className="text-center font-bold mb-3">Post coach reflection</div>
+            <div className="mb-3 text-center font-bold">
+              {editingNoteId ? 'Edit coach reflection' : 'Post coach reflection'}
+            </div>
+            {editingNoteId ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-xs text-sky-900">
+                <span>Editing an existing reflection.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearComposer();
+                    setMessage('');
+                  }}
+                  className="font-medium underline"
+                >
+                  Cancel edit
+                </button>
+              </div>
+            ) : null}
 
             <label className="block text-xs font-medium mb-1">Object</label>
             <input
@@ -731,7 +818,13 @@ export default function CoachNotesPanel({
               onClick={() => void postReflection()}
               className="w-full py-2.5 rounded font-semibold text-white bg-[#c43c54] hover:bg-[#a83249] disabled:opacity-50"
             >
-              {posting ? 'Posting…' : 'Post'}
+              {posting
+                ? editingNoteId
+                  ? 'Saving…'
+                  : 'Posting…'
+                : editingNoteId
+                  ? 'Save'
+                  : 'Post'}
             </button>
           </div>
         ) : null}

@@ -223,7 +223,7 @@ export default function MyCompaniesPanel({
             className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left transition-colors hover:bg-teal-700"
           >
             <Mail className="h-5 w-5 shrink-0" />
-            <span>I am member of</span>
+            <span>Member of…</span>
           </button>
           <button
             type="button"

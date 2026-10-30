@@ -2098,6 +2098,15 @@ export default function DarkSidebar({
                           onContactActivitiesClick();
                         } else {
                           router.push('/profile#member-info');
+                          if (typeof window !== 'undefined') {
+                            window.setTimeout(() => {
+                              document
+                                .querySelector<HTMLButtonElement>(
+                                  '[data-member-profile-tab="contacts"]',
+                                )
+                                ?.click();
+                            }, 0);
+                          }
                         }
                       }}
                       className="flex w-full items-center gap-2 border-t border-black/25 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90"

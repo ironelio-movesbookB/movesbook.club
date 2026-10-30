@@ -101,7 +101,7 @@ import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileB
 import AthleteMyPageRightSidebarExtras from '@/components/dashboard/AthleteMyPageRightSidebarExtras';
 import AthleteMyClubRightSidebar from '@/components/dashboard/AthleteMyClubRightSidebar';
 import MemberRegistrationInfoPanel from '@/components/member/MemberRegistrationInfoPanel';
-import MemberVisitorContactActivitiesPanel from '@/components/member/MemberVisitorContactActivitiesPanel';
+import MemberContactActivitiesPanel from '@/components/member/MemberContactActivitiesPanel';
 import {
   getDashboardPathForUserType,
   isClubAccountUserType,
@@ -1123,14 +1123,18 @@ function AthleteDashboardContent() {
                     />
                   </div>
                 )}
-                {activeSection === 'contact-activities' && (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <MemberVisitorContactActivitiesPanel
-                      embedded
+                {activeSection === 'contact-activities' && user?.id ? (
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <MemberContactActivitiesPanel
+                      userId={user.id}
+                      clubs={myClubs.map((c: { id: string; name: string }) => ({
+                        id: c.id,
+                        name: c.name,
+                      }))}
                       onClose={() => setActiveSection('overview')}
                     />
                   </div>
-                )}
+                ) : null}
                 {activeSection === 'staff-feedbacks' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <MyStaffFeedbacksPanel onClose={() => setActiveSection('overview')} />
