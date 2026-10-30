@@ -24,6 +24,8 @@ type ShareModalProps = {
   showEmail?: boolean;
   /** Open the shared page with its archive grid only, without workspace chrome. */
   gridOnly?: boolean;
+  /** Called when the user chooses Post on Movesbook. */
+  onPostToMovesbook?: () => void;
 };
 
 export default function ShareModal({
@@ -35,6 +37,7 @@ export default function ShareModal({
   hidePost = false,
   showEmail = false,
   gridOnly = false,
+  onPostToMovesbook,
 }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -142,6 +145,11 @@ export default function ShareModal({
         {/* Post Button */}
         {hidePost ? null : (
           <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onPostToMovesbook?.();
+            }}
             className="w-full flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-100 transition text-gray-700"
           >
             <PenSquare size={16} />
