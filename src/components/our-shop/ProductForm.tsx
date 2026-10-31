@@ -35,6 +35,7 @@ type Product = {
   hideFromShop?: boolean;
   allowMultipleUnits?: boolean;
   allowNonMembers?: boolean;
+  sector?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -148,6 +149,15 @@ export default function ProductForm({ productId }: Props) {
   const isEditing = Boolean(productId);
 
   const [name, setName] = useState('');
+  const [sector, setSector] = useState('Shop');
+
+  useEffect(() => {
+    if (productId) return;
+    const requested = new URLSearchParams(window.location.search).get('sector');
+    if (requested === 'Shop' || requested === 'Restaurant' || requested === 'Bar') {
+      setSector(requested);
+    }
+  }, [productId]);
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('0.00');
   const [vatRate, setVatRate] = useState('21');
@@ -203,6 +213,7 @@ export default function ProductForm({ productId }: Props) {
         if (cancelled) return;
 
         setName(product.name ?? '');
+        setSector(product.sector || 'Shop');
         setDescription(product.description ?? '');
         setPrice(String(product.price ?? 0));
         setVatRate(String(product.vatRate ?? 21));
@@ -354,6 +365,7 @@ export default function ProductForm({ productId }: Props) {
         hideFromShop,
         allowMultipleUnits,
         allowNonMembers,
+        sector,
       };
 
       const response = await shopFetch('/api/club/shop/products', {
@@ -368,7 +380,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not save the product.');
       }
 
-      router.push('/our-shop/products');
+      router.push(`/clubs/shop/products/${sector === 'Restaurant' ? 'restaurant' : sector === 'Bar' ? 'bar' : 'shop'}`);
       router.refresh();
     } catch (err) {
       setError(
@@ -403,7 +415,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not delete the product.');
       }
 
-      router.push('/our-shop/products');
+      router.push(`/clubs/shop/products/${sector === 'Restaurant' ? 'restaurant' : sector === 'Bar' ? 'bar' : 'shop'}`);
       router.refresh();
     } catch (err) {
       setError(
@@ -426,7 +438,7 @@ export default function ProductForm({ productId }: Props) {
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not duplicate the product.');
-      router.push(`/our-shop/products/${encodeURIComponent(data.id)}`);
+      router.push(`/clubs/shop/products/${encodeURIComponent(data.id)}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not duplicate the product.');
@@ -508,7 +520,7 @@ export default function ProductForm({ productId }: Props) {
       </ShopHeader>
 
       <Link
-        href="/our-shop/products"
+        href="/clubs/shop/products/shop"
         className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700"
       >
         <ArrowLeft size={16} />
@@ -527,6 +539,13 @@ export default function ProductForm({ productId }: Props) {
           <div className="space-y-6 rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
               <div className="sm:col-span-3">
+                <Field label="Sector" required>
+                  <select className={inputClass} value={sector} onChange={(event) => setSector(event.target.value)}>
+                    <option value="Shop">Shop</option>
+                    <option value="Restaurant">Restaurant</option>
+                    <option value="Bar">Bar</option>
+                  </select>
+                </Field>
                 <Field label="Name" required>
                   <input
                     value={name}
@@ -715,7 +734,7 @@ export default function ProductForm({ productId }: Props) {
       {/* Bottom actions */}
       <div className="mt-7 flex flex-col-reverse justify-end gap-3 sm:flex-row">
         <Link
-          href="/our-shop/products"
+          href="/clubs/shop/products/shop"
           className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Cancel

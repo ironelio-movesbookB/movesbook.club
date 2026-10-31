@@ -1,15 +1,10 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import OrderEditor from '@/components/our-shop/OrderEditor';
+import GoTo from '@/components/our-shop/GoTo';
 
-export default function OrderPage() {
+export default function OrderRedirect() {
   const params = useParams<{ orderId: string }>();
-  const orderId = typeof params?.orderId === 'string' ? decodeURIComponent(params.orderId) : '';
-
-  if (!orderId) {
-    return <p className="text-sm text-slate-500">Order not found.</p>;
-  }
-
-  return <OrderEditor orderId={orderId} />;
+  const id = typeof params?.orderId === 'string' ? params.orderId : '';
+  return <GoTo href={id ? `/clubs/shop/orders/${id}` : '/clubs/shop/orders'} />;
 }

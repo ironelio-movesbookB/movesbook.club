@@ -1,5 +1,7 @@
-import CreateOrderForm from '@/components/our-shop/CreateOrderForm';
+'use client';
 
-export default function NewOrderPage() {
-  return <CreateOrderForm />;
+import GoTo from '@/components/our-shop/GoTo';
+
+export default function NewOrderRedirect() {
+  return <GoTo href="/clubs/shop/sell" />;
 }

@@ -119,7 +119,7 @@ const EXPENSE: ProcedureDefinition = {
 const PRODUCT_SALE: ProcedureDefinition = {
   code: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
   name: 'Product Sale',
-  typologyLabel: 'SELLINGS',
+  typologyLabel: 'PURCHASE PRODUCTS',
   pageSize: 25,
   metadataKeys: { primary: 'productName', secondary: 'sectorName' },
   columnHeaders: { primary: 'Product', secondary: 'Sector' },

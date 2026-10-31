@@ -835,18 +835,52 @@ export async function listUnifiedProductSales(
       pageSize: 500,
       memberId: params.memberId,
     });
+    const recordIds = procedure.items.map((row) => row.id);
+    const receipts = recordIds.length
+      ? await prisma.procedureReceipt.findMany({
+          where: { procedureRecordId: { in: recordIds } },
+          select: { procedureRecordId: true, documentNumber: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const invoiceByRecord = new Map<string, string>();
+    for (const receipt of receipts) {
+      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
+        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
+      }
+    }
+
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const products = Array.isArray(meta.products) ? meta.products : [];
+      const purchaseLines = products
+        .map((line) => {
+          if (!line || typeof line !== 'object') return null;
+          const item = line as Record<string, unknown>;
+          const name = text(item.name);
+          const quantity = num(item.quantity);
+          if (!name) return null;
+          return { name, quantity: quantity > 0 ? quantity : 1 };
+        })
+        .filter((line): line is { name: string; quantity: number } => Boolean(line));
+      const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
       items.push({
         id: `proc-${row.id}`,
         memberId: row.memberId,
         userId: row.memberId,
         name: row.memberName,
-        image: null,
+        image: row.memberImage,
         insertDate: row.recordDate,
-        typology: 'Sellings',
-        casual: text(meta.sector) || text(meta.productName) || row.notes || '-',
+        typology: 'PURCHASE PRODUCTS',
+        casual: text(meta.sector) || text(meta.sectorName) || text(meta.productName) || row.notes || '-',
         value: row.totalAmount,
+        paid: row.paidAmount,
+        rest: row.balanceAmount,
+        number: productCount,
+        purchaseLines,
+        category: text(meta.sellingNumber) || '-',
+        service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
+        operator: row.operatorName || '-',
         status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
         source: 'procedure',
       });

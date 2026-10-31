@@ -19,12 +19,58 @@ import {
 } from '@/lib/club/serviceSaleClient';
 import { updateInstallment } from '@/lib/club/archives/clubArchiveClient';
 import { fetchOtherSettings } from '@/lib/club/otherSettingsClient';
+import { createProcedureClient, type ProcedurePaymentView, type ProcedureRecordView } from '@/lib/club/procedureClient';
+import { getProcedureTabs } from '@/lib/procedures/registry';
+import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
+
+function toProductPurchase(record: ProcedureRecordView): ServiceSalePurchase {
+  return {
+    id: record.id,
+    userId: record.userId,
+    memberName: record.memberName,
+    memberImage: record.memberImage,
+    typology: record.typology,
+    sectorName: record.secondaryLabel,
+    serviceName: record.primaryLabel,
+    recordDate: record.recordDate,
+    paydate: record.paydate,
+    expireDate: record.expireDate,
+    createdAt: record.createdAt,
+    value: record.value,
+    pay: record.pay,
+    rest: record.rest,
+    notes: record.notes,
+    operatorId: record.operatorId,
+    operatorName: record.operatorName,
+    lastPaymentDate: record.lastPaymentDate,
+  };
+}
+
+function toProductPayment(payment: ProcedurePaymentView): ServiceSalePayment {
+  return {
+    id: payment.id,
+    spId: payment.recordId,
+    memberName: payment.memberName,
+    typology: payment.typology,
+    serviceName: payment.primaryLabel,
+    paymentDate: payment.paymentDate,
+    paid: payment.paid,
+    balance: payment.balance,
+    originalDebt: payment.originalDebt,
+    residualDebt: payment.residualDebt,
+    description: payment.description,
+    operatorId: payment.operatorId,
+    operatorName: payment.operatorName,
+  };
+}
 
 function PaymentDetailPageInner() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = String(params?.id ?? '');
+  const productSale = searchParams.get('type') === 'product_sale';
+  const procedureCode = productSale ? PROCEDURE_TYPE_CODES.PRODUCT_SALE : 'service_sale';
 
   const extraIds = useMemo(() => {
     const raw = searchParams.get('ids') ?? '';
@@ -51,9 +97,16 @@ function PaymentDetailPageInner() {
 
   const load = useCallback(async () => {
     try {
+      const productClient = productSale ? createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE) : null;
       const [purchaseRes, paymentsRes, formOptions, settings, extras] = await Promise.all([
-        fetchPurchase(id),
-        fetchPaymentsForRecord(id, { pageSize: 50 }),
+        productClient
+          ? productClient.fetchRecord(id).then((res) => ({ purchase: toProductPurchase(res.record) }))
+          : fetchPurchase(id),
+        productClient
+          ? productClient.fetchPayments({ recordId: id, pageSize: 50 }).then((res) => ({
+              items: res.items.map(toProductPayment),
+            }))
+          : fetchPaymentsForRecord(id, { pageSize: 50 }),
         fetchFormOptions(),
         fetchOtherSettings().catch(() => ({
           formPayDeadlineStatus: 'Yes',
@@ -63,6 +116,10 @@ function PaymentDetailPageInner() {
         })),
         Promise.all(
           extraIds.map(async (extraId) => {
+            if (productClient) {
+              const res = await productClient.fetchRecord(extraId);
+              return toProductPurchase(res.record);
+            }
             const res = await fetchPurchase(extraId);
             return res.purchase;
           })
@@ -93,15 +150,19 @@ function PaymentDetailPageInner() {
         autoPaid.current = true;
         const defaultOperatorId = formOptions.currentOperatorId ?? formOptions.operators[0]?.id;
         if (defaultOperatorId) {
-          await addPayment(id, {
+          const autoInput = {
             amountPaid: primary.rest,
             paymentDate: new Date().toISOString().slice(0, 10),
             description: 'Auto-payment (deadline form disabled)',
             payMode: 'cash',
             operatorId: defaultOperatorId,
             createReceipt: false,
-          });
-          const reloaded = await fetchPurchase(id);
+          };
+          if (productClient) await productClient.addPayment(id, autoInput);
+          else await addPayment(id, autoInput);
+          const reloaded = productClient
+          ? { purchase: toProductPurchase((await productClient.fetchRecord(id)).record) }
+          : await fetchPurchase(id);
           setPurchase(reloaded.purchase);
           setSuccess(`Payment fully auto-settled (€${primary.rest.toFixed(2)}). Debt set to €0.`);
         }
@@ -109,7 +170,7 @@ function PaymentDetailPageInner() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
-  }, [id, extraIds]);
+  }, [id, extraIds, productSale]);
 
   useEffect(() => {
     load();
@@ -118,7 +179,11 @@ function PaymentDetailPageInner() {
   async function handleAddToRecordTotal(additionalAmount: number): Promise<void> {
     if (!purchase) return;
     const newTotal = purchase.value + additionalAmount;
-    await updatePurchase(id, { totalAmount: newTotal });
+    if (productSale) {
+      await createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE).updateRecord(id, { totalAmount: newTotal });
+    } else {
+      await updatePurchase(id, { totalAmount: newTotal });
+    }
     setPurchase((prev) =>
       prev ? { ...prev, value: newTotal, rest: prev.rest + additionalAmount } : prev
     );
@@ -130,6 +195,11 @@ function PaymentDetailPageInner() {
 
     setSaving(true);
     try {
+      const productClient = productSale ? createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE) : null;
+      const pay = (
+        recordId: string,
+        input: Parameters<typeof addPayment>[1],
+      ) => (productClient ? productClient.addPayment(recordId, input) : addPayment(recordId, input));
       const totalDistributed = values.distributions.reduce((s, d) => s + d.amount, 0);
       if (totalDistributed <= 0) {
         setError('No amount to distribute.');
@@ -148,7 +218,7 @@ function PaymentDetailPageInner() {
           if (dist.amount <= 0) continue;
           const recordId = dist.recordId ?? dist.installmentId;
           const makeReceipt = Boolean(values.createReceipt) && !receiptCreated;
-          await addPayment(recordId, {
+          await pay(recordId, {
             amountPaid: dist.amount,
             paymentDate: values.paymentDate,
             description: values.description,
@@ -173,7 +243,7 @@ function PaymentDetailPageInner() {
         for (const dist of values.distributions) {
           if (dist.amount <= 0) continue;
           const makeReceipt = Boolean(values.createReceipt) && !receiptCreated;
-          await addPayment(id, {
+          await pay(id, {
             amountPaid: dist.amount,
             paymentDate: values.paymentDate,
             description: values.description,
@@ -193,7 +263,7 @@ function PaymentDetailPageInner() {
           });
           if (makeReceipt) receiptCreated = true;
           if (dist.installmentId !== 'current') {
-            await updateInstallment('service_sale', id, dist.installmentId, {
+            await updateInstallment(procedureCode, id, dist.installmentId, {
               paid: dist.newPaid,
               balance: dist.newBalance,
             });
@@ -206,7 +276,7 @@ function PaymentDetailPageInner() {
           : 'Payment saved successfully.'
       );
       // Wait a brief moment to show success message before closing
-      setTimeout(() => router.push('/clubs/dead_line'), 1000);
+      setTimeout(() => router.push(productSale ? '/clubs/archive_deadlines' : '/clubs/dead_line'), 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
     } finally {
@@ -233,13 +303,11 @@ function PaymentDetailPageInner() {
             : undefined
         }
         activeTab="deadline"
-        tabs={getServiceSaleTabs(
-          'deadline',
-          id,
-          scopedRecordIds,
-          null,
-          purchase?.userId ?? null
-        )}
+        tabs={
+          productSale
+            ? getProcedureTabs(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'deadlines', id, purchase?.userId ?? null)
+            : getServiceSaleTabs('deadline', id, scopedRecordIds, null, purchase?.userId ?? null)
+        }
         error={!purchase ? error : undefined}
       >
         {purchase && options && (
@@ -249,12 +317,12 @@ function PaymentDetailPageInner() {
               extraPurchases={extraPurchases}
               payments={payments}
               options={options}
-              procedureType="service_sale"
+              procedureType={procedureCode}
               saving={saving}
               error={error}
               success={success}
               onSubmit={handleSubmit}
-              onCancel={() => router.push('/clubs/dead_line')}
+              onCancel={() => router.push(productSale ? '/clubs/archive_deadlines' : '/clubs/dead_line')}
               onAddToRecordTotal={
                 extraPurchases.length > 0 ? undefined : handleAddToRecordTotal
               }

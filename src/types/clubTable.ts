@@ -123,6 +123,8 @@ export type Member = {
   hour?: string;
   direction?: string;
   source?: string;
+  /** Product lines behind a selling row. Clicking the count opens this list. */
+  purchaseLines?: { name: string; quantity: number }[];
 };
 
 export type Column = {

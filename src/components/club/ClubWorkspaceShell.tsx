@@ -776,7 +776,8 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       : ownEntityWorkspace?.profileKind === 'group'
         ? 'group'
         : 'club';
-  const showEntityBanner = shellActiveTab !== 'my-page' && Boolean(bannerClub);
+  const shopManagementPage = pathname.startsWith('/clubs/shop');
+  const showEntityBanner = shellActiveTab !== 'my-page' && Boolean(bannerClub) && !shopManagementPage;
   const entityVisual = useEntityVisual(
     showEntityBanner ? bannerClub?.id : null,
     bannerClub?.description,
@@ -831,13 +832,13 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       />
 
       <div className="flex-1 flex flex-col w-full py-2">
-        {showAdBanner && (
+        {showAdBanner && !shopManagementPage && (
           <div className="flex-shrink-0 px-4">
             <AdvertisementCarousel />
           </div>
         )}
 
-        {showPersonalBanner && hasFormClub && bannerClub && (
+        {showPersonalBanner && hasFormClub && bannerClub && !shopManagementPage && (
           <ClubDashboardMyPageBanner
             clubName={getClubMyPageDisplayName(bannerClub)}
             clubId={bannerClub.id}
@@ -958,6 +959,8 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   }}
                 />
               </div>
+            ) : shopManagementPage ? (
+              <div className="pt-4 pb-8">{children}</div>
             ) : (
               children
             )}

@@ -1,4 +1,5 @@
-import { Prisma, ShopOrderStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ProcedureService } from '@/lib/procedures/ProcedureService';
 import { ensureDefaultInstallment } from '@/lib/procedures/installmentService';
@@ -21,6 +22,13 @@ export type ShopBuyerInput = {
 
 const procedureService = new ProcedureService();
 
+const SHOP_SECTORS = ['Shop', 'Restaurant', 'Bar'] as const;
+
+function shopSector(value: string | null | undefined) {
+  const found = SHOP_SECTORS.find((sector) => sector.toLowerCase() === String(value ?? '').trim().toLowerCase());
+  return found ?? 'Shop';
+}
+
 function money(value: Prisma.Decimal | number | string | null | undefined) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
@@ -41,13 +49,15 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function statusOut(status: ShopOrderStatus): 'pending' | 'completed' | 'cancelled' {
+type SaleStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
+
+function statusOut(status: SaleStatus): 'pending' | 'completed' | 'cancelled' {
   if (status === 'COMPLETED') return 'completed';
   if (status === 'CANCELLED') return 'cancelled';
   return 'pending';
 }
 
-function statusIn(status: string): ShopOrderStatus {
+function statusIn(status: string): SaleStatus {
   if (status === 'completed' || status === 'COMPLETED') return 'COMPLETED';
   if (status === 'cancelled' || status === 'CANCELLED') return 'CANCELLED';
   return 'PENDING';
@@ -66,6 +76,7 @@ export function productDto(row: {
   hideFromShop: boolean;
   allowMultipleUnits: boolean;
   allowNonMembers: boolean;
+  sector?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -82,15 +93,57 @@ export function productDto(row: {
     hideFromShop: row.hideFromShop,
     allowMultipleUnits: row.allowMultipleUnits,
     allowNonMembers: row.allowNonMembers,
+    sector: row.sector || 'Shop',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-type OrderWithItems = Prisma.ShopOrderGetPayload<{ include: { items: true; customer: true } }>;
+type SaleItem = {
+  productId: string | null;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+};
+
+type SaleRow = {
+  id: string;
+  orderNumber: string;
+  workspaceId: string;
+  customerId: string | null;
+  memberUserId: string | null;
+  customerName: string;
+  customerEmail: string;
+  status: SaleStatus;
+  paid: boolean;
+  paymentMethod: string;
+  source: string;
+  subtotal: number;
+  discount: number;
+  procedureRecordId: string | null;
+  receiptNumber: string | null;
+  invoiceNumber: string | null;
+  createdAt: Date;
+  items: SaleItem[];
+  customer: SaleParty;
+};
+
+type SaleParty = {
+  firstName: string;
+  surname: string;
+  email: string;
+  phone: string;
+  taxCode: string;
+  address: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  dateOfBirth: string;
+  photoUrl: string;
+};
 
 export function orderDto(
-  row: OrderWithItems,
+  row: SaleRow,
   shop?: { slug: string; name: string } | null,
 ) {
   const subtotal = money(row.subtotal);
@@ -214,6 +267,7 @@ export async function saveProduct(
     hideFromShop?: boolean;
     allowMultipleUnits?: boolean;
     allowNonMembers?: boolean;
+    sector?: string;
   },
 ) {
   const hideFromShop = input.hideFromShop ?? input.isVisible === false;
@@ -228,6 +282,7 @@ export async function saveProduct(
     isVisible: !hideFromShop,
     allowMultipleUnits: input.allowMultipleUnits ?? true,
     allowNonMembers: input.allowNonMembers ?? true,
+    sector: shopSector(input.sector),
   };
   if (!data.name) throw new Error('Enter a product name.');
 
@@ -265,6 +320,7 @@ export async function duplicateProduct(workspace: ShopWorkspace, id: string) {
       hideFromShop: existing.hideFromShop,
       allowMultipleUnits: existing.allowMultipleUnits,
       allowNonMembers: existing.allowNonMembers,
+      sector: existing.sector,
     },
   });
   return productDto(saved);
@@ -279,9 +335,12 @@ export async function deleteProduct(workspace: ShopWorkspace, id: string) {
 }
 
 async function nextOrderNumber(workspace: ShopWorkspace) {
-  const count = await prisma.shopOrder.count({
-    where: { workspaceKind: workspace.kind, workspaceId: workspace.id },
-  });
+  const procedureType = await procedureService.getProcedureTypeByCode(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
+  const count = procedureType
+    ? await prisma.procedureRecord.count({
+        where: { procedureTypeId: procedureType.id, clubId: workspace.id },
+      })
+    : 0;
   return String(2450 + count + 1);
 }
 
@@ -382,40 +441,15 @@ async function resolveBuyer(workspace: ShopWorkspace, input: ShopBuyerInput) {
     };
   }
 
-  if (input.customerId) {
-    const customer = await prisma.shopCustomer.findFirst({
-      where: { id: input.customerId, workspaceKind: workspace.kind, workspaceId: workspace.id },
-    });
-    if (!customer) throw new Error('The selected customer could not be found.');
-    const name = [customer.firstName, customer.surname].filter(Boolean).join(' ').trim();
-    return {
-      memberUserId: customer.memberUserId,
-      customerId: customer.id,
-      name: name || 'Customer',
-      email: customer.email,
-    };
-  }
-
   const name = await customerNameOf(input);
   if (name === 'Customer' && !input.email && !input.taxCode) {
-    throw new Error('Choose a customer or enter their name.');
+    throw new Error('Choose a member or enter their name.');
   }
-  const created = await prisma.shopCustomer.create({
-    data: {
-      workspaceKind: workspace.kind,
-      workspaceId: workspace.id,
-      firstName: (input.firstName ?? name).trim() || 'Customer',
-      surname: (input.surname ?? '').trim(),
-      email: (input.email ?? '').trim(),
-      phone: (input.phone ?? '').trim(),
-      taxCode: (input.taxCode ?? '').trim(),
-    },
-  });
   return {
     memberUserId: null,
-    customerId: created.id,
-    name: [created.firstName, created.surname].filter(Boolean).join(' ').trim(),
-    email: created.email,
+    customerId: null,
+    name,
+    email: (input.email ?? '').trim(),
   };
 }
 
@@ -446,25 +480,50 @@ async function pricedLines(workspace: ShopWorkspace, items: ShopLineInput[], non
 
 async function writeDeadline(
   workspace: ShopWorkspace,
-  order: { id: string; orderNumber: string; paid: boolean },
+  order: {
+    id: string;
+    orderNumber: string;
+    customerEmail?: string;
+    discount?: number;
+    source?: string;
+    paymentMethod?: string;
+  },
   memberUserId: string | null,
   customerName: string,
   total: number,
-  productName: string,
+  lines: Awaited<ReturnType<typeof pricedLines>>,
 ) {
   const memberId = memberUserId || workspace.adminId;
+  const productName = lines.map((line) => line.product.name).join(', ').slice(0, 180) || 'Shop';
+  const sectors = [...new Set(lines.map((line) => shopSector(line.product.sector)))];
+  const sectorName = sectors.join(' - ') || 'Shop';
+  const id = randomUUID();
   const metadata = {
     productName,
-    shopOrderId: order.id,
-    sectorName: 'Shop',
+    shopOrderId: id,
+    sectorName,
+    sector: sectorName,
+    productCount: lines.reduce((sum, line) => sum + line.quantity, 0),
+    products: lines.map((line) => ({
+      productId: line.product.id,
+      name: line.product.name,
+      quantity: line.quantity,
+      price: line.unitPrice,
+    })),
+    sellingNumber: order.orderNumber,
+    customerName,
+    customerEmail: order.customerEmail ?? '',
+    discount: money(order.discount ?? 0),
+    source: order.source ?? 'staff',
+    paymentMethod: order.paymentMethod ?? 'pickup',
     ...(memberUserId ? {} : { shopCustomerName: customerName }),
   };
-  return writeDeadlineDirect(workspace, order, memberId, total, productName, metadata);
+  return writeDeadlineDirect(workspace, { ...order, id }, memberId, total, productName, metadata);
 }
 
 async function writeDeadlineDirect(
   workspace: ShopWorkspace,
-  order: { id: string; orderNumber: string; paid: boolean },
+  order: { id: string; orderNumber: string },
   memberId: string,
   total: number,
   productName: string,
@@ -473,19 +532,18 @@ async function writeDeadlineDirect(
   const procedureType = await procedureService.getProcedureTypeByCode(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
   if (!procedureType) return null;
   const totalAmount = money(total);
-  const paidAmount = order.paid ? totalAmount : 0;
-  const balanceAmount = money(totalAmount - paidAmount);
   const recordDate = new Date(`${todayIso()}T00:00:00.000Z`);
   try {
     const record = await prisma.procedureRecord.create({
       data: {
+        id: order.id,
         procedureTypeId: procedureType.id,
         clubId: workspace.id,
         memberId,
         operatorId: workspace.adminId,
         totalAmount,
-        paidAmount,
-        balanceAmount,
+        paidAmount: 0,
+        balanceAmount: totalAmount,
         recordDate,
         dueDate: recordDate,
         notes: `Shop order ${order.orderNumber}`,
@@ -493,30 +551,10 @@ async function writeDeadlineDirect(
         status: 'ACTIVE',
       },
     });
-    if (paidAmount > 0) {
-      await prisma.procedurePayment.create({
-        data: {
-          procedureRecordId: record.id,
-          amount: paidAmount,
-          balanceAfter: balanceAmount,
-          paymentDate: recordDate,
-          operatorId: workspace.adminId,
-          payMode: 'cash',
-          notes: `Shop order ${order.orderNumber}`,
-        },
-      });
-    }
-    await ensureDefaultInstallment(
-      record.id,
-      totalAmount,
-      paidAmount,
-      todayIso(),
-      todayIso(),
-      productName,
-    );
     return record.id;
   } catch (error) {
     console.error('Shop order was saved, but the deadline archive was not updated:', error);
+    console.error('The selling could not be saved to the deadline archive:', error);
     return null;
   }
 }
@@ -532,7 +570,7 @@ async function createOneOrder(
   const total = money(subtotal - discount);
   const orderNumber = await nextOrderNumber(workspace);
 
-  const order = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     for (const line of lines) {
       const updated = await tx.shopProduct.updateMany({
         where: { id: line.product.id, quantity: { gte: line.quantity } },
@@ -540,51 +578,60 @@ async function createOneOrder(
       });
       if (updated.count !== 1) throw new Error(`${line.product.name} does not have enough stock.`);
     }
-    return tx.shopOrder.create({
-      data: {
-        orderNumber,
-        workspaceKind: workspace.kind,
-        workspaceId: workspace.id,
-        customerId: buyer.customerId,
-        memberUserId: buyer.memberUserId,
-        customerName: buyer.name,
-        customerEmail: buyer.email,
-        status: 'PENDING',
-        paid: options.paid,
-        paymentMethod: options.paymentMethod,
-        source: options.source,
-        subtotal,
-        discount,
-        items: {
-          create: lines.map((line) => ({
-            productId: line.product.id,
-            name: line.product.name,
-            unitPrice: line.unitPrice,
-            quantity: line.quantity,
-          })),
-        },
-      },
-      include: { items: true, customer: true },
-    });
   });
 
-  const productName = lines.map((line) => line.product.name).join(', ').slice(0, 180) || 'Shop';
   const procedureRecordId = await writeDeadline(
     workspace,
-    order,
+    {
+      id: randomUUID(),
+      orderNumber,
+      customerEmail: buyer.email,
+      discount,
+      source: options.source,
+      paymentMethod: options.paymentMethod,
+    },
     buyer.memberUserId,
     buyer.name,
     total,
-    productName,
+    lines,
   );
-    if (procedureRecordId) {
-      await prisma.shopOrder.update({
-        where: { id: order.id },
-        data: { procedureRecordId },
+  if (!procedureRecordId) {
+    for (const line of lines) {
+      await prisma.shopProduct.update({
+        where: { id: line.product.id },
+        data: { quantity: { increment: line.quantity } },
       });
-      order.procedureRecordId = procedureRecordId;
     }
-  return order;
+    throw new Error('The selling could not be saved to the deadline archive.');
+  }
+
+  const sale: SaleRow = {
+    id: procedureRecordId,
+    orderNumber,
+    workspaceId: workspace.id,
+    customerId: null,
+    memberUserId: buyer.memberUserId,
+    customerName: buyer.name,
+    customerEmail: buyer.email,
+    status: 'PENDING',
+    paid: false,
+    paymentMethod: options.paymentMethod,
+    source: options.source,
+    subtotal,
+    discount,
+    procedureRecordId,
+    receiptNumber: null,
+    invoiceNumber: null,
+    createdAt: new Date(),
+    items: lines.map((line) => ({
+      productId: line.product.id,
+      name: line.product.name,
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+    })),
+    customer: partyOf({}, buyer.name, buyer.email),
+  };
+  return sale;
 }
 
 export async function createStaffOrders(
@@ -610,7 +657,7 @@ export async function createStaffOrders(
     const buyer = await resolveBuyer(workspace, buyerInput);
     const lines = await pricedLines(workspace, input.items, !buyer.memberUserId);
     const order = await createOneOrder(workspace, lines, buyer, {
-      paid: buyerInput.paid ?? input.paid ?? false,
+      paid: false,
       source: many ? 'multi' : 'staff',
       paymentMethod: 'pickup',
       discount: input.discount,
@@ -669,18 +716,6 @@ export async function createPublicOrder(
       phone: input.customerDetails.telephone,
       taxCode: input.customerDetails.taxCode,
     });
-    if (input.customerDetails.residenceAddress || input.customerDetails.city) {
-      await prisma.shopCustomer.update({
-        where: { id: buyer.customerId! },
-        data: {
-          address: input.customerDetails.residenceAddress ?? '',
-          city: input.customerDetails.city ?? '',
-          province: input.customerDetails.province ?? '',
-          postalCode: input.customerDetails.cap ?? '',
-          dateOfBirth: input.customerDetails.dateOfBirth ?? '',
-        },
-      });
-    }
   }
 
   const lines = await pricedLines(workspace, input.items, input.userType !== 'affiliated');
@@ -761,13 +796,114 @@ export async function getPublicShop(slug: string, viewerUserId?: string | null) 
   };
 }
 
+function metaOf(value: Prisma.JsonValue | null): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function textOf(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function partyOf(meta: Record<string, unknown>, fallbackName: string, fallbackEmail: string): SaleParty {
+  const stored = meta.customer;
+  const raw =
+    stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? (stored as Record<string, unknown>)
+      : null;
+  const parts = fallbackName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: textOf(raw?.firstName) || (raw ? '' : parts[0] || ''),
+    surname: textOf(raw?.surname) || (raw ? '' : parts.slice(1).join(' ')),
+    email: textOf(raw?.email) || fallbackEmail,
+    phone: textOf(raw?.phone),
+    taxCode: textOf(raw?.taxCode),
+    address: textOf(raw?.address),
+    city: textOf(raw?.city),
+    province: textOf(raw?.province),
+    postalCode: textOf(raw?.postalCode),
+    dateOfBirth: textOf(raw?.dateOfBirth),
+    photoUrl: textOf(raw?.photoUrl),
+  };
+}
+
+async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
+  const procedureType = await procedureService.getProcedureTypeByCode(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
+  if (!procedureType) return [];
+  const records = await prisma.procedureRecord.findMany({
+    where: { procedureTypeId: procedureType.id, clubId: workspace.id },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+  if (records.length === 0) return [];
+  const memberIds = [...new Set(records.map((record) => record.memberId))];
+  const [users, receipts] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, email: true, name: true, firstName: true, surname: true },
+    }),
+    prisma.procedureReceipt.findMany({
+      where: { procedureRecordId: { in: records.map((record) => record.id) } },
+      select: { procedureRecordId: true, documentType: true, documentNumber: true },
+    }),
+  ]);
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  return records.map((record) => {
+    const meta = metaOf(record.metadata);
+    const products = Array.isArray(meta.products) ? meta.products : [];
+    const items: SaleItem[] = products.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const line = entry as Record<string, unknown>;
+      const name = textOf(line.name);
+      if (!name) return [];
+      return [{
+        productId: textOf(line.productId) || null,
+        name,
+        unitPrice: money(line.price as number),
+        quantity: Math.max(0, Math.floor(Number(line.quantity) || 0)),
+      }];
+    });
+    const discount = money(meta.discount as number);
+    const subtotal = money(items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) || money(record.totalAmount) + discount);
+    const settled = money(record.balanceAmount) <= 0 && money(record.paidAmount) > 0;
+    const user = usersById.get(record.memberId);
+    const guestName = textOf(meta.shopCustomerName) || textOf(meta.customerName);
+    const ownMember = user && user.id !== workspace.adminId;
+    const fallbackName = guestName || (user ? personName(user) : 'Customer');
+    const fallbackEmail = textOf(meta.customerEmail) || user?.email || '';
+    const party = partyOf(meta, fallbackName, fallbackEmail);
+    const editedName = meta.customer
+      ? [party.surname, party.firstName].filter(Boolean).join(' ').trim()
+      : '';
+    const receipt = receipts.find((row) => row.procedureRecordId === record.id && row.documentType === 'Receipt');
+    const invoice = receipts.find((row) => row.procedureRecordId === record.id && row.documentType === 'Invoice');
+    return {
+      id: record.id,
+      orderNumber: textOf(meta.sellingNumber) || record.id.slice(-6),
+      workspaceId: workspace.id,
+      customerId: null,
+      memberUserId: ownMember ? user.id : null,
+      customerName: editedName || fallbackName,
+      customerEmail: party.email || fallbackEmail,
+      status: record.status === 'DELETED' ? 'CANCELLED' : settled ? 'COMPLETED' : 'PENDING',
+      paid: settled,
+      paymentMethod: textOf(meta.paymentMethod) || 'pickup',
+      source: textOf(meta.source) || 'staff',
+      subtotal,
+      discount,
+      procedureRecordId: record.id,
+      receiptNumber: receipt?.documentNumber ?? null,
+      invoiceNumber: invoice?.documentNumber ?? (textOf(meta.invoiceNumber) || null),
+      createdAt: record.createdAt,
+      items,
+      customer: party,
+    };
+  });
+}
+
 export async function listOrders(workspace: ShopWorkspace) {
   const settings = await ensureShopSettings(workspace);
-  const rows = await prisma.shopOrder.findMany({
-    where: { workspaceKind: workspace.kind, workspaceId: workspace.id },
-    include: { items: true, customer: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const rows = await loadSales(workspace);
   return rows.map((row) =>
     orderDto(row, { slug: settings.slug, name: settings.displayName || workspace.name }),
   );
@@ -796,141 +932,129 @@ export async function updateOrder(
     };
   },
 ) {
-  const existing = await prisma.shopOrder.findFirst({
-    where: { id: orderId, workspaceKind: workspace.kind, workspaceId: workspace.id },
-    include: { items: true, customer: true },
-  });
+  const sales = await loadSales(workspace);
+  const existing = sales.find((sale) => sale.id === orderId);
   if (!existing) throw new Error('This order could not be found.');
 
   const locked = existing.status === 'COMPLETED' || existing.status === 'CANCELLED';
-  const paid = input.paid ?? existing.paid;
   const status = input.status ? statusIn(input.status) : existing.status;
   const discount = locked || input.discount == null ? money(existing.discount) : money(input.discount);
-  let subtotal = money(existing.subtotal);
+  let items = existing.items;
 
   if (!locked && input.items && input.items.length > 0) {
-    subtotal = await replaceOrderLines(workspace, existing, input.items);
-  }
-
-  let customerId = existing.customerId;
-  if (input.customer && !locked) {
-    const customerData = {
-      firstName: (input.customer.firstName ?? existing.customer?.firstName ?? '').trim() || 'Customer',
-      surname: (input.customer.surname ?? '').trim(),
-      email: (input.customer.email ?? '').trim(),
-      phone: (input.customer.phone ?? '').trim(),
-      taxCode: (input.customer.taxCode ?? '').trim(),
-      address: (input.customer.address ?? '').trim(),
-      city: (input.customer.city ?? '').trim(),
-      province: (input.customer.province ?? '').trim(),
-      postalCode: (input.customer.postalCode ?? '').trim(),
-      dateOfBirth: (input.customer.dateOfBirth ?? '').trim(),
-    };
-    if (existing.customerId) {
-      await prisma.shopCustomer.update({ where: { id: existing.customerId }, data: customerData });
-    } else {
-      const created = await prisma.shopCustomer.create({
-        data: {
-          ...customerData,
-          workspaceKind: workspace.kind,
-          workspaceId: workspace.id,
-          memberUserId: existing.memberUserId,
-        },
-      });
-      customerId = created.id;
-    }
-  } else if (input.customer?.email != null && existing.customerId) {
-    await prisma.shopCustomer.update({
-      where: { id: existing.customerId },
-      data: { email: input.customer.email.trim() },
-    });
-  }
-
-  const customerName = input.customer
-    ? [input.customer.firstName, input.customer.surname].filter(Boolean).join(' ').trim()
-    : '';
-
-  const updated = await prisma.shopOrder.update({
-    where: { id: existing.id },
-    data: {
-      status,
-      paid,
-      discount,
-      subtotal,
-      ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-      ...(customerId && customerId !== existing.customerId ? { customerId } : {}),
-      ...(customerName && !locked ? { customerName } : {}),
-      ...(input.customer?.email != null ? { customerEmail: input.customer.email.trim() } : {}),
-    },
-    include: { items: true, customer: true },
-  });
-
-  const total = money(subtotal - discount);
-  const becomingPaid = Boolean(paid && !existing.paid);
-  if (existing.procedureRecordId && !locked && input.items) {
-    await prisma.procedureRecord.updateMany({
-      where: { id: existing.procedureRecordId, clubId: workspace.id, status: 'ACTIVE' },
-      data: {
-        totalAmount: total,
-        paidAmount: becomingPaid ? 0 : paid ? total : 0,
-        balanceAmount: becomingPaid || !paid ? total : 0,
-      },
-    });
-  }
-
-  if (existing.procedureRecordId && paid !== existing.paid && paid) {
-    const open = await prisma.procedureRecord.findFirst({
-      where: { id: existing.procedureRecordId, status: 'ACTIVE' },
-    });
-    const due = open ? money(open.balanceAmount) : total;
-    if (due > 0) {
-      try {
-        await procedureService.addPayment(
-          {
-            userId: workspace.adminId,
-            club: { id: workspace.id, name: workspace.name },
-            workspaceKind: workspace.kind,
-          },
-          PROCEDURE_TYPE_CODES.PRODUCT_SALE,
-          existing.procedureRecordId,
-          {
-            amount: due,
-            paymentDate: todayIso(),
-            payMode: input.paymentMethod || 'cash',
-            notes: `Shop order ${existing.orderNumber} marked paid`,
-            operatorId: workspace.adminId,
-            skipOperatorPassword: true,
-          },
-        );
-      } catch (error) {
-        console.error('Shop payment was not written to the archive:', error);
-      }
-    }
+    items = await replaceOrderLines(workspace, existing, input.items);
   }
 
   if (status === 'CANCELLED' && existing.status !== 'CANCELLED') {
-    for (const item of updated.items) {
+    if (existing.paid) throw new Error('This selling is already paid. Use the payment archive to reverse it.');
+    for (const item of items) {
       if (!item.productId) continue;
       await prisma.shopProduct.update({
         where: { id: item.productId },
         data: { quantity: { increment: item.quantity } },
       });
     }
-    if (existing.procedureRecordId && !paid) {
-      await prisma.procedureRecord.updateMany({
-        where: { id: existing.procedureRecordId, clubId: workspace.id },
-        data: { status: 'DELETED' },
-      });
-    }
+    await prisma.procedureRecord.updateMany({
+      where: { id: existing.id, clubId: workspace.id },
+      data: { status: 'DELETED' },
+    });
+  } else if (existing.status !== 'CANCELLED') {
+    const customerName = input.customer
+      ? [input.customer.surname, input.customer.firstName].filter(Boolean).join(' ').trim()
+      : existing.customerName;
+    await saveSaleDetails(workspace, existing, {
+      items: locked ? existing.items : items,
+      discount,
+      customerName,
+      customerEmail: input.customer?.email?.trim() ?? existing.customerEmail,
+      paymentMethod: input.paymentMethod || existing.paymentMethod,
+      customer: input.customer,
+    });
   }
 
   const settings = await ensureShopSettings(workspace);
+  const updated = (await loadSales(workspace)).find((sale) => sale.id === orderId) ?? existing;
   return orderDto(updated, { slug: settings.slug, name: settings.displayName || workspace.name });
+}
+
+async function saveSaleDetails(
+  workspace: ShopWorkspace,
+  existing: SaleRow,
+  patch: {
+    items: SaleItem[];
+    discount: number;
+    customerName: string;
+    customerEmail: string;
+    paymentMethod: string;
+    customer?: {
+      firstName?: string;
+      surname?: string;
+      email?: string;
+      phone?: string;
+      taxCode?: string;
+      address?: string;
+      city?: string;
+      province?: string;
+      postalCode?: string;
+      dateOfBirth?: string;
+    };
+  },
+) {
+  const record = await prisma.procedureRecord.findFirst({
+    where: { id: existing.id, clubId: workspace.id, status: 'ACTIVE' },
+  });
+  if (!record) return;
+  const meta = metaOf(record.metadata);
+  const subtotal = money(patch.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
+  const total = money(subtotal - patch.discount);
+  const alreadyPaid = money(record.paidAmount);
+  const party = patch.customer
+    ? {
+        firstName: patch.customer.firstName?.trim() || '',
+        surname: patch.customer.surname?.trim() || '',
+        email: patch.customer.email?.trim() || patch.customerEmail,
+        phone: patch.customer.phone?.trim() || '',
+        taxCode: patch.customer.taxCode?.trim() || '',
+        address: patch.customer.address?.trim() || '',
+        city: patch.customer.city?.trim() || '',
+        province: patch.customer.province?.trim() || '',
+        postalCode: patch.customer.postalCode?.trim() || '',
+        dateOfBirth: patch.customer.dateOfBirth?.trim() || '',
+      }
+    : null;
+  const customerName =
+    party && [party.surname, party.firstName].filter(Boolean).join(' ').trim()
+      ? [party.surname, party.firstName].filter(Boolean).join(' ').trim()
+      : patch.customerName;
+  await prisma.procedureRecord.update({
+    where: { id: record.id },
+    data: {
+      totalAmount: total,
+      balanceAmount: Math.max(0, money(total - alreadyPaid)),
+      metadata: {
+        ...meta,
+        productName: patch.items.map((item) => item.name).join(', ').slice(0, 180) || 'Shop',
+        productCount: patch.items.reduce((sum, item) => sum + item.quantity, 0),
+        products: patch.items.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.unitPrice,
+        })),
+        discount: patch.discount,
+        customerName,
+        customerEmail: party?.email || patch.customerEmail,
+        paymentMethod: patch.paymentMethod,
+        ...(party ? { customer: party } : {}),
+        ...(existing.memberUserId ? {} : { shopCustomerName: customerName }),
+      } as Prisma.InputJsonValue,
+    },
+  });
 }
 
 async function replaceOrderLines(
   workspace: ShopWorkspace,
-  existing: { id: string; memberUserId: string | null; items: { productId: string | null; quantity: number }[] },
+  existing: { memberUserId: string | null; items: SaleItem[] },
   items: ShopLineInput[],
 ) {
   for (const item of existing.items) {
@@ -942,7 +1066,6 @@ async function replaceOrderLines(
   }
   try {
     const lines = await pricedLines(workspace, items, !existing.memberUserId);
-    const subtotal = money(lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0));
     await prisma.$transaction(async (tx) => {
       for (const line of lines) {
         const updated = await tx.shopProduct.updateMany({
@@ -951,18 +1074,13 @@ async function replaceOrderLines(
         });
         if (updated.count !== 1) throw new Error(`${line.product.name} does not have enough stock.`);
       }
-      await tx.shopOrderItem.deleteMany({ where: { orderId: existing.id } });
-      await tx.shopOrderItem.createMany({
-        data: lines.map((line) => ({
-          orderId: existing.id,
-          productId: line.product.id,
-          name: line.product.name,
-          unitPrice: line.unitPrice,
-          quantity: line.quantity,
-        })),
-      });
     });
-    return subtotal;
+    return lines.map((line) => ({
+      productId: line.product.id,
+      name: line.product.name,
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+    }));
   } catch (error) {
     for (const item of existing.items) {
       if (!item.productId) continue;
@@ -980,13 +1098,9 @@ export async function issueOrderDocument(
   orderId: string,
   kind: 'receipt' | 'invoice',
 ) {
-  const order = await prisma.shopOrder.findFirst({
-    where: { id: orderId, workspaceKind: workspace.kind, workspaceId: workspace.id },
-  });
+  const order = (await loadSales(workspace)).find((sale) => sale.id === orderId);
   if (!order) throw new Error('This order could not be found.');
-  if (order.status !== 'COMPLETED') throw new Error('Complete the order before issuing a document.');
-  if (!order.paid) throw new Error('Mark the order as paid before issuing a document.');
-
+  if (!order.paid) throw new Error('Pay this selling in the payment form before a receipt is issued.');
   const number = `${kind === 'invoice' ? 'INV' : 'REC'}-${order.orderNumber}`;
   if (order.procedureRecordId) {
     const existing = await prisma.procedureReceipt.findFirst({
@@ -1024,20 +1138,28 @@ export async function issueOrderDocument(
   }
 
   const data = kind === 'invoice' ? { invoiceNumber: number } : { receiptNumber: number };
-  await prisma.shopOrder.update({ where: { id: order.id }, data });
   return { documentNumber: number, documentType: kind };
 }
 
 export async function listCustomers(workspace: ShopWorkspace) {
-  return prisma.shopCustomer.findMany({
-    where: { workspaceKind: workspace.kind, workspaceId: workspace.id },
-    orderBy: { createdAt: 'desc' },
+  const { members } = await listBuyers(workspace);
+  return members.map((member) => {
+    const parts = member.name.trim().split(/\s+/);
+    return {
+      id: member.id,
+      firstName: parts[0] || member.name,
+      surname: parts.slice(1).join(' '),
+      email: member.email,
+      phone: '',
+      taxCode: member.taxCode,
+      photoUrl: member.photoUrl ?? null,
+    };
   });
 }
 
 export async function createCustomer(
-  workspace: ShopWorkspace,
-  input: {
+  _workspace: ShopWorkspace,
+  _input: {
     firstName: string;
     surname?: string;
     email?: string;
@@ -1046,24 +1168,10 @@ export async function createCustomer(
     photoUrl?: string;
   },
 ) {
-  const firstName = input.firstName.trim();
-  if (!firstName) throw new Error('Enter the customer name.');
-  return prisma.shopCustomer.create({
-    data: {
-      workspaceKind: workspace.kind,
-      workspaceId: workspace.id,
-      firstName,
-      surname: (input.surname ?? '').trim(),
-      email: (input.email ?? '').trim(),
-      phone: (input.phone ?? '').trim(),
-      taxCode: (input.taxCode ?? '').trim(),
-      photoUrl: input.photoUrl?.trim() || null,
-    },
-  });
+  throw new Error('Customers are the club members. Add the person from the club member list.');
 }
 
 export async function listBuyers(workspace: ShopWorkspace) {
-  const customers = await listCustomers(workspace);
   const memberSelect = {
     id: true,
     email: true,
@@ -1100,29 +1208,23 @@ export async function listBuyers(workspace: ShopWorkspace) {
         kind: 'member' as const,
       };
     }),
-    customers: customers.map((customer) => ({
-      id: customer.id,
-      memberUserId: customer.memberUserId,
-      name: [customer.firstName, customer.surname].filter(Boolean).join(' ').trim(),
-      email: customer.email,
-      taxCode: customer.taxCode,
-      photoUrl: customer.photoUrl,
-      kind: 'customer' as const,
-    })),
+    customers: [],
   };
 }
 
 export async function shopSummary(workspace: ShopWorkspace) {
-  const where = { workspaceKind: workspace.kind, workspaceId: workspace.id };
-  const [products, orders, customers, paid] = await Promise.all([
-    prisma.shopProduct.count({ where }),
-    prisma.shopOrder.count({ where: { ...where, status: { not: 'CANCELLED' } } }),
-    prisma.shopCustomer.count({ where }),
-    prisma.shopOrder.findMany({
-      where: { ...where, paid: true, status: { not: 'CANCELLED' } },
-      select: { subtotal: true, discount: true },
+  const [products, sales, customers] = await Promise.all([
+    prisma.shopProduct.count({
+      where: { workspaceKind: workspace.kind, workspaceId: workspace.id },
     }),
+    loadSales(workspace),
+    workspace.kind === 'club'
+      ? prisma.clubMember.count({ where: { clubId: workspace.id } })
+      : prisma.teamMember.count({ where: { teamId: workspace.id } }),
   ]);
-  const revenue = paid.reduce((sum, row) => sum + money(row.subtotal) - money(row.discount), 0);
-  return { products, orders, customers, revenue: money(revenue) };
+  const openSales = sales.filter((sale) => sale.status !== 'CANCELLED');
+  const revenue = openSales
+    .filter((sale) => sale.paid)
+    .reduce((sum, sale) => sum + sale.subtotal - sale.discount, 0);
+  return { products, orders: openSales.length, customers, revenue: money(revenue) };
 }

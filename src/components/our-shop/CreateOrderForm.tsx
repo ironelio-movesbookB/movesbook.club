@@ -47,7 +47,6 @@ export default function CreateOrderForm() {
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
   const [selectedBuyer, setSelectedBuyer] = useState('');
-  const [paid, setPaid] = useState(false);
   const [multi, setMulti] = useState(false);
   const [selectedCustomers, setSelectedCustomers] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
@@ -119,12 +118,10 @@ export default function CreateOrderForm() {
                 items,
                 buyers: chosen.map((buyer) => ({
                   ...(buyer.kind === 'member' ? { memberUserId: buyer.id } : { customerId: buyer.id }),
-                  paid: Boolean(selectedCustomers[`${buyer.id}:paid`]),
                 })),
               }
             : {
                 items,
-                paid,
                 buyer: buyers.find((buyer) => buyer.id === selectedBuyer)?.kind === 'member'
                   ? { memberUserId: selectedBuyer }
                   : { customerId: selectedBuyer },
@@ -133,7 +130,15 @@ export default function CreateOrderForm() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not create the order.');
-      router.push('/our-shop/orders');
+      const created = Array.isArray(data.orders) ? data.orders : [];
+      const recordId = created.length === 1 ? created[0]?.procedureRecordId : '';
+      const saleClubId = created.length === 1 ? created[0]?.clubId : '';
+      if (recordId) {
+        const clubQuery = saleClubId ? `&clubId=${encodeURIComponent(saleClubId)}` : '';
+        router.push(`/clubs/payment_detail/${encodeURIComponent(recordId)}?type=product_sale${clubQuery}`);
+        return;
+      }
+      router.push('/clubs/shop/orders');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the order.');
     } finally {
@@ -143,7 +148,7 @@ export default function CreateOrderForm() {
 
   return (
     <main className="space-y-4 md:space-y-6">
-      <ShopHeader title="Order creation" subtitle="Created by club or team staff. One order is saved for each selected customer.">
+      <ShopHeader title="Sell products" subtitle="Select the products, close the total, then the standard payment form opens.">
           <button
             type="button"
             disabled={saving}
@@ -151,11 +156,11 @@ export default function CreateOrderForm() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
           >
             <Plus size={17} />
-            {saving ? 'Saving...' : 'Create order'}
+            {saving ? 'Saving...' : 'Close the selling'}
           </button>
       </ShopHeader>
 
-      <Link href="/our-shop/orders" className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700">
+      <Link href="/clubs/shop/orders" className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700">
         <ArrowLeft size={16} />
         Return to the list
       </Link>
@@ -217,9 +222,9 @@ export default function CreateOrderForm() {
 
         {!multi ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Customer">
+            <Field label="Member">
               <select value={selectedBuyer} onChange={(event) => setSelectedBuyer(event.target.value)} className={inputClass}>
-                <option value="">Select a member or customer</option>
+                <option value="">Select a member</option>
                 {buyers.map((buyer) => (
                   <option key={`${buyer.kind}-${buyer.id}`} value={buyer.id}>
                     {buyer.name} {buyer.kind === 'member' ? '(member)' : '(customer)'}
@@ -227,10 +232,9 @@ export default function CreateOrderForm() {
                 ))}
               </select>
             </Field>
-            <label className="mt-8 flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} />
-              Paid
-            </label>
+            <p className="mt-8 text-sm text-gray-600">
+              Closing the selling opens the payment form. Pay now, or send the member a PayPal or Stripe link from that form.
+            </p>
           </div>
         ) : (
           <div className="mt-4 space-y-2">
@@ -247,22 +251,12 @@ export default function CreateOrderForm() {
                   {buyer.name}
                   <span className="text-xs text-gray-400">{buyer.kind === 'member' ? 'Member' : 'Customer'}</span>
                 </span>
-                <span className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedCustomers[`${buyer.id}:paid`])}
-                    onChange={(event) =>
-                      setSelectedCustomers((current) => ({ ...current, [`${buyer.id}:paid`]: event.target.checked }))
-                    }
-                  />
-                  Paid
-                </span>
               </label>
             ))}
           </div>
         )}
         <p className="mt-4 text-xs leading-5 text-gray-500">
-          Each customer gets their own order. Every order is written to Archive of Deadlines. A payment is written to Archive of Payments only when Paid is selected.
+          Each customer gets their own selling and their own deadline. Payment is done afterwards in the standard payment form.
         </p>
       </section>
     </main>

@@ -62,9 +62,16 @@ async function memberShopLinks(userId: string) {
 async function resolveManagedWorkspace(
   userId: string,
   userType: string,
+  requestedId: string | null,
 ): Promise<ShopWorkspace | null> {
   if (isTeamAccountUserType(userType)) {
-    const team = await prisma.team.findFirst({
+    const selectedTeam = requestedId
+      ? await prisma.team.findFirst({
+          where: { id: requestedId, adminId: userId },
+          select: { id: true, name: true, adminId: true },
+        })
+      : null;
+    const team = selectedTeam ?? await prisma.team.findFirst({
       where: { adminId: userId },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, adminId: true },
@@ -82,7 +89,13 @@ async function resolveManagedWorkspace(
   }
 
   if (userType === 'CLUB' || userType === 'CLUB_TRAINER') {
-    const club = await prisma.club.findFirst({
+    const selectedClub = requestedId
+      ? await prisma.club.findFirst({
+          where: { id: requestedId, adminId: userId },
+          select: { id: true, name: true, adminId: true },
+        })
+      : null;
+    const club = selectedClub ?? await prisma.club.findFirst({
       where: { adminId: userId },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, adminId: true },
@@ -100,7 +113,13 @@ async function resolveManagedWorkspace(
   }
 
   if (canAccessClubWorkspace(userType)) {
-    const staff = await prisma.clubStaff.findFirst({
+    const selectedStaff = requestedId
+      ? await prisma.clubStaff.findFirst({
+          where: { userId, clubId: requestedId },
+          select: { club: { select: { id: true, name: true, adminId: true } } },
+        })
+      : null;
+    const staff = selectedStaff ?? await prisma.clubStaff.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       select: { club: { select: { id: true, name: true, adminId: true } } },
@@ -133,7 +152,8 @@ export async function getShopAccess(request: NextRequest): Promise<
   }
   const userId = String(decoded.userId);
   const userType = String(decoded.userType);
-  const workspace = await resolveManagedWorkspace(userId, userType);
+  const requestedId = request.nextUrl.searchParams.get('clubId') || request.nextUrl.searchParams.get('teamId');
+  const workspace = await resolveManagedWorkspace(userId, userType, requestedId);
   const memberShops = workspace ? [] : await memberShopLinks(userId);
   return { access: { userId, userType, workspace, memberShops } };
 }

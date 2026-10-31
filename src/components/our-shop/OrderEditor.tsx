@@ -66,6 +66,8 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   const [orderStatus, setOrderStatus] = useState('pending');
   const [savedStatus, setSavedStatus] = useState('pending');
   const [paid, setPaid] = useState(false);
+  const [procedureRecordId, setProcedureRecordId] = useState('');
+  const [saleClubId, setSaleClubId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('pickup');
   const [discount, setDiscount] = useState('0.00');
   const [orderDate, setOrderDate] = useState('');
@@ -116,6 +118,8 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
         setOrderStatus(order.status);
         setSavedStatus(order.status);
         setPaid(Boolean(order.paid));
+        setProcedureRecordId(order.procedureRecordId || '');
+        setSaleClubId(order.clubId || '');
         setPaymentMethod(order.paymentMethod || 'pickup');
         setDiscount(String(order.discount ?? 0));
         setOrderDate(order.orderDate || '');
@@ -173,7 +177,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
       setError(data.error || 'Could not save the order.');
       return;
     }
-    router.push('/our-shop/orders');
+    router.push('/clubs/shop/orders');
   }
 
   async function issue(kind: 'receipt' | 'invoice') {
@@ -255,7 +259,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   }
 
   return (
-    <main className="space-y-4 md:space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <ShopHeader title={customerName || 'Order'} subtitle={`Shop / Orders / ${orderId ? 'Edit order' : 'Order'}`}>
             <button
               type="button"
@@ -366,10 +370,8 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                           }
                         }}
                         onBlur={(event) => {
-                          if (
-                            !event.target.value ||
-                            Number(event.target.value) < 1
-                          ) {
+                          const raw = Number(event.target.value);
+                          if (!event.target.value || !(raw >= 1)) {
                             updateQuantity(product.id, 1);
                           }
                         }}
@@ -507,66 +509,28 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
           <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
             {/* Receipt and invoice information */}
             <div className="rounded-xl border border-purple-100 bg-purple-50/60 p-4 sm:p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-purple-600 shadow-sm">
-                  <FileText size={20} />
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    Receipt and invoice
-                  </h3>
-                  <p className="mt-1 text-sm leading-6 text-gray-600">
-                    Once the order status is set to Completed in Actions, it
-                    will be possible to manage the generation of the related
-                    receipt or invoice.
-                  </p>
-                </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900">Payment</h3>
+                <p className="mt-1 text-sm leading-6 text-gray-600">
+                  This selling is a deadline. Payment, the receipt and the invoice are done in the standard payment form.
+                  {paid ? ' This deadline is already paid.' : ' It is still open.'}
+                </p>
               </div>
-
-              <div className="mt-4 flex flex-wrap gap-3 border-t border-purple-100 pt-4">
-                <button
-                  type="button"
-                  disabled={orderStatus !== 'completed'}
-                  onClick={() => void issue('receipt')}
-                  className="inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-white px-3.5 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
-                >
-                  <Receipt size={16} />
-                  {receiptNumber ? `Receipt ${receiptNumber}` : 'Generate receipt'}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={orderStatus !== 'completed'}
-                  onClick={() => void issue('invoice')}
-                  className="inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-white px-3.5 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
-                >
-                  <FileText size={16} />
-                  {invoiceNumber ? `Invoice ${invoiceNumber}` : 'Generate invoice'}
-                </button>
+              <div className="mt-4">
+                {procedureRecordId ? (
+                  <Link
+                    href={`/clubs/payment_detail/${encodeURIComponent(procedureRecordId)}?type=product_sale${saleClubId ? `&clubId=${encodeURIComponent(saleClubId)}` : ''}`}
+                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                  >
+                    Open payment form
+                  </Link>
+                ) : (
+                  <p className="text-sm text-gray-500">This selling has no deadline yet.</p>
+                )}
               </div>
             </div>
 
-            {/* Payment status and method */}
-            <div className="mt-6 grid grid-cols-1 gap-5 border-t border-gray-100 pt-6 sm:grid-cols-2">
-              <div>
-                <span className="mb-2 block text-sm font-medium text-gray-700">
-                  Payment status
-                </span>
-
-                <label className="flex min-h-[46px] cursor-pointer items-center gap-3 rounded-lg border border-gray-200 px-3.5 py-3 transition hover:border-purple-300">
-                  <input
-                    type="checkbox"
-                    checked={paid}
-                    onChange={(event) => setPaid(event.target.checked)}
-                    className="h-5 w-5 accent-purple-600"
-                  />
-                  <span className="text-sm font-medium text-gray-800">
-                    Paid
-                  </span>
-                </label>
-              </div>
-
+            <div className="mt-6 border-t border-gray-100 pt-6">
               <Field label="Payment method" required>
                 <select
                   value={paymentMethod}
@@ -755,6 +719,6 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
           Save changes
         </button>
       </div>
-    </main>
+    </div>
   );
 }
