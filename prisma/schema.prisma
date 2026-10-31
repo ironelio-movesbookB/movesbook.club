@@ -726,6 +726,10 @@ model UserMessageThread {
   isInappropriate Boolean               @default(false)
   /// Club/staff thread: recipient soft-deleted their copy (raw SQL path also ensures this column).
   deletedByRecipient Boolean            @default(false)
+  /// Club staff messaging (runtime ALTER in clubStaffMessages.ts; keep so db push does not drop).
+  recipientUserId    String?            @db.VarChar(191)
+  recipientType      String?            @db.VarChar(16)
+  senderType         String?            @db.VarChar(16)
   /// JSON array of up to 3 public image URLs attached to the first post
   imageUrls       String?               @db.Text
   likeCount       Int                   @default(0)
