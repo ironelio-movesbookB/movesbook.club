@@ -10,6 +10,7 @@ import {
   roleValueForMemberArchiveStatus,
   type AddableMemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
+import { incrementMembersAddedLifetime } from '@/lib/club/clubMembersAddedCounter';
 
 const prisma = new PrismaClient();
 
@@ -152,6 +153,8 @@ export async function POST(
         }
       }
     });
+
+    await incrementMembersAddedLifetime(prisma, { kind: 'team', id: teamId });
 
     return NextResponse.json({
       success: true,

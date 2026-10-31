@@ -95,6 +95,14 @@ function isPublicMemberPhoto(request: NextRequest): boolean {
   return request.nextUrl.pathname.startsWith('/api/media/uploads/member-photos/');
 }
 
+/** Documents folder Get-link / shared page — no Authorization header on public preview. */
+function isPublicClubDocumentsFolderApi(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  return /^\/api\/clubs\/[^/]+\/documents-folder\/public\/?$/.test(
+    request.nextUrl.pathname,
+  );
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -134,7 +142,8 @@ export function middleware(request: NextRequest) {
       !publicApiRoutes.some((route) => pathname.startsWith(route)) &&
       !isPublicSharedWorkoutApi(pathname) &&
       !isPublicMemberProfileView(request) &&
-      !isPublicMemberPhoto(request)
+      !isPublicMemberPhoto(request) &&
+      !isPublicClubDocumentsFolderApi(request)
     ) {
       return NextResponse.json(
         { error: 'Unauthorized' },

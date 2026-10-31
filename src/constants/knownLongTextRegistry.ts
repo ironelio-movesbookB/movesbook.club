@@ -12,7 +12,27 @@ import {
   IDENTIFICATION_DEVICES_INFO_DEFAULT_EN,
   IDENTIFICATION_DEVICES_INFO_TRANSLATION_KEY,
 } from './identificationDevicesInfoLongText';
-import { PAYMENT_INFO_DEFAULT_EN, PAYMENT_INFO_TRANSLATION_KEY } from './paymentInfoLongText';
+import {
+  PAYMENT_INFO_DEFAULT_EN,
+  PAYMENT_INFO_DEFAULT_IT,
+  PAYMENT_INFO_TRANSLATION_KEY,
+} from './paymentInfoLongText';
+import {
+  ADD_AVAILABLE_SLOTS_FORM_EN,
+  ADD_AVAILABLE_SLOTS_FORM_IT,
+  ADD_AVAILABLE_SLOTS_FORM_KEY,
+  ARCHIVE_LOW_SLOTS_NOTICE_EN,
+  ARCHIVE_LOW_SLOTS_NOTICE_IT,
+  ARCHIVE_LOW_SLOTS_NOTICE_KEY,
+  MEMBER_REMOVE_SLOTS_INFO_EN,
+  MEMBER_REMOVE_SLOTS_INFO_IT,
+  MEMBER_REMOVE_SLOTS_INFO_KEY,
+} from './memberArchiveSlotsLongText';
+import {
+  MEMBER_RENAME_INFO_EN,
+  MEMBER_RENAME_INFO_IT,
+  MEMBER_RENAME_INFO_KEY,
+} from './memberRenameQuotaLongText';
 import {
   SUGGEST_MOVESBOOK_INTRO_EN,
   SUGGEST_MOVESBOOK_INTRO_IT,
@@ -51,7 +71,35 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     key: PAYMENT_INFO_TRANSLATION_KEY,
     category: 'management',
     descriptionEn: 'Member profile Settings — “Type of payments — method default” Info popup.',
-    values: { en: PAYMENT_INFO_DEFAULT_EN },
+    values: { en: PAYMENT_INFO_DEFAULT_EN, it: PAYMENT_INFO_DEFAULT_IT },
+  },
+  {
+    key: MEMBER_REMOVE_SLOTS_INFO_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Users — message when removing a member (slots are not freed; Members added is progressive).',
+    values: { en: MEMBER_REMOVE_SLOTS_INFO_EN, it: MEMBER_REMOVE_SLOTS_INFO_IT },
+  },
+  {
+    key: ARCHIVE_LOW_SLOTS_NOTICE_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Members — notice when residual slots are below 10 (prompt to add new available slots).',
+    values: { en: ARCHIVE_LOW_SLOTS_NOTICE_EN, it: ARCHIVE_LOW_SLOTS_NOTICE_IT },
+  },
+  {
+    key: ADD_AVAILABLE_SLOTS_FORM_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Members — “Add new available slots” modal body (purchase form placeholder).',
+    values: { en: ADD_AVAILABLE_SLOTS_FORM_EN, it: ADD_AVAILABLE_SLOTS_FORM_IT },
+  },
+  {
+    key: MEMBER_RENAME_INFO_KEY,
+    category: 'management',
+    descriptionEn:
+      'Member profile Data for Login — info that renaming is allowed for 10% of total enabled slots.',
+    values: { en: MEMBER_RENAME_INFO_EN, it: MEMBER_RENAME_INFO_IT },
   },
   {
     key: SUGGEST_MOVESBOOK_INTRO_KEY,

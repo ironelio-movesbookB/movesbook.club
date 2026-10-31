@@ -43,6 +43,42 @@ import {
   roleValueForMemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
 import { listTeamMemberGroups } from '@/lib/club/teamMemberLists';
+import {
+  UNRESTRICTED_RENAME_QUOTA,
+  namesDifferForRename,
+} from '@/lib/club/clubMemberRenameQuota';
+import {
+  incrementMemberRenamesUsed,
+  resolveRenameQuotaForEntity,
+} from '@/lib/club/clubMemberRenameQuota.server';
+
+/** Enforce rename quota when first/last name changes; consume one rename on success. */
+async function consumeMemberRenameIfNeeded(opts: {
+  kind: 'club' | 'team';
+  entityId: string;
+  description: string | null | undefined;
+  createdAt?: Date | string | null;
+  viewerUserId: string;
+  before: { firstName?: string | null; lastName?: string | null };
+  after: { firstName?: string | null; lastName?: string | null };
+}): Promise<{ ok: true } | { error: string; status: number }> {
+  if (!namesDifferForRename(opts.before, opts.after)) return { ok: true };
+
+  const quota = await resolveRenameQuotaForEntity({
+    description: opts.description,
+    createdAt: opts.createdAt,
+    viewerUserId: opts.viewerUserId,
+  });
+  if (!quota.canRename) {
+    return {
+      error:
+        'No residual renamings available. Purchase new available slots to unlock more renames (10% of slots purchased).',
+      status: 403,
+    };
+  }
+  await incrementMemberRenamesUsed(prisma, { kind: opts.kind, id: opts.entityId });
+  return { ok: true };
+}
 
 /** Each phone can be linked to WhatsApp or Telegram, not both (WhatsApp wins on legacy data). */
 function oneMessengerPerPhone(address: OwnerProfileData['address']): OwnerProfileData['address'] {
@@ -645,7 +681,14 @@ async function loadTeamMemberProfileBundle(opts: {
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const team = await prisma.team.findUnique({
     where: { id: opts.clubId },
-    select: { id: true, name: true, adminId: true, description: true, sport: true },
+    select: {
+      id: true,
+      name: true,
+      adminId: true,
+      description: true,
+      sport: true,
+      createdAt: true,
+    },
   });
   if (!team) return loadCoachAthleteProfileBundle(opts);
 
@@ -771,6 +814,15 @@ async function loadTeamMemberProfileBundle(opts: {
         .filter((q) => q.question)
     : [];
 
+  const renameQuota = await resolveRenameQuotaForEntity({
+    description: team.description,
+    createdAt: team.createdAt,
+    viewerUserId: opts.viewerUserId || team.adminId,
+    persistKind: 'team',
+    persistId: team.id,
+    db: prisma,
+  });
+
   return {
     clubId: team.id,
     workspaceKind: 'team',
@@ -788,6 +840,7 @@ async function loadTeamMemberProfileBundle(opts: {
       canEditClubScoped,
       canEditMemberSignature,
     },
+    renameQuota,
     user: {
       id: teamMember.athlete.id,
       username: teamMember.athlete.username,
@@ -883,6 +936,7 @@ async function loadCoachAthleteProfileBundle(opts: {
       canEditClubScoped: false,
       canEditMemberSignature: false,
     },
+    renameQuota: UNRESTRICTED_RENAME_QUOTA,
     user: {
       id: athlete.id,
       username: athlete.username,
@@ -922,7 +976,7 @@ export async function loadMemberProfileBundle(opts: {
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const club = await prisma.club.findUnique({
     where: { id: opts.clubId },
-    select: { id: true, name: true, adminId: true, description: true },
+    select: { id: true, name: true, adminId: true, description: true, createdAt: true },
   });
   if (!club) {
     return loadTeamMemberProfileBundle(opts);
@@ -1251,6 +1305,14 @@ export async function loadMemberProfileBundle(opts: {
     clubParentsCatalog,
     ...(await loadClubMemberGroupOptions(club.id, clubMember.memberId)),
     customQuestions,
+    renameQuota: await resolveRenameQuotaForEntity({
+      description: club.description,
+      createdAt: club.createdAt,
+      viewerUserId: opts.viewerUserId || club.adminId,
+      persistKind: 'club',
+      persistId: club.id,
+      db: prisma,
+    }),
     ...memberNotes,
   };
 }
@@ -1318,6 +1380,29 @@ async function saveTeamMemberSharedProfile(opts: {
 
   if (payload.owner && loaded.viewer.canEditOwner) {
     const owner = payload.owner;
+    const teamRow = await prisma.team.findUnique({
+      where: { id: loaded.clubId },
+      select: { id: true, description: true, createdAt: true },
+    });
+    if (teamRow) {
+      const renameGate = await consumeMemberRenameIfNeeded({
+        kind: 'team',
+        entityId: teamRow.id,
+        description: teamRow.description,
+        createdAt: teamRow.createdAt,
+        viewerUserId: opts.viewerUserId,
+        before: {
+          firstName: loaded.owner.login.firstName || loaded.user.firstName,
+          lastName: loaded.owner.login.lastName || loaded.user.surname,
+        },
+        after: {
+          firstName: owner.login.firstName,
+          lastName: owner.login.lastName,
+        },
+      });
+      if ('error' in renameGate) return renameGate;
+    }
+
     const userUpdate: Record<string, unknown> = {
       firstName: owner.login.firstName || null,
       surname: owner.login.lastName || null,
@@ -1562,6 +1647,29 @@ export async function saveMemberProfileBundle(opts: {
 
   if (opts.payload.owner && loaded.viewer.canEditOwner) {
     const owner = opts.payload.owner;
+    const clubRow = await prisma.club.findUnique({
+      where: { id: opts.clubId },
+      select: { id: true, description: true, createdAt: true },
+    });
+    if (clubRow) {
+      const renameGate = await consumeMemberRenameIfNeeded({
+        kind: 'club',
+        entityId: clubRow.id,
+        description: clubRow.description,
+        createdAt: clubRow.createdAt,
+        viewerUserId: opts.viewerUserId,
+        before: {
+          firstName: loaded.owner.login.firstName || loaded.user.firstName,
+          lastName: loaded.owner.login.lastName || loaded.user.surname,
+        },
+        after: {
+          firstName: owner.login.firstName,
+          lastName: owner.login.lastName,
+        },
+      });
+      if ('error' in renameGate) return renameGate;
+    }
+
     const userUpdate: Record<string, unknown> = {
       firstName: owner.login.firstName || null,
       surname: owner.login.lastName || null,
@@ -1885,6 +1993,7 @@ export async function loadSelfMemberProfileBundle(opts: {
       canEditClubScoped: false,
       canEditMemberSignature: false,
     },
+    renameQuota: UNRESTRICTED_RENAME_QUOTA,
     user: {
       id: user.id,
       username: user.username,
