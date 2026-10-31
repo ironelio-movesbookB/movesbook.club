@@ -38,6 +38,16 @@ import {
   SUGGEST_MOVESBOOK_INTRO_IT,
   SUGGEST_MOVESBOOK_INTRO_KEY,
 } from './suggestMovesbookLongText';
+import {
+  ACTIVATION_EMAIL_BODY_EN,
+  ACTIVATION_EMAIL_BODY_KEY,
+  ACTIVATION_EMAIL_BUTTON_EN,
+  ACTIVATION_EMAIL_BUTTON_KEY,
+  ACTIVATION_EMAIL_SUBJECT_EN,
+  ACTIVATION_EMAIL_SUBJECT_KEY,
+  PAYMENT_SUCCESS_LONG_TEXT_EN,
+  PAYMENT_SUCCESS_LONG_TEXT_KEY,
+} from './activationEmailLongText';
 
 export type KnownLongTextEntry = {
   key: string;
@@ -107,6 +117,31 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     descriptionEn:
       'Suggest Movesbook — intro explaining advantages of inviting friends (login prompt + Suggest Movesbook page).',
     values: { en: SUGGEST_MOVESBOOK_INTRO_EN, it: SUGGEST_MOVESBOOK_INTRO_IT },
+  },
+  {
+    key: ACTIVATION_EMAIL_SUBJECT_KEY,
+    category: 'system',
+    descriptionEn: 'Registration activation email — subject line. Placeholders: none.',
+    values: { en: ACTIVATION_EMAIL_SUBJECT_EN },
+  },
+  {
+    key: ACTIVATION_EMAIL_BODY_KEY,
+    category: 'system',
+    descriptionEn:
+      'Registration activation email — body. Placeholders: {name}, {username}, {link}.',
+    values: { en: ACTIVATION_EMAIL_BODY_EN },
+  },
+  {
+    key: ACTIVATION_EMAIL_BUTTON_KEY,
+    category: 'system',
+    descriptionEn: 'Registration activation email — green button label.',
+    values: { en: ACTIVATION_EMAIL_BUTTON_EN },
+  },
+  {
+    key: PAYMENT_SUCCESS_LONG_TEXT_KEY,
+    category: 'system',
+    descriptionEn: 'Shown on /register/success after payment or free/test registration.',
+    values: { en: PAYMENT_SUCCESS_LONG_TEXT_EN },
   },
 ];
 
