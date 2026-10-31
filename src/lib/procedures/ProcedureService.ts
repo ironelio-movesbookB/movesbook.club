@@ -18,7 +18,7 @@ import { updateTaxDocumentCounter } from "@/lib/club/otherSettingsReader";
 import {
   forgetMemberSettingsDeadlines,
   forgetMemberSettingsFirstPaid,
-  MEMBER_SETTINGS_INSTALLMENT_LABELS,
+  memberSettingsKeyForLabel,
   MEMBER_SETTINGS_RECORD_SOURCE,
 } from "@/lib/club/memberSettingsDeadlineLinks";
 import type {
@@ -725,19 +725,23 @@ export class ProcedureService {
           error,
         );
       }
-      if (
-        deleted.payments.some(
-          (payment) =>
-            !payment.cancelledAt &&
-            !payment.reversalOfId &&
-            payment.notes === MEMBER_SETTINGS_INSTALLMENT_LABELS.firstPayment,
-        )
-      ) {
+      const paidKeysToClear = new Set(
+        deleted.payments
+          .filter(
+            (payment) =>
+              !payment.cancelledAt &&
+              !payment.reversalOfId &&
+              memberSettingsKeyForLabel(payment.notes),
+          )
+          .map((payment) => memberSettingsKeyForLabel(payment.notes)!),
+      );
+      for (const key of paidKeysToClear) {
         try {
           await forgetMemberSettingsFirstPaid({
             clubId: ctx.club.id,
             memberUserId: deleted.memberId,
             recordId,
+            key,
           });
         } catch (error) {
           console.error(
@@ -1054,15 +1058,14 @@ export class ProcedureService {
     });
 
     const source = (record.metadata as Record<string, unknown> | null)?.source;
-    if (
-      source === MEMBER_SETTINGS_RECORD_SOURCE &&
-      payment.notes === MEMBER_SETTINGS_INSTALLMENT_LABELS.firstPayment
-    ) {
+    const installmentKey = memberSettingsKeyForLabel(payment.notes);
+    if (source === MEMBER_SETTINGS_RECORD_SOURCE && installmentKey) {
       try {
         await forgetMemberSettingsFirstPaid({
           clubId: ctx.club.id,
           memberUserId: record.memberId,
           recordId: payment.procedureRecordId,
+          key: installmentKey,
         });
       } catch (error) {
         console.error(

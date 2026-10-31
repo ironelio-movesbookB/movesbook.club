@@ -1172,6 +1172,8 @@ export async function listCashMovements(
   await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-');
   await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-');
   await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.MEMBERSHIP, 'min-');
+  await pushPayments(PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION, 'cin-');
   await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
   if (direction === 'all' || direction === 'IN') {

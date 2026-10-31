@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getClubAuthContext } from '@/lib/procedures';
 import { computeClubMemberCapacityFromClub } from '@/lib/club/clubMemberCapacity';
+import { ensureMembersAddedLifetime } from '@/lib/club/clubMembersAddedCounter';
+import { resolveRenameQuotaForEntity } from '@/lib/club/clubMemberRenameQuota.server';
 import { getMemberRegistrationInfoForUser } from '@/lib/registration/memberRegistrationInfoService';
 
 export const dynamic = 'force-dynamic';
@@ -21,14 +23,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: isTeam ? 'Team not found' : 'Club not found' }, { status: 404 });
     }
 
-    const membersAdded = isTeam
+    const currentMembers = isTeam
       ? await prisma.teamMember.count({ where: { teamId: auth.ctx.club.id } })
       : await prisma.clubMember.count({ where: { clubId: auth.ctx.club.id } });
+
+    const membersAdded = await ensureMembersAddedLifetime(prisma, {
+      kind: isTeam ? 'team' : 'club',
+      id: auth.ctx.club.id,
+      currentMembers,
+    });
+
+    // Persist A (rename quota) on first load: floor(10% × total available slots).
+    await resolveRenameQuotaForEntity({
+      description: club.description,
+      createdAt: club.createdAt,
+      viewerUserId: auth.ctx.userId,
+      persistKind: isTeam ? 'team' : 'club',
+      persistId: auth.ctx.club.id,
+      db: prisma,
+    });
+
+    const refreshed = isTeam
+      ? await prisma.team.findUnique({ where: { id: auth.ctx.club.id }, select })
+      : await prisma.club.findUnique({ where: { id: auth.ctx.club.id }, select });
+
     const registrationInfo = await getMemberRegistrationInfoForUser(auth.ctx.userId);
 
     const capacity = computeClubMemberCapacityFromClub({
-      description: club.description,
-      createdAt: club.createdAt,
+      description: refreshed?.description ?? club.description,
+      createdAt: refreshed?.createdAt ?? club.createdAt,
+      currentMembers,
       membersAdded,
       subscriptionSettingId: registrationInfo?.subscriptionSettingId ?? null,
     });

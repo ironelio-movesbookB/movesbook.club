@@ -428,6 +428,15 @@ export type MemberProfileBundle = {
   memberPresentGroupIds: string[];
   /** Club customized questions (admin-defined). */
   customQuestions: CustomQuestionDef[];
+  /**
+   * Club-level rename allowance for first/last name.
+   * UI shows only residual; A/B stay in the background.
+   */
+  renameQuota: {
+    residual: number | null;
+    canRename: boolean;
+    unlimited: boolean;
+  };
   staffNotes: Array<{
     id: string;
     title: string;
@@ -518,12 +527,21 @@ export type MemberSettingsDeadlines = {
   /** Membership procedure record holding the deadlines ('' = none yet). */
   recordId: string;
   generated: MemberSettingsInstallmentKey[];
+  /** Installments fully paid (balance 0) — Settings Paid checkbox is greyed for these. */
+  paidKeys: MemberSettingsInstallmentKey[];
+  /** @deprecated Prefer paidKeys.includes('firstPayment'); kept for older profiles. */
   firstPaidRecorded: boolean;
   generatedAt: string;
 };
 
 export function emptyMemberSettingsDeadlines(): MemberSettingsDeadlines {
-  return { recordId: '', generated: [], firstPaidRecorded: false, generatedAt: '' };
+  return {
+    recordId: '',
+    generated: [],
+    paidKeys: [],
+    firstPaidRecorded: false,
+    generatedAt: '',
+  };
 }
 
 export function normalizeMemberSettingsDeadlines(raw: unknown): MemberSettingsDeadlines {
@@ -534,10 +552,19 @@ export function normalizeMemberSettingsDeadlines(raw: unknown): MemberSettingsDe
   const generated = Array.isArray(r.generated)
     ? MEMBER_SETTINGS_INSTALLMENT_KEYS.filter((k) => (r.generated as unknown[]).includes(k))
     : [];
+  const paidKeys = Array.isArray(r.paidKeys)
+    ? MEMBER_SETTINGS_INSTALLMENT_KEYS.filter((k) => (r.paidKeys as unknown[]).includes(k))
+    : [];
+  const firstPaidRecorded =
+    Boolean(r.firstPaidRecorded) || paidKeys.includes('firstPayment');
+  if (firstPaidRecorded && !paidKeys.includes('firstPayment')) {
+    paidKeys.push('firstPayment');
+  }
   return {
     recordId,
     generated,
-    firstPaidRecorded: Boolean(r.firstPaidRecorded),
+    paidKeys,
+    firstPaidRecorded,
     generatedAt: typeof r.generatedAt === 'string' ? r.generatedAt : '',
   };
 }

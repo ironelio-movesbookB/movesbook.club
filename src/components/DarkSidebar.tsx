@@ -265,26 +265,19 @@ function ClubOfficialSectionRow({
   );
 }
 
-/** Official Club My Club menu nests these rows inside "My Club Dashboard"; other layouts render them flat. */
+/** @deprecated Nesting under My Club Dashboard was wrong — official layout is flat. Kept as a pass-through. */
 function ClubDashboardGroup({
-  enabled,
   children,
-  ...dashboard
 }: {
-  enabled: boolean;
+  enabled?: boolean;
   children: ReactNode;
   clubId?: string;
   youtubeChannelUrl?: string | null;
-  canManageClub: boolean;
+  canManageClub?: boolean;
   onYoutubeChannelUrlSaved?: (clubId: string, url: string | null) => void;
   onClubBootstrapped?: (club: { id: string; name?: string; youtubeChannelUrl?: string | null }) => void;
 }) {
-  if (!enabled) return <>{children}</>;
-  return (
-    <ClubMembersDashboardSection {...dashboard} title="My Club Dashboard">
-      {children}
-    </ClubMembersDashboardSection>
-  );
+  return <>{children}</>;
 }
 
 interface DarkSidebarProps {
@@ -2774,17 +2767,24 @@ export default function DarkSidebar({
                   </>
                 )}
 
-                <ClubDashboardGroup
-                  enabled={officialClubMyClub}
-                  clubId={displaySelectedClub?.id as string | undefined}
-                  youtubeChannelUrl={
-                    (displaySelectedClub as { youtubeChannelUrl?: string | null })
-                      ?.youtubeChannelUrl ?? null
-                  }
-                  canManageClub={clubWebsiteManage}
-                  onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
-                  onClubBootstrapped={handleClubBootstrapped}
-                >
+                {officialClubMyClub ? (
+                  <>
+                    <ClubMembersDashboardSection
+                      title="My Club Dashboard"
+                      clubId={displaySelectedClub?.id as string | undefined}
+                      youtubeChannelUrl={
+                        (displaySelectedClub as { youtubeChannelUrl?: string | null })
+                          ?.youtubeChannelUrl ?? null
+                      }
+                      canManageClub={clubWebsiteManage}
+                      onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
+                      onClubBootstrapped={handleClubBootstrapped}
+                    />
+                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
+                  </>
+                ) : null}
+
+                <ClubDashboardGroup enabled={false}>
                 {officialClubMyClub ? (
                   <button
                     type="button"
@@ -3431,7 +3431,6 @@ export default function DarkSidebar({
 
                 {officialClubMyClub ? (
                   <>
-                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
                     <ClubOfficialSectionRow icon={Timer} label="Section Training" />
                     <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
                     <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
@@ -4997,7 +4996,8 @@ export default function DarkSidebar({
                 )}
 
                 {renderFriendsAndCommunitiesMenus({
-                  showEvents: true,
+                  // Official My Club ends at Communities (Events was removed in the flat layout).
+                  showEvents: !officialClubMyClub,
                   titleCase: officialClubMyClub,
                 })}
               </div>

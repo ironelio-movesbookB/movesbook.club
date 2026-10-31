@@ -80,6 +80,12 @@ import { getWorldTimezones } from '@/lib/timezones';
 import SportStatsBoard from '@/components/sport/SportStatsBoard';
 import { athleteSportProfile, athleteSportStatGroups } from '@/lib/sport/athleteSportProfiles';
 import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
+import {
+  getMemberRenameInfoLabel,
+  getMemberRenameResidualLabel,
+} from '@/constants/memberRenameQuotaLongText';
 
 function looksLikeHtml(value: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(value);
@@ -132,6 +138,18 @@ export default function ClubMemberProfileEditor({
   const clubEnabledPayments = useClubEnabledPaymentMethods();
   const radioGroupId = useId();
   const st = useSportT();
+  const { currentLanguage } = useLanguage();
+  const language = normalizeToolsLanguage(currentLanguage);
+  const renameQuota = data.renameQuota ?? {
+    residual: null,
+    canRename: true,
+    unlimited: true,
+  };
+  const canRenameNames = renameQuota.canRename || renameQuota.unlimited;
+  const showRenameQuotaHints =
+    Boolean(data.viewer.isClubAdmin) &&
+    data.workspaceKind !== 'coach' &&
+    Boolean(data.clubId);
   const [saving, setSaving] = useState(false);
   const [resetConfirmKind, setResetConfirmKind] = useState<'staff' | 'coach' | null>(null);
   const [message, setMessage] = useState('');
@@ -803,7 +821,7 @@ export default function ClubMemberProfileEditor({
         <SectionCard title="Private settings" tone="red">
           <CheckRow
             label={
-              o.privateSettings.disallowClubAdmins && !data.viewer.isSelf ? (
+              o.privateSettings.disallowClubAdmins ? (
                 <span className="font-semibold text-red-600">
                   {data.workspaceKind === 'team'
                     ? 'Entry by Team Staff disabled'
@@ -823,13 +841,14 @@ export default function ClubMemberProfileEditor({
             }
           />
           <p className="text-xs text-gray-500">
-            Only the member can change this flag. When checked, club admins cannot edit Owner
-            profile fields.
+            Only the member can change this flag. When checked, the label becomes
+            &quot;Entry by Club Staff disabled&quot; and club admins cannot edit Owner profile
+            fields.
           </p>
         </SectionCard>
 
         <SectionCard title="Photo and QR code">
-          <Row2>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2 md:items-start">
             <Field label="Personal photo">
               <TextInput
                 disabled={readOnlyOwner}
@@ -837,8 +856,18 @@ export default function ClubMemberProfileEditor({
                 onChange={(e) => patchOwner((p) => ({ ...p, photoUrl: e.target.value }))}
                 placeholder="/uploads/..."
               />
+            </Field>
+            <Field label="QR code URL">
+              <TextInput
+                disabled
+                value={defaultProfileViewUrl}
+                placeholder="View-only profile URL"
+              />
+            </Field>
+
+            <div className="min-h-[2.75rem]">
               {!readOnlyOwner ? (
-                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm text-red-700 underline">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-red-700 underline">
                   Upload image
                   <input
                     type="file"
@@ -852,41 +881,46 @@ export default function ClubMemberProfileEditor({
                   />
                 </label>
               ) : null}
-              {o.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={o.photoUrl} alt="" className="mt-2 h-28 w-28 object-cover border" />
-              ) : null}
-            </Field>
-            <Field label="QR code URL">
-              <TextInput
-                disabled
-                value={defaultProfileViewUrl}
-                placeholder="View-only profile URL"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Auto-generated link encoded in the QR. Scanning it opens this member&apos;s
-                profile in view-only mode. It is not an editable free-text field.
-              </p>
-              <div className="mt-3 flex flex-col items-start gap-2">
-                <p className="text-sm font-medium text-gray-700">Dynamic User QR code</p>
-                <div className="flex h-[220px] w-[220px] items-center justify-center border border-gray-300 bg-white">
-                  {qrImageSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={qrImageSrc}
-                      alt={`QR code for ${data.user.username || 'member'}`}
-                      width={220}
-                      height={220}
-                    />
-                  ) : (
-                    <span className="px-3 text-center text-xs text-gray-400">
-                      QR unavailable (missing club or member)
-                    </span>
-                  )}
-                </div>
+            </div>
+            <p className="min-h-[2.75rem] text-xs text-gray-500">
+              Auto-generated link encoded in the QR. Scanning it opens this member&apos;s
+              profile in view-only mode. It is not an editable free-text field.
+            </p>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Photo preview</p>
+              <div className="relative flex h-[220px] w-[220px] items-center justify-center overflow-hidden border border-gray-300 bg-gray-50">
+                {o.photoUrl ? (
+                  <AuthImage
+                    src={o.photoUrl}
+                    alt="Personal photo"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="px-3 text-center text-xs text-gray-400">No photo</span>
+                )}
               </div>
-            </Field>
-          </Row2>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Dynamic User QR code</p>
+              <div className="relative flex h-[220px] w-[220px] items-center justify-center overflow-hidden border border-gray-300 bg-white">
+                {qrImageSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrImageSrc}
+                    alt={`QR code for ${data.user.username || 'member'}`}
+                    className="h-full w-full object-contain"
+                    width={220}
+                    height={220}
+                  />
+                ) : (
+                  <span className="px-3 text-center text-xs text-gray-400">
+                    QR unavailable (missing club or member)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </SectionCard>
 
         <SectionCard title="Data for Login">
@@ -904,9 +938,42 @@ export default function ClubMemberProfileEditor({
                 }
               />
             </Field>
-            <Field label="First name">
+          </Row2>
+          {/*
+            Fixed-height label row: Last name + info + residual on one line (no wrap).
+            Inputs sit on the next grid row so First/Last boxes stay level.
+          */}
+          <div className="grid grid-cols-1 gap-x-3 gap-y-1 md:grid-cols-2">
+            <div className="order-1 flex h-7 items-center text-sm font-semibold text-gray-800">
+              First name
+            </div>
+            <div className="order-3 flex h-7 min-w-0 items-center gap-2 overflow-hidden md:order-2">
+              <span className="shrink-0 text-sm font-semibold text-gray-800">Last name</span>
+              {showRenameQuotaHints ? (
+                <>
+                  <span
+                    className="min-w-0 flex-1 truncate text-[11px] font-medium leading-none text-red-600"
+                    title={getMemberRenameInfoLabel(language)}
+                  >
+                    {getMemberRenameInfoLabel(language)}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-[11px] font-semibold leading-none ${
+                      canRenameNames ? 'text-emerald-600' : 'text-red-600'
+                    }`}
+                  >
+                    {getMemberRenameResidualLabel(
+                      language,
+                      renameQuota.residual,
+                      renameQuota.unlimited,
+                    )}
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <div className="order-2 md:order-3">
               <TextInput
-                disabled={readOnlyOwner}
+                disabled={readOnlyOwner || !canRenameNames}
                 value={o.login.firstName}
                 onChange={(e) =>
                   patchOwner((p) => ({
@@ -915,10 +982,10 @@ export default function ClubMemberProfileEditor({
                   }))
                 }
               />
-            </Field>
-            <Field label="Last name">
+            </div>
+            <div className="order-4">
               <TextInput
-                disabled={readOnlyOwner}
+                disabled={readOnlyOwner || !canRenameNames}
                 value={o.login.lastName}
                 onChange={(e) =>
                   patchOwner((p) => ({
@@ -927,7 +994,9 @@ export default function ClubMemberProfileEditor({
                   }))
                 }
               />
-            </Field>
+            </div>
+          </div>
+          <Row2>
             <Field label="New password">
               <TextInput
                 disabled={readOnlyOwner}
@@ -1125,41 +1194,50 @@ export default function ClubMemberProfileEditor({
               ['mobile1', 'Phone 1', 'mobile1Whatsapp', 'mobile1Telegram'],
               ['mobile2', 'Phone 2', 'mobile2Whatsapp', 'mobile2Telegram'],
             ] as const
-          ).map(([numKey, label, waKey, tgKey]) => (
-            <div key={numKey} className="rounded border border-gray-200 p-2">
-              <Field label={label}>
-                <TextInput
-                  disabled={readOnlyOwner}
-                  value={o.address[numKey]}
-                  onChange={(e) =>
-                    patchOwner((p) => ({
-                      ...p,
-                      address: { ...p.address, [numKey]: e.target.value },
-                    }))
-                  }
-                />
-              </Field>
-              <div className="mt-2 flex flex-wrap gap-4" role="radiogroup" aria-label={`${label} messenger`}>
-                {(
-                  [
-                    ['none', 'None'],
-                    ['whatsapp', 'WhatsApp'],
-                    ['telegram', 'Telegram'],
-                  ] as const
-                ).map(([value, text]) => {
-                  const current = o.address[waKey]
-                    ? 'whatsapp'
-                    : o.address[tgKey]
-                      ? 'telegram'
-                      : 'none';
-                  return (
-                    <label key={value} className="flex items-center gap-2 text-sm text-gray-800">
+          ).map(([numKey, label, waKey, tgKey]) => {
+            // Exclusive: WhatsApp OR Telegram (never both). Legacy both → WhatsApp.
+            const messenger: 'whatsapp' | 'telegram' | '' = o.address[waKey]
+              ? 'whatsapp'
+              : o.address[tgKey]
+                ? 'telegram'
+                : '';
+            const groupName = `messenger-${numKey}-${String(radioGroupId).replace(/:/g, '')}`;
+            return (
+              <div key={numKey} className="rounded border border-gray-200 p-2">
+                <Field label={label}>
+                  <TextInput
+                    disabled={readOnlyOwner}
+                    value={o.address[numKey]}
+                    onChange={(e) =>
+                      patchOwner((p) => ({
+                        ...p,
+                        address: { ...p.address, [numKey]: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <div
+                  className="mt-2 flex flex-wrap items-center gap-5"
+                  role="radiogroup"
+                  aria-label={`${label}: WhatsApp or Telegram`}
+                >
+                  {(
+                    [
+                      ['whatsapp', 'WhatsApp'],
+                      ['telegram', 'Telegram'],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <label
+                      key={value}
+                      className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-800"
+                    >
                       <input
                         type="radio"
-                        name={`${radioGroupId}-messenger-${numKey}`}
+                        name={groupName}
                         value={value}
                         disabled={readOnlyOwner}
-                        checked={current === value}
+                        checked={messenger === value}
+                        className="h-4 w-4 shrink-0 cursor-pointer appearance-auto rounded-full border border-gray-400 accent-blue-600"
                         onChange={() =>
                           patchOwner((p) => ({
                             ...p,
@@ -1170,14 +1248,27 @@ export default function ClubMemberProfileEditor({
                             },
                           }))
                         }
+                        onClick={() => {
+                          // Click selected again → clear (neither).
+                          if (readOnlyOwner || messenger !== value) return;
+                          patchOwner((p) => ({
+                            ...p,
+                            address: {
+                              ...p.address,
+                              [waKey]: false,
+                              [tgKey]: false,
+                            },
+                          }));
+                        }}
                       />
                       {text}
                     </label>
-                  );
-                })}
+                  ))}
+                  <span className="text-xs text-gray-500">Choose one — not both</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </SectionCard>
 
         <SectionCard title="Personal Data">
