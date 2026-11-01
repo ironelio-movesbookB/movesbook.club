@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuthWithUser, requireAuthForNews, getOrCreateUserForSuperAdmin, getSuperAdminCreatorIds } from '../auth';
 import { requireCategory } from '../category';
@@ -11,6 +12,23 @@ function parseJsonArray(str: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/** Load typology even if Prisma client is stale (before regenerate). */
+async function loadExerciseOgpTypologies(ids: string[]): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  if (ids.length === 0) return map;
+  try {
+    const rows = await prisma.$queryRaw<{ id: string; typology: string | null }[]>`
+      SELECT id, typology FROM exercise_ogp_articles WHERE id IN (${Prisma.join(ids)})
+    `;
+    for (const row of rows) {
+      map.set(row.id, row.typology ?? null);
+    }
+  } catch (e) {
+    console.warn('GET /api/exercises/ogp: typology column read failed', e);
+  }
+  return map;
 }
 
 /** Same rules as non-admin branch in GET: what OGPs can this user see (excluding admin bypass). */
@@ -118,6 +136,7 @@ export async function GET(request: NextRequest) {
 
       const superAdminCreatorIds = await getSuperAdminCreatorIds();
       const filtered = list.filter((a) => ogpVisibleToViewer(a, viewer));
+      const typologyById = await loadExerciseOgpTypologies(filtered.map((a) => a.id));
 
       const articles = filtered.map((a) => ({
         id: a.id,
@@ -133,6 +152,8 @@ export async function GET(request: NextRequest) {
         url: a.url,
         siteName: a.siteName,
         type: a.type,
+        typology:
+          typologyById.get(a.id) ?? (a as { typology?: string | null }).typology ?? null,
         customDescription: a.customDescription,
         topic: a.topic,
         languageCode: a.languageCode ?? null,
@@ -222,6 +243,7 @@ export async function GET(request: NextRequest) {
       if (vSports.length > 0 && !vSports.some((s: string) => userSports.includes(s))) return false;
       return true;
     });
+    const typologyById = await loadExerciseOgpTypologies(filtered.map((a) => a.id));
 
     const articles = filtered.map((a) => ({
       id: a.id,
@@ -237,6 +259,8 @@ export async function GET(request: NextRequest) {
       url: a.url,
       siteName: a.siteName,
       type: a.type,
+      typology:
+        typologyById.get(a.id) ?? (a as { typology?: string | null }).typology ?? null,
       customDescription: a.customDescription,
       topic: a.topic,
       languageCode: a.languageCode ?? null,
@@ -275,6 +299,7 @@ export async function POST(request: NextRequest) {
       url,
       siteName,
       type,
+      typology,
       customDescription,
       topic,
       languageCode,
@@ -288,6 +313,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
     const topicName = typeof topic === 'string' && topic.trim() ? topic.trim() : 'General';
+    const typologyName =
+      typeof typology === 'string' && typology.trim() ? typology.trim() : null;
     const created = await prisma.exerciseOgpArticle.create({
       data: {
         userId,
@@ -306,8 +333,19 @@ export async function POST(request: NextRequest) {
         visibilityCountries: Array.isArray(visibilityCountries) ? JSON.stringify(visibilityCountries) : null,
         visibilityLanguages: Array.isArray(visibilityLanguages) ? JSON.stringify(visibilityLanguages) : null,
         visibilitySports: Array.isArray(visibilitySports) ? JSON.stringify(visibilitySports) : null,
-      },
+        ...(typologyName ? ({ typology: typologyName } as { typology: string }) : {}),
+      } as Parameters<typeof prisma.exerciseOgpArticle.create>[0]['data'],
     });
+    // Ensure typology is persisted even if Prisma client was generated before the column existed.
+    if (typologyName) {
+      try {
+        await prisma.$executeRaw`
+          UPDATE exercise_ogp_articles SET typology = ${typologyName} WHERE id = ${created.id}
+        `;
+      } catch (e) {
+        console.warn('POST /api/exercises/ogp: typology column update failed', e);
+      }
+    }
     return NextResponse.json({
       id: created.id,
       category: created.category,
@@ -317,6 +355,7 @@ export async function POST(request: NextRequest) {
       url: created.url,
       siteName: created.siteName,
       type: created.type,
+      typology: (created as { typology?: string | null }).typology ?? typologyName,
       customDescription: created.customDescription,
       topic: created.topic,
       languageCode: created.languageCode ?? null,

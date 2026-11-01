@@ -460,6 +460,7 @@ export default function ExerciseOGPPanel({
                 </button>
               </div>
               <OGPForm
+                variant="exercise"
                 onPastedArticle={handlePastedArticle}
                 onSaveTyped={handleSaveTyped}
                 onCancel={() => setShowOgpForm(false)}

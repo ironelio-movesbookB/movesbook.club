@@ -11,8 +11,13 @@ import {
   MUSICAL_GENRES,
   MUSIC_REGISTRATION_TYPES,
 } from '@/constants/musicGenres.constants';
+import {
+  EXERCISE_OGP_TYPOLOGIES,
+  EXERCISE_OGP_TYPOLOGY_SINGLE,
+} from '@/constants/exerciseLibrary.constants';
 import RichTextEditor from '@/components/settings/RichTextEditor';
 import { hasRichTextContent } from '@/utils/richTextTranslation';
+
 
 export interface OGPData {
   title: string | null;
@@ -31,6 +36,7 @@ export type MusicOgpFormMeta = {
   musicalGenre?: string | null;
   registrationType?: string | null;
   isFavourite?: boolean;
+  typology?: string | null;
 };
 
 /** Prefill values when editing an existing OGP (Music pencil → Add Music modal). */
@@ -42,6 +48,7 @@ export type OGPFormInitialValues = {
   musicTitle?: string | null;
   musicalGenre?: string | null;
   registrationType?: string | null;
+  typology?: string | null;
   visibility?: OgpVisibilitySettings;
   /** Existing OGP preview (title/image/description/url) so Save works without re-fetch. */
   og?: OGPData | null;
@@ -57,6 +64,7 @@ interface OGPFormProps {
       artist?: string | null;
       musicTitle?: string | null;
       registrationType?: string | null;
+      typology?: string | null;
       isFavourite?: boolean;
     }
   ) => void;
@@ -66,8 +74,8 @@ interface OGPFormProps {
     meta?: MusicOgpFormMeta
   ) => void;
   onCancel?: () => void;
-  /** Music modal: Artist / Title / Genre / Registration fields and “Who will see the music”. */
-  variant?: 'news' | 'music';
+  /** Music modal: Artist / Title / Genre / Registration. Exercise: Typology. */
+  variant?: 'news' | 'music' | 'exercise';
   /** Controlled value: whether "Put in my favourites" is checked (managed by parent). */
   isFavourite?: boolean;
   /** When set, form opens prefilled for editing an existing entry. */
@@ -95,6 +103,7 @@ export default function OGPForm({
   showClubAudienceRadios = false,
 }: OGPFormProps) {
   const isMusic = variant === 'music';
+  const isExercise = variant === 'exercise';
   const [url, setUrl] = useState(() => initialValues?.url ?? '');
   const [description, setDescription] = useState(() => initialValues?.description ?? '');
   const [languageCode, setLanguageCode] = useState<string>(() => initialValues?.languageCode ?? '');
@@ -103,6 +112,9 @@ export default function OGPForm({
   const [musicalGenre, setMusicalGenre] = useState(() => initialValues?.musicalGenre ?? '');
   const [registrationType, setRegistrationType] = useState(
     () => initialValues?.registrationType ?? ''
+  );
+  const [typology, setTypology] = useState(
+    () => initialValues?.typology?.trim() || (isExercise ? EXERCISE_OGP_TYPOLOGY_SINGLE : '')
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,12 +211,19 @@ export default function OGPForm({
     setRegistrationType('');
   };
 
+  const resetExerciseFields = () => {
+    setTypology(EXERCISE_OGP_TYPOLOGY_SINGLE);
+  };
+
   const handleSave = () => {
     const genreToSave = isMusic && musicalGenre.trim() ? musicalGenre.trim() : null;
     const artistToSave = isMusic && artist.trim() ? artist.trim() : null;
     const musicTitleToSave = isMusic && musicTitle.trim() ? musicTitle.trim() : null;
     const registrationTypeToSave =
       isMusic && registrationType.trim() ? registrationType.trim() : null;
+    const typologyToSave = isExercise
+      ? typology.trim() || EXERCISE_OGP_TYPOLOGY_SINGLE
+      : null;
     const descriptionToSave = hasRichTextContent(description) ? description.trim() : '';
     if (fetchedOg) {
       onPastedArticle({
@@ -216,6 +235,7 @@ export default function OGPForm({
         artist: artistToSave,
         musicTitle: musicTitleToSave,
         registrationType: registrationTypeToSave,
+        typology: typologyToSave,
         isFavourite: isMusic ? isFavourite : undefined,
       });
       setUrl('');
@@ -225,16 +245,19 @@ export default function OGPForm({
       setError(null);
       setVisibility(defaultVisibility(showClubAudienceRadios));
       if (isMusic) resetMusicFields();
+      if (isExercise) resetExerciseFields();
     } else if (descriptionToSave && onSaveTyped) {
       onSaveTyped(descriptionToSave, genreToSave, {
         artist: artistToSave,
         musicTitle: musicTitleToSave,
         musicalGenre: genreToSave,
         registrationType: registrationTypeToSave,
+        typology: typologyToSave,
         isFavourite: isMusic ? isFavourite : undefined,
       });
       setDescription('');
       if (isMusic) resetMusicFields();
+      if (isExercise) resetExerciseFields();
     }
   };
 
@@ -244,6 +267,7 @@ export default function OGPForm({
     setFetchedOg(null);
     setError(null);
     if (isMusic) resetMusicFields();
+    if (isExercise) resetExerciseFields();
     onCancel?.();
   };
 
@@ -257,7 +281,7 @@ export default function OGPForm({
   return (
     <div
       className={
-        isMusic
+        isMusic || isExercise
           ? 'bg-white'
           : 'bg-white rounded-xl border border-gray-200 shadow-sm p-6'
       }
@@ -310,6 +334,32 @@ export default function OGPForm({
           </div>
         )}
       </div>
+
+      {isExercise && (
+        <div className="mb-4 rounded-xl bg-gray-100 border border-gray-200 p-4">
+          <div className="flex items-center gap-3">
+            <label
+              htmlFor="exercise-typology"
+              className="w-[7.5rem] shrink-0 text-sm font-medium text-gray-700"
+            >
+              Typology
+            </label>
+            <select
+              id="exercise-typology"
+              value={typology}
+              onChange={(e) => setTypology(e.target.value)}
+              className={fieldSelectClass}
+              aria-label="Typology"
+            >
+              {EXERCISE_OGP_TYPOLOGIES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {isMusic && (
         <>
@@ -474,7 +524,7 @@ export default function OGPForm({
         onSave={(s) => setVisibility(s)}
         onDeleteSettings={() => setVisibility(defaultVisibility(showClubAudienceRadios))}
         options={settingsOptions}
-        title={isMusic ? 'Music Setting' : 'OGP News Setting'}
+        title={isMusic ? 'Music Setting' : isExercise ? 'OGP Exercise Setting' : 'OGP News Setting'}
         showClubAudienceRadios={showClubAudienceRadios}
       />
     </div>

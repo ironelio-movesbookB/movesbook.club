@@ -10,6 +10,7 @@ import { ALL_LANGUAGES } from '@/constants/language.constants';
 import {
   ALL_MUSICAL_GENRES,
 } from '@/constants/musicGenres.constants';
+import { isExerciseOgpPlaylistTypology } from '@/constants/exerciseLibrary.constants';
 import NewsSettingModal, { type OgpVisibilitySettings, defaultSettings } from './NewsSettingModal';
 import OgpShareModal from './OgpShareModal';
 import CreateOgpNewsGroupModal from './CreateOgpNewsGroupModal';
@@ -96,6 +97,8 @@ export type ArticlePasted = OGPData & {
   artist?: string | null;
   /** Song / Album / Playlist selected in Add Music (Music OGP only). */
   registrationType?: string | null;
+  /** Exercise OGP: "Single exercises" | "Playlist of exercises". */
+  typology?: string | null;
   /** True when the creator saved this entry with "Put in my favourites" checked. */
   isFavourite?: boolean;
   /** When true, this card represents an OGP News group (preview = first member). */
@@ -234,6 +237,55 @@ function isPastExpired(a: ArticlePasted): boolean {
 /** Active for normal viewers: has News Settings, not deleted, and not past expiry (unlimited OK). */
 function isActiveForNormalUser(a: ArticlePasted): boolean {
   return isNotExpired(a) && !a.deletedAt && hasAnyVisibilitySettings(a);
+}
+
+/** Simulated viewer profile for “visible by this user” preview (no creator bypass). */
+export type OgpSimulationViewer = {
+  userTypes: string[];
+  countries: string[];
+  languages: string[];
+  sports: string[];
+};
+
+/**
+ * Whether an OGP would be visible to a simulated audience (sports / type / language / country).
+ * Matches server visibility rules, treating multi-select as “any of these viewers”.
+ */
+function isVisibleToSimulatedViewer(a: ArticlePasted, viewer: OgpSimulationViewer): boolean {
+  if (a.deletedAt) return false;
+  if (!isNotExpired(a)) return false;
+
+  const v = a.visibility;
+  const vUserTypes = v?.userTypes ?? [];
+  const vCountries = v?.countries ?? [];
+  const vLanguages = v?.languages ?? [];
+  const vSports = v?.sports ?? [];
+  const hasNoVisibilitySet =
+    vUserTypes.length === 0 &&
+    vCountries.length === 0 &&
+    vLanguages.length === 0 &&
+    vSports.length === 0 &&
+    !hasExpirationDateSet(a);
+  if (hasNoVisibilitySet) return true;
+
+  if (vUserTypes.length > 0) {
+    if (viewer.userTypes.length === 0) return false;
+    if (!viewer.userTypes.some((t) => vUserTypes.includes(t))) return false;
+  }
+  if (vCountries.length > 0) {
+    if (viewer.countries.length === 0) return false;
+    if (!viewer.countries.some((c) => vCountries.includes(c))) return false;
+  }
+  if (vLanguages.length > 0) {
+    if (viewer.languages.length === 0) return false;
+    const wanted = new Set(viewer.languages.map((l) => l.slice(0, 2).toLowerCase()));
+    if (!vLanguages.some((l) => wanted.has(l.slice(0, 2).toLowerCase()))) return false;
+  }
+  if (vSports.length > 0) {
+    if (viewer.sports.length === 0) return false;
+    if (!viewer.sports.some((s) => vSports.includes(s))) return false;
+  }
+  return true;
 }
 
 function groupToFeedItem(g: OgpNewsGroupCard): ArticlePasted {
@@ -578,6 +630,18 @@ export default function NewsArticlesList({
   const [showSingleNews, setShowSingleNews] = useState(
     () => hideOgpGroups || preferSingleNewsDefault,
   );
+  /** Exercise OGP: filter to Typology = "Playlist of exercises". */
+  const [showPlaylistExercises, setShowPlaylistExercises] = useState(false);
+  /**
+   * Super admin (News / Music / Exercises): when on, hide poster filters
+   * (View selected / posted by Movesbook / country / me). Also forced on in view-as-user mode.
+   */
+  const [visibleByThisUser, setVisibleByThisUser] = useState(false);
+  /** Super admin simulation modal + applied viewer profile for “visible by this user”. */
+  const [showSimulationModal, setShowSimulationModal] = useState(false);
+  const [simulationViewer, setSimulationViewer] = useState<OgpSimulationViewer | null>(null);
+  /** Skip cancel-clear in simulation onClose when closing right after Apply (onSave → onClose). */
+  const simulationJustAppliedRef = useRef(false);
   const [showGroupsOfNews, setShowGroupsOfNews] = useState(false);
   const [isAddingToGroup, setIsAddingToGroup] = useState(false);
   const [viewSelectedOnly, setViewSelectedOnly] = useState(false);
@@ -894,35 +958,34 @@ export default function NewsArticlesList({
   }, [previewArticleId, adminContext, apiBase, ogpNewsGroups]);
 
   useEffect(() => {
-    if (
-      settingsArticleId != null &&
-      (!settingsOptions || !Array.isArray(settingsOptions.sports))
-    ) {
-      const empty = { userTypes: [], countries: [], languages: [], sports: [] };
-      const token =
-        typeof window !== 'undefined'
-          ? adminContext
-            ? localStorage.getItem('adminToken')
-            : localStorage.getItem('token')
-          : null;
-      const headers: HeadersInit = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-      fetch('/api/news/ogp-settings-options', { headers })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (!data) {
-            setSettingsOptions(empty);
-            return;
-          }
-          setSettingsOptions({
-            userTypes: data.userTypes ?? [],
-            countries: data.countries ?? [],
-            languages: data.languages ?? [],
-            sports: data.sports ?? [],
-          });
-        })
-        .catch(() => setSettingsOptions(empty));
-    }
-  }, [settingsArticleId, settingsOptions, adminContext]);
+    const needsOptions =
+      (settingsArticleId != null || showSimulationModal) &&
+      (!settingsOptions || !Array.isArray(settingsOptions.sports));
+    if (!needsOptions) return;
+    const empty = { userTypes: [], countries: [], languages: [], sports: [] };
+    const token =
+      typeof window !== 'undefined'
+        ? adminContext
+          ? localStorage.getItem('adminToken')
+          : localStorage.getItem('token')
+        : null;
+    const headers: HeadersInit = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+    fetch('/api/news/ogp-settings-options', { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) {
+          setSettingsOptions(empty);
+          return;
+        }
+        setSettingsOptions({
+          userTypes: data.userTypes ?? [],
+          countries: data.countries ?? [],
+          languages: data.languages ?? [],
+          sports: data.sports ?? [],
+        });
+      })
+      .catch(() => setSettingsOptions(empty));
+  }, [settingsArticleId, showSimulationModal, settingsOptions, adminContext]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1086,6 +1149,24 @@ export default function NewsArticlesList({
       : 'posted by my country';
   }, [showOnlyMyOgNewsLabelUsername, viewingUserInsertedTopic]);
 
+  /** Simulation (or view-as) is active — radio stays on and poster filters stay hidden. */
+  const isVisibleByThisUserActive =
+    visibleByThisUser || viewerScopedOgpList || !!simulationViewer;
+
+  const simulationModalTitle = isMusic
+    ? 'OGP Music Simulation Setting'
+    : isExercise
+      ? 'OGP Exercise Simulation Setting'
+      : 'OGP News Simulation Setting';
+  const simulationSaveLabel = isMusic
+    ? 'Show music for these users'
+    : isExercise
+      ? 'Show exercises for these users'
+      : 'Show news for these users';
+  /** Hide poster-filter radios/checkboxes when “visible by this user” is on. */
+  const hidePosterFiltersWhenVisibleByUser = isVisibleByThisUserActive;
+  const showVisibleByThisUserRadio = isSuperAdmin && !viewingOgpGroup;
+
   const filtered = useMemo(() => {
     const applyArticleFilters = (source: ArticlePasted[]) => {
       let list = source;
@@ -1151,7 +1232,14 @@ export default function NewsArticlesList({
         list = list.filter((a) => (a.topic ?? '').toLowerCase() === selectedSport.toLowerCase());
       }
       if (selectedLanguage) {
-        list = list.filter((a) => (a.visibility?.languages ?? []).includes(selectedLanguage));
+        // Match "Language used" from Add OGP / Add Music (languageCode),
+        // not visibility languages from the Setting modal.
+        list = list.filter(
+          (a) => (a.languageCode ?? '').trim().toLowerCase() === selectedLanguage.toLowerCase()
+        );
+      }
+      if (simulationViewer) {
+        list = list.filter((a) => isVisibleToSimulatedViewer(a, simulationViewer));
       }
       if (
         isMusic &&
@@ -1226,16 +1314,30 @@ export default function NewsArticlesList({
 
     // Both off (or both on) → show all; only Single → singles; only Groups → groups.
     // Club shared OGP News: always singles only (never groups).
+    // Exercises: Single / Playlist / Groups — Playlist filters typology.
+    const wantSingleArticles = showSingleNews;
+    const wantPlaylistArticles = isExercise && showPlaylistExercises;
+    const wantAnyArticleType = isExercise
+      ? wantSingleArticles || wantPlaylistArticles
+      : wantSingleArticles;
     const showArticles = hideOgpGroups
       ? true
-      : showSingleNews || !showGroupsOfNews;
+      : wantAnyArticleType || !showGroupsOfNews;
     const showGroups = hideOgpGroups
       ? false
-      : showGroupsOfNews || !showSingleNews;
+      : showGroupsOfNews || !wantAnyArticleType;
 
     let articles: ArticlePasted[] = [];
     if (showArticles) {
-      articles = applyArticleFilters(articleBase.filter((a) => !a.isOgpGroup));
+      let singles = articleBase.filter((a) => !a.isOgpGroup);
+      if (isExercise && (wantSingleArticles || wantPlaylistArticles)) {
+        if (wantSingleArticles && !wantPlaylistArticles) {
+          singles = singles.filter((a) => !isExerciseOgpPlaylistTypology(a.typology));
+        } else if (wantPlaylistArticles && !wantSingleArticles) {
+          singles = singles.filter((a) => isExerciseOgpPlaylistTypology(a.typology));
+        }
+      }
+      articles = applyArticleFilters(singles);
     }
 
     let groups: ArticlePasted[] = [];
@@ -1303,6 +1405,9 @@ export default function NewsArticlesList({
       if (showOnlyLiked) {
         groups = groups.filter((a) => (likesMap[a.id]?.count ?? 0) >= 1);
       }
+      if (simulationViewer) {
+        groups = groups.filter((a) => isVisibleToSimulatedViewer(a, simulationViewer));
+      }
       if (search.trim()) {
         const q = search.toLowerCase();
         groups = groups.filter(
@@ -1335,9 +1440,12 @@ export default function NewsArticlesList({
     isSuperAdmin,
     canEditAsCreator,
     isMusic,
+    isExercise,
+    simulationViewer,
     activeMusicalGenre,
     musicLibraryNav,
     showSingleNews,
+    showPlaylistExercises,
     showGroupsOfNews,
     hideOgpGroups,
     isAddingToGroup,
@@ -1941,7 +2049,7 @@ export default function NewsArticlesList({
           >
             {t('news_next_ogp')}
           </button>
-          {/* Single / Groups — after pagination, before topic title */}
+          {/* Single / Playlist / Groups — after pagination, before topic title */}
           {!viewingOgpGroup && (
             <div className="flex items-center gap-3 flex-shrink-0 ml-1">
               <label
@@ -1965,6 +2073,21 @@ export default function NewsArticlesList({
                 />
                 <span className="text-sm text-gray-900 whitespace-nowrap">{singleLabel}</span>
               </label>
+              {isExercise && !isAddingToGroup && !hideOgpGroups && (
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showPlaylistExercises}
+                    onChange={(e) => {
+                      setShowPlaylistExercises(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="w-4 h-4 rounded border-gray-400 accent-green-600"
+                    aria-label="Playlist"
+                  />
+                  <span className="text-sm text-gray-900 whitespace-nowrap">Playlist</span>
+                </label>
+              )}
               {!isAddingToGroup && !hideOgpGroups && (
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input
@@ -2335,7 +2458,41 @@ export default function NewsArticlesList({
                 </span>
               </label>
             )}
-            {isAddingToGroup && !viewingOgpGroup && (
+            {showVisibleByThisUserRadio && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="visible-by-this-user"
+                  checked={isVisibleByThisUserActive}
+                  onChange={() => {
+                    // View-as-user mode keeps this on until "Back to Super Admin page".
+                    if (viewerScopedOgpList) return;
+                    setVisibleByThisUser(true);
+                    setPostedByFilter('none');
+                    setViewSelectedOnly(false);
+                    setCurrentPage(1);
+                    // Open simulation settings to pick audience attributes.
+                    setShowSimulationModal(true);
+                  }}
+                  onClick={() => {
+                    if (viewerScopedOgpList) return;
+                    // Disable → exit simulation and restore the original OGP list.
+                    if (isVisibleByThisUserActive) {
+                      setVisibleByThisUser(false);
+                      setSimulationViewer(null);
+                      setShowSimulationModal(false);
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="w-4 h-4 border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                  aria-label="visible by this user"
+                />
+                <span className="text-white text-sm whitespace-nowrap">
+                  visible by this user
+                </span>
+              </label>
+            )}
+            {!hidePosterFiltersWhenVisibleByUser && isAddingToGroup && !viewingOgpGroup && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2352,7 +2509,7 @@ export default function NewsArticlesList({
                 </span>
               </label>
             )}
-            {showClubGlobalNewsButton && clubGlobalNewsClubId ? (
+            {!hidePosterFiltersWhenVisibleByUser && showClubGlobalNewsButton && clubGlobalNewsClubId ? (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="radio"
@@ -2376,6 +2533,7 @@ export default function NewsArticlesList({
                 </span>
               </label>
             ) : null}
+            {!hidePosterFiltersWhenVisibleByUser && (
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="radio"
@@ -2399,6 +2557,8 @@ export default function NewsArticlesList({
                 posted by Movesbook
               </span>
             </label>
+            )}
+            {!hidePosterFiltersWhenVisibleByUser && (
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="radio"
@@ -2421,7 +2581,8 @@ export default function NewsArticlesList({
                 {postedByCountryLabel}
               </span>
             </label>
-            {canFilterByMyOgNews && (
+            )}
+            {!hidePosterFiltersWhenVisibleByUser && canFilterByMyOgNews && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="radio"
@@ -3320,11 +3481,58 @@ export default function NewsArticlesList({
               ? 'Group Setting'
               : apiBase === '/api/music'
                 ? 'Music Setting'
-                : 'OGP News Setting'
+                : apiBase === '/api/exercises'
+                  ? 'OGP Exercise Setting'
+                  : 'OGP News Setting'
           }
           showClubAudienceRadios={Boolean(clubGlobalNewsClubId)}
         />
       )}
+
+      <NewsSettingModal
+        isOpen={showSimulationModal}
+        onClose={() => {
+          setShowSimulationModal(false);
+          // onSave also calls onClose — don't clear the just-applied simulation.
+          if (simulationJustAppliedRef.current) {
+            simulationJustAppliedRef.current = false;
+            return;
+          }
+          // Back as before with no active simulation → turn radio off.
+          if (!simulationViewer) {
+            setVisibleByThisUser(false);
+          }
+        }}
+        initialSettings={
+          simulationViewer
+            ? {
+                userTypes: simulationViewer.userTypes,
+                countries: simulationViewer.countries,
+                languages: simulationViewer.languages,
+                sports: simulationViewer.sports,
+                expiresAt: null,
+              }
+            : defaultSettings
+        }
+        onSave={(settings) => {
+          simulationJustAppliedRef.current = true;
+          setSimulationViewer({
+            userTypes: settings.userTypes ?? [],
+            countries: settings.countries ?? [],
+            languages: settings.languages ?? [],
+            sports: settings.sports ?? [],
+          });
+          setVisibleByThisUser(true);
+          setPostedByFilter('none');
+          setViewSelectedOnly(false);
+          setShowSimulationModal(false);
+          setCurrentPage(1);
+        }}
+        options={settingsOptions}
+        title={simulationModalTitle}
+        hideWhoCanSeeDuration
+        saveButtonLabel={simulationSaveLabel}
+      />
 
       <OgpShareModal
         isOpen={shareModalArticle != null}
@@ -3615,7 +3823,9 @@ export default function NewsArticlesList({
                 ? 'Change group topic'
                 : apiBase === '/api/music'
                   ? 'Change Music topic'
-                  : 'Change OGP topic'}
+                  : apiBase === '/api/exercises'
+                    ? 'Change OGP Exercise topic'
+                    : 'Change OGP topic'}
             </h2>
             <p className="text-sm text-gray-600 mb-3">
               {isEditingGroup

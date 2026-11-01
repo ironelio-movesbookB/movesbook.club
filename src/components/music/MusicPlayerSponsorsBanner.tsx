@@ -1,37 +1,22 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Music2 } from 'lucide-react';
-
-const ROTATE_MS = 5000;
-
-type BannerTrack = {
-  id: string;
-  title: string | null;
-  artist?: string | null;
-  image: string | null;
-  url: string;
-  siteName: string | null;
-  description: string | null;
-  creatorUsername: string | null;
-};
-
-type MusicPlayerPlaylistBannerProps = {
-  tracks: BannerTrack[];
-  currentIndex: number;
-  onSelectTrack: (index: number) => void;
-};
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  activeSponsorGroups,
+  openSponsorLink,
+  SPONSOR_DELAY_MS_DEFAULT,
+  type OgpSponsor,
+  type OgpSponsorSettings,
+} from '@/lib/news/ogpSponsors';
 
 /**
- * Header banner: rotates through every track in the current playlist
- * (same items as My Playlist below). Click plays that track.
+ * Music player header ad: flattens every sponsor from all active OGP News
+ * sponsor groups and rotates at the fastest (minimum) delayMs among those groups.
  */
-export default function MusicPlayerSponsorsBanner({
-  tracks,
-  currentIndex,
-  onSelectTrack,
-}: MusicPlayerPlaylistBannerProps) {
-  const [index, setIndex] = useState(currentIndex);
+export default function MusicPlayerSponsorsBanner() {
+  const [sponsors, setSponsors] = useState<OgpSponsor[]>([]);
+  const [delayMs, setDelayMs] = useState(SPONSOR_DELAY_MS_DEFAULT);
+  const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
@@ -39,29 +24,59 @@ export default function MusicPlayerSponsorsBanner({
     pausedRef.current = paused;
   }, [paused]);
 
-  // Keep banner in sync when the playing track changes from the playlist / controls.
   useEffect(() => {
-    setIndex(currentIndex);
-  }, [currentIndex]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/news/ogp-sponsors');
+        if (!res.ok) return;
+        const data = (await res.json()) as OgpSponsorSettings;
+        if (cancelled || !data || !Array.isArray(data.groups)) return;
+
+        const groups = activeSponsorGroups(data);
+        const flat = groups
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .flatMap((g) =>
+            g.sponsors.slice().sort((a, b) => a.sortOrder - b.sortOrder),
+          );
+        const fastest =
+          groups.length > 0
+            ? Math.min(...groups.map((g) => g.delayMs))
+            : SPONSOR_DELAY_MS_DEFAULT;
+
+        setSponsors(flat);
+        setDelayMs(fastest);
+        setIndex(0);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (tracks.length === 0) {
-      setIndex(0);
-      return;
-    }
-    setIndex((i) => Math.min(i, tracks.length - 1));
-  }, [tracks.length]);
+    setIndex((i) => (sponsors.length === 0 ? 0 : Math.min(i, sponsors.length - 1)));
+  }, [sponsors.length]);
 
   useEffect(() => {
-    if (tracks.length < 2) return;
+    if (sponsors.length < 2) return;
     const timer = window.setInterval(() => {
       if (pausedRef.current) return;
-      setIndex((i) => (i >= tracks.length - 1 ? 0 : i + 1));
-    }, ROTATE_MS);
+      setIndex((i) => (i >= sponsors.length - 1 ? 0 : i + 1));
+    }, Math.max(1000, delayMs));
     return () => window.clearInterval(timer);
-  }, [tracks.length]);
+  }, [sponsors.length, delayMs]);
 
-  if (tracks.length === 0) {
+  const current = sponsors[index] ?? sponsors[0];
+  const handleOpen = useCallback(() => {
+    if (!current?.linkUrl) return;
+    openSponsorLink(current.linkUrl, current.linkTarget);
+  }, [current]);
+
+  if (!current) {
     return (
       <div className="mx-2 flex-1 flex items-center justify-center min-h-[100px] sm:min-h-[120px] rounded-sm border border-sky-300/40 bg-sky-200/90 px-3 py-4 text-center text-sm font-medium text-sky-950">
         Advertising here
@@ -69,11 +84,7 @@ export default function MusicPlayerSponsorsBanner({
     );
   }
 
-  const safeIndex = Math.min(Math.max(0, index), tracks.length - 1);
-  const track = tracks[safeIndex];
-  const title = track.title || track.url || 'Track';
-  const subtitle =
-    track.artist || track.siteName || track.creatorUsername || track.description || '';
+  const title = current.hoverTitle || 'Sponsored';
 
   return (
     <div
@@ -83,35 +94,17 @@ export default function MusicPlayerSponsorsBanner({
     >
       <button
         type="button"
-        className="relative flex h-full w-full min-h-[100px] sm:min-h-[120px] items-stretch gap-3 px-2 py-1.5 text-left"
-        onClick={() => onSelectTrack(safeIndex)}
-        title={`Play: ${title}`}
-        aria-label={`Play ${title}`}
+        className="relative block h-full w-full min-h-[100px] sm:min-h-[120px]"
+        onClick={handleOpen}
+        title={title}
+        aria-label={title}
       >
-        <span className="relative h-full aspect-square shrink-0 overflow-hidden rounded-sm bg-sky-100/80 self-stretch min-h-[88px]">
-          {track.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={track.image}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          ) : (
-            <span className="absolute inset-0 flex items-center justify-center bg-sky-100">
-              <Music2 className="h-8 w-8 text-sky-700/40" aria-hidden />
-            </span>
-          )}
-        </span>
-        <span className="min-w-0 flex-1 flex flex-col justify-center py-1">
-          <span className="text-[10px] uppercase tracking-wide text-sky-800/70">
-            {safeIndex + 1} / {tracks.length}
-            {safeIndex === currentIndex ? ' · Playing' : ''}
-          </span>
-          <span className="truncate text-sm font-semibold text-sky-950">{title}</span>
-          {subtitle ? (
-            <span className="truncate text-xs text-sky-900/70">{subtitle}</span>
-          ) : null}
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={current.image}
+          alt={title}
+          className="absolute inset-0 h-full w-full object-contain bg-sky-100/80"
+        />
       </button>
     </div>
   );

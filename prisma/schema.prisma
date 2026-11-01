@@ -556,6 +556,8 @@ model ExerciseOgpArticle {
   url                   String    @db.Text
   siteName              String?
   type                  String?
+  /// "Single exercises" | "Playlist of exercises" (Add OGP exercise Typology).
+  typology              String?
   customDescription     String?   @db.Text
   topic                 String
   languageCode          String?

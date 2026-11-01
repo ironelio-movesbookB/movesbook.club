@@ -65,6 +65,7 @@ export interface UseNewsDataResult {
       artist?: string | null;
       musicTitle?: string | null;
       registrationType?: string | null;
+      typology?: string | null;
       isFavourite?: boolean;
     },
     topic: string,
@@ -84,6 +85,7 @@ export interface UseNewsDataResult {
       artist?: string | null;
       musicTitle?: string | null;
       registrationType?: string | null;
+      typology?: string | null;
       isFavourite?: boolean;
     }
   ) => Promise<void>;
@@ -342,6 +344,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           url: a.url,
           siteName: a.siteName,
           type: a.type,
+          typology: a.typology ?? null,
           customDescription: a.customDescription,
           topic: a.topic,
           genre: a.genre ?? null,
@@ -501,6 +504,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         artist?: string | null;
         musicTitle?: string | null;
         registrationType?: string | null;
+        typology?: string | null;
         isFavourite?: boolean;
       },
       topic: string,
@@ -522,6 +526,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           url: data.url,
           siteName: data.siteName,
           type: data.type,
+          typology: data.typology ?? null,
           customDescription: data.customDescription,
           topic: topic || (defaultTopics[0] ?? 'News'),
           genre: data.musicalGenre ?? null,
@@ -568,6 +573,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           url: created.url,
           siteName: created.siteName,
           type: created.type,
+          typology: created.typology ?? data.typology ?? null,
           customDescription: created.customDescription,
           topic: created.topic,
           genre: created.genre ?? data.musicalGenre ?? null,

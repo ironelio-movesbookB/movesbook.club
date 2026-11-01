@@ -70,6 +70,13 @@ interface NewsSettingModalProps {
    * Club OGP News: show audience radios (Only me / club members / members + filters).
    */
   showClubAudienceRadios?: boolean;
+  /**
+   * Simulation mode (e.g. “visible by this user”): hide “Who can see it?” / Duration,
+   * and use a custom primary action label.
+   */
+  hideWhoCanSeeDuration?: boolean;
+  /** Primary action label; defaults to "Save". */
+  saveButtonLabel?: string;
 }
 
 export default function NewsSettingModal({
@@ -81,6 +88,8 @@ export default function NewsSettingModal({
   options,
   title = 'OGP News Setting',
   showClubAudienceRadios = false,
+  hideWhoCanSeeDuration = false,
+  saveButtonLabel = 'Save',
 }: NewsSettingModalProps) {
   const [userTypes, setUserTypes] = useState<string[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
@@ -292,58 +301,63 @@ export default function NewsSettingModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <p className="text-sm font-medium text-gray-700">Who can see it?</p>
+          {!hideWhoCanSeeDuration && (
+            <>
+              <p className="text-sm font-medium text-gray-700">Who can see it?</p>
 
-          {showClubAudienceRadios && (
-            <fieldset className="space-y-2.5">
-              <legend className="sr-only">Who can see this article in the club</legend>
-              {CLUB_AUDIENCE_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex items-start gap-2.5 cursor-pointer select-none"
-                >
-                  <input
-                    type="radio"
-                    name="club-audience-mode"
-                    value={opt.value}
-                    checked={clubAudienceMode === opt.value}
-                    onChange={() => setClubAudienceMode(opt.value)}
-                    className="mt-0.5 h-4 w-4 shrink-0 border-gray-400 text-cyan-600 focus:ring-cyan-500"
-                  />
-                  <span className="text-sm text-gray-900 leading-snug drop-shadow-sm">
-                    {opt.label}
-                  </span>
+              {showClubAudienceRadios && (
+                <fieldset className="space-y-2.5">
+                  <legend className="sr-only">Who can see this article in the club</legend>
+                  {CLUB_AUDIENCE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex items-start gap-2.5 cursor-pointer select-none"
+                    >
+                      <input
+                        type="radio"
+                        name="club-audience-mode"
+                        value={opt.value}
+                        checked={clubAudienceMode === opt.value}
+                        onChange={() => setClubAudienceMode(opt.value)}
+                        className="mt-0.5 h-4 w-4 shrink-0 border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                      />
+                      <span className="text-sm text-gray-900 leading-snug drop-shadow-sm">
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Duration (expiration date)
                 </label>
-              ))}
-            </fieldset>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExpiresAt('2099-12-31')}
+                    disabled={expiresAt === '2099-12-31'}
+                    className="shrink-0 px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:hover:bg-red-600"
+                    aria-label="No expiration"
+                    title="No expiration"
+                  >
+                    No Expiration
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  After this date the article is hidden from users. Super admin and admin still see
+                  it.
+                </p>
+              </div>
+            </>
           )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Duration (expiration date)
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500"
-              />
-              <button
-                type="button"
-                onClick={() => setExpiresAt('2099-12-31')}
-                disabled={expiresAt === '2099-12-31'}
-                className="shrink-0 px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:hover:bg-red-600"
-                aria-label="No expiration"
-                title="No expiration"
-              >
-                No Expiration
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              After this date the article is hidden from users. Super admin and admin still see it.
-            </p>
-          </div>
 
           {options && (
             <div
@@ -507,7 +521,7 @@ export default function NewsSettingModal({
             onClick={handleSave}
             className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium"
           >
-            Save
+            {saveButtonLabel}
           </button>
         </div>
       </div>

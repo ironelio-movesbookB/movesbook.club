@@ -566,11 +566,7 @@ export default function MusicPlayerWindow({
           <h2 id="music-player-title" className="text-lg font-bold tracking-wide shrink-0">
             My Music
           </h2>
-          <MusicPlayerSponsorsBanner
-            tracks={playlist}
-            currentIndex={currentIndex}
-            onSelectTrack={(i) => loadTrackAt(i, true)}
-          />
+          <MusicPlayerSponsorsBanner />
           <button
             type="button"
             onClick={onClose}
