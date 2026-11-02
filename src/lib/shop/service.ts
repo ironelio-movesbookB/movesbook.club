@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ProcedureService } from '@/lib/procedures/ProcedureService';
 import { ensureDefaultInstallment } from '@/lib/procedures/installmentService';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
+import { fetchProcedureCustomerOptions, fetchSingleUserOptions } from '@/lib/procedures/clubMembers';
 import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
 
@@ -1172,42 +1173,48 @@ export async function createCustomer(
 }
 
 export async function listBuyers(workspace: ShopWorkspace) {
-  const memberSelect = {
-    id: true,
-    email: true,
-    username: true,
-    name: true,
-    firstName: true,
-    surname: true,
-    image: true,
-  } as const;
+  const asMember = (id: string, name: string, email = '', photoUrl: string | null = null) => ({
+    id,
+    name,
+    email,
+    taxCode: '',
+    photoUrl,
+    kind: 'member' as const,
+  });
 
-  const members =
-    workspace.kind === 'club'
-      ? await prisma.clubMember.findMany({
-          where: { clubId: workspace.id },
-          include: { member: { select: memberSelect }, profile: { select: { profileJson: true } } },
-          take: 500,
-        })
-      : await prisma.teamMember.findMany({
-          where: { teamId: workspace.id },
-          include: { athlete: { select: memberSelect } },
-          take: 500,
-        });
+  if (workspace.kind === 'club') {
+    const options = await fetchProcedureCustomerOptions(workspace.id);
+    return {
+      members: options.map((member) => asMember(member.id, member.name, '', member.image ?? null)),
+      customers: [],
+    };
+  }
 
+  const rows = await prisma.teamMember.findMany({
+    where: { teamId: workspace.id },
+    include: {
+      athlete: {
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          name: true,
+          firstName: true,
+          surname: true,
+          image: true,
+        },
+      },
+    },
+    take: 500,
+  });
+  const teamMembers = rows.map((row) =>
+    asMember(row.athlete.id, personName(row.athlete), row.athlete.email, row.athlete.image),
+  );
+  if (teamMembers.length > 0) return { members: teamMembers, customers: [] };
+
+  const fallback = await fetchSingleUserOptions();
   return {
-    members: members.map((row) => {
-      const user = 'member' in row ? row.member : row.athlete;
-      const codes = 'profile' in row ? extractTaxCodes(row.profile?.profileJson) : [];
-      return {
-        id: user.id,
-        name: personName(user),
-        email: user.email,
-        taxCode: codes[0] ?? '',
-        photoUrl: user.image,
-        kind: 'member' as const,
-      };
-    }),
+    members: fallback.map((member) => asMember(member.id, member.name, '', member.image ?? null)),
     customers: [],
   };
 }

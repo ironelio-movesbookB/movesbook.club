@@ -49,6 +49,7 @@ export default function CreateOrderForm() {
   const [selectedBuyer, setSelectedBuyer] = useState('');
   const [multi, setMulti] = useState(false);
   const [selectedCustomers, setSelectedCustomers] = useState<Record<string, boolean>>({});
+  const [memberQuery, setMemberQuery] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -62,11 +63,14 @@ export default function CreateOrderForm() {
       .catch(() => undefined);
     shopFetch('/api/club/shop/buyers')
       .then(async (response) => {
-        if (!response.ok) return;
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setError(typeof data.error === 'string' ? data.error : 'Could not load members.');
+          return;
+        }
         setBuyers([...(data.members ?? []), ...(data.customers ?? [])]);
       })
-      .catch(() => undefined);
+      .catch(() => setError('Could not load members.'));
   }, []);
 
   const matches = useMemo(() => {
@@ -74,6 +78,27 @@ export default function CreateOrderForm() {
     if (!q) return catalog.slice(0, 8);
     return catalog.filter((product) => product.name.toLowerCase().includes(q)).slice(0, 8);
   }, [catalog, query]);
+
+  const memberMatches = useMemo(() => {
+    const q = memberQuery.trim().toLowerCase();
+    if (!q) return buyers;
+    return buyers.filter(
+      (buyer) =>
+        buyer.name.toLowerCase().includes(q) ||
+        buyer.email.toLowerCase().includes(q) ||
+        buyer.taxCode.toLowerCase().includes(q),
+    );
+  }, [buyers, memberQuery]);
+
+  const chosenBuyers = useMemo(() => {
+    const ticked = buyers.filter((buyer) => selectedCustomers[buyer.id]);
+    if (ticked.length > 0) return ticked;
+    if (selectedBuyer) {
+      const fromDropdown = buyers.find((buyer) => buyer.id === selectedBuyer);
+      if (fromDropdown) return [fromDropdown];
+    }
+    return [];
+  }, [buyers, selectedCustomers, selectedBuyer]);
 
   const total = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
 
@@ -97,9 +122,10 @@ export default function CreateOrderForm() {
       return;
     }
     const items = lines.map((line) => ({ productId: line.id, quantity: line.quantity }));
-    const chosen = buyers.filter((buyer) => selectedCustomers[buyer.id]);
+    const chosen = multi ? chosenBuyers : [];
     if (multi && chosen.length === 0) {
-      setError('Select at least one customer.');
+      setError('Tick at least one member below. Each ticked person gets their own selling.');
+      document.getElementById('shop-ordering-user')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     if (!multi && !selectedBuyer) {
@@ -213,10 +239,20 @@ export default function CreateOrderForm() {
         <p className="mt-4 text-right text-2xl font-bold">{formatPrice(total)}</p>
       </section>
 
-      <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
+      <section id="shop-ordering-user" className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
         <h2 className="text-base font-semibold text-gray-800">Ordering user</h2>
         <label className="mt-4 flex items-center gap-2 text-sm font-medium text-gray-700">
-          <input type="checkbox" checked={multi} onChange={(event) => setMulti(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={multi}
+            onChange={(event) => {
+              const on = event.target.checked;
+              setMulti(on);
+              if (on && selectedBuyer) {
+                setSelectedCustomers((current) => ({ ...current, [selectedBuyer]: true }));
+              }
+            }}
+          />
           Assign these products to more than one customer
         </label>
 
@@ -237,22 +273,48 @@ export default function CreateOrderForm() {
             </p>
           </div>
         ) : (
-          <div className="mt-4 space-y-2">
-            {buyers.map((buyer) => (
-              <label key={`${buyer.kind}-${buyer.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                <span className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedCustomers[buyer.id])}
-                    onChange={(event) =>
-                      setSelectedCustomers((current) => ({ ...current, [buyer.id]: event.target.checked }))
-                    }
-                  />
-                  {buyer.name}
-                  <span className="text-xs text-gray-400">{buyer.kind === 'member' ? 'Member' : 'Customer'}</span>
-                </span>
-              </label>
-            ))}
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-gray-600">
+              Tick every member who should get this selling. {chosenBuyers.length} selected.
+            </p>
+            <div className="relative">
+              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={memberQuery}
+                onChange={(event) => setMemberQuery(event.target.value)}
+                placeholder="Search members..."
+                className={`${inputClass} pl-10`}
+              />
+            </div>
+            {buyers.length === 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                No members found for this club. Add them from the club member list, then try again.
+              </p>
+            ) : (
+              <div className="max-h-72 space-y-2 overflow-y-auto">
+                {memberMatches.map((buyer) => (
+                  <label
+                    key={`${buyer.kind}-${buyer.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedCustomers[buyer.id])}
+                        onChange={(event) =>
+                          setSelectedCustomers((current) => ({ ...current, [buyer.id]: event.target.checked }))
+                        }
+                      />
+                      {buyer.name}
+                      <span className="text-xs text-gray-400">{buyer.kind === 'member' ? 'Member' : 'Customer'}</span>
+                    </span>
+                  </label>
+                ))}
+                {memberMatches.length === 0 && (
+                  <p className="text-sm text-gray-500">No member matches that search.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
         <p className="mt-4 text-xs leading-5 text-gray-500">
