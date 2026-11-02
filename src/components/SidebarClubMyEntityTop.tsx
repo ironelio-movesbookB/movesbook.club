@@ -64,6 +64,7 @@ export default function SidebarClubMyEntityTop({
   onClubYoutubeSaved,
   onClubBootstrapped,
   onChatClick,
+  onMessagesClick,
 }: {
   personName: string;
   club: ClubEntity | null;
@@ -76,6 +77,7 @@ export default function SidebarClubMyEntityTop({
     youtubeChannelUrl?: string | null;
   }) => void;
   onChatClick?: () => void;
+  onMessagesClick?: () => void;
 }) {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -196,7 +198,9 @@ export default function SidebarClubMyEntityTop({
           </div>
         </div>
 
-        {officialClubLayout ? null : <ClubSocialSubmenu onChatClick={onChatClick} />}
+        {officialClubLayout ? null : (
+          <ClubSocialSubmenu onChatClick={onChatClick} onMessagesClick={onMessagesClick} />
+        )}
 
         {officialClubLayout ? (
           <ClubMyClubInfoSubmenu clubId={club?.id} />

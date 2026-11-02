@@ -27,9 +27,12 @@ const SOCIAL_ITEMS: SocialSubmenuItem[] = [
  */
 export default function ClubSocialSubmenu({
   onChatClick,
+  onMessagesClick,
   variant = 'default',
 }: {
   onChatClick?: () => void;
+  /** My Club → Messages among Staff and members (current club only). */
+  onMessagesClick?: () => void;
   /** `section`: blue "Section Social" row of the official Club My Club menu. */
   variant?: 'default' | 'section';
 }) {
@@ -84,6 +87,7 @@ export default function ClubSocialSubmenu({
                 type="button"
                 onClick={() => {
                   if (item.key === 'chat') onChatClick?.();
+                  if (item.key === 'messages') onMessagesClick?.();
                 }}
                 className={`flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90 ${
                   idx > 0 ? 'border-t border-black/25' : ''
