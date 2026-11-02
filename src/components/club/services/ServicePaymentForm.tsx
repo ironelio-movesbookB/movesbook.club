@@ -28,11 +28,20 @@ import type {
 import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmModal";
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
 import ShareModal from "@/components/ShareModal";
-import { isShareOnlinePayMode } from "@/lib/procedures/payModes";
+import {
+  isShareOnlinePayMode,
+  PAYMENT_TYPE_OPTIONS,
+  SHARE_ONLINE_PAY_MODES,
+} from "@/lib/procedures/payModes";
 import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 import { useClubEnabledPaymentMethods } from "@/lib/club/useClubEnabledPaymentMethods";
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
 import { SIGNED_RECEIPT_DOCUMENT_TYPE } from "@/lib/procedures/taxDocumentDefaults";
+
+const SHARE_PAY_EXTRA_OPTIONS = SHARE_ONLINE_PAY_MODES.map((value) => ({
+  value,
+  label: PAYMENT_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value,
+}));
 
 export type PaymentDistribution = {
   installmentId: string;
@@ -945,6 +954,12 @@ export default function ServicePaymentForm({
 
     const onlinePay = procedureType !== "expense" && isShareOnlinePayMode(payMode);
     if (onlinePay) {
+      if (!purchase.userId) {
+        setInstallmentError(
+          "This selling has no member. Pick a member before sharing a payment link.",
+        );
+        return;
+      }
       const totals = new Map<string, number>();
       for (const row of distributions) {
         const recordId = row.recordId || purchase.id;
@@ -1402,7 +1417,10 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowedMethods={enabledMethods}
-                extraOptions={stripeEnabled ? [{ value: 'stripe', label: 'Stripe' }] : []}
+                extraOptions={[
+                  ...SHARE_PAY_EXTRA_OPTIONS,
+                  ...(stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []),
+                ]}
               />
               {isExpensePayment ? (
                 <div className="min-w-0 space-y-2 lg:col-span-2">
@@ -1962,7 +1980,7 @@ export default function ServicePaymentForm({
         onClose={() => setShareOpen(false)}
         title="Share payment link"
         url={shareUrl}
-        description="Send this selling payment link to the member. They pay Credit card, PayPal, or Satispay from their phone."
+        description="Send this payment link to the member. They can pay by Credit card, PayPal, or Satispay from their phone."
         hidePost
         showEmail
       />
