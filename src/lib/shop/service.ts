@@ -7,7 +7,8 @@ import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { fetchProcedureCustomerOptions, fetchSingleUserOptions } from '@/lib/procedures/clubMembers';
 import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
-import { shopSector } from './sectors';
+import { sellingArchiveSector, sellingPerformedBy, shopSector } from './sectors';
+import { formatSellingNumber } from './sellingNumber';
 
 export type ShopLineInput = { productId: string; quantity: number };
 
@@ -111,8 +112,12 @@ type SaleRow = {
   customerEmail: string;
   status: SaleStatus;
   paid: boolean;
+  paidAmount: number;
+  restAmount: number;
   paymentMethod: string;
   source: string;
+  sector: string;
+  operatorName: string;
   subtotal: number;
   discount: number;
   procedureRecordId: string | null;
@@ -143,6 +148,7 @@ export function orderDto(
 ) {
   const subtotal = money(row.subtotal);
   const discount = money(row.discount);
+  const productCount = row.items.reduce((sum, item) => sum + item.quantity, 0);
   return {
     id: row.id,
     orderNumber: row.orderNumber,
@@ -162,6 +168,13 @@ export function orderDto(
     subtotal,
     discount,
     total: money(subtotal - discount),
+    paidAmount: money(row.paidAmount),
+    restAmount: money(row.restAmount),
+    productCount,
+    firstProduct: row.items[0]?.name || '-',
+    performedBy: sellingPerformedBy(row.source),
+    sector: sellingArchiveSector(row.source, row.sector),
+    operatorName: sellingPerformedBy(row.source) === 'Member' ? '-' : row.operatorName || '-',
     status: statusOut(row.status),
     paid: row.paid,
     paymentStatus: row.paid ? 'paid' : 'unpaid',
@@ -246,6 +259,12 @@ export async function listProducts(workspace: ShopWorkspace) {
     orderBy: { name: 'asc' },
   });
   return rows.map(productDto);
+}
+
+export async function findProduct(workspace: ShopWorkspace, id: string) {
+  return prisma.shopProduct.findFirst({
+    where: { id, workspaceKind: workspace.kind, workspaceId: workspace.id },
+  });
 }
 
 export async function saveProduct(
@@ -336,7 +355,7 @@ async function nextOrderNumber(workspace: ShopWorkspace) {
         where: { procedureTypeId: procedureType.id, clubId: workspace.id },
       })
     : 0;
-  return String(2450 + count + 1);
+  return formatSellingNumber(count + 1);
 }
 
 function extractTaxCodes(raw: string | null | undefined) {
@@ -535,7 +554,7 @@ async function writeDeadlineDirect(
         procedureTypeId: procedureType.id,
         clubId: workspace.id,
         memberId,
-        operatorId: workspace.adminId,
+        operatorId: workspace.userId || workspace.adminId,
         totalAmount,
         paidAmount: 0,
         balanceAmount: totalAmount,
@@ -610,8 +629,12 @@ async function createOneOrder(
     customerEmail: buyer.email,
     status: 'PENDING',
     paid: false,
+    paidAmount: 0,
+    restAmount: total,
     paymentMethod: options.paymentMethod,
     source: options.source,
+    sector: [...new Set(lines.map((line) => shopSector(line.product.sector)))].join(' - ') || 'Shop',
+    operatorName: '-',
     subtotal,
     discount,
     procedureRecordId,
@@ -832,9 +855,11 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
   });
   if (records.length === 0) return [];
   const memberIds = [...new Set(records.map((record) => record.memberId))];
+  const operatorIds = [...new Set(records.map((record) => record.operatorId).filter(Boolean))];
+  const peopleIds = [...new Set([...memberIds, ...operatorIds])];
   const [users, receipts] = await Promise.all([
     prisma.user.findMany({
-      where: { id: { in: memberIds } },
+      where: { id: { in: peopleIds } },
       select: { id: true, email: true, name: true, firstName: true, surname: true },
     }),
     prisma.procedureReceipt.findMany({
@@ -862,6 +887,7 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
     const subtotal = money(items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) || money(record.totalAmount) + discount);
     const settled = money(record.balanceAmount) <= 0 && money(record.paidAmount) > 0;
     const user = usersById.get(record.memberId);
+    const operator = record.operatorId ? usersById.get(record.operatorId) : undefined;
     const guestName = textOf(meta.shopCustomerName) || textOf(meta.customerName);
     const ownMember = user && user.id !== workspace.adminId;
     const fallbackName = guestName || (user ? personName(user) : 'Customer');
@@ -882,8 +908,12 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
       customerEmail: party.email || fallbackEmail,
       status: record.status === 'DELETED' ? 'CANCELLED' : settled ? 'COMPLETED' : 'PENDING',
       paid: settled,
+      paidAmount: money(record.paidAmount),
+      restAmount: money(record.balanceAmount),
       paymentMethod: textOf(meta.paymentMethod) || 'pickup',
       source: textOf(meta.source) || 'staff',
+      sector: textOf(meta.sector) || textOf(meta.sectorName) || 'Shop',
+      operatorName: operator ? personName(operator) : '-',
       subtotal,
       discount,
       procedureRecordId: record.id,

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
+import { useSuperAdminPassword } from '@/components/admin/SuperAdminPasswordModal';
 import { SHOP_SECTORS, shopProductListPath, shopSector } from '@/lib/shop/sectors';
 import {
   ArrowLeft,
@@ -148,9 +149,11 @@ export default function ProductForm({ productId }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = Boolean(productId);
+  const { requestPassword, passwordModal } = useSuperAdminPassword();
 
   const [name, setName] = useState('');
   const [sector, setSector] = useState('Shop');
+  const [savedSector, setSavedSector] = useState('Shop');
 
   useEffect(() => {
     if (productId) return;
@@ -213,6 +216,7 @@ export default function ProductForm({ productId }: Props) {
 
         setName(product.name ?? '');
         setSector(product.sector || 'Shop');
+        setSavedSector(product.sector || 'Shop');
         setDescription(product.description ?? '');
         setPrice(String(product.price ?? 0));
         setVatRate(String(product.vatRate ?? 21));
@@ -299,6 +303,17 @@ export default function ProductForm({ productId }: Props) {
     }
   }
 
+  async function hardwarePasswordIfNeeded() {
+    if (shopSector(sector) !== 'Hardware' && shopSector(savedSector) !== 'Hardware') {
+      return '';
+    }
+    const password = await requestPassword({
+      title: 'List of hardware purchasable',
+      message: 'Enter the Super Admin password to insert, edit, or delete hardware products.',
+    });
+    return password;
+  }
+
   async function uploadImage(): Promise<string> {
     if (!selectedFile) return imageUrl;
 
@@ -348,6 +363,9 @@ export default function ProductForm({ productId }: Props) {
     }
 
     try {
+      const hardwarePassword = await hardwarePasswordIfNeeded();
+      if (hardwarePassword === null) return;
+
       setSaving(true);
 
       const uploadedImageUrl = await uploadImage();
@@ -365,6 +383,7 @@ export default function ProductForm({ productId }: Props) {
         allowMultipleUnits,
         allowNonMembers,
         sector,
+        ...(hardwarePassword ? { superAdminPassword: hardwarePassword } : {}),
       };
 
       const response = await shopFetch('/api/club/shop/products', {
@@ -400,12 +419,19 @@ export default function ProductForm({ productId }: Props) {
     if (!confirmed) return;
 
     try {
+      const hardwarePassword = await hardwarePasswordIfNeeded();
+      if (hardwarePassword === null) return;
+
       setSaving(true);
       setError('');
 
       const response = await shopFetch(
         `/api/club/shop/products?id=${encodeURIComponent(productId)}`,
-        { method: 'DELETE' },
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hardwarePassword ? { superAdminPassword: hardwarePassword } : {}),
+        },
       );
 
       const data = await response.json().catch(() => ({}));
@@ -429,11 +455,18 @@ export default function ProductForm({ productId }: Props) {
   async function duplicateProduct() {
     if (!productId) return;
     try {
+      const hardwarePassword = await hardwarePasswordIfNeeded();
+      if (hardwarePassword === null) return;
+
       setSaving(true);
       setError('');
       const response = await shopFetch(
         `/api/club/shop/products/${encodeURIComponent(productId)}/duplicate`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hardwarePassword ? { superAdminPassword: hardwarePassword } : {}),
+        },
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not duplicate the product.');
@@ -456,6 +489,8 @@ export default function ProductForm({ productId }: Props) {
   }
 
   return (
+    <>
+      {passwordModal}
     <form
       onSubmit={handleSubmit}
       className="space-y-4 md:space-y-6"
@@ -751,5 +786,6 @@ export default function ProductForm({ productId }: Props) {
         </button>
       </div>
     </form>
+    </>
   );
 }

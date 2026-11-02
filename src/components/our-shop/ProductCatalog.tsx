@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Package,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { shopFetch } from '@/lib/shop/browser';
-import { SHOP_SECTOR_TITLE, shopSectorFromPath } from '@/lib/shop/sectors';
+import { SHOP_SECTOR_TITLE, isHardwareProductSector, shopSector, shopSectorFromPath } from '@/lib/shop/sectors';
 
 type Product = {
   id: string;
@@ -174,46 +174,66 @@ function ShopShareCard({
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({
+  product,
+  selected,
+  onSelect,
+  showSector,
+}: {
+  product: Product;
+  selected: boolean;
+  onSelect: () => void;
+  showSector?: boolean;
+}) {
   return (
-    <article className="rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-sm transition hover:border-purple-100 hover:shadow-md sm:px-5">
+    <article
+      className={`rounded-xl border bg-white px-4 py-4 shadow-sm transition hover:border-purple-100 hover:shadow-md sm:px-5 ${
+        selected ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-100'
+      }`}
+    >
       <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+        >
         <ProductImage product={product} />
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
-            {product.name}
-          </h3>
-        </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
+              {product.name}
+            </h3>
+            {showSector ? (
+              <p className="mt-0.5 text-xs text-gray-400">{shopSector(product.sector)}</p>
+            ) : null}
+          </div>
 
-        {/* Gross price */}
-        <div className="w-24 shrink-0 sm:w-32">
-          <p className="text-[11px] text-gray-400 sm:text-xs">
-            Gross price
-          </p>
-          <p className="mt-1 truncate text-sm font-semibold text-gray-800">
-            {currency(product.price)}
-          </p>
-        </div>
+          <div className="w-24 shrink-0 sm:w-32">
+            <p className="text-[11px] text-gray-400 sm:text-xs">
+              Gross price
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold text-gray-800">
+              {currency(product.price)}
+            </p>
+          </div>
 
-        {/* Quantity in stock */}
-        <div className="w-20 shrink-0 sm:w-28">
-          <p className="text-[11px] text-gray-400 sm:text-xs">
-            Qty in Stock
-          </p>
-          <p
-            className={`mt-1 text-sm font-semibold ${
-              product.quantity === 0
-                ? 'text-red-600'
-                : product.quantity <= 5
-                  ? 'text-amber-600'
-                  : 'text-gray-800'
-            }`}
-          >
-            {product.quantity}
-          </p>
-        </div>
+          <div className="w-20 shrink-0 sm:w-28">
+            <p className="text-[11px] text-gray-400 sm:text-xs">
+              Qty in Stock
+            </p>
+            <p
+              className={`mt-1 text-sm font-semibold ${
+                product.quantity === 0
+                  ? 'text-red-600'
+                  : product.quantity <= 5
+                    ? 'text-amber-600'
+                    : 'text-gray-800'
+              }`}
+            >
+              {product.quantity}
+            </p>
+          </div>
+        </button>
 
-        {/* Edit button */}
         <Link
           href={`/clubs/shop/products/${encodeURIComponent(product.id)}`}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-semibold text-purple-700 transition hover:bg-purple-50 sm:px-4"
@@ -228,13 +248,20 @@ function ProductCard({ product }: { product: Product }) {
 
 export default function ProductsPage() {
   const pathname = usePathname() || '';
+  const router = useRouter();
   const sector = shopSectorFromPath(pathname);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [shopUrl, setShopUrl] = useState('');
-  const listed = products.filter((product) => (product.sector || 'Shop') === sector);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const listed = products.filter((product) => {
+    const productSector = shopSector(product.sector);
+    if (sector === 'All') return !isHardwareProductSector(productSector);
+    return productSector === sector;
+  });
+  const addSector = sector === 'All' ? 'Shop' : sector;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -293,9 +320,28 @@ export default function ProductsPage() {
           subtitle={
             loading
               ? 'Loading your products...'
-              : `${listed.length} ${listed.length === 1 ? 'product' : 'products'}`
+              : sector === 'Hardware'
+                ? `${listed.length} ${listed.length === 1 ? 'product' : 'products'} · Super Admin password required to insert, edit, or delete`
+                : sector === 'All'
+                  ? `${listed.length} ${listed.length === 1 ? 'product' : 'products'} · Bar, Restaurant, Shop (no hardware)`
+                : `${listed.length} ${listed.length === 1 ? 'product' : 'products'} · Insert and edit products`
           }
         >
+          <button
+            type="button"
+            onClick={() => {
+              if (!selectedProductId) {
+                window.alert('Select a product in the list first.');
+                return;
+              }
+              router.push(
+                `/clubs/shop/orders?productId=${encodeURIComponent(selectedProductId)}`,
+              );
+            }}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-teal-700 bg-white px-4 text-sm font-semibold text-teal-800 transition hover:bg-teal-50"
+          >
+            Details of the product
+          </button>
           <button
             type="button"
             onClick={() => void loadProducts(true)}
@@ -307,7 +353,7 @@ export default function ProductsPage() {
             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
           </button>
           <Link
-            href={`/clubs/shop/products/new?sector=${encodeURIComponent(sector)}`}
+            href={`/clubs/shop/products/new?sector=${encodeURIComponent(addSector)}`}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white transition hover:bg-purple-700"
           >
             <Plus size={18} />
@@ -356,7 +402,7 @@ export default function ProductsPage() {
                 Add your first product to start building your online shop.
               </p>
               <Link
-                href={`/clubs/shop/products/new?sector=${encodeURIComponent(sector)}`}
+                href={`/clubs/shop/products/new?sector=${encodeURIComponent(addSector)}`}
                 className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-800"
               >
                 <Plus size={17} />
@@ -366,7 +412,15 @@ export default function ProductsPage() {
           ) : (
             <div className="space-y-3">
               {listed.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  selected={selectedProductId === product.id}
+                  showSector={sector === 'All'}
+                  onSelect={() =>
+                    setSelectedProductId((current) => (current === product.id ? null : product.id))
+                  }
+                />
               ))}
             </div>
           )}

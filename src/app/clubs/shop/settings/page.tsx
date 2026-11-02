@@ -158,7 +158,7 @@ export default function SettingsPage() {
 
   return (
     <ShopFrame>
-        <ShopHeader title="Shop settings" subtitle="Manage your shop, payment preferences, and customer-facing content.">
+        <ShopHeader title="Settings" subtitle="Settings related to the sellings">
               <button
                 type="button"
                 onClick={resetSettings}

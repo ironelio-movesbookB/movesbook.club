@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireShopManager } from '@/lib/shop/auth';
 import {
+  assertHardwareSuperAdminPassword,
+  isHardwareSector,
+} from '@/lib/shop/hardwareAuth';
+import {
   deleteProduct,
+  findProduct,
   listProducts,
   saveProduct,
 } from '@/lib/shop/service';
@@ -24,6 +29,9 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error;
   try {
     const body = await request.json();
+    if (isHardwareSector(body?.sector)) {
+      await assertHardwareSuperAdminPassword(body?.superAdminPassword);
+    }
     const product = await saveProduct(auth.workspace, body);
     return NextResponse.json(product);
   } catch (error) {
@@ -37,6 +45,10 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     if (!body?.id) return NextResponse.json({ error: 'Product id is required.' }, { status: 400 });
+    const existing = await findProduct(auth.workspace, String(body.id));
+    if (isHardwareSector(body?.sector) || isHardwareSector(existing?.sector)) {
+      await assertHardwareSuperAdminPassword(body?.superAdminPassword);
+    }
     const product = await saveProduct(auth.workspace, body);
     return NextResponse.json(product);
   } catch (error) {
@@ -50,6 +62,13 @@ export async function DELETE(request: NextRequest) {
   const id = request.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Product id is required.' }, { status: 400 });
   try {
+    const body = await request.json().catch(() => ({}));
+    const existing = await findProduct(auth.workspace, id);
+    if (isHardwareSector(existing?.sector)) {
+      await assertHardwareSuperAdminPassword(
+        body && typeof body === 'object' ? (body as { superAdminPassword?: unknown }).superAdminPassword : '',
+      );
+    }
     await deleteProduct(auth.workspace, id);
     return NextResponse.json({ ok: true });
   } catch (error) {

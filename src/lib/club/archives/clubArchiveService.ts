@@ -864,15 +864,19 @@ export async function listUnifiedProductSales(
         })
         .filter((line): line is { name: string; quantity: number } => Boolean(line));
       const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
+      const online = text(meta.source).toLowerCase() === 'online';
       items.push({
         id: `proc-${row.id}`,
+        procedureRecordId: row.id,
         memberId: row.memberId,
         userId: row.memberId,
         name: row.memberName,
         image: row.memberImage,
         insertDate: row.recordDate,
         typology: 'PURCHASE PRODUCTS',
-        casual: text(meta.sector) || text(meta.sectorName) || text(meta.productName) || row.notes || '-',
+        casual: online ? 'Shop online' : text(meta.sector) || text(meta.sectorName) || 'Shop',
+        description: online ? 'Member' : 'Operator',
+        course: purchaseLines[0]?.name || text(meta.productName) || '-',
         value: row.totalAmount,
         paid: row.paidAmount,
         rest: row.balanceAmount,
@@ -880,7 +884,7 @@ export async function listUnifiedProductSales(
         purchaseLines,
         category: text(meta.sellingNumber) || '-',
         service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
-        operator: row.operatorName || '-',
+        operator: online ? '-' : row.operatorName || '-',
         status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
         source: 'procedure',
       });

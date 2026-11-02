@@ -22,6 +22,7 @@ import {
   HelpCircle,
   Hourglass,
   Landmark,
+  LayoutGrid,
   Calculator,
   Megaphone,
   Paperclip,
@@ -65,8 +66,9 @@ export const CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS: ClubAdminInsertItem[][] = [
     { kind: 'icon', Icon: CheckCircle, label: 'Payment of deadlines', path: '/clubs/archive_deadlines' },
   ],
   [
-    { kind: 'icon', Icon: ShoppingCart, label: 'Sell products', path: '/clubs/shop/sell' },
-    { kind: 'icon', Icon: Store, label: 'Online shop', path: '/clubs/shop' },
+    { kind: 'icon', Icon: LayoutGrid, label: 'Panel of sellings', path: '/clubs/shop/sell' },
+    { kind: 'icon', Icon: ShoppingCart, label: 'Selling of a product', path: '/ArchiveSeles/new_product_sale' },
+    { kind: 'icon', Icon: Store, label: 'Purchase ONLINE', path: '/clubs/shop' },
     {
       kind: 'icon',
       Icon: ShoppingBasket,
@@ -233,7 +235,7 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'icon', Icon: Hourglass, label: 'Planned expenses', path: '/clubs/arc_expenses' },
   ],
   [
-    { kind: 'icon', Icon: ShoppingCart, label: 'Shop/Selling of products', path: '/ArchiveSeles/product_sale_list' },
+    { kind: 'icon', Icon: ShoppingCart, label: 'Archive of sellings', path: '/ArchiveSeles/product_sale_list' },
     { kind: 'icon', Icon: Store, label: 'Online shop', path: '/clubs/shop' },
     { kind: 'icon', Icon: Users2, label: 'Archive of Memberships', path: '/clubs/memberships/archive' },
     { kind: 'icon', Icon: BookOpen, label: 'Archive of Course Subs', path: '/clubs/courses/archive' },

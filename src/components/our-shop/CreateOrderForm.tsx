@@ -5,7 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Search, Trash2 } from 'lucide-react';
 import { shopFetch } from '@/lib/shop/browser';
-import { ShopHeader } from '@/components/our-shop/pageChrome';
+import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
+import {
+  SELLING_SECTORS,
+  isHardwareProductSector,
+  shopSector,
+} from '@/lib/shop/sectors';
 
 const inputClass =
   'w-full rounded-lg border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100';
@@ -15,6 +20,7 @@ type CatalogProduct = {
   name: string;
   price: number;
   quantity: number;
+  sector?: string;
 };
 
 type Line = { id: string; name: string; unitPrice: number; quantity: number };
@@ -45,6 +51,7 @@ export default function CreateOrderForm() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [query, setQuery] = useState('');
+  const [sectorFilter, setSectorFilter] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
   const [selectedBuyer, setSelectedBuyer] = useState('');
   const [multi, setMulti] = useState(false);
@@ -73,11 +80,19 @@ export default function CreateOrderForm() {
       .catch(() => setError('Could not load members.'));
   }, []);
 
+  const sellable = useMemo(
+    () => catalog.filter((product) => !isHardwareProductSector(product.sector)),
+    [catalog],
+  );
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return catalog.slice(0, 8);
-    return catalog.filter((product) => product.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [catalog, query]);
+    return sellable.filter((product) => {
+      if (sectorFilter && shopSector(product.sector) !== sectorFilter) return false;
+      if (!q) return true;
+      return product.name.toLowerCase().includes(q);
+    });
+  }, [sellable, query, sectorFilter]);
 
   const memberMatches = useMemo(() => {
     const q = memberQuery.trim().toLowerCase();
@@ -148,9 +163,10 @@ export default function CreateOrderForm() {
               }
             : {
                 items,
-                buyer: buyers.find((buyer) => buyer.id === selectedBuyer)?.kind === 'member'
-                  ? { memberUserId: selectedBuyer }
-                  : { customerId: selectedBuyer },
+                buyer:
+                  buyers.find((buyer) => buyer.id === selectedBuyer)?.kind === 'member'
+                    ? { memberUserId: selectedBuyer }
+                    : { customerId: selectedBuyer },
               },
         ),
       });
@@ -173,17 +189,20 @@ export default function CreateOrderForm() {
   }
 
   return (
-    <main className="space-y-4 md:space-y-6">
-      <ShopHeader title="Sell products" subtitle="Select the products, close the total, then the standard payment form opens.">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void submit()}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
-          >
-            <Plus size={17} />
-            {saving ? 'Saving...' : 'Close the selling'}
-          </button>
+    <ShopFrame>
+      <ShopHeader
+        title="Panel of sellings"
+        subtitle="Select products, close the selling, then the standard payment form opens."
+      >
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void submit()}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
+        >
+          <Plus size={17} />
+          {saving ? 'Saving...' : 'Close the selling'}
+        </button>
       </ShopHeader>
 
       <Link href="/clubs/shop/orders" className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700">
@@ -191,24 +210,56 @@ export default function CreateOrderForm() {
         Return to the list
       </Link>
 
-      {error && <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error ? (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      ) : null}
 
       <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
         <h2 className="text-base font-semibold text-gray-800">Products</h2>
-        <div className="relative mt-4">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products..." className={`${inputClass} pl-10`} />
-        </div>
-        {query && (
-          <div className="mt-2 overflow-hidden rounded-lg border border-gray-200">
-            {matches.map((product) => (
-              <button key={product.id} type="button" onClick={() => addProduct(product)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50">
-                <span>{product.name}</span>
-                <span className="text-gray-500">{formatPrice(product.price)} · stock {product.quantity}</span>
-              </button>
-            ))}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="Sector">
+            <select
+              value={sectorFilter}
+              onChange={(event) => setSectorFilter(event.target.value)}
+              className={inputClass}
+            >
+              <option value="">All</option>
+              {SELLING_SECTORS.map((sector) => (
+                <option key={sector} value={sector}>
+                  {sector}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="relative mt-7">
+            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search products..."
+              className={`${inputClass} pl-10`}
+            />
           </div>
-        )}
+        </div>
+        <div className="mt-3 max-h-72 space-y-1 overflow-y-auto rounded-lg border border-gray-200">
+          {matches.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-gray-500">No products in this sector.</p>
+          ) : (
+            matches.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => addProduct(product)}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+              >
+                <span className="min-w-0 truncate">{product.name}</span>
+                <span className="shrink-0 text-gray-500">
+                  {shopSector(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
         <div className="mt-4 space-y-3">
           {lines.map((line) => (
             <div key={line.id} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
@@ -219,7 +270,9 @@ export default function CreateOrderForm() {
                 onChange={(event) =>
                   setLines((current) =>
                     current.map((item) =>
-                      item.id === line.id ? { ...item, quantity: Math.max(1, Number(event.target.value) || 1) } : item,
+                      item.id === line.id
+                        ? { ...item, quantity: Math.max(1, Number(event.target.value) || 1) }
+                        : item,
                     ),
                   )
                 }
@@ -230,7 +283,11 @@ export default function CreateOrderForm() {
                 <p className="text-xs text-gray-500">{formatPrice(line.unitPrice)} per unit</p>
               </div>
               <p className="text-sm font-semibold">{formatPrice(line.unitPrice * line.quantity)}</p>
-              <button type="button" onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))} className="text-red-600">
+              <button
+                type="button"
+                onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))}
+                className="text-red-600"
+              >
                 <Trash2 size={16} />
               </button>
             </div>
@@ -259,7 +316,11 @@ export default function CreateOrderForm() {
         {!multi ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Field label="Member">
-              <select value={selectedBuyer} onChange={(event) => setSelectedBuyer(event.target.value)} className={inputClass}>
+              <select
+                value={selectedBuyer}
+                onChange={(event) => setSelectedBuyer(event.target.value)}
+                className={inputClass}
+              >
                 <option value="">Select a member</option>
                 {buyers.map((buyer) => (
                   <option key={`${buyer.kind}-${buyer.id}`} value={buyer.id}>
@@ -306,13 +367,15 @@ export default function CreateOrderForm() {
                         }
                       />
                       {buyer.name}
-                      <span className="text-xs text-gray-400">{buyer.kind === 'member' ? 'Member' : 'Customer'}</span>
+                      <span className="text-xs text-gray-400">
+                        {buyer.kind === 'member' ? 'Member' : 'Customer'}
+                      </span>
                     </span>
                   </label>
                 ))}
-                {memberMatches.length === 0 && (
+                {memberMatches.length === 0 ? (
                   <p className="text-sm text-gray-500">No member matches that search.</p>
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -321,6 +384,6 @@ export default function CreateOrderForm() {
           Each customer gets their own selling and their own deadline. Payment is done afterwards in the standard payment form.
         </p>
       </section>
-    </main>
+    </ShopFrame>
   );
 }

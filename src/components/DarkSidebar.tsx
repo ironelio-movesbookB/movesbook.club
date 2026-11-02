@@ -4528,31 +4528,37 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 {(
                                   [
-                                    { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard },
+                                    { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard, disabled: true },
                                     { label: 'Products', path: '/clubs/shop/products/shop', Icon: Shirt },
                                     { label: 'List of hardware purchasable', path: '/clubs/shop/products/hardware', Icon: Monitor },
                                     { label: 'Orders', path: '/clubs/shop/orders', Icon: ListOrdered },
                                     { label: 'Settings', path: '/clubs/shop/settings', Icon: Settings },
                                   ] as const
-                                ).map((item, index, list) => (
+                                ).map((item, index, list) => {
+                                  const disabled = 'disabled' in item && item.disabled;
+                                  return (
                                   <button
                                     key={item.path}
                                     type="button"
+                                    disabled={disabled}
+                                    title={disabled ? 'Dashboard is disabled for now' : undefined}
                                     onClick={() => {
+                                      if (disabled) return;
                                       if (isClubAccountUserType(userType)) {
                                         writeClubWorkspaceTab('my-entity');
                                         setCurrentTab('my-entity');
                                       }
                                       router.push(item.path);
                                     }}
-                                    className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                      index < list.length - 1 ? 'border-b border-gray-600/50' : ''
-                                    }`}
+                                    className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors ${
+                                      disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-[#333]'
+                                    } ${index < list.length - 1 ? 'border-b border-gray-600/50' : ''}`}
                                   >
                                     <item.Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
                                     <span className="leading-snug">{item.label}</span>
                                   </button>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -4677,15 +4683,15 @@ export default function DarkSidebar({
                                       group: true as const,
                                     },
                                     {
-                                      Icon: ShoppingCart,
-                                      label: 'Product of the Shop',
-                                      path: '/clubs/shop/products/shop',
+                                      Icon: LayoutGrid,
+                                      label: 'ALL products',
+                                      path: '/clubs/shop/products/all',
                                       nested: true as const,
                                     },
                                     {
-                                      Icon: Monitor,
-                                      label: 'List of hardware purchasable',
-                                      path: '/clubs/shop/products/hardware',
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Bar',
+                                      path: '/clubs/shop/products/bar',
                                       nested: true as const,
                                     },
                                     {
@@ -4696,8 +4702,14 @@ export default function DarkSidebar({
                                     },
                                     {
                                       Icon: ShoppingCart,
-                                      label: 'Products of the Bar',
-                                      path: '/clubs/shop/products/bar',
+                                      label: 'Product of the Shop',
+                                      path: '/clubs/shop/products/shop',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: Monitor,
+                                      label: 'List of hardware purchasable',
+                                      path: '/clubs/shop/products/hardware',
                                       nested: true as const,
                                     },
                                     {
