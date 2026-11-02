@@ -45,6 +45,16 @@ async function clubMemberUserIds(clubId: string): Promise<string[]> {
   return rows.map((r) => r.memberId);
 }
 
+function metadataHasProduct(meta: Record<string, unknown>, productId: string): boolean {
+  if (!productId) return true;
+  if (text(meta.productId) === productId) return true;
+  const products = Array.isArray(meta.products) ? meta.products : [];
+  return products.some((line) => {
+    if (!line || typeof line !== 'object') return false;
+    return text((line as Record<string, unknown>).productId) === productId;
+  });
+}
+
 function formatArchiveDate(value: Date | null | undefined): string {
   if (!value || Number.isNaN(value.getTime())) return '-';
   const dd = String(value.getDate()).padStart(2, '0');
@@ -827,7 +837,8 @@ export async function listUnifiedProductSales(
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const items = await loadLegacyProductSaleItems(ctx);
+  const productId = text(params.productId);
+  const items: Record<string, unknown>[] = productId ? [] : await loadLegacyProductSaleItems(ctx);
 
   try {
     const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
@@ -852,6 +863,7 @@ export async function listUnifiedProductSales(
 
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      if (productId && !metadataHasProduct(meta, productId)) continue;
       const products = Array.isArray(meta.products) ? meta.products : [];
       const purchaseLines = products
         .map((line) => {
@@ -860,9 +872,13 @@ export async function listUnifiedProductSales(
           const name = text(item.name);
           const quantity = num(item.quantity);
           if (!name) return null;
-          return { name, quantity: quantity > 0 ? quantity : 1 };
+          return {
+            name,
+            quantity: quantity > 0 ? quantity : 1,
+            productId: text(item.productId) || undefined,
+          };
         })
-        .filter((line): line is { name: string; quantity: number } => Boolean(line));
+        .filter((line): line is { name: string; quantity: number; productId?: string } => Boolean(line));
       const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
       const online = text(meta.source).toLowerCase() === 'online';
       items.push({

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertCircle,
+  Check,
   Package,
   Pencil,
   Plus,
@@ -187,21 +188,39 @@ function ProductCard({
 }) {
   return (
     <article
-      className={`rounded-xl border bg-white px-4 py-4 shadow-sm transition hover:border-purple-100 hover:shadow-md sm:px-5 ${
-        selected ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-100'
+      className={`rounded-xl border px-4 py-4 shadow-sm transition sm:px-5 ${
+        selected
+          ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-300'
+          : 'border-gray-100 bg-white hover:border-purple-100 hover:shadow-md'
       }`}
     >
       <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={onSelect}
+          aria-pressed={selected}
           className="flex min-w-0 flex-1 items-center gap-4 text-left"
         >
+          <span
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+              selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-gray-300 bg-white text-transparent'
+            }`}
+            aria-hidden="true"
+          >
+            <Check size={14} strokeWidth={3} />
+          </span>
         <ProductImage product={product} />
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
-              {product.name}
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
+                {product.name}
+              </h3>
+              {selected ? (
+                <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+                  Selected
+                </span>
+              ) : null}
+            </div>
             {showSector ? (
               <p className="mt-0.5 text-xs text-gray-400">{shopSector(product.sector)}</p>
             ) : null}
@@ -262,6 +281,7 @@ export default function ProductsPage() {
     return productSector === sector;
   });
   const addSector = sector === 'All' ? 'Shop' : sector;
+  const selectedProduct = listed.find((product) => product.id === selectedProductId) ?? null;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -330,15 +350,21 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => {
-              if (!selectedProductId) {
+              if (!selectedProduct) {
                 window.alert('Select a product in the list first.');
                 return;
               }
-              router.push(
-                `/clubs/shop/orders?productId=${encodeURIComponent(selectedProductId)}`,
-              );
+              const params = new URLSearchParams({
+                productId: selectedProduct.id,
+                productName: selectedProduct.name,
+              });
+              router.push(`/ArchiveSeles/product_sale_list?${params.toString()}`);
             }}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-teal-700 bg-white px-4 text-sm font-semibold text-teal-800 transition hover:bg-teal-50"
+            className={`inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ${
+              selectedProduct
+                ? 'bg-teal-700 text-white hover:bg-teal-800'
+                : 'border border-teal-700 bg-white text-teal-800 hover:bg-teal-50'
+            }`}
           >
             Details of the product
           </button>

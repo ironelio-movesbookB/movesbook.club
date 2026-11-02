@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ClubArchivePage from '@/components/club/archives/ClubArchivePage';
 import type { Column, Member } from '@/types/clubTable';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
@@ -94,7 +94,10 @@ function SaleOptions({ row, onDeleted }: { row: Member; onDeleted: () => void })
   );
 }
 
-export default function ProductSaleListPage() {
+function ProductSaleListPageInner() {
+  const searchParams = useSearchParams();
+  const productId = searchParams?.get('productId') || '';
+  const productName = searchParams?.get('productName')?.trim() || 'selected product';
   const [refreshKey, setRefreshKey] = useState(0);
   const columns: Column[] = [
     { key: 'insertDate', header: 'Date' },
@@ -132,12 +135,29 @@ export default function ProductSaleListPage() {
         </Link>
       </div>
       <ClubArchivePage
-        title={def.archiveTitles.records}
+        title={productId ? `${def.archiveTitles.records} · ${productName}` : def.archiveTitles.records}
         archiveType="product-sales-unified"
         columns={columns}
         refreshKey={refreshKey}
-        footerHint="Sellings performed by the operator or by the member online."
+        footerHint={
+          productId
+            ? `Only sellings that include ${productName}.`
+            : 'Sellings performed by the operator or by the member online.'
+        }
+        emptyMessage={
+          productId
+            ? `No sellings found for ${productName}. This product has not been sold yet.`
+            : 'No records found.'
+        }
       />
     </div>
+  );
+}
+
+export default function ProductSaleListPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading archive of sellings...</div>}>
+      <ProductSaleListPageInner />
+    </Suspense>
   );
 }

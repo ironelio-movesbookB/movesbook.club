@@ -44,6 +44,7 @@ function parseArchiveParams(
     toDate: sp.get('toDate') ?? undefined,
     orderBy: (sp.get('orderBy') as 'recent' | 'old') ?? undefined,
     memberId: sp.get('memberId') ?? undefined,
+    productId: sp.get('productId') ?? undefined,
     recordId: sp.get('recordId') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
