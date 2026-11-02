@@ -1063,7 +1063,7 @@ function FrameSettingsPageContent() {
           RESPONSIVE
       ================================================== */}
 
-      <style jsx global>{`
+      <style>{`
 
         .ck-editor {
           width: 100%;
