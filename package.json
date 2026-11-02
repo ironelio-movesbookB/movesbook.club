@@ -6,7 +6,7 @@
     },
     "scripts": {
         "dev": "next dev -p 3000",
-        "build": "prisma generate && node --max-old-space-size=6144 ./node_modules/next/dist/bin/next build",
+        "build": "prisma generate && node next-build.cjs",
         "build:clean": "rm -rf .next && npm run build",
         "start": "next start -p 3000",
         "lint": "next lint",
@@ -106,7 +106,6 @@
         "ts-node": "^10.9.2"
     },
     "optionalDependencies": {
-        "@img/sharp-libvips-linux-x64": "1.2.4",
-        "@next/swc-win32-x64-msvc": "14.2.35"
+        "@img/sharp-libvips-linux-x64": "1.2.4"
     }
 }
