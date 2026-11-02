@@ -7,6 +7,7 @@ import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { fetchProcedureCustomerOptions, fetchSingleUserOptions } from '@/lib/procedures/clubMembers';
 import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
+import { shopSector } from './sectors';
 
 export type ShopLineInput = { productId: string; quantity: number };
 
@@ -22,13 +23,6 @@ export type ShopBuyerInput = {
 };
 
 const procedureService = new ProcedureService();
-
-const SHOP_SECTORS = ['Shop', 'Restaurant', 'Bar'] as const;
-
-function shopSector(value: string | null | undefined) {
-  const found = SHOP_SECTORS.find((sector) => sector.toLowerCase() === String(value ?? '').trim().toLowerCase());
-  return found ?? 'Shop';
-}
 
 function money(value: Prisma.Decimal | number | string | null | undefined) {
   const n = Number(value ?? 0);

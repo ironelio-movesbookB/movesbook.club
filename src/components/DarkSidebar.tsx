@@ -4530,6 +4530,7 @@ export default function DarkSidebar({
                                   [
                                     { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard },
                                     { label: 'Products', path: '/clubs/shop/products/shop', Icon: Shirt },
+                                    { label: 'List of hardware purchasable', path: '/clubs/shop/products/hardware', Icon: Monitor },
                                     { label: 'Orders', path: '/clubs/shop/orders', Icon: ListOrdered },
                                     { label: 'Settings', path: '/clubs/shop/settings', Icon: Settings },
                                   ] as const
@@ -4679,6 +4680,12 @@ export default function DarkSidebar({
                                       Icon: ShoppingCart,
                                       label: 'Product of the Shop',
                                       path: '/clubs/shop/products/shop',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: Monitor,
+                                      label: 'List of hardware purchasable',
+                                      path: '/clubs/shop/products/hardware',
                                       nested: true as const,
                                     },
                                     {

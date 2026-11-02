@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { shopFetch } from '@/lib/shop/browser';
+import { SHOP_SECTOR_TITLE, shopSectorFromPath } from '@/lib/shop/sectors';
 
 type Product = {
   id: string;
@@ -225,21 +226,9 @@ function ProductCard({ product }: { product: Product }) {
   );
 }
 
-function catalogSector(pathname: string) {
-  if (pathname.includes('/products/restaurant')) return 'Restaurant';
-  if (pathname.includes('/products/bar')) return 'Bar';
-  return 'Shop';
-}
-
-const sectorTitle: Record<string, string> = {
-  Shop: 'Product of the Shop',
-  Restaurant: 'Product of the Restaurant',
-  Bar: 'Products of the Bar',
-};
-
 export default function ProductsPage() {
   const pathname = usePathname() || '';
-  const sector = catalogSector(pathname);
+  const sector = shopSectorFromPath(pathname);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -300,7 +289,7 @@ export default function ProductsPage() {
   return (
     <ShopFrame>
         <ShopHeader
-          title={sectorTitle[sector]}
+          title={SHOP_SECTOR_TITLE[sector]}
           subtitle={
             loading
               ? 'Loading your products...'

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
+import { SHOP_SECTORS, shopProductListPath, shopSector } from '@/lib/shop/sectors';
 import {
   ArrowLeft,
   ChevronDown,
@@ -154,9 +155,7 @@ export default function ProductForm({ productId }: Props) {
   useEffect(() => {
     if (productId) return;
     const requested = new URLSearchParams(window.location.search).get('sector');
-    if (requested === 'Shop' || requested === 'Restaurant' || requested === 'Bar') {
-      setSector(requested);
-    }
+    if (requested) setSector(shopSector(requested));
   }, [productId]);
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('0.00');
@@ -380,7 +379,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not save the product.');
       }
 
-      router.push(`/clubs/shop/products/${sector === 'Restaurant' ? 'restaurant' : sector === 'Bar' ? 'bar' : 'shop'}`);
+      router.push(shopProductListPath(sector));
       router.refresh();
     } catch (err) {
       setError(
@@ -415,7 +414,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not delete the product.');
       }
 
-      router.push(`/clubs/shop/products/${sector === 'Restaurant' ? 'restaurant' : sector === 'Bar' ? 'bar' : 'shop'}`);
+      router.push(shopProductListPath(sector));
       router.refresh();
     } catch (err) {
       setError(
@@ -520,7 +519,7 @@ export default function ProductForm({ productId }: Props) {
       </ShopHeader>
 
       <Link
-        href="/clubs/shop/products/shop"
+        href={shopProductListPath(sector)}
         className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700"
       >
         <ArrowLeft size={16} />
@@ -541,9 +540,11 @@ export default function ProductForm({ productId }: Props) {
               <div className="sm:col-span-3">
                 <Field label="Sector" required>
                   <select className={inputClass} value={sector} onChange={(event) => setSector(event.target.value)}>
-                    <option value="Shop">Shop</option>
-                    <option value="Restaurant">Restaurant</option>
-                    <option value="Bar">Bar</option>
+                    {SHOP_SECTORS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </Field>
                 <Field label="Name" required>
