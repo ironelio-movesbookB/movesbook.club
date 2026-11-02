@@ -27,6 +27,9 @@ import RegistrationVersionNewsModal, {
   type RegistrationVersionTextMode,
 } from './RegistrationVersionNewsModal';
 import RegistrationSpecialOfferBox from './RegistrationSpecialOfferBox';
+import RegistrationSpecialUpgradeBox, {
+  type SpecialUpgradeSoftwareInfo,
+} from './RegistrationSpecialUpgradeBox';
 import { SubscriptionSharingSummary } from '@/components/admin/subscriptions/SubscriptionMembershipSharingDisplay';
 
 type WaysToGetStartedSectionProps = {
@@ -37,6 +40,12 @@ type WaysToGetStartedSectionProps = {
   lang: string;
   specialOfferConfirmed?: boolean;
   onSpecialOfferConfirmChange?: (confirmed: boolean) => void;
+  specialUpgradeConfirmed?: boolean;
+  specialUpgradeSoftware?: SpecialUpgradeSoftwareInfo;
+  onSpecialUpgradeConfirmChange?: (
+    confirmed: boolean,
+    software?: SpecialUpgradeSoftwareInfo,
+  ) => void;
   /** Pricing of the selected country: prices are scaled and shown in local currency too. */
   countryPrice?: CountryPriceInfo | null;
 };
@@ -49,6 +58,9 @@ export default function WaysToGetStartedSection({
   lang,
   specialOfferConfirmed = false,
   onSpecialOfferConfirmChange,
+  specialUpgradeConfirmed = false,
+  specialUpgradeSoftware = { company: '', version: '', expiration: '' },
+  onSpecialUpgradeConfirmChange,
   countryPrice = null,
 }: WaysToGetStartedSectionProps) {
   const priceFactor = countryPrice?.factor ?? 1;
@@ -140,34 +152,45 @@ export default function WaysToGetStartedSection({
                   const isSelected = selectedVersionId === version.id;
                   const countryVersionPrice = priceForCountry(version.price, priceFactor);
                   return (
-                    <label
-                      key={version.id}
-                      className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 px-2 rounded cursor-pointer transition-colors ${
-                        isSelected ? 'bg-white/80 ring-1 ring-[#7a1f2e]/30' : 'hover:bg-white/50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="subscription-version"
-                        checked={isSelected}
-                        onChange={() => onVersionSelect(version.id)}
-                        className="shrink-0 accent-[#7a1f2e]"
-                      />
-                      <span className="text-sm font-medium text-gray-900 min-w-[140px] flex-1">
-                        {version.name}
-                      </span>
-                      <span className="text-sm font-semibold text-[#8b2942] whitespace-nowrap">
-                        : {formatCountryPrice(countryVersionPrice, countryPrice)}
-                      </span>
-                      <span className="text-sm text-gray-700 whitespace-nowrap ml-auto sm:ml-0">
-                        Duration : <span className="font-medium">{version.durationDays} days</span>
-                      </span>
-                      <RegistrationMonthlyCostLine
-                        price={countryVersionPrice}
-                        durationDays={version.durationDays}
-                        className="w-full sm:w-auto basis-full sm:basis-auto"
-                      />
-                    </label>
+                    <div key={version.id} className="space-y-1">
+                      <label
+                        className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 px-2 rounded cursor-pointer transition-colors ${
+                          isSelected ? 'bg-white/80 ring-1 ring-[#7a1f2e]/30' : 'hover:bg-white/50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="subscription-version"
+                          checked={isSelected}
+                          onChange={() => onVersionSelect(version.id)}
+                          className="shrink-0 accent-[#7a1f2e]"
+                        />
+                        <span className="text-sm font-medium text-gray-900 min-w-[140px] flex-1">
+                          {version.name}
+                        </span>
+                        <span className="text-sm font-semibold text-[#8b2942] whitespace-nowrap">
+                          : {formatCountryPrice(countryVersionPrice, countryPrice)}
+                        </span>
+                        <span className="text-sm text-gray-700 whitespace-nowrap ml-auto sm:ml-0">
+                          Duration : <span className="font-medium">{version.durationDays} days</span>
+                        </span>
+                        <RegistrationMonthlyCostLine
+                          price={countryVersionPrice}
+                          durationDays={version.durationDays}
+                          className="w-full sm:w-auto basis-full sm:basis-auto"
+                        />
+                      </label>
+                      {isSelected && onSpecialUpgradeConfirmChange ? (
+                        <RegistrationSpecialUpgradeBox
+                          versionId={version.id}
+                          lang={lang}
+                          confirmed={specialUpgradeConfirmed}
+                          software={specialUpgradeSoftware}
+                          onConfirmChange={onSpecialUpgradeConfirmChange}
+                          countryPrice={countryPrice}
+                        />
+                      ) : null}
+                    </div>
                   );
                 })}
 

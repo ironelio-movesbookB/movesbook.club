@@ -67,7 +67,7 @@ export type PublicOrgCard = {
 };
 
 type TeamProfileLike = {
-  contacts?: { email?: string; phone1?: string; website?: string };
+  contacts?: { email?: string; phone1?: string; phone2?: string; website?: string };
   mainData?: { fiscalCode?: string };
 };
 
@@ -79,13 +79,14 @@ export function publicOrgCard(org: PublicOrg): PublicOrgCard {
   const meta = parseClubDescriptionMeta(org.description);
   const contacts = meta.clubContacts ?? teamProfileOf(meta)?.contacts;
   const website = (contacts?.website || meta.website || '').trim();
+  const phone = (contacts?.phone1 || contacts?.phone2 || meta.phone || '').trim();
   return {
     kind: org.kind,
     name: org.name,
     logoUrl: resolveEntityLogoUrl(meta.logoUrl),
     bannerUrl: resolveEntityLogoUrl(meta.bannerUrl),
     email: (contacts?.email || org.ownerEmail || '').trim(),
-    phone: (contacts?.phone1 || meta.phone || '').trim(),
+    phone,
     website: website && !/^https?:\/\//i.test(website) ? `https://${website}` : website,
   };
 }

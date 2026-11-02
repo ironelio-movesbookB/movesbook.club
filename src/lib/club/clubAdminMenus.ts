@@ -257,6 +257,7 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'icon', Icon: Paperclip, label: 'Reservations', path: '/clubs/archive_reservations' },
     { kind: 'icon', Icon: Phone, label: 'Contacts of marketing', path: '/clubs/marketing_contacts' },
     { kind: 'icon', Icon: Calendar, label: 'Events', path: '/clubs/archive_events' },
+    { kind: 'icon', Icon: Calendar, label: 'Manage Events', path: '/clubs/events' },
   ],
   [
     { kind: 'icon', Icon: Presentation, label: 'Polls', path: '/clubs/archive_polls' },

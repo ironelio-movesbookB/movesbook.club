@@ -24,6 +24,7 @@ import {
   User,
   Users,
 } from 'lucide-react';
+import { DeleteRowButton, EditRowButton } from '@/components/procedures/ArchiveRowActions';
 import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   PREVIEW_LIMIT,
@@ -83,11 +84,11 @@ function printRows(title: string, rows: PreviewRow[]) {
   const body = rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(cell(row.typology))}</td><td>${escapeHtml(cell(row.detail))}</td><td>${escapeHtml(cell(row.date))}</td><td>${escapeHtml(cell(row.paymentIn))}</td><td>${escapeHtml(cell(row.paymentOut))}</td><td>${escapeHtml(cell(row.paidTotal))}</td><td>${escapeHtml(cell(row.rest))}</td><td>${escapeHtml(cell(row.nr))}</td></tr>`,
+        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(cell(row.typology))}</td><td>${escapeHtml(cell(row.detail))}</td><td>${escapeHtml(cell(row.date))}</td><td>${escapeHtml(cell(row.paymentIn))}</td><td>${escapeHtml(cell(row.paymentOut))}</td></tr>`,
     )
     .join('');
   popup.document.write(
-    `<!doctype html><title>${escapeHtml(title)}</title><style>body{font-family:sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#0f766e;color:#fff}button{margin:0 0 12px;padding:8px 12px}</style><body><button type="button" onclick="window.print()">Print or save as PDF</button><h1>${escapeHtml(title)}</h1><table><thead><tr><th>Full name</th><th>Typology</th><th>Detail</th><th>Date</th><th>Payment IN</th><th>Payment OUT</th><th>Paid / Total</th><th>Rest</th><th>Nr.</th></tr></thead><tbody>${body || '<tr><td colspan="9">No records.</td></tr>'}</tbody></table></body>`,
+    `<!doctype html><title>${escapeHtml(title)}</title><style>body{font-family:sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#115e59;color:#fff}button{margin:0 0 12px;padding:8px 12px}</style><body><button type="button" onclick="window.print()">Print or save as PDF</button><h1>${escapeHtml(title)}</h1><table><thead><tr><th>Full Name</th><th>Typology</th><th>Detail</th><th>Date</th><th>Payment IN</th><th>Payment OUT</th></tr></thead><tbody>${body || '<tr><td colspan="6">No records.</td></tr>'}</tbody></table></body>`,
   );
   popup.document.close();
 }
@@ -340,7 +341,7 @@ export default function ClubMonitoringDashboard({
                   className="px-2 py-2 text-sm text-gray-700 hover:underline"
                   onClick={() => router.push(def.readAllPath)}
                 >
-                  Save as current
+                  Read all
                 </button>
                 <button
                   type="button"
@@ -374,7 +375,12 @@ export default function ClubMonitoringDashboard({
                     </div>
                   ) : (
                     <>
-                      <PreviewTable rows={rows} altColor={section.altColor} visibleCount={visibleCount} />
+                      <PreviewTable
+                        rows={rows}
+                        altColor={section.altColor}
+                        visibleCount={visibleCount}
+                        onOpenArchive={() => router.push(def.readAllPath)}
+                      />
                       {rows.length > section.rows && !showAll ? (
                         <button
                           type="button"
@@ -386,7 +392,7 @@ export default function ClubMonitoringDashboard({
                       ) : null}
                       {rows.length >= PREVIEW_LIMIT ? (
                         <p className="mt-2 text-xs text-gray-500">
-                          Showing the latest {PREVIEW_LIMIT} records. Save as current opens the full archive.
+                          Showing the latest {PREVIEW_LIMIT} records. Read all opens the full archive.
                         </p>
                       ) : null}
                     </>
@@ -424,53 +430,83 @@ function PreviewTable({
   rows,
   altColor,
   visibleCount,
+  onOpenArchive,
 }: {
   rows: PreviewRow[];
   altColor: string;
   visibleCount: number;
+  onOpenArchive?: () => void;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-500">No records.</p>;
   }
-  const headers = [
-    'Full name',
-    'Typology',
-    'Detail',
-    'Date',
-    'Payment IN',
-    'Payment OUT',
-    'Paid / Total',
-    'Rest',
-    'Nr.',
-    'Edit',
-    'Delete',
-  ];
+  const visible = rows.slice(0, visibleCount);
+  const headers = ['Full Name', 'Typology', 'Detail', 'Date', 'Payment IN', 'Payment OUT', 'Edit', 'Delete'];
+  const allChecked = visible.length > 0 && visible.every((row) => selected.has(row.id));
+  const openArchive = () => onOpenArchive?.();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[880px] border-collapse text-sm">
-        <thead>
-          <tr className="bg-teal-800 text-left text-white">
+        <thead className="bg-teal-800 text-white">
+          <tr className="text-left">
+            <th className="w-10 px-2 py-2">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                aria-label="Select all"
+                onChange={(event) => {
+                  setSelected((current) => {
+                    const next = new Set(current);
+                    if (event.target.checked) {
+                      for (const row of visible) next.add(row.id);
+                    } else {
+                      for (const row of visible) next.delete(row.id);
+                    }
+                    return next;
+                  });
+                }}
+              />
+            </th>
             {headers.map((header) => (
-              <th key={header} className="px-2 py-1.5 font-semibold whitespace-nowrap">
+              <th key={header} className="px-3 py-2 font-semibold whitespace-nowrap">
                 {header}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, visibleCount).map((row, index) => (
+          {visible.map((row, index) => (
             <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
-              <td className="px-2 py-1.5">{row.title}</td>
-              <td className="px-2 py-1.5">{row.typology || '—'}</td>
-              <td className="px-2 py-1.5">{row.detail || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.paymentIn || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.paymentOut || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.paidTotal || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.rest || '—'}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.nr || '—'}</td>
-              <td className="px-2 py-1.5">—</td>
-              <td className="px-2 py-1.5">—</td>
+              <td className="px-2 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={selected.has(row.id)}
+                  aria-label={`Select ${row.title}`}
+                  onChange={(event) => {
+                    setSelected((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(row.id);
+                      else next.delete(row.id);
+                      return next;
+                    });
+                  }}
+                />
+              </td>
+              <td className="px-3 py-1.5">{row.title}</td>
+              <td className="px-3 py-1.5">{row.typology || '—'}</td>
+              <td className="px-3 py-1.5">{row.detail || '—'}</td>
+              <td className="px-3 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
+              <td className="px-3 py-1.5 whitespace-nowrap">{row.paymentIn || '—'}</td>
+              <td className={`px-3 py-1.5 whitespace-nowrap ${row.paymentOut ? 'text-red-700' : ''}`}>
+                {row.paymentOut || '—'}
+              </td>
+              <td className="px-3 py-1.5">
+                <EditRowButton onClick={openArchive} />
+              </td>
+              <td className="px-3 py-1.5">
+                <DeleteRowButton onClick={openArchive} />
+              </td>
             </tr>
           ))}
         </tbody>

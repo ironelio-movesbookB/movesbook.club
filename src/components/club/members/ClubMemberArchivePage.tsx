@@ -62,6 +62,11 @@ type Props = {
   onViewModeChange?: (mode: MemberArchiveViewMode) => void;
   /** Coach workspace: athletes trained have no membership status, so the dots are display-only. */
   statusChangesEnabled?: boolean;
+  /**
+   * Club Channel in-app delivery is only for club workspaces.
+   * Team / Coach Send Msg uses email only (same Ionos path as Send mail / Send Data).
+   */
+  clubChannelMessaging?: boolean;
 };
 
 function memberTypeBadge(value: unknown) {
@@ -181,6 +186,7 @@ export default function ClubMemberArchivePage({
   onMembershipStatusChanged,
   onViewModeChange,
   statusChangesEnabled = true,
+  clubChannelMessaging = true,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
 
@@ -216,8 +222,9 @@ export default function ClubMemberArchivePage({
   const [shareOpen, setShareOpen] = useState(false);
   const [messageDialog, setMessageDialog] = useState<{ rows: Member[] } | null>(null);
   const [messageText, setMessageText] = useState('');
+  const [messageSubject, setMessageSubject] = useState('');
   const [messageInApp, setMessageInApp] = useState(true);
-  const [messageByEmail, setMessageByEmail] = useState(false);
+  const [messageByEmail, setMessageByEmail] = useState(true);
   const [dataDialog, setDataDialog] = useState<{ rows: Member[] } | null>(null);
   const [dataEmail, setDataEmail] = useState('');
   const [dataNote, setDataNote] = useState('');
@@ -726,8 +733,11 @@ export default function ClubMemberArchivePage({
       const rows = await resolveTargetRows();
       if (kind === 'message') {
         setMessageText('');
-        setMessageInApp(true);
-        setMessageByEmail(false);
+        setMessageSubject('');
+        // Club: Club Channel + email (email on by default, like Send mail).
+        // Team/Coach: email only.
+        setMessageInApp(clubChannelMessaging);
+        setMessageByEmail(true);
         setMessageDialog({ rows });
       } else {
         setDataEmail(currentUserEmail());
@@ -748,8 +758,14 @@ export default function ClubMemberArchivePage({
       setError('Write a message.');
       return;
     }
-    if (!messageInApp && !messageByEmail) {
-      setError('Choose Club Channel and/or email.');
+    const useChannel = clubChannelMessaging && messageInApp;
+    const useEmail = messageByEmail;
+    if (!useChannel && !useEmail) {
+      setError(
+        clubChannelMessaging
+          ? 'Choose Club Channel and/or email.'
+          : 'Email delivery is required for Team/Coach messages.',
+      );
       return;
     }
     setActionBusy('message');
@@ -768,8 +784,9 @@ export default function ClubMemberArchivePage({
           memberIds: targetIds(messageDialog.rows),
           membershipStatus: actionMembershipStatus,
           content,
-          inApp: messageInApp,
-          byEmail: messageByEmail,
+          subject: messageSubject.trim(),
+          inApp: useChannel,
+          byEmail: useEmail,
         }),
       });
       const parts: string[] = [];
@@ -778,7 +795,7 @@ export default function ClubMemberArchivePage({
         const notMembers = res.recipients - res.inApp;
         if (notMembers > 0) parts.push(`${notMembers} staff-only not in Club Channel`);
       }
-      if (messageByEmail) {
+      if (useEmail) {
         parts.push(`emailed to ${res.emailed}`);
         if (res.noEmail) parts.push(`${res.noEmail} without email`);
         if (res.emailFailed) parts.push(`${res.emailFailed} email(s) failed`);
@@ -1005,8 +1022,12 @@ export default function ClubMemberArchivePage({
                   <Filter size={16} />
                   Filter
                 </button>
-                <button type="button" onClick={clearFilters} className={filterActionClass}>
-                  <RotateCcw size={16} />
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcw size={16} aria-hidden />
                   Clear
                 </button>
                 {showBulkActions && selectedIds.size > 0 ? (
@@ -1188,8 +1209,25 @@ export default function ClubMemberArchivePage({
       {messageDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-900">Send message</h2>
-            <p className="mt-1 text-sm text-gray-600">To: {targetLabel(messageDialog.rows.length)}</p>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Send a Message to the selected members
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              To: {targetLabel(messageDialog.rows.length)}
+            </p>
+            {messageByEmail ? (
+              <label className="mt-4 block">
+                <span className="text-sm text-gray-700">Subject (optional)</span>
+                <input
+                  type="text"
+                  maxLength={200}
+                  value={messageSubject}
+                  onChange={(e) => setMessageSubject(e.target.value)}
+                  className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Message from your club"
+                />
+              </label>
+            ) : null}
             <label className="mt-4 block">
               <span className="text-sm text-gray-700">Message</span>
               <textarea
@@ -1203,23 +1241,28 @@ export default function ClubMemberArchivePage({
               />
             </label>
             <div className="mt-3 space-y-2 text-sm text-gray-800">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300"
-                  checked={messageInApp}
-                  onChange={(e) => setMessageInApp(e.target.checked)}
-                />
-                Send in the Club Channel (only these members will see it)
-              </label>
+              {clubChannelMessaging ? (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300"
+                    checked={messageInApp}
+                    onChange={(e) => setMessageInApp(e.target.checked)}
+                  />
+                  Send in the Club Channel (only these members will see it)
+                </label>
+              ) : null}
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-gray-300"
                   checked={messageByEmail}
                   onChange={(e) => setMessageByEmail(e.target.checked)}
+                  disabled={!clubChannelMessaging}
                 />
-                Also send by email
+                {clubChannelMessaging
+                  ? 'Also send by email (registered address on file)'
+                  : 'Send by email (registered address on file)'}
               </label>
             </div>
             {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}

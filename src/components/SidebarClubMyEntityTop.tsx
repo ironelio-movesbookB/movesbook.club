@@ -91,7 +91,10 @@ export default function SidebarClubMyEntityTop({
     (club?.description?.trim().startsWith('{') ? '' : club?.description?.trim()) ||
     '';
   const country = userCountry ?? fallbackCountry;
-  /** Official MY CLUB menu: dashboard, social and visitors rows move below Club Info (DarkSidebar). */
+  /**
+   * Official MY CLUB menu: after Club Info, DarkSidebar renders flat rows —
+   * My Club Dashboard → Section Social → Club page for visitors → …
+   */
   const officialClubLayout = isClubAccountUserType(userType);
 
   return (

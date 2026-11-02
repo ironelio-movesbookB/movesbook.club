@@ -15,12 +15,14 @@ import SubscriptionGeneralForm from './SubscriptionGeneralForm';
 import SubscriptionEditSettingsForm from './SubscriptionEditSettingsForm';
 import SubscriptionExpirationSections from './SubscriptionExpirationSections';
 import SpecialOfferSettingsPanel from './SpecialOfferSettingsPanel';
+import SpecialUpgradeSettingsPanel from './SpecialUpgradeSettingsPanel';
 
-type EditTab = 'general' | 'special_offer';
+type EditTab = 'general' | 'special_offer' | 'special_upgrade';
 
 const EDIT_TABS: { key: EditTab; label: string }[] = [
   { key: 'general', label: 'General' },
   { key: 'special_offer', label: 'Special offer' },
+  { key: 'special_upgrade', label: 'Special Upgrade' },
 ];
 
 type EditSubscriptionPanelProps = {
@@ -110,6 +112,8 @@ export default function EditSubscriptionPanel({
       <div className="flex-1 overflow-y-auto p-4 lg:p-6 max-w-5xl">
         {activeTab === 'special_offer' ? (
           <SpecialOfferSettingsPanel versionId={subscriptionId} versionName={row.name} />
+        ) : activeTab === 'special_upgrade' ? (
+          <SpecialUpgradeSettingsPanel versionId={subscriptionId} versionName={row.name} />
         ) : (
         <>
         <SubscriptionGeneralForm

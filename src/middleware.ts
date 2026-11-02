@@ -51,6 +51,11 @@ const publicApiRoutes = [
   '/api/admin/promocodes/change-code',
   /** Outcome audio for <audio src> — no Authorization header on GET */
   '/api/outcome-messages',
+  /**
+   * Uploaded files (sponsor PDFs, banners, logos, …). Browser <a href>/<img src> have no
+   * Authorization header; member-medical paths stay gated inside the route handler.
+   */
+  '/api/media',
   /** Public read APIs (editorial news, shared OGP groups, etc.) */
   '/api/public/',
   /** Used by admin editors (Settings, subscriptions, recipes) — token is often in localStorage only */
@@ -75,6 +80,27 @@ const publicApiRoutes = [
 /** Public share links (read-only workout day / session). */
 function isPublicSharedWorkoutApi(pathname: string): boolean {
   return /^\/api\/workouts\/(days|sessions)\/[^/]+\/shared$/.test(pathname);
+}
+
+/** QR / shared member profile. GET with mode=view only; edits stay authenticated. */
+function isPublicMemberProfileView(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  if (request.nextUrl.searchParams.get('mode') !== 'view') return false;
+  return /^\/api\/clubs\/[^/]+\/members\/[^/]+\/profile\/?$/.test(request.nextUrl.pathname);
+}
+
+/** Personal member photos are not medical files. The QR view page loads them without a club login. */
+function isPublicMemberPhoto(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  return request.nextUrl.pathname.startsWith('/api/media/uploads/member-photos/');
+}
+
+/** Documents folder Get-link / shared page — no Authorization header on public preview. */
+function isPublicClubDocumentsFolderApi(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  return /^\/api\/clubs\/[^/]+\/documents-folder\/public\/?$/.test(
+    request.nextUrl.pathname,
+  );
 }
 
 export function middleware(request: NextRequest) {
@@ -114,7 +140,10 @@ export function middleware(request: NextRequest) {
     if (
       !token &&
       !publicApiRoutes.some((route) => pathname.startsWith(route)) &&
-      !isPublicSharedWorkoutApi(pathname)
+      !isPublicSharedWorkoutApi(pathname) &&
+      !isPublicMemberProfileView(request) &&
+      !isPublicMemberPhoto(request) &&
+      !isPublicClubDocumentsFolderApi(request)
     ) {
       return NextResponse.json(
         { error: 'Unauthorized' },

@@ -1206,6 +1206,8 @@ export async function listCashMovements(
   await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-');
   await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-');
   await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.MEMBERSHIP, 'min-');
+  await pushPayments(PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION, 'cin-');
   await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
   if (direction === 'all' || direction === 'IN') {
@@ -1218,6 +1220,16 @@ export async function listCashMovements(
       items.push(...sponsorCash);
     } catch {
       /* sponsor tables may be unavailable */
+    }
+    try {
+      const { listEventArchiveCash } = await import('@/lib/club/events/eventService');
+      const eventCash = await listEventArchiveCash({
+        kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
+        id: ctx.club.id,
+      });
+      items.push(...eventCash);
+    } catch {
+      /* event tables may be unavailable */
     }
   }
 

@@ -17,7 +17,8 @@ const MAX_EMAIL_RECIPIENTS = 500;
 
 /**
  * Sends a message to the selected / filtered Archive of Users rows:
- * in-app via the Club Channel (visible only to those members) and optionally by email.
+ * in-app via the Club Channel (visible only to those members) and/or by email
+ * (same Ionos mail path as Archive "Send Data" / table "Send mail").
  */
 export async function POST(request: NextRequest) {
   try {
@@ -41,17 +42,19 @@ export async function POST(request: NextRequest) {
     if (!content) {
       return NextResponse.json({ error: 'Write a message.' }, { status: 400 });
     }
+    const subjectRaw =
+      typeof body.subject === 'string' ? body.subject.trim().slice(0, 200) : '';
 
-    // The in-app Club Channel exists only for clubs; teams and coaches send by email.
+    // Club Channel exists only for clubs; teams and coaches send by email (like Send mail).
     const isTeam = ctx.workspaceKind === 'team' || ctx.workspaceKind === 'coach';
     const inApp = body.inApp !== false && !isTeam;
-    const byEmail = body.byEmail === true;
+    const byEmail = body.byEmail === true || (isTeam && body.byEmail !== false);
     if (!inApp && !byEmail) {
       return NextResponse.json(
         {
           error: isTeam
-            ? `${ctx.workspaceKind === 'coach' ? 'Coach' : 'Team'} messages can be sent by email only.`
-            : 'Choose how to send the message.',
+            ? `${ctx.workspaceKind === 'coach' ? 'Coach' : 'Team'} messages are sent by email only.`
+            : 'Choose Club Channel and/or email.',
         },
         { status: 400 },
       );
@@ -63,8 +66,15 @@ export async function POST(request: NextRequest) {
       parseMembershipStatus(body.membershipStatus),
     );
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'No members of this club match the selection.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'No members of this club match the selection.' },
+        { status: 400 },
+      );
     }
+
+    const targetIds = rows
+      .map((r) => String(r.memberId ?? r.id ?? '').trim())
+      .filter(Boolean);
 
     const sender = await prisma.user.findUnique({
       where: { id: ctx.userId },
@@ -76,6 +86,7 @@ export async function POST(request: NextRequest) {
       ctx.club.name ||
       'Club admin';
     const clubName = ctx.club.name || 'Club';
+    const mailSubject = subjectRaw || `Message from ${clubName}`;
 
     // Club Channel is readable only by club members, so staff-only rows can't receive it.
     const channelRecipientIds = inApp
@@ -86,13 +97,17 @@ export async function POST(request: NextRequest) {
       : [];
     if (inApp && channelRecipientIds.length === 0 && !byEmail) {
       return NextResponse.json(
-        { error: 'None of these users is a club member, so they cannot see the Club Channel. Use email.' },
+        {
+          error:
+            'None of these users is a club member, so they cannot see the Club Channel. Use email.',
+        },
         { status: 400 },
       );
     }
 
     let inAppCount = 0;
     if (channelRecipientIds.length > 0) {
+      // Same storage as Club Channel composer (`/api/chat/broadcast` with targeted recipients).
       await prisma.chatBroadcastMessage.create({
         data: {
           content,
@@ -109,44 +124,68 @@ export async function POST(request: NextRequest) {
     let emailFailed = 0;
     let noEmail = 0;
     if (byEmail) {
+      // Resolve emails from User (same source as admin Send mail), not only archive row cache.
+      const users = await prisma.user.findMany({
+        where: { id: { in: targetIds } },
+        select: { id: true, email: true },
+      });
+      const emailById = new Map(
+        users.map((u) => [u.id, String(u.email ?? '').trim()] as const),
+      );
       const emails = Array.from(
         new Set(
-          rows
-            .map((r) => String(r.email ?? '').trim())
+          targetIds
+            .map((id) => emailById.get(id) || '')
             .filter((e) => isValidEmail(e)),
         ),
       );
-      noEmail = rows.length - emails.length;
-      if (emails.length > MAX_EMAIL_RECIPIENTS) {
-        return NextResponse.json(
-          { error: `Too many email recipients (max ${MAX_EMAIL_RECIPIENTS}).` },
-          { status: 400 },
-        );
-      }
-      const html =
-        `<p><strong>${escapeHtml(senderName)}</strong> (${escapeHtml(clubName)}) wrote:</p>` +
-        `<p style="white-space:pre-wrap">${escapeHtml(content)}</p>`;
-      const text = `${senderName} (${clubName}) wrote:\n\n${content}`;
-      for (const to of emails) {
-        try {
-          await sendIonosEmail({
-            to,
-            subject: `Message from ${clubName}`,
-            html,
-            text,
-            replyTo: sender?.email || undefined,
-          });
-          emailed += 1;
-        } catch (error) {
-          emailFailed += 1;
-          console.error('club members send-message email failed:', to, error);
+      noEmail = targetIds.length - emails.length;
+      if (emails.length === 0) {
+        if (!inApp) {
+          return NextResponse.json(
+            { error: 'None of the selected members has a valid email on file.' },
+            { status: 400 },
+          );
+        }
+      } else {
+        if (emails.length > MAX_EMAIL_RECIPIENTS) {
+          return NextResponse.json(
+            { error: `Too many email recipients (max ${MAX_EMAIL_RECIPIENTS}).` },
+            { status: 400 },
+          );
+        }
+        const html =
+          `<p><strong>${escapeHtml(senderName)}</strong> (${escapeHtml(clubName)}) wrote:</p>` +
+          `<p style="white-space:pre-wrap">${escapeHtml(content)}</p>` +
+          `<p style="margin-top:20px;font-size:12px;color:#999;">Sent from Movesbook</p>`;
+        const text = `${senderName} (${clubName}) wrote:\n\n${content}`;
+        for (const to of emails) {
+          try {
+            await sendIonosEmail({
+              to,
+              subject: mailSubject,
+              html,
+              text,
+              replyTo: sender?.email || undefined,
+            });
+            emailed += 1;
+          } catch (error) {
+            emailFailed += 1;
+            console.error('club members send-message email failed:', to, error);
+          }
+        }
+        if (emailed === 0 && emailFailed > 0 && !inApp) {
+          return NextResponse.json(
+            { error: 'Failed to send the email. Nothing was delivered.' },
+            { status: 500 },
+          );
         }
       }
     }
 
     return NextResponse.json({
       recipients: rows.length,
-      channelUsed: inApp,
+      channelUsed: inApp && inAppCount > 0,
       inApp: inAppCount,
       emailed,
       emailFailed,

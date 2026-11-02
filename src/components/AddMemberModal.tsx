@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { UserPlus, UserCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
-  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
+  ADDABLE_MEMBER_HINT,
+  AdminAsMemberConfirmError,
   type MemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
 
@@ -11,7 +12,7 @@ const MEMBERSHIP_LIST_OPTIONS: Array<{
   value: MemberArchiveStatus;
   label: string;
 }> = [
-  { value: 'member', label: "In the list of Members" },
+  { value: 'member', label: 'In the list of Members' },
   { value: 'pending', label: 'In the list of Members in pending' },
   { value: 'not_member', label: 'In the list of Athletes NOT members' },
 ];
@@ -20,6 +21,8 @@ export type AddMemberExistingPayload = {
   username: string;
   password: string;
   membershipStatus?: MemberArchiveStatus;
+  /** Set after the admin confirms “Do you want insert the user the same?” */
+  confirmAdminAsMember?: boolean;
 };
 
 export type AddMemberNewPayload = {
@@ -61,6 +64,10 @@ export default function AddMemberModal({
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [adminConfirm, setAdminConfirm] = useState<{
+    hint: string;
+    question: string;
+  } | null>(null);
   const [membershipStatus, setMembershipStatus] = useState<MemberArchiveStatus | null>(
     null,
   );
@@ -86,6 +93,7 @@ export default function AddMemberModal({
     setShowPassword(false);
     setSubmitting(false);
     setError('');
+    setAdminConfirm(null);
     setMembershipStatus(null);
   };
 
@@ -99,6 +107,7 @@ export default function AddMemberModal({
     if (submitting) return;
     setActiveOption(null);
     setError('');
+    setAdminConfirm(null);
     setExistingUsername('');
     setExistingPassword('');
     setNewUsername('');
@@ -135,8 +144,7 @@ export default function AddMemberModal({
     </fieldset>
   ) : null;
 
-  const handleSubmitExistingUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitExisting = async (confirmAdminAsMember: boolean) => {
     if (!existingUsername.trim() || !existingPassword || !onAddExistingUser || submitting) {
       return;
     }
@@ -147,19 +155,30 @@ export default function AddMemberModal({
 
     setSubmitting(true);
     setError('');
+    setAdminConfirm(null);
     try {
       await onAddExistingUser({
         username: existingUsername.trim(),
         password: existingPassword,
         ...(membershipStatus ? { membershipStatus } : {}),
+        ...(confirmAdminAsMember ? { confirmAdminAsMember: true } : {}),
       });
       resetForm();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add member');
+      if (err instanceof AdminAsMemberConfirmError) {
+        setAdminConfirm({ hint: err.message, question: err.question });
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to add member');
+      }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmitExistingUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitExisting(false);
   };
 
   const handleSubmitNewUser = async (e: React.FormEvent) => {
@@ -204,6 +223,7 @@ export default function AddMemberModal({
                 type="button"
                 onClick={() => {
                   setError('');
+                  setAdminConfirm(null);
                   setActiveOption('new');
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 px-6 py-4 font-medium text-white transition-colors hover:bg-gray-700"
@@ -217,6 +237,7 @@ export default function AddMemberModal({
               type="button"
               onClick={() => {
                 setError('');
+                setAdminConfirm(null);
                 setActiveOption('existing');
               }}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 px-6 py-4 font-medium text-white transition-colors hover:bg-gray-700"
@@ -241,11 +262,9 @@ export default function AddMemberModal({
               Enter the Movesbook username and password of the user to add as{' '}
               {entityType === 'coaching-group'
                 ? 'an athlete trained by you'
-                : `a ${entityType === 'team' ? 'team' : 'club'} member`}
+                : `a ${entityType === 'team' ? 'team' : entityType === 'group' ? 'group' : 'club'} member`}
               .{' '}
-              <span className="text-gray-500">
-                {NOT_ADDABLE_MEMBER_USER_TYPE_ERROR}
-              </span>
+              <span className="text-gray-500">{ADDABLE_MEMBER_HINT}</span>
             </p>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Username</label>
@@ -284,6 +303,30 @@ export default function AddMemberModal({
               </div>
             </div>
             {membershipListField}
+            {adminConfirm ? (
+              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm text-red-600">{adminConfirm.hint}</p>
+                <p className="text-sm font-semibold text-gray-900">{adminConfirm.question}</p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => void submitExisting(true)}
+                    className="flex-1 rounded-lg bg-gray-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60"
+                  >
+                    {submitting ? 'Adding…' : 'YES'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => setAdminConfirm(null)}
+                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-300 disabled:opacity-60"
+                  >
+                    NO
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="flex gap-3">
               <button
@@ -296,7 +339,7 @@ export default function AddMemberModal({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || Boolean(adminConfirm)}
                 className="flex-1 rounded-lg bg-gray-800 px-6 py-3 font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-60"
               >
                 {submitting ? 'Adding…' : 'OK'}

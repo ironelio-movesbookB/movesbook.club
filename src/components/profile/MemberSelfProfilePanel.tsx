@@ -127,10 +127,25 @@ function clubTabBlockedContent(
 type Props = {
   userId: string;
   clubs: ClubOption[];
+  /** Open on this tab (default: Member profile). */
+  initialTab?: ProfileTabId;
+  /** When set, only these tabs are shown (e.g. Contacts + My Activities). */
+  onlyTabs?: ProfileTabId[];
+  title?: string;
+  description?: string;
+  onClose?: () => void;
 };
 
-function MemberSelfProfilePanelView({ userId, clubs }: Props) {
-  const [activeTab, setActiveTab] = useState<ProfileTabId>('owner-profile');
+function MemberSelfProfilePanelView({
+  userId,
+  clubs,
+  initialTab = 'owner-profile',
+  onlyTabs,
+  title,
+  description,
+  onClose,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<ProfileTabId>(initialTab);
   const [selectedClubId, setSelectedClubId] = useState<string>('');
   const st = useSportT();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -140,9 +155,22 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const sharedTabs = useMemo(() => {
+    if (!onlyTabs?.length) return SHARED_TABS;
+    return SHARED_TABS.filter((tab) => onlyTabs.includes(tab.id));
+  }, [onlyTabs]);
+
+  const clubTabs = useMemo(() => {
+    if (!onlyTabs?.length) return CLUB_TABS;
+    return CLUB_TABS.filter((tab) => onlyTabs.includes(tab.id));
+  }, [onlyTabs]);
+
+  /** Contacts / Activities / References / Owner are shared — load the self API when that is all we show. */
+  const sharedOnlyMode = Boolean(onlyTabs?.length) && clubTabs.length === 0;
+
   const activeMeta = useMemo(
-    () => [...SHARED_TABS, ...CLUB_TABS].find((t) => t.id === activeTab),
-    [activeTab],
+    () => [...sharedTabs, ...clubTabs].find((t) => t.id === activeTab),
+    [activeTab, sharedTabs, clubTabs],
   );
 
   const loadSelf = useCallback(async () => {
@@ -194,23 +222,34 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
   );
 
   useEffect(() => {
-    if (clubs.length === 0) {
+    if (sharedOnlyMode || clubs.length === 0) {
       void loadSelf();
     } else {
       void loadClub(clubs[0].id);
     }
-  }, [clubs, loadSelf, loadClub]);
+  }, [clubs, loadSelf, loadClub, sharedOnlyMode]);
 
-  const profileSource = clubs.length === 0 ? 'self' : 'club';
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
-  // Always show all labels; enforce club-admin visibility after a club is selected.
+  useEffect(() => {
+    if (!onlyTabs?.length) return;
+    if (!onlyTabs.includes(activeTab)) {
+      setActiveTab(onlyTabs[0] || initialTab);
+    }
+  }, [onlyTabs, activeTab, initialTab]);
+
+  const profileSource = sharedOnlyMode || clubs.length === 0 ? 'self' : 'club';
+
+  // Always show all labels (or onlyTabs); enforce club-admin visibility after a club is selected.
   const tabs = useMemo(
     () => ({
-      shared: SHARED_TABS,
-      club: CLUB_TABS,
-      all: [...SHARED_TABS, ...CLUB_TABS],
+      shared: sharedTabs,
+      club: clubTabs,
+      all: [...sharedTabs, ...clubTabs],
     }),
-    [],
+    [sharedTabs, clubTabs],
   );
 
   const clubTabBlocked =
@@ -266,15 +305,32 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
   const sponsors = useSectionSponsors(selectedClubId, sponsorSections);
 
   return (
-    <div>
-      <h2 className="text-xl font-bold text-gray-800 mb-1">{st('Member info')}</h2>
-      <p className="mb-4 text-sm text-gray-600">
-        {st(
-          'Grey labels are shared across all your clubs and teams (you edit them). Blue labels load data from the club or team you select and are managed by its admin — they may enable or hide each label for you.',
-        )}
-      </p>
+    <div className="min-w-0">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="mb-1 text-xl font-bold text-gray-800">
+            {st(title || 'Member info')}
+          </h2>
+          <p className="text-sm text-gray-600">
+            {st(
+              description ||
+                'Grey labels are shared across all your clubs and teams (you edit them). Blue labels load data from the club or team you select and are managed by its admin — they may enable or hide each label for you.',
+            )}
+          </p>
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-300 bg-white p-2 text-gray-600 hover:bg-gray-50"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
 
-      {clubs.length === 0 ? (
+      {clubs.length === 0 && !sharedOnlyMode ? (
         <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {st(
             'You are not a member of any club or team yet. Shared profile labels still work; blue labels need a club or team membership.',
@@ -282,12 +338,14 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
         </p>
       ) : null}
 
-      <SponsorSlot
-        items={sponsors}
-        title={st('Sponsored by')}
-        compact
-        className="mb-3 rounded-lg border border-gray-200 bg-white px-3 py-2"
-      />
+      {!sharedOnlyMode ? (
+        <SponsorSlot
+          items={sponsors}
+          title={st('Sponsored by')}
+          compact
+          className="mb-3 rounded-lg border border-gray-200 bg-white px-3 py-2"
+        />
+      ) : null}
 
       <div className="min-w-0 overflow-visible rounded-lg border border-gray-300 bg-white">
         <nav
@@ -296,6 +354,7 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
         >
           <ScrollArrowsRow activeKey={activeTab}>
             <div className="flex flex-nowrap items-stretch gap-px">
+              {tabs.shared.length > 0 ? (
               <div className="flex flex-auto flex-col">
                 <p
                   title={st('Managed by the member (*Member profile can be shared)')}
@@ -311,6 +370,7 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
                         key={tab.id}
                         type="button"
                         title={st(tab.label)}
+                        data-member-profile-tab={tab.id}
                         data-scroll-active={active}
                         onClick={() => openTab(tab)}
                         className={`flex-auto rounded-t px-1.5 py-1.5 text-center text-xs font-medium leading-tight ${
@@ -325,7 +385,9 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
                   })}
                 </div>
               </div>
+              ) : null}
 
+              {tabs.club.length > 0 ? (
               <div className="flex flex-auto flex-col">
                 <p
                   title={st('Managed by the Club/Team Admin')}
@@ -355,6 +417,7 @@ function MemberSelfProfilePanelView({ userId, clubs }: Props) {
                   })}
                 </div>
               </div>
+              ) : null}
             </div>
           </ScrollArrowsRow>
         </nav>

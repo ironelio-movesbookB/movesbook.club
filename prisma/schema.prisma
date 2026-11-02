@@ -724,6 +724,12 @@ model UserMessageThread {
   status          String?               @db.VarChar(32)
   /// Marked inappropriate by staff/admin (formerly "spam")
   isInappropriate Boolean               @default(false)
+  /// Club/staff thread: recipient soft-deleted their copy (raw SQL path also ensures this column).
+  deletedByRecipient Boolean            @default(false)
+  /// Club staff messaging (runtime ALTER in clubStaffMessages.ts; keep so db push does not drop).
+  recipientUserId    String?            @db.VarChar(191)
+  recipientType      String?            @db.VarChar(16)
+  senderType         String?            @db.VarChar(16)
   /// JSON array of up to 3 public image URLs attached to the first post
   imageUrls       String?               @db.Text
   likeCount       Int                   @default(0)
@@ -802,17 +808,35 @@ model Language {
 }
 
 model Translation {
-  id        String   @id @default(cuid())
-  key       String
-  language  String   
-  value     String   @db.Text
-  category  String   @default("general") 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  id         String   @id @default(cuid())
+  key        String
+  language   String
+  value      String   @db.Text
+  category   String   @default("general")
+  isDeleted  Boolean  @default(false)
+  /// Long-text registry flag used by Language Settings / admin translation APIs.
+  isLongText Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([key, language])
   @@map("translations")
+}
+
+/// Lookup table for club identification devices (card readers).
+model ClubCardReaderType {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(191)
+
+  @@map("club_card_reader_types")
+}
+
+/// Lookup table for club card-reader control modes.
+model ClubCardControlMode {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(191)
+
+  @@map("club_card_control_modes")
 }
 
 model CoachAthlete {
@@ -2481,6 +2505,7 @@ model SubscriptionSpecialOfferRow {
   id               Int      @id @default(autoincrement())
   versionId        Int      @unique(map: "uq_special_offer_version")
   enabled          Boolean  @default(false)
+  offerCode        String   @default("") @db.VarChar(32)
   titlesJson       String?  @db.Text
   descriptionsJson String?  @db.MediumText
   counterLangsJson String?  @db.Text
@@ -2494,6 +2519,59 @@ model SubscriptionSpecialOfferRow {
   updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
 
   @@map("subscription_special_offers")
+  @@ignore
+}
+
+/// Registration device mode for admin/all Mode column. Raw SQL in register + registered-users routes.
+model UserRegistrationMetaRow {
+  userId           String   @id @db.VarChar(191)
+  registrationMode String   @default("desk") @db.VarChar(20)
+  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("user_registration_meta")
+  @@ignore
+}
+
+/// src/lib/subscriptions/specialUpgrades.ts
+model SubscriptionSpecialUpgradeRow {
+  id                 Int       @id @default(autoincrement())
+  versionId          Int       @unique(map: "uq_special_upgrade_version")
+  enabled            Boolean   @default(false)
+  titlesJson         String?   @db.Text
+  descriptionsJson   String?   @db.MediumText
+  buttonLabelsJson   String?   @db.Text
+  validFrom          DateTime? @db.Date
+  validTo            DateTime? @db.Date
+  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
+  daysOfSubscription Int       @default(365)
+  analyzeWithinDays  Int       @default(60)
+  logoUrl            String?   @db.VarChar(512)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("subscription_special_upgrades")
+  @@ignore
+}
+
+model SubscriptionSpecialUpgradeRegistrationRow {
+  id                 Int       @id @default(autoincrement())
+  upgradeId          Int
+  versionId          Int
+  versionName        String    @db.VarChar(255)
+  upgradeTitle       String?   @db.VarChar(255)
+  userId             String    @db.VarChar(191)
+  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
+  dateStart          DateTime  @db.Date
+  dateEnd            DateTime? @db.Date
+  checkDeadline      DateTime? @db.Date
+  checkCleared       Boolean   @default(false)
+  softwareCompany    String    @default("") @db.VarChar(255)
+  softwareVersion    String    @default("") @db.VarChar(255)
+  softwareExpiration String    @default("") @db.VarChar(32)
+  createdAt          DateTime  @default(now()) @db.DateTime(0)
+
+  @@index([upgradeId], map: "idx_sur_upgrade")
+  @@index([userId], map: "idx_sur_user")
+  @@map("subscription_special_upgrade_registrations")
   @@ignore
 }
 
@@ -4318,6 +4396,154 @@ model LegacyUnits {
   @@index([name], map: "idx_units_name")
   @@index([userId, clubId], map: "idx_units_user_club")
   @@map("units")
+  @@ignore
+}
+
+/// Club / team internal events (Manage Events). Raw SQL in `src/lib/club/events/eventService.ts`.
+model OrgClubEventRow {
+  id                    String   @id @db.VarChar(191)
+  workspace_kind        String   @db.VarChar(10)
+  workspace_id          String   @db.VarChar(191)
+  name                  String   @db.VarChar(191)
+  event_type            String   @default("Event") @db.VarChar(40)
+  start_date            DateTime @db.Date
+  end_date              DateTime @db.Date
+  cost                  Decimal  @default(0) @db.Decimal(12, 2)
+  seats                 Int      @default(0)
+  allow_subevents       Boolean  @default(false)
+  hide_from_share       Boolean  @default(false)
+  allow_multi_subevent  Boolean  @default(false)
+  subscriber_type       String   @default("Singles") @db.VarChar(20)
+  members_only          Boolean  @default(false)
+  open_to_non_members   Boolean  @default(true)
+  confirmation_text     String?  @db.Text
+  city                  String   @default("") @db.VarChar(120)
+  zip                   String   @default("") @db.VarChar(20)
+  address               String   @default("") @db.VarChar(255)
+  province              String   @default("") @db.VarChar(40)
+  description           String?  @db.Text
+  banner_url            String   @default("") @db.VarChar(512)
+  cover_path            String?  @db.VarChar(255)
+  sponsor_id            String   @default("") @db.VarChar(191)
+  privacy_text          String?  @db.Text
+  photo_video_text      String?  @db.Text
+  attachment1_name      String   @default("") @db.VarChar(191)
+  attachment1_path      String?  @db.VarChar(255)
+  attachment2_name      String   @default("") @db.VarChar(191)
+  attachment2_path      String?  @db.VarChar(255)
+  file_upload_enabled   Boolean  @default(false)
+  file_upload_label     String   @default("") @db.VarChar(191)
+  sibling_enabled       Boolean  @default(false)
+  sibling_parent_name   String   @default("") @db.VarChar(191)
+  sibling_fiscal_code   String   @default("") @db.VarChar(32)
+  sibling_percent       Decimal  @default(0) @db.Decimal(5, 2)
+  public_token          String   @unique(map: "org_club_events_token") @db.VarChar(64)
+  created_at            DateTime @default(now()) @db.DateTime(3)
+  updated_at            DateTime @default(now()) @db.DateTime(3)
+
+  @@index([workspace_kind, workspace_id], map: "org_club_events_ws")
+  @@map("org_club_events")
+  @@ignore
+}
+
+model OrgClubEventSubeventRow {
+  id               String   @id @db.VarChar(191)
+  event_id         String   @db.VarChar(191)
+  name             String   @db.VarChar(191)
+  start_date       DateTime @db.Date
+  end_date         DateTime @db.Date
+  cost             Decimal  @default(0) @db.Decimal(12, 2)
+  seats            Int      @default(0)
+  external_to_main Boolean  @default(false)
+  sort_order       Int      @default(0)
+
+  @@index([event_id], map: "org_club_event_subevents_event")
+  @@map("org_club_event_subevents")
+  @@ignore
+}
+
+model OrgClubEventServiceRow {
+  id         String  @id @db.VarChar(191)
+  event_id   String  @db.VarChar(191)
+  name       String  @db.VarChar(191)
+  price      Decimal @default(0) @db.Decimal(12, 2)
+  sort_order Int     @default(0)
+
+  @@index([event_id], map: "org_club_event_services_event")
+  @@map("org_club_event_services")
+  @@ignore
+}
+
+model OrgClubEventTextRow {
+  id         String  @id @db.VarChar(191)
+  event_id   String  @db.VarChar(191)
+  label      String  @db.VarChar(500)
+  mandatory  Boolean @default(false)
+  enabled    Boolean @default(true)
+  sort_order Int     @default(0)
+
+  @@index([event_id], map: "org_club_event_texts_event")
+  @@map("org_club_event_texts")
+  @@ignore
+}
+
+model OrgClubEventRegistrationRow {
+  id                     String   @id @db.VarChar(191)
+  event_id               String   @db.VarChar(191)
+  full_name              String   @default("") @db.VarChar(191)
+  email                  String   @default("") @db.VarChar(191)
+  phone                  String   @default("") @db.VarChar(64)
+  fiscal_code            String   @default("") @db.VarChar(32)
+  birthdate              String   @default("") @db.VarChar(10)
+  address                String   @default("") @db.VarChar(255)
+  city                   String   @default("") @db.VarChar(120)
+  province               String   @default("") @db.VarChar(40)
+  zip                    String   @default("") @db.VarChar(20)
+  is_minor               Boolean  @default(false)
+  parent_name            String   @default("") @db.VarChar(191)
+  parent_fiscal_code     String   @default("") @db.VarChar(32)
+  notes                  String?  @db.Text
+  group_or_team_name     String   @default("") @db.VarChar(191)
+  member_user_id         String?  @db.VarChar(191)
+  is_member              Boolean  @default(false)
+  selected_main_event    Boolean  @default(true)
+  selected_subevent_ids  String?  @db.Text
+  selected_service_ids   String?  @db.Text
+  text_answers_json      String?  @db.Text
+  file_path              String?  @db.VarChar(255)
+  amount_gross           Decimal  @default(0) @db.Decimal(12, 2)
+  discount_percent       Decimal  @default(0) @db.Decimal(5, 2)
+  amount_paid            Decimal  @default(0) @db.Decimal(12, 2)
+  pay_mode               String   @default("") @db.VarChar(64)
+  status                 String   @default("confirmed") @db.VarChar(20)
+  receipt_number         String?  @db.VarChar(64)
+  created_at             DateTime @default(now()) @db.DateTime(3)
+
+  @@index([event_id], map: "org_club_event_regs_event")
+  @@map("org_club_event_registrations")
+  @@ignore
+}
+
+model OrgClubEventSettingsRow {
+  workspace_kind               String   @db.VarChar(10)
+  workspace_id                 String   @db.VarChar(191)
+  disable_subscription_emails  Boolean  @default(false)
+  updated_at                   DateTime @default(now()) @db.DateTime(3)
+
+  @@id([workspace_kind, workspace_id])
+  @@map("org_club_event_settings")
+  @@ignore
+}
+
+model OrgClubEventDiscountRuleRow {
+  id               String  @id @db.VarChar(191)
+  workspace_kind   String  @db.VarChar(10)
+  workspace_id     String  @db.VarChar(191)
+  min_subevents    Int     @default(2)
+  discount_percent Decimal @default(0) @db.Decimal(5, 2)
+
+  @@index([workspace_kind, workspace_id], map: "org_club_event_discount_ws")
+  @@map("org_club_event_discount_rules")
   @@ignore
 }
 

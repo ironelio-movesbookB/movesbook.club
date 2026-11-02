@@ -267,26 +267,19 @@ function ClubOfficialSectionRow({
   );
 }
 
-/** Official Club My Club menu nests these rows inside "My Club Dashboard"; other layouts render them flat. */
+/** @deprecated Nesting under My Club Dashboard was wrong — official layout is flat. Kept as a pass-through. */
 function ClubDashboardGroup({
-  enabled,
   children,
-  ...dashboard
 }: {
-  enabled: boolean;
+  enabled?: boolean;
   children: ReactNode;
   clubId?: string;
   youtubeChannelUrl?: string | null;
-  canManageClub: boolean;
+  canManageClub?: boolean;
   onYoutubeChannelUrlSaved?: (clubId: string, url: string | null) => void;
   onClubBootstrapped?: (club: { id: string; name?: string; youtubeChannelUrl?: string | null }) => void;
 }) {
-  if (!enabled) return <>{children}</>;
-  return (
-    <ClubMembersDashboardSection {...dashboard} title="My Club Dashboard">
-      {children}
-    </ClubMembersDashboardSection>
-  );
+  return <>{children}</>;
 }
 
 interface DarkSidebarProps {
@@ -2110,6 +2103,15 @@ export default function DarkSidebar({
                           onContactActivitiesClick();
                         } else {
                           router.push('/profile#member-info');
+                          if (typeof window !== 'undefined') {
+                            window.setTimeout(() => {
+                              document
+                                .querySelector<HTMLButtonElement>(
+                                  '[data-member-profile-tab="contacts"]',
+                                )
+                                ?.click();
+                            }, 0);
+                          }
                         }
                       }}
                       className="flex w-full items-center gap-2 border-t border-black/25 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90"
@@ -2777,17 +2779,24 @@ export default function DarkSidebar({
                   </>
                 )}
 
-                <ClubDashboardGroup
-                  enabled={officialClubMyClub}
-                  clubId={displaySelectedClub?.id as string | undefined}
-                  youtubeChannelUrl={
-                    (displaySelectedClub as { youtubeChannelUrl?: string | null })
-                      ?.youtubeChannelUrl ?? null
-                  }
-                  canManageClub={clubWebsiteManage}
-                  onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
-                  onClubBootstrapped={handleClubBootstrapped}
-                >
+                {officialClubMyClub ? (
+                  <>
+                    <ClubMembersDashboardSection
+                      title="My Club Dashboard"
+                      clubId={displaySelectedClub?.id as string | undefined}
+                      youtubeChannelUrl={
+                        (displaySelectedClub as { youtubeChannelUrl?: string | null })
+                          ?.youtubeChannelUrl ?? null
+                      }
+                      canManageClub={clubWebsiteManage}
+                      onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
+                      onClubBootstrapped={handleClubBootstrapped}
+                    />
+                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
+                  </>
+                ) : null}
+
+                <ClubDashboardGroup enabled={false}>
                 {officialClubMyClub ? (
                   <button
                     type="button"
@@ -3434,7 +3443,6 @@ export default function DarkSidebar({
 
                 {officialClubMyClub ? (
                   <>
-                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
                     <ClubOfficialSectionRow icon={Timer} label="Section Training" />
                     <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
                     <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
@@ -4909,6 +4917,14 @@ export default function DarkSidebar({
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => router.push('/clubs/marketing/website')}
                                   className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
@@ -5086,7 +5102,8 @@ export default function DarkSidebar({
                 )}
 
                 {renderFriendsAndCommunitiesMenus({
-                  showEvents: true,
+                  // Official My Club ends at Communities (Events was removed in the flat layout).
+                  showEvents: !officialClubMyClub,
                   titleCase: officialClubMyClub,
                 })}
               </div>
@@ -5443,6 +5460,14 @@ export default function DarkSidebar({
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
                                   <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
                                 </button>
                                 <button
                                   type="button"

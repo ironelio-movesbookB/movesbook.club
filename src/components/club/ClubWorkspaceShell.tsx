@@ -444,6 +444,15 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         (onClubDashboard && isManagedEntityAdminUserType(user.userType))),
   );
   const onMembersArchivePath = Boolean(pathname?.startsWith('/clubMembers'));
+  /** QR link: /clubMembers/memberProfile/…?mode=view is readable without that club's login. */
+  const isSharedProfileView =
+    Boolean(pathname?.includes('/clubMembers/memberProfile/')) &&
+    searchParams?.get('mode') === 'view';
+  /** Documents Get-link / shared page — open without club login (private window). */
+  const isPublicDocumentsView =
+    Boolean(pathname?.startsWith('/club/documents/view/')) ||
+    Boolean(pathname?.startsWith('/club/documents/shared'));
+  const isPublicReadOnlyView = isSharedProfileView || isPublicDocumentsView;
   const onManagedArchiveShell = Boolean(
     user && canAccessManagedArchiveShell(user.userType, pathname),
   );
@@ -482,16 +491,18 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [archiveOnlyMembersAccess, clubsLoaded, selectedClubId, activeTab]);
 
   useEffect(() => {
+    if (isPublicReadOnlyView) return;
     if (!loading && !user) {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isPublicReadOnlyView]);
 
   useEffect(() => {
+    if (isPublicReadOnlyView) return;
     if (!user || loading) return;
     if (canUseMembersArchive) return;
     router.push('/my-page');
-  }, [user, loading, router, canUseMembersArchive]);
+  }, [user, loading, router, canUseMembersArchive, isPublicReadOnlyView]);
 
   /**
    * Team / Coach / Group on shared archive routes must stay on My Team (my-entity)
@@ -782,6 +793,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     showEntityBanner ? bannerClub?.id : null,
     bannerClub?.description,
   );
+
+  if (isPublicReadOnlyView && !canUseMembersArchive) {
+    // Public Get-link / shared docs must render even before auth finishes (private window).
+    return <main className="min-h-screen w-full bg-white">{children}</main>;
+  }
 
   if (loading || !user || !canUseMembersArchive) {
     return null;
