@@ -17,6 +17,7 @@ import {
   Underline,
   Undo
 } from 'lucide-react';
+import { getAuthToken } from '@/utils/auth.utils';
 
 const EDITOR_STYLES = `
   .rich-text-editor {
@@ -81,7 +82,25 @@ export type RichTextEditorProps = {
   showTestButton?: boolean;
   showClearButton?: boolean;
   focusRingClass?: string;
+  /** Paste/upload images via `/api/messages/support/upload-image` (Chat-style). */
+  enableImagePaste?: boolean;
+  placeholder?: string;
 };
+
+async function uploadEditorImage(file: File): Promise<string | null> {
+  const token = getAuthToken();
+  if (!token) return null;
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/messages/support/upload-image', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { path?: string };
+  return data.path || null;
+}
 
 export default function RichTextEditor({
   value,
@@ -90,9 +109,12 @@ export default function RichTextEditor({
   maxHeight = '400px',
   showTestButton = true,
   showClearButton = true,
-  focusRingClass = 'focus:ring-2 focus:ring-pink-500'
+  focusRingClass = 'focus:ring-2 focus:ring-pink-500',
+  enableImagePaste = false,
+  placeholder = '',
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -171,6 +193,36 @@ export default function RichTextEditor({
     editorRef.current.innerHTML +=
       '<p><strong>Bold text</strong>, <em>italic text</em>, <u>underlined text</u></p>';
     syncContent();
+  };
+
+  const insertUploadedImage = async (file: File) => {
+    if (!editorRef.current) return;
+    const url = await uploadEditorImage(file);
+    if (!url) {
+      window.alert('Could not upload the image. Please try again.');
+      return;
+    }
+    editorRef.current.focus();
+    document.execCommand('insertImage', false, url);
+    syncContent();
+  };
+
+  const handlePaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!enableImagePaste) return;
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    let imageFile: File | null = null;
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i].type.startsWith('image/')) {
+        imageFile = items[i].getAsFile();
+        break;
+      }
+    }
+    if (!imageFile) return; // keep default HTML/text paste
+
+    event.preventDefault();
+    await insertUploadedImage(imageFile);
   };
 
   return (
@@ -285,14 +337,31 @@ export default function RichTextEditor({
           <LinkIcon size={18} />
         </ToolbarIconButton>
         <ToolbarIconButton
-          title="Insert Image"
+          title={enableImagePaste ? 'Insert / upload image' : 'Insert Image'}
           onClick={() => {
+            if (enableImagePaste) {
+              fileInputRef.current?.click();
+              return;
+            }
             const url = window.prompt('Enter image URL:');
             if (url) execCommand('insertImage', url);
           }}
         >
           <ImageIcon size={18} />
         </ToolbarIconButton>
+        {enableImagePaste ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void insertUploadedImage(file);
+            }}
+          />
+        ) : null}
         <button
           type="button"
           onClick={() => execCommand('insertHorizontalRule')}
@@ -339,6 +408,7 @@ export default function RichTextEditor({
         ref={editorRef}
         contentEditable
         spellCheck={false}
+        data-placeholder={placeholder}
         className={`rich-text-editor overflow-y-auto rounded-b border border-gray-300 bg-white p-4 focus:outline-none ${focusRingClass}`}
         style={{
           minHeight,
@@ -350,6 +420,9 @@ export default function RichTextEditor({
         }}
         suppressContentEditableWarning
         onInput={(event) => onChange(event.currentTarget.innerHTML)}
+        onPaste={(event) => {
+          void handlePaste(event);
+        }}
       />
     </div>
   );

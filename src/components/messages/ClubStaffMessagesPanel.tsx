@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { getAuthToken } from '@/utils/auth.utils';
+import RichTextEditor from '@/components/shared/RichTextEditor';
+import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
 
 type ClubRole = 'admin' | 'staff' | 'member';
 type PartyType = 'staff' | 'member';
@@ -19,6 +21,8 @@ type MessageItem = {
   replyCount: number;
   clubId: string | null;
   clubName: string;
+  clubUsername?: string;
+  clubLogoUrl?: string | null;
   author: Person | null;
   recipient: Person | null;
   recipientType: PartyType | null;
@@ -46,6 +50,10 @@ type ThreadDetail = {
 
 type Props = {
   initialClubId?: string | null;
+  /** When true, club filter stays on initialClubId (My Club current club). */
+  lockClubId?: boolean;
+  /** Show club logo + username on the far right (My Page all-clubs inbox). */
+  showClubBadge?: boolean;
 };
 
 const LIST_BG = 'rgb(251,255,237)';
@@ -59,6 +67,12 @@ function typeLabel(type: PartyType): string {
 function typesForRole(role: ClubRole | undefined): PartyType[] {
   if (!role) return [];
   return role === 'member' ? ['staff'] : ['staff', 'member'];
+}
+
+function hasMessageContent(html: string): boolean {
+  return (
+    Boolean(html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').trim()) || /<img\b/i.test(html)
+  );
 }
 
 async function fetchRecipients(clubId: string, type: PartyType): Promise<Person[]> {
@@ -77,7 +91,11 @@ async function fetchRecipients(clubId: string, type: PartyType): Promise<Person[
 const selectClass =
   'mt-1 block w-full min-w-[180px] border border-gray-300 rounded px-2 py-1.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400';
 
-export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) {
+export default function ClubStaffMessagesPanel({
+  initialClubId = null,
+  lockClubId = false,
+  showClubBadge = false,
+}: Props) {
   const [clubs, setClubs] = useState<ClubOption[]>([]);
   const [viewerId, setViewerId] = useState('');
   const [error, setError] = useState('');
@@ -133,9 +151,15 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
       const preferred =
         initialClubId && list.some((c) => c.id === initialClubId) ? initialClubId : list[0]?.id || '';
       setCClubId(preferred);
-      setFClubId((prev) => (prev && list.some((c) => c.id === prev) ? prev : initialClubId ? preferred : ''));
+      if (lockClubId && preferred) {
+        setFClubId(preferred);
+      } else {
+        setFClubId((prev) =>
+          prev && list.some((c) => c.id === prev) ? prev : initialClubId ? preferred : '',
+        );
+      }
     })();
-  }, [initialClubId]);
+  }, [initialClubId, lockClubId]);
 
   useEffect(() => {
     const types = typesForRole(composeClub?.role);
@@ -239,7 +263,7 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
 
   async function submitCompose() {
     const t = getAuthToken();
-    if (!t || !cClubId || !cType || !cRecipientId || !body.trim()) return;
+    if (!t || !cClubId || !cType || !cRecipientId || !hasMessageContent(body)) return;
     setSaving(true);
     setError('');
     try {
@@ -269,7 +293,7 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
 
   async function submitReply() {
     const t = getAuthToken();
-    if (!t || !selectedId || !reply.trim()) return;
+    if (!t || !selectedId || !hasMessageContent(reply)) return;
     setReplying(true);
     try {
       const res = await fetch(`/api/messages/threads/${selectedId}`, {
@@ -355,6 +379,7 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
             <span className="text-gray-600 text-xs font-medium">Club</span>
             <select
               value={cClubId}
+              disabled={lockClubId}
               onChange={(e) => {
                 setCClubId(e.target.value);
                 closeCompose();
@@ -425,12 +450,16 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
               placeholder="Subject"
               className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
-            <textarea
+            <RichTextEditor
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Write your message…"
-              rows={5}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+              onChange={setBody}
+              minHeight="160px"
+              maxHeight="360px"
+              showTestButton={false}
+              showClearButton={false}
+              enableImagePaste
+              focusRingClass="focus:ring-2 focus:ring-teal-600"
+              placeholder="Write your message… (paste HTML or images)"
             />
             <div className="flex gap-2 justify-end">
               <button
@@ -442,7 +471,7 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
               </button>
               <button
                 type="button"
-                disabled={saving || !body.trim()}
+                disabled={saving || !hasMessageContent(body)}
                 onClick={() => void submitCompose()}
                 className="px-3 py-1.5 text-sm rounded bg-teal-800 text-white disabled:opacity-40"
               >
@@ -461,13 +490,14 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
               <span className="text-gray-600 text-xs font-medium">Club</span>
               <select
                 value={fClubId}
+                disabled={lockClubId}
                 onChange={(e) => {
                   setFClubId(e.target.value);
                   resetSelection();
                 }}
                 className={selectClass}
               >
-                <option value="">All</option>
+                {!lockClubId ? <option value="">All</option> : null}
                 {clubs.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -558,7 +588,7 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
                             <p className="text-[11px] text-gray-500 mt-1">
                               {item.isCreator ? 'To' : 'From'}: {other?.name || 'Club staff'}
                               {other?.username ? ` (@${other.username})` : ''}
-                              {item.clubName ? ` · ${item.clubName}` : ''} —{' '}
+                              {!showClubBadge && item.clubName ? ` · ${item.clubName}` : ''} —{' '}
                               {new Date(item.updatedAt).toLocaleString()}
                             </p>
                             {greyed ? (
@@ -569,6 +599,25 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
                               </p>
                             )}
                           </div>
+                          {showClubBadge ? (
+                            <div className="ml-auto flex shrink-0 flex-col items-center gap-1 w-16">
+                              {item.clubLogoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={item.clubLogoUrl}
+                                  alt=""
+                                  className="h-10 w-10 rounded object-cover bg-gray-200"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded bg-gray-200" />
+                              )}
+                              <span className="text-[10px] text-gray-600 text-center leading-tight line-clamp-2">
+                                {item.clubUsername
+                                  ? `@${item.clubUsername}`
+                                  : item.clubName || 'Club'}
+                              </span>
+                            </div>
+                          ) : null}
                         </button>
                         <div className="px-3 pb-2 flex justify-end">
                           <button
@@ -655,7 +704,10 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
                           {mine ? 'You' : m.sender?.name || detail.thread.authorName || 'Member'} ·{' '}
                           {new Date(m.createdAt).toLocaleString()}
                         </div>
-                        <div className="whitespace-pre-wrap text-gray-900">{m.body}</div>
+                        <div
+                          className="rich-text-editor prose prose-sm max-w-none text-gray-900 [&_img]:max-w-full [&_img]:h-auto"
+                          dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(m.body) }}
+                        />
                         {mine && !isFirst ? (
                           <div className="flex justify-end mt-1">
                             <button
@@ -673,16 +725,20 @@ export default function ClubStaffMessagesPanel({ initialClubId = null }: Props) 
                 </ul>
                 {detail.canReply ? (
                   <div className="space-y-2 pt-2 border-t">
-                    <textarea
+                    <RichTextEditor
                       value={reply}
-                      onChange={(e) => setReply(e.target.value)}
-                      rows={3}
-                      placeholder="Write a reply…"
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                      onChange={setReply}
+                      minHeight="120px"
+                      maxHeight="280px"
+                      showTestButton={false}
+                      showClearButton={false}
+                      enableImagePaste
+                      focusRingClass="focus:ring-2 focus:ring-teal-600"
+                      placeholder="Write a reply… (paste HTML or images)"
                     />
                     <button
                       type="button"
-                      disabled={replying || !reply.trim()}
+                      disabled={replying || !hasMessageContent(reply)}
                       onClick={() => void submitReply()}
                       className="rounded bg-teal-800 text-white px-3 py-1.5 text-sm disabled:opacity-40"
                     >
