@@ -1,8 +1,10 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import ProcedurePaymentDetail from '@/components/procedures/archives/ProcedurePaymentDetail';
-import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-
-export default function ProductPaymentDetailPage() {
-  return <ProcedurePaymentDetail procedureCode={PROCEDURE_TYPE_CODES.PRODUCT_SALE} />;
+/** Product sellings pay on the same form as Services. */
+export default function ProductPaymentDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  redirect(`/clubs/payment_detail/${encodeURIComponent(params.id)}?type=product_sale`);
 }

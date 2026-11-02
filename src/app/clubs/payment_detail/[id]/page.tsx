@@ -64,12 +64,36 @@ function toProductPayment(payment: ProcedurePaymentView): ServiceSalePayment {
   };
 }
 
+async function loadServiceBundle(recordId: string, extra: string[]) {
+  const [purchaseRes, paymentsRes, extras] = await Promise.all([
+    fetchPurchase(recordId),
+    fetchPaymentsForRecord(recordId, { pageSize: 50 }),
+    Promise.all(extra.map(async (extraId) => (await fetchPurchase(extraId)).purchase)),
+  ]);
+  return { purchaseRes, paymentsRes, extras, productClient: null as ReturnType<typeof createProcedureClient> | null };
+}
+
+async function loadProductBundle(recordId: string, extra: string[]) {
+  const productClient = createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
+  const [purchaseRes, paymentsRes, extras] = await Promise.all([
+    productClient.fetchRecord(recordId).then((res) => ({ purchase: toProductPurchase(res.record) })),
+    productClient.fetchPayments({ recordId, pageSize: 50 }).then((res) => ({
+      items: res.items.map(toProductPayment),
+    })),
+    Promise.all(
+      extra.map(async (extraId) => toProductPurchase((await productClient.fetchRecord(extraId)).record)),
+    ),
+  ]);
+  return { purchaseRes, paymentsRes, extras, productClient };
+}
+
 function PaymentDetailPageInner() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = String(params?.id ?? '');
-  const productSale = searchParams.get('type') === 'product_sale';
+  const hintedProductSale = searchParams.get('type') === 'product_sale';
+  const [productSale, setProductSale] = useState(hintedProductSale);
   const procedureCode = productSale ? PROCEDURE_TYPE_CODES.PRODUCT_SALE : 'service_sale';
 
   const extraIds = useMemo(() => {
@@ -95,18 +119,16 @@ function PaymentDetailPageInner() {
   const autoPaid = useRef(false);
   const [scopedRecordIds, setScopedRecordIds] = useState<string[]>([id].filter(Boolean));
 
+  useEffect(() => {
+    setProductSale(hintedProductSale);
+  }, [hintedProductSale, id]);
+
   const load = useCallback(async () => {
     try {
-      const productClient = productSale ? createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE) : null;
-      const [purchaseRes, paymentsRes, formOptions, settings, extras] = await Promise.all([
-        productClient
-          ? productClient.fetchRecord(id).then((res) => ({ purchase: toProductPurchase(res.record) }))
-          : fetchPurchase(id),
-        productClient
-          ? productClient.fetchPayments({ recordId: id, pageSize: 50 }).then((res) => ({
-              items: res.items.map(toProductPayment),
-            }))
-          : fetchPaymentsForRecord(id, { pageSize: 50 }),
+      const [bundle, formOptions, settings] = await Promise.all([
+        hintedProductSale
+          ? loadProductBundle(id, extraIds)
+          : loadServiceBundle(id, extraIds).catch(() => loadProductBundle(id, extraIds)),
         fetchFormOptions(),
         fetchOtherSettings().catch(() => ({
           formPayDeadlineStatus: 'Yes',
@@ -114,17 +136,9 @@ function PaymentDetailPageInner() {
           calTaxStatus: false,
           notEnterCustData: false,
         })),
-        Promise.all(
-          extraIds.map(async (extraId) => {
-            if (productClient) {
-              const res = await productClient.fetchRecord(extraId);
-              return toProductPurchase(res.record);
-            }
-            const res = await fetchPurchase(extraId);
-            return res.purchase;
-          })
-        ),
       ]);
+      const { purchaseRes, paymentsRes, extras, productClient } = bundle;
+      setProductSale(Boolean(productClient));
 
       const primary = purchaseRes.purchase;
       const validExtras = extras.filter(
@@ -170,7 +184,7 @@ function PaymentDetailPageInner() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
-  }, [id, extraIds, productSale]);
+  }, [id, extraIds, hintedProductSale]);
 
   useEffect(() => {
     load();

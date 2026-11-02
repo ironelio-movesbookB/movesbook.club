@@ -129,7 +129,7 @@ const PRODUCT_SALE: ProcedureDefinition = {
     deadlines: '/ArchiveSeles/product_deadline',
     payments: '/ArchiveSeles/product_payments',
     receipts: '/ArchiveSeles/product_receipts',
-    paymentDetail: (id) => `/ArchiveSeles/payment_detail/${id}`,
+    paymentDetail: (id) => `/clubs/payment_detail/${id}?type=product_sale`,
   },
   archiveTitles: {
     records: 'Archive of Product Sales',
@@ -278,6 +278,23 @@ export function getProcedureDefinition(code: string): ProcedureDefinition | null
     return PROCEDURE_DEFINITIONS[code as ProcedureTypeCode];
   }
   return null;
+}
+
+/** Append extra query values to a payment URL that may already have ?type=. */
+export function withPaymentIds(paymentPath: string, ids?: string[]): string {
+  if (!ids || ids.length <= 1) return paymentPath;
+  const sep = paymentPath.includes('?') ? '&' : '?';
+  return `${paymentPath}${sep}ids=${encodeURIComponent(ids.join(','))}`;
+}
+
+export function procedurePaymentHref(
+  code: string,
+  recordId: string,
+  ids?: string[],
+): string | null {
+  const def = getProcedureDefinition(code);
+  if (!def) return null;
+  return withPaymentIds(def.routes.paymentDetail(recordId), ids);
 }
 
 export function getProcedureTypology(code: string): string {
