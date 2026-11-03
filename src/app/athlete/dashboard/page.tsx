@@ -85,6 +85,7 @@ import MyMusicPanel from '@/components/music/MyMusicPanel';
 import MusicOGPPanel from '@/components/music/MusicOGPPanel';
 import PostsPanel from '@/components/posts/PostsPanel';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import ClubNewsArchivePanel from '@/components/club/ClubNewsArchivePanel';
 import ClubSharedNewsPanel from '@/components/club/ClubSharedNewsPanel';
 import ClubMovesbookNewsPanel from '@/components/club/ClubMovesbookNewsPanel';
@@ -168,6 +169,7 @@ function AthleteDashboardContent() {
     | 'registration-info'
     | 'contact-activities'
     | 'staff-feedbacks'
+    | 'club-staff-messages'
   >('overview');
   const [showAdBanner, setShowAdBanner] = useState(true);
   const [showPersonalBanner, setShowPersonalBanner] = useState(true);
@@ -987,6 +989,10 @@ function AthleteDashboardContent() {
                   setActiveTab('my-page');
                   setActiveSection('staff-feedbacks');
                 }}
+                onClubStaffMessagesClick={() => {
+                  setActiveTab('my-page');
+                  setActiveSection('club-staff-messages');
+                }}
                 onMyClubClick={() => setActiveTab('my-entity')}
                 onClubChatClick={handleClubChatClick}
                 onClubAddSongsPlaylistsClick={() => {
@@ -1138,6 +1144,20 @@ function AthleteDashboardContent() {
                 {activeSection === 'staff-feedbacks' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <MyStaffFeedbacksPanel onClose={() => setActiveSection('overview')} />
+                  </div>
+                )}
+                {activeSection === 'club-staff-messages' && (
+                  <div className="w-full">
+                    <div className="px-1 pt-2">
+                      <h1 className="text-xl font-bold text-orange-600">
+                        Messages among Staff and members
+                      </h1>
+                      <p className="text-sm text-gray-600 mt-1 mb-2">
+                        All clubs and teams you belong to. Club logo and username appear on the
+                        right of each message.
+                      </p>
+                    </div>
+                    <ClubStaffMessagesPanel showClubBadge />
                   </div>
                 )}
               </div>

@@ -2,6 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   // Keep Prisma out of the webpack bundle so model delegates (e.g. teamStaff) match generate.
+  // Next 14 uses experimental.*; Next 15+ moved this to top-level serverExternalPackages.
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
   },
@@ -47,6 +48,6 @@ const nextConfig = {
     }
     return config;
   }
-}
-  
+};
+
 module.exports = nextConfig;

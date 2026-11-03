@@ -1363,7 +1363,7 @@ function PageContent() {
           CKEDITOR STYLE
       ==================================================== */}
 
-      <style jsx global>{`
+      <style>{`
 
         .ck-editor {
           width: 100%;
