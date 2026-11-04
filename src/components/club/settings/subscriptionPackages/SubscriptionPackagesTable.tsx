@@ -242,8 +242,8 @@ export default function SubscriptionPackagesTable({ mode, fromPricelistId, share
             </h3>
             {activePackage?.packageFeature ? (
               <div
-                className="package-feature-html mt-3 p-2 text-sm text-gray-800 [&_a]:text-blue-600 [&_a]:underline [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-6"
-                dangerouslySetInnerHTML={{ __html: activePackage.packageFeature }}
+                className="package-feature-html mt-3 p-2 text-sm text-gray-800"
+                dangerouslySetInnerHTML={{ __html: renderMediaEmbeds(activePackage.packageFeature) }}
               />
             ) : (
               <p className="py-10 text-center italic text-gray-400">
@@ -255,6 +255,26 @@ export default function SubscriptionPackagesTable({ mode, fromPricelistId, share
           </div>
         </div>
       </section>
+
+      {/* Tailwind preflight resets editor HTML (headings, lists, links); restore it for the features box. */}
+      <style>{`
+        .package-feature-html h1 { font-size: 2em; font-weight: 700; margin: 0.67em 0; }
+        .package-feature-html h2 { font-size: 1.5em; font-weight: 700; margin: 0.75em 0; }
+        .package-feature-html h3 { font-size: 1.25em; font-weight: 700; margin: 0.8em 0; }
+        .package-feature-html h4 { font-size: 1.1em; font-weight: 700; margin: 0.9em 0; }
+        .package-feature-html h5, .package-feature-html h6 { font-size: 1em; font-weight: 700; margin: 1em 0; }
+        .package-feature-html p { margin: 0.5em 0; }
+        .package-feature-html a { color: #2563eb; text-decoration: underline; }
+        .package-feature-html ul { list-style: disc; padding-left: 1.5em; }
+        .package-feature-html ol { list-style: decimal; padding-left: 1.5em; }
+        .package-feature-html blockquote { border-left: 4px solid #ccc; padding-left: 1em; font-style: italic; margin: 0.75em 0; }
+        .package-feature-html figure { margin: 0.75em 0; }
+        .package-feature-html img { max-width: 100%; height: auto; }
+        .package-feature-html table { width: 100%; border-collapse: collapse; }
+        .package-feature-html td, .package-feature-html th { border: 1px solid #d1d5db; padding: 0.5em; }
+        .package-feature-html .media-embed { position: relative; width: 100%; max-width: 640px; padding-bottom: 56.25%; }
+        .package-feature-html .media-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+      `}</style>
 
       {popupService && (
         <ServicePopup
@@ -462,15 +482,39 @@ function VideoPlayer({ url }: { url: string }) {
   );
 }
 
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * CKEditor "Insert media" saves <oembed url="..."></oembed>, which browsers don't render.
+ * YouTube URLs become an embedded player built from the parsed video id; anything else becomes a link.
+ */
+function renderMediaEmbeds(html: string): string {
+  return html.replace(/<oembed\s+url\s*=\s*"([^"]*)"\s*>\s*<\/oembed>/gi, (_match, rawUrl: string) => {
+    const url = rawUrl.replace(/&amp;/g, '&');
+    const embed = toYouTubeEmbed(url);
+    if (embed) {
+      return `<div class="media-embed"><iframe src="${escapeAttr(embed)}" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`;
+    }
+    return /^https?:\/\//i.test(url)
+      ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeAttr(url)}</a>`
+      : '';
+  });
+}
+
 function toYouTubeEmbed(url: string): string | null {
   try {
     const u = new URL(/^www\./i.test(url) ? `https://${url}` : url);
-    const host = u.hostname.toLowerCase();
-    if (u.pathname.startsWith('/embed/') && host.includes('youtube.com')) return u.toString();
+    const host = u.hostname.toLowerCase().replace(/^(www|m)\./, '');
     let videoId = '';
-    if (host.includes('youtube.com')) videoId = u.searchParams.get('v') ?? '';
-    else if (host.includes('youtu.be')) videoId = u.pathname.split('/')[1] ?? '';
-    if (!videoId) return null;
+    if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      const embedMatch = u.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/);
+      videoId = embedMatch?.[1] ?? u.searchParams.get('v') ?? '';
+    } else if (host === 'youtu.be') {
+      videoId = u.pathname.split('/')[1] ?? '';
+    }
+    if (!/^[\w-]{6,20}$/.test(videoId)) return null;
     const params = new URLSearchParams();
     const list = u.searchParams.get('list');
     if (list) params.set('list', list);
