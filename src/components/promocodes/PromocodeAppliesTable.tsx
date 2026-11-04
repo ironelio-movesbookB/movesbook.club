@@ -114,6 +114,7 @@ function recipientMark(
       countryName={row.receiverCountryName}
       flagImage={row.flagImage}
       registered={Boolean(row.receiverId && row.receiverId > 0)}
+      showFlag={false}
       onClick={onClick}
     />
   );
@@ -138,6 +139,11 @@ function secondaryMark(
     />
   );
 }
+
+/** Vertical column separators for apply tables. */
+const thClass = 'p-2 border-r border-gray-500 last:border-r-0';
+const tdClass = 'p-2 border-r border-gray-200 last:border-r-0';
+const tdCenter = `${tdClass} text-center`;
 
 function clickableName(
   label: string,
@@ -184,49 +190,49 @@ export function PromocodeAppliesTable({
           <tr className="bg-[#3d3d3d] text-white text-left">
             {variant === 'promoAll' && (
               <>
-                <th className="p-2">Date</th>
-                <th className="p-2">Promocode</th>
-                <th className="p-2">Mode invite</th>
-                <th className="p-2">Sender</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Also Credits to</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Flag</th>
-                <th className="p-2">Recipient</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Version</th>
-                <th className="p-2">Data Start</th>
-                <th className="p-2">Data end</th>
+                <th className={thClass}>Date</th>
+                <th className={thClass}>Promocode</th>
+                <th className={thClass}>Mode invite</th>
+                <th className={thClass}>Sender</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Also Credits to</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Flag</th>
+                <th className={thClass}>Recipient</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Version</th>
+                <th className={thClass}>Data Start</th>
+                <th className={thClass}>Data end</th>
               </>
             )}
             {variant === 'detail' && (
               <>
-                <th className="p-2">Date</th>
-                <th className="p-2">Sender</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Secondary Sender</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Flag</th>
-                <th className="p-2">Recipient</th>
-                <th className="p-2">%</th>
-                <th className="p-2">Version</th>
-                <th className="p-2">Data Start</th>
-                <th className="p-2">Data end</th>
+                <th className={thClass}>Date</th>
+                <th className={thClass}>Sender</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Secondary Sender</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Flag</th>
+                <th className={thClass}>Recipient</th>
+                <th className={thClass}>%</th>
+                <th className={thClass}>Version</th>
+                <th className={thClass}>Data Start</th>
+                <th className={thClass}>Data end</th>
               </>
             )}
             {variant === 'index' && (
               <>
-                <th className="p-2">Flag</th>
-                <th className="p-2">New user</th>
-                <th className="p-2">Version</th>
-                <th className="p-2">Data Start</th>
-                <th className="p-2">Data End</th>
-                <th className="p-2">Promocode</th>
-                <th className="p-2">Primary</th>
-                <th className="p-2">Secondary</th>
-                <th className="p-2">Date of Mail</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">Credit</th>
+                <th className={thClass}>Flag</th>
+                <th className={thClass}>New user</th>
+                <th className={thClass}>Version</th>
+                <th className={thClass}>Data Start</th>
+                <th className={thClass}>Data End</th>
+                <th className={thClass}>Promocode</th>
+                <th className={thClass}>Primary</th>
+                <th className={thClass}>Secondary</th>
+                <th className={thClass}>Date of Mail</th>
+                <th className={thClass}>Status</th>
+                <th className={thClass}>Credit</th>
               </>
             )}
           </tr>
@@ -262,14 +268,14 @@ export function PromocodeAppliesTable({
               >
                 {variant === 'promoAll' && (
                   <>
-                    <td className="p-2">{date}</td>
-                    <td className="p-2 text-[#7b0a26]">{row.promocodeCode}</td>
-                    <td className="p-2 text-center">{row.inviteMode || 'Mail'}</td>
-                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
-                    <td className="p-2 text-center">{row.senderCredit ?? '00'}</td>
-                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
-                    <td className="p-2 text-center">{row.secondarySenderCredit ?? '00'}</td>
-                    <td className="p-2 text-center">
+                    <td className={tdClass}>{date}</td>
+                    <td className={`${tdClass} text-[#7b0a26]`}>{row.promocodeCode}</td>
+                    <td className={tdCenter}>{row.inviteMode || 'Mail'}</td>
+                    <td className={tdCenter}>{senderMark(row, onSenderClick)}</td>
+                    <td className={tdCenter}>{row.senderCredit ?? '00'}</td>
+                    <td className={tdCenter}>{secondaryMark(row, onSecondaryClick)}</td>
+                    <td className={tdCenter}>{row.secondarySenderCredit ?? '00'}</td>
+                    <td className={tdCenter}>
                       <PromocodeAssetImage
                         src={flagSrc}
                         fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
@@ -277,23 +283,23 @@ export function PromocodeAppliesTable({
                         className="w-12 h-7 object-cover mx-auto"
                       />
                     </td>
-                    <td className={`p-2 ${recipient.className}`}>
+                    <td className={`${tdClass} ${recipient.className}`}>
                       {recipientMark(row, onRecipientClick)}
                     </td>
-                    <td className="p-2 text-center">{row.receiverCredit ?? '00'}</td>
-                    <td className="p-2 text-center">{row.receiverVersion}</td>
-                    <td className="p-2 text-center">{dataStart}</td>
-                    <td className="p-2 text-center">{dataEnd}</td>
+                    <td className={tdCenter}>{row.receiverCredit ?? '00'}</td>
+                    <td className={tdCenter}>{row.receiverVersion}</td>
+                    <td className={tdCenter}>{dataStart}</td>
+                    <td className={tdCenter}>{dataEnd}</td>
                   </>
                 )}
                 {variant === 'detail' && (
                   <>
-                    <td className="p-2">{date}</td>
-                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
-                    <td className="p-2 text-center">{row.senderCredit}</td>
-                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
-                    <td className="p-2 text-center">{row.secondarySenderCredit}</td>
-                    <td className="p-2 text-center">
+                    <td className={tdClass}>{date}</td>
+                    <td className={tdCenter}>{senderMark(row, onSenderClick)}</td>
+                    <td className={tdCenter}>{row.senderCredit}</td>
+                    <td className={tdCenter}>{secondaryMark(row, onSecondaryClick)}</td>
+                    <td className={tdCenter}>{row.secondarySenderCredit}</td>
+                    <td className={tdCenter}>
                       <PromocodeAssetImage
                         src={flagSrc}
                         fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
@@ -301,18 +307,18 @@ export function PromocodeAppliesTable({
                         className="w-12 h-7 object-cover mx-auto"
                       />
                     </td>
-                    <td className={`p-2 ${recipient.className}`}>
+                    <td className={`${tdClass} ${recipient.className}`}>
                       {recipientMark(row, onRecipientClick)}
                     </td>
-                    <td className="p-2 text-center">{row.receiverCredit}</td>
-                    <td className="p-2 text-center">{row.receiverVersion}</td>
-                    <td className="p-2 text-center">{dataStart}</td>
-                    <td className="p-2 text-center">{dataEnd}</td>
+                    <td className={tdCenter}>{row.receiverCredit}</td>
+                    <td className={tdCenter}>{row.receiverVersion}</td>
+                    <td className={tdCenter}>{dataStart}</td>
+                    <td className={tdCenter}>{dataEnd}</td>
                   </>
                 )}
                 {variant === 'index' && (
                   <>
-                    <td className="p-2 text-center">
+                    <td className={tdCenter}>
                       <PromocodeAssetImage
                         src={flagSrc}
                         fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
@@ -320,18 +326,18 @@ export function PromocodeAppliesTable({
                         className="w-12 h-7 object-cover mx-auto"
                       />
                     </td>
-                    <td className={`p-2 ${recipient.className}`}>
+                    <td className={`${tdClass} ${recipient.className}`}>
                       {recipientMark(row, onRecipientClick)}
                     </td>
-                    <td className="p-2 text-center">{row.receiverVersion}</td>
-                    <td className="p-2 text-center">{dataStart}</td>
-                    <td className="p-2 text-center">{dataEnd}</td>
-                    <td className="p-2 text-[#7b0a26]">{row.promocodeCode}</td>
-                    <td className="p-2 text-center">{senderMark(row, onSenderClick)}</td>
-                    <td className="p-2 text-center">{secondaryMark(row, onSecondaryClick)}</td>
-                    <td className="p-2 text-center">{date}</td>
-                    <td className="p-2 text-center">{status}</td>
-                    <td className="p-2 text-center">{row.receiverCredit ?? '00'}</td>
+                    <td className={tdCenter}>{row.receiverVersion}</td>
+                    <td className={tdCenter}>{dataStart}</td>
+                    <td className={tdCenter}>{dataEnd}</td>
+                    <td className={`${tdClass} text-[#7b0a26]`}>{row.promocodeCode}</td>
+                    <td className={tdCenter}>{senderMark(row, onSenderClick)}</td>
+                    <td className={tdCenter}>{secondaryMark(row, onSecondaryClick)}</td>
+                    <td className={tdCenter}>{date}</td>
+                    <td className={tdCenter}>{status}</td>
+                    <td className={tdCenter}>{row.receiverCredit ?? '00'}</td>
                   </>
                 )}
               </tr>

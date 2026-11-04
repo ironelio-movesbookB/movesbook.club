@@ -7,9 +7,9 @@ import {
   getCountriesTable,
   getLegacyUsersTable,
   getPromocodeAppliesTable,
-  getSubscriptionSettingsTable,
 } from '@/lib/promocodes/legacyDb';
 import { fetchModernUserCountries, findModernUserCountry } from '@/lib/promocodes/modernUserCountry';
+import { resolveSecondaryCreditAmount } from '@/lib/promocodes/resolveSecondaryCreditAmount';
 
 export type CreditsEarnedRow = {
   id: number;
@@ -150,23 +150,12 @@ export async function listCreditsEarnedUsers(searchUsername = ''): Promise<Credi
         const key = `${rid}:${pid}`;
         if (!rid || seenSec.has(key)) continue;
         seenSec.add(key);
-        let credit = Number(row.secondary_sender_credit ?? 0) || 0;
-        if (credit <= 0 && row.receiver_version) {
-          const subTable = await getSubscriptionSettingsTable();
-          if (subTable) {
-            try {
-              const creditRows = await prisma.$queryRawUnsafe<{ credit1: unknown }[]>(
-                `SELECT credit1 FROM \`${subTable}\`
-                 WHERE subscription_name = ? LIMIT 1`,
-                String(row.receiver_version).trim()
-              );
-              const n = Number(creditRows[0]?.credit1 ?? 0);
-              if (Number.isFinite(n) && n > 0) credit = n;
-            } catch {
-              /* ignore */
-            }
-          }
-        }
+        const credit = await resolveSecondaryCreditAmount({
+          storedCredit: Number(row.secondary_sender_credit ?? 0) || 0,
+          receiverId: rid,
+          receiverVersionName: row.receiver_version != null ? String(row.receiver_version) : '',
+          promocodeId: pid || undefined,
+        });
         secondaryEarned += credit;
       }
     }

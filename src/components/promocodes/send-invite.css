@@ -59,6 +59,31 @@
 }
 
 /* Aligned promocode / other info / visit also rows */
+.send-invite-content .si-invite-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 20px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #312e81 0%, #1e40af 50%, #0369a1 100%);
+  color: #fff;
+}
+
+.send-invite-content .si-invite-hero-photo {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.send-invite-content .si-invite-hero-name {
+  font-size: 22px;
+  font-weight: 700;
+}
+
 .send-invite-content {
   --si-label-w: 120px;
   --si-col-gap: 12px;

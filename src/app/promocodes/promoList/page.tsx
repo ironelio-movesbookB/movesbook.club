@@ -16,6 +16,7 @@ import PromocodePageSizeSelect from '@/components/promocodes/PromocodePageSizeSe
 import { promocodesFetch, usePromocodesAdminAuth } from '@/components/promocodes/usePromocodesAdminAuth';
 import { usePromocodeDialogs } from '@/components/promocodes/usePromocodeDialogs';
 import type { PaginatedResult, PromocodeSettingRow } from '@/lib/promocodes/types';
+import { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
 
 export default function PromocodesPromoListPage() {
   const ready = usePromocodesAdminAuth();
@@ -244,12 +245,33 @@ export default function PromocodesPromoListPage() {
     watchAddPopupUntilClosed(popup);
   };
 
-  const submitInviteFromModal = () => {
+  const submitInviteFromModal = async () => {
     if (!inviteEmail.trim()) {
       showAlert('Please enter an email address.');
       return;
     }
     if (!invitePromocodeRow) return;
+
+    try {
+      const previewParams = new URLSearchParams(
+        buildSendInvitePreviewUrl(invitePromocodeRow, inviteEmail).split('?')[1] ?? ''
+      );
+      const res = await promocodesFetch(`/api/admin/promocodes/send-invite?${previewParams.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert(data.error || 'Could not load invitation preview.');
+        return;
+      }
+      if (isBlankInviteHtml(String(data.emailBodyHtml ?? ''))) {
+        showAlert(
+          'Invitation body text is empty for the selected language. Edit the promocode language or add invite text before sending.'
+        );
+        return;
+      }
+    } catch {
+      showAlert('Could not verify invitation body text.');
+      return;
+    }
 
     const popup = window.open(buildSendInvitePreviewUrl(invitePromocodeRow, inviteEmail), '_blank');
     watchInvitePopupUntilClosed(popup);

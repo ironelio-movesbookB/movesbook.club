@@ -361,6 +361,21 @@ export default function PromocodeUsersPage() {
                             ? String(row.receiver_username || row.receiver_email || '')
                             : String(row.receiver_email || '');
                           const direct = Number(row.sender_id ?? 0) === selectedUserId;
+                          const friendOfFriend =
+                            !direct &&
+                            (Number(row.secondary_sender_id ?? 0) === selectedUserId ||
+                              (registered && Number(row.viewer_credit ?? 0) > 0));
+                          const relation = direct
+                            ? 'Direct'
+                            : friendOfFriend
+                              ? 'Friend-of-friend'
+                              : 'Indirect';
+                          const creditsDisplay =
+                            row.viewer_credit != null && row.viewer_credit !== ''
+                              ? Number(row.viewer_credit)
+                              : direct
+                                ? Number(row.sender_credit ?? 0)
+                                : 0;
                           return (
                           <tr key={idx} className="border-t">
                             <td className="p-2">
@@ -373,7 +388,7 @@ export default function PromocodeUsersPage() {
                                 registered={Boolean(row.sender_username)}
                               />
                             </td>
-                            <td className="p-2">{direct ? 'Direct' : 'Indirect'}</td>
+                            <td className="p-2">{relation}</td>
                             <td className="p-2">
                               <PromocodePersonMark
                                 label={receiverName}
@@ -394,7 +409,9 @@ export default function PromocodeUsersPage() {
                               {String(row.subscription_end_date ?? '').slice(0, 10) || '--'}
                             </td>
                             <td className="p-2">{String(row.cost_paid ?? row.total_payment ?? '--')}</td>
-                            <td className="p-2">{String(row.sender_credit ?? '')}</td>
+                            <td className="p-2">
+                              {creditsDisplay > 0 ? creditsDisplay.toFixed(2) : registered ? '0.00' : ''}
+                            </td>
                           </tr>
                           );
                         })
@@ -458,7 +475,7 @@ export default function PromocodeUsersPage() {
                               />
                             </td>
                             <td className="p-2">
-                              {row._role === 'receiver'
+                              {row._role === 'receiver' || row._role === 'sender'
                                 ? '-'
                                 : String(row.secondary_sender_username ?? '')}
                             </td>
