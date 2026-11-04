@@ -99,10 +99,25 @@ export default function ProcedureArchiveTable({
 
   const colSpan =
     dataColumns.length + (actionColumns.length > 0 ? 1 : 0) + (selectable ? 1 : 0);
+  const pinActions = actionColumns.length > 0;
+  // border-collapse breaks position:sticky on th/td — always use separate borders when pinning.
+  const tableLayout = bordered || pinActions ? 'border-separate border-spacing-0' : '';
+  // Keep Options (and other action cols) glued to the visible right edge while data cols scroll.
+  const stickyHead =
+    'sticky right-0 z-30 bg-teal-800 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.35)]';
+  const stickyCellBase =
+    'sticky right-0 z-20 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.18)]';
 
   return (
-    <div className={`isolate border rounded-lg overflow-x-auto ${bordered ? 'border-gray-300' : ''}`}>
-      <table className={`min-w-full text-sm ${bordered ? 'border-collapse' : ''}`}>
+    <div
+      className={`relative border rounded-lg overflow-x-auto overscroll-x-contain ${
+        bordered ? 'border-gray-300' : ''
+      }`}
+    >
+      <table
+        className={`w-max min-w-full text-sm ${tableLayout}`}
+        style={pinActions ? { borderCollapse: 'separate', borderSpacing: 0 } : undefined}
+      >
         <thead className="bg-teal-800 text-white">
           <tr>
             {selectable && (
@@ -139,11 +154,12 @@ export default function ProcedureArchiveTable({
                 </th>
               );
             })}
-            {actionColumns.length > 0 && (
+            {pinActions && (
               <th
-                className={`sticky right-0 z-20 bg-teal-800 px-3 py-2 text-left whitespace-nowrap ${
+                className={`${stickyHead} px-3 py-2 text-left whitespace-nowrap ${
                   bordered ? cellBorder : 'border-l border-teal-700'
                 }`}
+                style={{ position: 'sticky', right: 0 }}
               >
                 <span className="flex items-center gap-4">
                   {actionColumns.map((col) => (
@@ -178,8 +194,7 @@ export default function ProcedureArchiveTable({
               const isSelected = selectedId && row.id === selectedId;
               const isChecked = Boolean(row.id && selectedIds?.has(row.id));
               const canCheck = rowIsCheckable(row);
-              // Pinned cells need the row's own background, hover included, or the scrolled
-              // columns show through them.
+              // Pinned cells need an opaque row background (incl. hover) or scrolled cols show through.
               const rowBg = row.isDuplicate
                 ? 'bg-red-100'
                 : isChecked
@@ -190,7 +205,9 @@ export default function ProcedureArchiveTable({
               const rowHover = row.isDuplicate ? 'hover:bg-red-200' : 'hover:bg-teal-50';
               const actionHover = row.isDuplicate
                 ? 'group-hover:bg-red-200'
-                : 'group-hover:bg-teal-50';
+                : isChecked
+                  ? 'group-hover:bg-amber-100'
+                  : 'group-hover:bg-teal-50';
               const statusClass = getRowClassName?.(row) ?? '';
               return (
                 <tr
@@ -222,11 +239,13 @@ export default function ProcedureArchiveTable({
                         : (row[col.key] as React.ReactNode) ?? '-'}
                     </td>
                   ))}
-                  {actionColumns.length > 0 && (
+                  {pinActions && (
                     <td
-                      className={`sticky right-0 z-10 px-3 py-2 text-gray-800 whitespace-nowrap ${
+                      className={`${stickyCellBase} px-3 py-2 text-gray-800 whitespace-nowrap ${
                         bordered ? cellBorder : 'border-l border-gray-200'
                       } ${rowBg} ${actionHover}`}
+                      style={{ position: 'sticky', right: 0 }}
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className="flex items-center gap-4">
                         {actionColumns.map((col) => (

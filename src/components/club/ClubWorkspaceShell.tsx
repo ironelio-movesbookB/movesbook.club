@@ -71,6 +71,7 @@ import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashbo
 import TopBar from '@/app/club/dashboard/components/topbar/TopBar';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
+import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import ChatPanel from '@/components/chat/ChatPanel';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
@@ -111,6 +112,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
   const [orgFeedbackScope, setOrgFeedbackScope] = useState<'mine' | 'manage' | null>(null);
+  const [showClubStaffMessages, setShowClubStaffMessages] = useState(false);
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
   const [telegramAccount, setTelegramAccount] = useState('');
   const [isLoadingTelegram, setIsLoadingTelegram] = useState(false);
@@ -444,13 +446,25 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         (onClubDashboard && isManagedEntityAdminUserType(user.userType))),
   );
   const onMembersArchivePath = Boolean(pathname?.startsWith('/clubMembers'));
+  /** QR link: /clubMembers/memberProfile/…?mode=view is readable without that club's login. */
+  const isSharedProfileView =
+    Boolean(pathname?.includes('/clubMembers/memberProfile/')) &&
+    searchParams?.get('mode') === 'view';
+  /** Documents Get-link / shared page — open without club login (private window). */
+  const isPublicDocumentsView =
+    Boolean(pathname?.startsWith('/club/documents/view/')) ||
+    Boolean(pathname?.startsWith('/club/documents/shared'));
+  const isPublicReadOnlyView = isSharedProfileView || isPublicDocumentsView;
   const onManagedArchiveShell = Boolean(
     user && canAccessManagedArchiveShell(user.userType, pathname),
   );
+  /** Staff↔member inbox — any logged-in user (incl. ATHLETE/ADMIN) may open this route. */
+  const onClubStaffMessagesPath = Boolean(pathname?.startsWith('/clubs/messages'));
   const canUseMembersArchive = Boolean(
     user &&
       (canUseClubShell ||
         onManagedArchiveShell ||
+        onClubStaffMessagesPath ||
         (onMembersArchivePath && canAccessClubMembersArchive(user.userType))),
   );
   /**
@@ -482,16 +496,18 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [archiveOnlyMembersAccess, clubsLoaded, selectedClubId, activeTab]);
 
   useEffect(() => {
+    if (isPublicReadOnlyView) return;
     if (!loading && !user) {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isPublicReadOnlyView]);
 
   useEffect(() => {
+    if (isPublicReadOnlyView) return;
     if (!user || loading) return;
     if (canUseMembersArchive) return;
     router.push('/my-page');
-  }, [user, loading, router, canUseMembersArchive]);
+  }, [user, loading, router, canUseMembersArchive, isPublicReadOnlyView]);
 
   /**
    * Team / Coach / Group on shared archive routes must stay on My Team (my-entity)
@@ -782,6 +798,11 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     bannerClub?.description,
   );
 
+  if (isPublicReadOnlyView && !canUseMembersArchive) {
+    // Public Get-link / shared docs must render even before auth finishes (private window).
+    return <main className="min-h-screen w-full bg-white">{children}</main>;
+  }
+
   if (loading || !user || !canUseMembersArchive) {
     return null;
   }
@@ -907,6 +928,23 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 onAccessOutcomeSettingsClick={() => goToDashboardPanel('outcome-settings')}
                 onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
                 onClubChatClick={() => goToDashboardPanel('chat')}
+                onClubMessagesClick={() => {
+                  const clubId = selectedClubId || searchParams?.get('clubId') || '';
+                  if (clubId) {
+                    router.push(`/clubs/messages?clubId=${encodeURIComponent(clubId)}`);
+                  } else {
+                    router.push('/clubs/messages');
+                  }
+                }}
+                onClubStaffMessagesClick={() => {
+                  setShowChatPanel(false);
+                  setChatAudience(null);
+                  setMyPageNewsPanel(null);
+                  setShowStaffFeedbacks(false);
+                  setOrgFeedbackScope(null);
+                  setActiveTab('my-page');
+                  setShowClubStaffMessages(true);
+                }}
                 onClubNewsSectionClick={() => goToDashboardPanel('club-news')}
                 onClubMovesbookNewsSectionClick={() => goToDashboardPanel('club-movesbook-news')}
                 onClubOgpNewsSectionClick={() => goToDashboardPanel('club-news-ogp')}
@@ -922,6 +960,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setMyPageNewsPanel(null);
                   setActiveTab('my-page');
                   setOrgFeedbackScope(null);
+                  setShowClubStaffMessages(false);
                   setShowStaffFeedbacks(true);
                 }}
                 onOrgFeedbacksClick={(scope) => {
@@ -929,6 +968,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
                   setShowStaffFeedbacks(false);
+                  setShowClubStaffMessages(false);
                   setOrgFeedbackScope(scope);
                 }}
               />
@@ -939,6 +979,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             <TopBar onChatPanelClick={handleChatPanelClick} />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
+            ) : showClubStaffMessages ? (
+              <div className="w-full">
+                <div className="px-1 pt-2">
+                  <h1 className="text-xl font-bold text-orange-600">
+                    Messages among Staff and members
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-1 mb-2">
+                    All clubs you belong to. Club logo and username appear on the right of each
+                    message.
+                  </p>
+                </div>
+                <ClubStaffMessagesPanel showClubBadge />
+              </div>
             ) : orgFeedbackScope ? (
               <OrgFeedbacksPanel
                 key={orgFeedbackScope}

@@ -18,10 +18,19 @@ import {
 } from '@/lib/registration/registrationPayments';
 import { decryptPrivateData } from '@/lib/payments/paymentSettings';
 import { quickRegisterUser, type QuickRegisterPayload } from '@/lib/users/quickRegisterService';
+import {
+  ACTIVATION_EMAIL_BODY_EN,
+  ACTIVATION_EMAIL_BODY_KEY,
+  ACTIVATION_EMAIL_BUTTON_EN,
+  ACTIVATION_EMAIL_BUTTON_KEY,
+  ACTIVATION_EMAIL_SUBJECT_EN,
+  ACTIVATION_EMAIL_SUBJECT_KEY,
+  PAYMENT_SUCCESS_LONG_TEXT_EN,
+  PAYMENT_SUCCESS_LONG_TEXT_KEY,
+} from '@/constants/activationEmailLongText';
 
-export const PAYMENT_SUCCESS_TEXT_KEY = 'Payment_successfully';
-export const PAYMENT_SUCCESS_FALLBACK_EN =
-  'You have successfully registered. Open your email and activate your account.';
+export const PAYMENT_SUCCESS_TEXT_KEY = PAYMENT_SUCCESS_LONG_TEXT_KEY;
+export const PAYMENT_SUCCESS_FALLBACK_EN = PAYMENT_SUCCESS_LONG_TEXT_EN;
 
 /** Long text from Settings → Language in the user's language, then English, then the fallback. */
 export async function registrationLongText(
@@ -75,13 +84,9 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
   const displayName = user.firstName?.trim() || user.name?.trim() || user.username;
 
   const [subject, body, buttonLabel] = await Promise.all([
-    registrationLongText('Activation_email_subject', lang, 'Activate your Movesbook account'),
-    registrationLongText(
-      'Activation_email',
-      lang,
-      'Hello {name},\n\nthank you for registering on Movesbook with the username {username}.\nClick the button below to activate your account.',
-    ),
-    registrationLongText('Activate_account', lang, 'Activate account'),
+    registrationLongText(ACTIVATION_EMAIL_SUBJECT_KEY, lang, ACTIVATION_EMAIL_SUBJECT_EN),
+    registrationLongText(ACTIVATION_EMAIL_BODY_KEY, lang, ACTIVATION_EMAIL_BODY_EN),
+    registrationLongText(ACTIVATION_EMAIL_BUTTON_KEY, lang, ACTIVATION_EMAIL_BUTTON_EN),
   ]);
 
   const values = {
@@ -90,7 +95,9 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
     link: escapeHtml(link),
   };
   const bodyHtml = sanitizeRichHtml(fillPlaceholders(longTextDisplayHtml(body), values));
-  const label = escapeHtml(buttonLabel.replace(/<[^>]*>/g, '').trim() || 'Activate account');
+  const label = escapeHtml(
+    buttonLabel.replace(/<[^>]*>/g, '').trim() || ACTIVATION_EMAIL_BUTTON_EN,
+  );
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">
   ${bodyHtml}
   <p style="margin:28px 0">
@@ -106,7 +113,7 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
 
   await sendIonosEmail({
     to: user.email,
-    subject: subject.replace(/<[^>]*>/g, '').trim() || 'Activate your Movesbook account',
+    subject: subject.replace(/<[^>]*>/g, '').trim() || ACTIVATION_EMAIL_SUBJECT_EN,
     html,
     text,
   });

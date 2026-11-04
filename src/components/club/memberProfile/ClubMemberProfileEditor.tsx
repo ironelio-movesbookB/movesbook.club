@@ -80,6 +80,12 @@ import { getWorldTimezones } from '@/lib/timezones';
 import SportStatsBoard from '@/components/sport/SportStatsBoard';
 import { athleteSportProfile, athleteSportStatGroups } from '@/lib/sport/athleteSportProfiles';
 import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
+import {
+  getMemberRenameInfoLabel,
+  getMemberRenameResidualLabel,
+} from '@/constants/memberRenameQuotaLongText';
 
 function looksLikeHtml(value: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(value);
@@ -132,6 +138,18 @@ export default function ClubMemberProfileEditor({
   const clubEnabledPayments = useClubEnabledPaymentMethods();
   const radioGroupId = useId();
   const st = useSportT();
+  const { currentLanguage } = useLanguage();
+  const language = normalizeToolsLanguage(currentLanguage);
+  const renameQuota = data.renameQuota ?? {
+    residual: null,
+    canRename: true,
+    unlimited: true,
+  };
+  const canRenameNames = renameQuota.canRename || renameQuota.unlimited;
+  const showRenameQuotaHints =
+    Boolean(data.viewer.isClubAdmin) &&
+    data.workspaceKind !== 'coach' &&
+    Boolean(data.clubId);
   const [saving, setSaving] = useState(false);
   const [resetConfirmKind, setResetConfirmKind] = useState<'staff' | 'coach' | null>(null);
   const [message, setMessage] = useState('');
@@ -150,6 +168,19 @@ export default function ClubMemberProfileEditor({
     parent1: string;
     parent2: string;
   }>({ parent1: '', parent2: '' });
+  const [memberTypes, setMemberTypes] = useState<
+    Array<{
+      id: string;
+      name: string;
+      discountSubscription: string;
+      discountServices: string;
+      discountRest: string;
+      discountSupplement: string;
+      discountClothing: string;
+      discountOutfit: string;
+    }>
+  >([]);
+  const [memberTypesLoading, setMemberTypesLoading] = useState(false);
 
   const readOnlyOwner = mode === 'view' || !data.viewer.canEditOwner;
   const readOnlyMemberTabs =
@@ -180,6 +211,63 @@ export default function ClubMemberProfileEditor({
   useEffect(() => {
     setOrigin(typeof window !== 'undefined' ? window.location.origin : '');
   }, []);
+
+  /** Same catalog as Club management → Tables → Member type. */
+  useEffect(() => {
+    if (!data.clubId) {
+      setMemberTypes([]);
+      setMemberTypesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    async function loadMemberTypes() {
+      setMemberTypesLoading(true);
+      try {
+        const res = await fetch(
+          withSelectedClubId(
+            `/api/club/settings/tables/member-types?scope=profile&clubId=${encodeURIComponent(data.clubId)}`,
+          ),
+          { headers: getAuthHeaders() },
+        );
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const items = Array.isArray(json.items) ? json.items : [];
+        setMemberTypes(
+          items
+            .map(
+              (row: {
+                id?: string;
+                name?: string;
+                discountSubscription?: string;
+                discountServices?: string;
+                discountRest?: string;
+                discountSupplement?: string;
+                discountClothing?: string;
+                discountOutfit?: string;
+              }) => ({
+                id: String(row.id || ''),
+                name: String(row.name || '').trim(),
+                discountSubscription: String(row.discountSubscription || ''),
+                discountServices: String(row.discountServices || ''),
+                discountRest: String(row.discountRest || ''),
+                discountSupplement: String(row.discountSupplement || ''),
+                discountClothing: String(row.discountClothing || ''),
+                discountOutfit: String(row.discountOutfit || ''),
+              }),
+            )
+            .filter((row: { id: string; name: string }) => row.id && row.name),
+        );
+      } catch {
+        if (!cancelled) setMemberTypes([]);
+      } finally {
+        if (!cancelled) setMemberTypesLoading(false);
+      }
+    }
+    void loadMemberTypes();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.clubId]);
 
   /** View-only member profile — default payload encoded in the user QR. */
   const defaultProfileViewUrl = useMemo(() => {
@@ -733,7 +821,7 @@ export default function ClubMemberProfileEditor({
         <SectionCard title="Private settings" tone="red">
           <CheckRow
             label={
-              o.privateSettings.disallowClubAdmins && !data.viewer.isSelf ? (
+              o.privateSettings.disallowClubAdmins ? (
                 <span className="font-semibold text-red-600">
                   {data.workspaceKind === 'team'
                     ? 'Entry by Team Staff disabled'
@@ -753,13 +841,14 @@ export default function ClubMemberProfileEditor({
             }
           />
           <p className="text-xs text-gray-500">
-            Only the member can change this flag. When checked, club admins cannot edit Owner
-            profile fields.
+            Only the member can change this flag. When checked, the label becomes
+            &quot;Entry by Club Staff disabled&quot; and club admins cannot edit Owner profile
+            fields.
           </p>
         </SectionCard>
 
         <SectionCard title="Photo and QR code">
-          <Row2>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2 md:items-start">
             <Field label="Personal photo">
               <TextInput
                 disabled={readOnlyOwner}
@@ -767,8 +856,18 @@ export default function ClubMemberProfileEditor({
                 onChange={(e) => patchOwner((p) => ({ ...p, photoUrl: e.target.value }))}
                 placeholder="/uploads/..."
               />
+            </Field>
+            <Field label="QR code URL">
+              <TextInput
+                disabled
+                value={defaultProfileViewUrl}
+                placeholder="View-only profile URL"
+              />
+            </Field>
+
+            <div className="min-h-[2.75rem]">
               {!readOnlyOwner ? (
-                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm text-red-700 underline">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-red-700 underline">
                   Upload image
                   <input
                     type="file"
@@ -782,41 +881,46 @@ export default function ClubMemberProfileEditor({
                   />
                 </label>
               ) : null}
-              {o.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={o.photoUrl} alt="" className="mt-2 h-28 w-28 object-cover border" />
-              ) : null}
-            </Field>
-            <Field label="QR code URL">
-              <TextInput
-                disabled
-                value={defaultProfileViewUrl}
-                placeholder="View-only profile URL"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Auto-generated link encoded in the QR. Scanning it opens this member&apos;s
-                profile in view-only mode. It is not an editable free-text field.
-              </p>
-              <div className="mt-3 flex flex-col items-start gap-2">
-                <p className="text-sm font-medium text-gray-700">Dynamic User QR code</p>
-                <div className="flex h-[220px] w-[220px] items-center justify-center border border-gray-300 bg-white">
-                  {qrImageSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={qrImageSrc}
-                      alt={`QR code for ${data.user.username || 'member'}`}
-                      width={220}
-                      height={220}
-                    />
-                  ) : (
-                    <span className="px-3 text-center text-xs text-gray-400">
-                      QR unavailable (missing club or member)
-                    </span>
-                  )}
-                </div>
+            </div>
+            <p className="min-h-[2.75rem] text-xs text-gray-500">
+              Auto-generated link encoded in the QR. Scanning it opens this member&apos;s
+              profile in view-only mode. It is not an editable free-text field.
+            </p>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Photo preview</p>
+              <div className="relative flex h-[220px] w-[220px] items-center justify-center overflow-hidden border border-gray-300 bg-gray-50">
+                {o.photoUrl ? (
+                  <AuthImage
+                    src={o.photoUrl}
+                    alt="Personal photo"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="px-3 text-center text-xs text-gray-400">No photo</span>
+                )}
               </div>
-            </Field>
-          </Row2>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Dynamic User QR code</p>
+              <div className="relative flex h-[220px] w-[220px] items-center justify-center overflow-hidden border border-gray-300 bg-white">
+                {qrImageSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrImageSrc}
+                    alt={`QR code for ${data.user.username || 'member'}`}
+                    className="h-full w-full object-contain"
+                    width={220}
+                    height={220}
+                  />
+                ) : (
+                  <span className="px-3 text-center text-xs text-gray-400">
+                    QR unavailable (missing club or member)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </SectionCard>
 
         <SectionCard title="Data for Login">
@@ -834,9 +938,42 @@ export default function ClubMemberProfileEditor({
                 }
               />
             </Field>
-            <Field label="First name">
+          </Row2>
+          {/*
+            Fixed-height label row: Last name + info + residual on one line (no wrap).
+            Inputs sit on the next grid row so First/Last boxes stay level.
+          */}
+          <div className="grid grid-cols-1 gap-x-3 gap-y-1 md:grid-cols-2">
+            <div className="order-1 flex h-7 items-center text-sm font-semibold text-gray-800">
+              First name
+            </div>
+            <div className="order-3 flex h-7 min-w-0 items-center gap-2 overflow-hidden md:order-2">
+              <span className="shrink-0 text-sm font-semibold text-gray-800">Last name</span>
+              {showRenameQuotaHints ? (
+                <>
+                  <span
+                    className="min-w-0 flex-1 truncate text-[11px] font-medium leading-none text-red-600"
+                    title={getMemberRenameInfoLabel(language)}
+                  >
+                    {getMemberRenameInfoLabel(language)}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-[11px] font-semibold leading-none ${
+                      canRenameNames ? 'text-emerald-600' : 'text-red-600'
+                    }`}
+                  >
+                    {getMemberRenameResidualLabel(
+                      language,
+                      renameQuota.residual,
+                      renameQuota.unlimited,
+                    )}
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <div className="order-2 md:order-3">
               <TextInput
-                disabled={readOnlyOwner}
+                disabled={readOnlyOwner || !canRenameNames}
                 value={o.login.firstName}
                 onChange={(e) =>
                   patchOwner((p) => ({
@@ -845,10 +982,10 @@ export default function ClubMemberProfileEditor({
                   }))
                 }
               />
-            </Field>
-            <Field label="Last name">
+            </div>
+            <div className="order-4">
               <TextInput
-                disabled={readOnlyOwner}
+                disabled={readOnlyOwner || !canRenameNames}
                 value={o.login.lastName}
                 onChange={(e) =>
                   patchOwner((p) => ({
@@ -857,7 +994,9 @@ export default function ClubMemberProfileEditor({
                   }))
                 }
               />
-            </Field>
+            </div>
+          </div>
+          <Row2>
             <Field label="New password">
               <TextInput
                 disabled={readOnlyOwner}
@@ -1055,41 +1194,50 @@ export default function ClubMemberProfileEditor({
               ['mobile1', 'Phone 1', 'mobile1Whatsapp', 'mobile1Telegram'],
               ['mobile2', 'Phone 2', 'mobile2Whatsapp', 'mobile2Telegram'],
             ] as const
-          ).map(([numKey, label, waKey, tgKey]) => (
-            <div key={numKey} className="rounded border border-gray-200 p-2">
-              <Field label={label}>
-                <TextInput
-                  disabled={readOnlyOwner}
-                  value={o.address[numKey]}
-                  onChange={(e) =>
-                    patchOwner((p) => ({
-                      ...p,
-                      address: { ...p.address, [numKey]: e.target.value },
-                    }))
-                  }
-                />
-              </Field>
-              <div className="mt-2 flex flex-wrap gap-4" role="radiogroup" aria-label={`${label} messenger`}>
-                {(
-                  [
-                    ['none', 'None'],
-                    ['whatsapp', 'WhatsApp'],
-                    ['telegram', 'Telegram'],
-                  ] as const
-                ).map(([value, text]) => {
-                  const current = o.address[waKey]
-                    ? 'whatsapp'
-                    : o.address[tgKey]
-                      ? 'telegram'
-                      : 'none';
-                  return (
-                    <label key={value} className="flex items-center gap-2 text-sm text-gray-800">
+          ).map(([numKey, label, waKey, tgKey]) => {
+            // Exclusive: WhatsApp OR Telegram (never both). Legacy both → WhatsApp.
+            const messenger: 'whatsapp' | 'telegram' | '' = o.address[waKey]
+              ? 'whatsapp'
+              : o.address[tgKey]
+                ? 'telegram'
+                : '';
+            const groupName = `messenger-${numKey}-${String(radioGroupId).replace(/:/g, '')}`;
+            return (
+              <div key={numKey} className="rounded border border-gray-200 p-2">
+                <Field label={label}>
+                  <TextInput
+                    disabled={readOnlyOwner}
+                    value={o.address[numKey]}
+                    onChange={(e) =>
+                      patchOwner((p) => ({
+                        ...p,
+                        address: { ...p.address, [numKey]: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <div
+                  className="mt-2 flex flex-wrap items-center gap-5"
+                  role="radiogroup"
+                  aria-label={`${label}: WhatsApp or Telegram`}
+                >
+                  {(
+                    [
+                      ['whatsapp', 'WhatsApp'],
+                      ['telegram', 'Telegram'],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <label
+                      key={value}
+                      className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-800"
+                    >
                       <input
                         type="radio"
-                        name={`${radioGroupId}-messenger-${numKey}`}
+                        name={groupName}
                         value={value}
                         disabled={readOnlyOwner}
-                        checked={current === value}
+                        checked={messenger === value}
+                        className="h-4 w-4 shrink-0 cursor-pointer appearance-auto rounded-full border border-gray-400 accent-blue-600"
                         onChange={() =>
                           patchOwner((p) => ({
                             ...p,
@@ -1100,14 +1248,27 @@ export default function ClubMemberProfileEditor({
                             },
                           }))
                         }
+                        onClick={() => {
+                          // Click selected again → clear (neither).
+                          if (readOnlyOwner || messenger !== value) return;
+                          patchOwner((p) => ({
+                            ...p,
+                            address: {
+                              ...p.address,
+                              [waKey]: false,
+                              [tgKey]: false,
+                            },
+                          }));
+                        }}
                       />
                       {text}
                     </label>
-                  );
-                })}
+                  ))}
+                  <span className="text-xs text-gray-500">Choose one — not both</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </SectionCard>
 
         <SectionCard title="Personal Data">
@@ -2279,7 +2440,14 @@ export default function ClubMemberProfileEditor({
                     // different vocabulary (Active / Inactive / Injured / Suspended).
                     setClub((c) => ({
                       ...c,
-                      otherDetails: { ...c.otherDetails, athleteStatus: status },
+                      otherDetails: {
+                        ...c.otherDetails,
+                        athleteStatus: status,
+                        // Type of member applies only while status is Member.
+                        ...(status === 'Member'
+                          ? {}
+                          : { groupTrainedId: '' }),
+                      },
                     }))
                   }
                   className="border-gray-400"
@@ -2290,22 +2458,129 @@ export default function ClubMemberProfileEditor({
           </div>
         </SectionCard>
 
-        <SectionCard title={`Group trained (${byAdmin})`}>
-          <Field label="Connect member to a group trained">
-            <TextSelect
-              disabled={readOnlyClub}
-              value={od.groupTrainedId}
-              onChange={(e) =>
-                setClub((c) => ({
-                  ...c,
-                  otherDetails: { ...c.otherDetails, groupTrainedId: e.target.value },
-                }))
-              }
-            >
-              <option value="">—</option>
-            </TextSelect>
-          </Field>
-        </SectionCard>
+        {od.athleteStatus === 'Member' ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900">Type of member</h3>
+            <SectionCard title={`Member type (${byAdmin})`}>
+              <Field label="Member type">
+                <TextSelect
+                  disabled={readOnlyClub || memberTypesLoading}
+                  value={club.settings.memberTypeId}
+                  onChange={(e) => {
+                    const memberTypeId = e.target.value;
+                    const selected = memberTypes.find((item) => item.id === memberTypeId);
+                    setClub((c) => ({
+                      ...c,
+                      settings: {
+                        ...c.settings,
+                        memberTypeId,
+                        discounts: selected
+                          ? {
+                              subscript: selected.discountSubscription,
+                              service: selected.discountServices,
+                              barRest: selected.discountRest,
+                              supply: selected.discountSupplement,
+                              clothing: selected.discountClothing,
+                              outfit: selected.discountOutfit,
+                            }
+                          : c.settings.discounts,
+                      },
+                    }));
+                  }}
+                >
+                  <option value="">
+                    {memberTypesLoading
+                      ? 'Loading…'
+                      : memberTypes.length === 0
+                        ? 'No member types yet'
+                        : 'Select'}
+                  </option>
+                  {memberTypes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                  {club.settings.memberTypeId &&
+                  !memberTypes.some((item) => item.id === club.settings.memberTypeId) ? (
+                    <option value={club.settings.memberTypeId}>
+                      Saved type #{club.settings.memberTypeId}
+                    </option>
+                  ) : null}
+                </TextSelect>
+                {!memberTypesLoading && memberTypes.length === 0 ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Add types under{' '}
+                    <a
+                      href="/club/settings/tables/member_type"
+                      className="text-blue-800 underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Club management → General settings → Tables → Member type
+                    </a>
+                    .
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    List from Tables → Member type. Choosing a type also fills Discount % on Settings.
+                  </p>
+                )}
+              </Field>
+            </SectionCard>
+            <SectionCard title={`Group trained (${byAdmin})`}>
+              <Field label="Connect member to a group trained">
+                {(() => {
+                  const allGroups = data.memberGroups ?? [];
+                  const presentIds = new Set(data.memberPresentGroupIds ?? []);
+                  const presentGroups = allGroups.filter((g) => presentIds.has(g.id));
+                  // Prefer groups this member already belongs to; otherwise full Archive list.
+                  const groupOptions =
+                    presentGroups.length > 0 ? presentGroups : allGroups;
+                  return (
+                    <>
+                      <TextSelect
+                        disabled={readOnlyClub}
+                        value={od.groupTrainedId}
+                        onChange={(e) =>
+                          setClub((c) => ({
+                            ...c,
+                            otherDetails: {
+                              ...c.otherDetails,
+                              groupTrainedId: e.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="">
+                          {allGroups.length === 0 ? 'No groups yet' : 'Select'}
+                        </option>
+                        {groupOptions.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                        {od.groupTrainedId &&
+                        !groupOptions.some((g) => g.id === od.groupTrainedId) ? (
+                          <option value={od.groupTrainedId}>
+                            {allGroups.find((g) => g.id === od.groupTrainedId)?.name ||
+                              `Saved group #${od.groupTrainedId}`}
+                          </option>
+                        ) : null}
+                      </TextSelect>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {presentGroups.length > 0
+                          ? 'Only groups this member is already in (Archive → Groups).'
+                          : allGroups.length > 0
+                            ? 'Member is not in any group yet — showing all Archive groups.'
+                            : 'Create groups under Archive of Users → Groups, then add this member.'}
+                      </p>
+                    </>
+                  );
+                })()}
+              </Field>
+            </SectionCard>
+          </div>
+        ) : null}
 
         <SectionCard
           title={

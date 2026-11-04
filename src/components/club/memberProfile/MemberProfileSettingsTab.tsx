@@ -535,10 +535,16 @@ export default function MemberProfileSettingsTab({
     paymentMethod,
   );
   const canBeVerified = paymentMethodIn(TO_BE_VERIFIED_METHODS, paymentMethod);
-  const canMarkFirstPaid = paymentMethodIn(
+  const canMarkPaid = paymentMethodIn(
     PAID_AT_FIRST_DEADLINE_METHODS,
     paymentMethod,
   );
+  const paidKeys = deadlines.paidKeys ?? [];
+  const isFullyPaid = (key: InstallmentKey) => paidKeys.includes(key);
+  /** Next open deadline that can receive the Paid tick (previous ones must be fully paid). */
+  const nextPayableKey =
+    installmentRows.find(({ key }) => !isFullyPaid(key) && installmentAmount(key) > 0)
+      ?.key ?? null;
   const paymentMethodChoices = useMemo(() => {
     const tagged = sanitizeDefaultPaymentMethods(defaultPaymentMethods);
     const catalog = clubEnabledPayments
@@ -556,20 +562,21 @@ export default function MemberProfileSettingsTab({
 
   const setPaymentMethod = (value: string) => {
     patchSettings((prev) => {
-      const recorded = Boolean(prev.football.deadlines?.firstPaidRecorded);
-      const keepPaid =
-        recorded || paymentMethodIn(PAID_AT_FIRST_DEADLINE_METHODS, value);
+      const recordedPaid = prev.football.deadlines?.paidKeys ?? [];
+      const methodAllows = paymentMethodIn(PAID_AT_FIRST_DEADLINE_METHODS, value);
+      const nextFootball = { ...prev.football, paymentMethod: value };
+      for (const key of INSTALLMENT_KEYS) {
+        const fullyPaid = recordedPaid.includes(key);
+        if (fullyPaid || methodAllows) continue;
+        nextFootball[key] = { ...nextFootball[key], status: "" };
+      }
       return {
         ...prev,
         football: {
-          ...prev.football,
-          paymentMethod: value,
+          ...nextFootball,
           paymentToBeVerified:
             prev.football.paymentToBeVerified &&
             paymentMethodIn(TO_BE_VERIFIED_METHODS, value),
-          firstPayment: keepPaid
-            ? prev.football.firstPayment
-            : { ...prev.football.firstPayment, status: "" },
         },
       };
     });
@@ -629,20 +636,27 @@ export default function MemberProfileSettingsTab({
     }
   };
 
-  const firstPaidTicked =
-    s.football.firstPayment.status === "Paid" && canMarkFirstPaid;
-  const firstPaidMissingAmount =
-    firstPaidTicked &&
-    !deadlines.firstPaidRecorded &&
-    installmentAmount("firstPayment") <= 0;
+  const newlyPaidKeys = installmentRows
+    .map(({ key }) => key)
+    .filter(
+      (key) =>
+        s.football[key].status === "Paid" &&
+        canMarkPaid &&
+        !isFullyPaid(key) &&
+        installmentAmount(key) > 0,
+    );
+  const paidMissingAmount =
+    canMarkPaid &&
+    nextPayableKey != null &&
+    s.football[nextPayableKey].status === "Paid" &&
+    !isFullyPaid(nextPayableKey) &&
+    installmentAmount(nextPayableKey) <= 0;
   const pendingFiling =
     (s.football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS &&
       installmentRows.some(
         ({ key }) => !isFiled(key) && installmentAmount(key) > 0,
       )) ||
-    (firstPaidTicked &&
-      !deadlines.firstPaidRecorded &&
-      installmentAmount("firstPayment") > 0);
+    newlyPaidKeys.length > 0;
   const installmentsTotalLabel = Number.isInteger(installmentsTotal)
     ? String(installmentsTotal)
     : installmentsTotal.toFixed(2);
@@ -1405,7 +1419,7 @@ export default function MemberProfileSettingsTab({
                     >
                       <input
                         type="checkbox"
-                        disabled={readOnlyClub || deadlines.firstPaidRecorded}
+                        disabled={readOnlyClub || paidKeys.length > 0}
                         checked={s.football.paymentToBeVerified}
                         onChange={(e) =>
                           patchSettings((prev) => ({
@@ -1468,6 +1482,9 @@ export default function MemberProfileSettingsTab({
             </div>
             {installmentRows.map(({ key, label }, index) => {
               const filed = isFiled(key);
+              const fullyPaid = isFullyPaid(key);
+              const isNextPayable = nextPayableKey === key;
+              const showPaidBox = fullyPaid || isNextPayable;
               const locked = readOnlyClub || filed;
               return (
                 <div
@@ -1493,39 +1510,42 @@ export default function MemberProfileSettingsTab({
                         >
                           Auto
                         </button>
-                        {index === 0 ? (
+                        {showPaidBox ? (
                           <label
                             className={`inline-flex items-center gap-1 text-xs font-semibold ${
-                              canMarkFirstPaid || deadlines.firstPaidRecorded
-                                ? "text-red-600"
-                                : "text-gray-400"
+                              fullyPaid
+                                ? "text-gray-400"
+                                : canMarkPaid
+                                  ? "text-red-600"
+                                  : "text-gray-400"
                             }`}
                             title={
-                              canMarkFirstPaid || deadlines.firstPaidRecorded
-                                ? "Files this deadline in the Archive of the Deadlines as paid and adds the payment to the Archive of the Payments when you save."
-                                : "Choose Cash, Cheque, Payment slip or Bank transfer as payment method to mark the first deadline as paid."
+                              fullyPaid
+                                ? "Fully paid — checkbox locked."
+                                : canMarkPaid
+                                  ? index === 0
+                                    ? "On save: copies all deadlines into the Archive of the Deadlines, records this payment (pending amount only) in Cash / Archive of Payments, then moves Paid to the next deadline."
+                                    : "On save: pays only the pending amount for this deadline into Cash / Archive of Payments."
+                                  : "Choose Cash, Cheque, Payment slip or Bank transfer as payment method to mark as paid."
                             }
                           >
                             <input
                               type="checkbox"
                               disabled={
-                                readOnlyClub ||
-                                deadlines.firstPaidRecorded ||
-                                !canMarkFirstPaid
+                                readOnlyClub || fullyPaid || !canMarkPaid
                               }
                               checked={
-                                s.football.firstPayment.status === "Paid" &&
-                                (canMarkFirstPaid ||
-                                  deadlines.firstPaidRecorded)
+                                fullyPaid ||
+                                (s.football[key].status === "Paid" && canMarkPaid)
                               }
                               onChange={(e) =>
                                 patchInstallment(
-                                  "firstPayment",
+                                  key,
                                   "status",
                                   e.target.checked ? "Paid" : "",
                                 )
                               }
-                              className="h-3.5 w-3.5 border-red-400 accent-red-600"
+                              className="h-3.5 w-3.5 border-red-400 accent-red-600 disabled:opacity-60"
                             />
                             Paid
                           </label>
@@ -1533,11 +1553,11 @@ export default function MemberProfileSettingsTab({
                       </>
                     }
                     hint={
-                      filed
-                        ? index === 0 && deadlines.firstPaidRecorded
-                          ? "Paid — in the Archive of the Deadlines and the Archive of the Payments"
-                          : "In the Archive of the Deadlines"
-                        : undefined
+                      fullyPaid
+                        ? "Paid — in the Archive of the Deadlines and the Archive of the Payments"
+                        : filed
+                          ? "In the Archive of the Deadlines"
+                          : undefined
                     }
                   >
                     <TextInput
@@ -1617,9 +1637,9 @@ export default function MemberProfileSettingsTab({
                   </>
                 ) : null}
                 {pendingFiling ? "Click Save to create them. " : null}
-                {firstPaidMissingAmount ? (
+                {paidMissingAmount ? (
                   <span className="font-semibold text-red-600">
-                    Enter the first payment amount to record it as paid.
+                    Enter the payment amount to record it as paid.
                   </span>
                 ) : null}
               </p>

@@ -73,10 +73,18 @@ export default function AuthImage({
   }, [src]);
 
   if (failed) {
-    return <p className="mt-2 text-sm text-red-600">Could not load the image.</p>;
+    return (
+      <p className={`flex items-center justify-center text-sm text-red-600 ${className ?? ''}`}>
+        Could not load the image.
+      </p>
+    );
   }
   if (!objectUrl) {
-    return <p className="mt-2 text-sm text-gray-500">Loading image…</p>;
+    return (
+      <p className={`flex items-center justify-center text-sm text-gray-500 ${className ?? ''}`}>
+        Loading image…
+      </p>
+    );
   }
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={objectUrl} alt={alt} className={className} />;

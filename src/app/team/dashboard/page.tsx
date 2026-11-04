@@ -33,6 +33,7 @@ import { getDashboardPathForUserType, isTeamAccountUserType } from '@/utils/dash
 import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashboardNav';
 import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 
 function TeamDashboardContent() {
   const router = useRouter();
@@ -70,6 +71,7 @@ function TeamDashboardContent() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showWorkoutSection, setShowWorkoutSection] = useState(false);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
+  const [showClubStaffMessages, setShowClubStaffMessages] = useState(false);
   /** My Team tab visible only after opening a team from the sidebar (hidden on My Page). */
   const [myEntityTabVisible, setMyEntityTabVisible] = useState(false);
 
@@ -262,7 +264,13 @@ function TeamDashboardContent() {
                 onSuggestMovesbookClick={() => router.push('/users/notification_by_promocode')}
                 onMyFeedbacksStaffClick={() => {
                   setActiveTab('my-page');
+                  setShowClubStaffMessages(false);
                   setShowStaffFeedbacks(true);
+                }}
+                onClubStaffMessagesClick={() => {
+                  setActiveTab('my-page');
+                  setShowStaffFeedbacks(false);
+                  setShowClubStaffMessages(true);
                 }}
               />
             </div>
@@ -278,6 +286,19 @@ function TeamDashboardContent() {
             />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
+            ) : showClubStaffMessages ? (
+              <div className="w-full">
+                <div className="px-1 pt-2">
+                  <h1 className="text-xl font-bold text-orange-600">
+                    Messages among Staff and members
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-1 mb-2">
+                    All clubs and teams you belong to. Club logo and username appear on the right of
+                    each message.
+                  </p>
+                </div>
+                <ClubStaffMessagesPanel showClubBadge />
+              </div>
             ) : (
               <>
             {activeTab === 'my-page' && (

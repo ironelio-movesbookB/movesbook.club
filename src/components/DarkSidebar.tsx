@@ -265,26 +265,19 @@ function ClubOfficialSectionRow({
   );
 }
 
-/** Official Club My Club menu nests these rows inside "My Club Dashboard"; other layouts render them flat. */
+/** @deprecated Nesting under My Club Dashboard was wrong — official layout is flat. Kept as a pass-through. */
 function ClubDashboardGroup({
-  enabled,
   children,
-  ...dashboard
 }: {
-  enabled: boolean;
+  enabled?: boolean;
   children: ReactNode;
   clubId?: string;
   youtubeChannelUrl?: string | null;
-  canManageClub: boolean;
+  canManageClub?: boolean;
   onYoutubeChannelUrlSaved?: (clubId: string, url: string | null) => void;
   onClubBootstrapped?: (club: { id: string; name?: string; youtubeChannelUrl?: string | null }) => void;
 }) {
-  if (!enabled) return <>{children}</>;
-  return (
-    <ClubMembersDashboardSection {...dashboard} title="My Club Dashboard">
-      {children}
-    </ClubMembersDashboardSection>
-  );
+  return <>{children}</>;
 }
 
 interface DarkSidebarProps {
@@ -318,6 +311,10 @@ interface DarkSidebarProps {
   onSuggestMovesbookClick?: () => void;
   /** My Club → SOCIAL → Chat (club broadcast channel) */
   onClubChatClick?: () => void;
+  /** My Club → SOCIAL / Section Social → Messages (current club staff↔member inbox) */
+  onClubMessagesClick?: () => void;
+  /** My Page → Messages → Messages-Feedbacks with Club\Team (all clubs inbox) */
+  onClubStaffMessagesClick?: () => void;
   /** My Club → Club News → News (shared editorial news) */
   onClubNewsSectionClick?: () => void;
   /** My Club → Club News → Movesbook News (superadmin Global News, read-only) */
@@ -388,6 +385,8 @@ export default function DarkSidebar({
   onAccessOutcomeSettingsClick,
   onSuggestMovesbookClick,
   onClubChatClick,
+  onClubMessagesClick,
+  onClubStaffMessagesClick,
   onClubNewsSectionClick,
   onClubMovesbookNewsSectionClick,
   onClubOgpNewsSectionClick,
@@ -1195,6 +1194,28 @@ export default function DarkSidebar({
   /** Official MY CLUB menu (club accounts): Dashboard group, blue Sections, then Friends / Communities / Events. */
   const officialClubMyClub = showClubMyEntityTop && isClubAccountUserType(userType);
 
+  const openClubMessagesForCurrentClub = () => {
+    if (onClubMessagesClick) {
+      onClubMessagesClick();
+      return;
+    }
+    const clubId =
+      (displaySelectedClub as { id?: string } | null)?.id || selectedEntityId || null;
+    if (clubId) {
+      router.push(`/clubs/messages?clubId=${encodeURIComponent(String(clubId))}`);
+      return;
+    }
+    router.push('/clubs/messages');
+  };
+
+  const openClubStaffMessagesAllClubs = () => {
+    if (onClubStaffMessagesClick) {
+      onClubStaffMessagesClick();
+      return;
+    }
+    router.push('/clubs/messages');
+  };
+
   const handleMyPage = () => {
     router.push('/privacy');
   };
@@ -1730,6 +1751,7 @@ export default function DarkSidebar({
           onClubYoutubeSaved={handleClubYoutubeSaved}
           onClubBootstrapped={handleClubBootstrapped}
           onChatClick={onClubChatClick}
+          onMessagesClick={openClubMessagesForCurrentClub}
         />
       ) : (
         <div className="bg-gray-800 p-3 flex-shrink-0">
@@ -2098,6 +2120,15 @@ export default function DarkSidebar({
                           onContactActivitiesClick();
                         } else {
                           router.push('/profile#member-info');
+                          if (typeof window !== 'undefined') {
+                            window.setTimeout(() => {
+                              document
+                                .querySelector<HTMLButtonElement>(
+                                  '[data-member-profile-tab="contacts"]',
+                                )
+                                ?.click();
+                            }, 0);
+                          }
                         }
                       }}
                       className="flex w-full items-center gap-2 border-t border-black/25 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90"
@@ -2396,7 +2427,7 @@ export default function DarkSidebar({
                   </button>
                   <button
                     type="button"
-                    onClick={() => openOrgFeedbacks('mine')}
+                    onClick={() => openClubStaffMessagesAllClubs()}
                     className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
                   >
                     <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
@@ -2723,7 +2754,10 @@ export default function DarkSidebar({
                       </div>
                     </div>
 
-                    <ClubSocialSubmenu onChatClick={onClubChatClick} />
+                    <ClubSocialSubmenu
+                      onChatClick={onClubChatClick}
+                      onMessagesClick={openClubMessagesForCurrentClub}
+                    />
 
                     {isClubAccountUserType(userType) ? (
                       <ClubMyClubInfoSubmenu
@@ -2765,17 +2799,28 @@ export default function DarkSidebar({
                   </>
                 )}
 
-                <ClubDashboardGroup
-                  enabled={officialClubMyClub}
-                  clubId={displaySelectedClub?.id as string | undefined}
-                  youtubeChannelUrl={
-                    (displaySelectedClub as { youtubeChannelUrl?: string | null })
-                      ?.youtubeChannelUrl ?? null
-                  }
-                  canManageClub={clubWebsiteManage}
-                  onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
-                  onClubBootstrapped={handleClubBootstrapped}
-                >
+                {officialClubMyClub ? (
+                  <>
+                    <ClubMembersDashboardSection
+                      title="My Club Dashboard"
+                      clubId={displaySelectedClub?.id as string | undefined}
+                      youtubeChannelUrl={
+                        (displaySelectedClub as { youtubeChannelUrl?: string | null })
+                          ?.youtubeChannelUrl ?? null
+                      }
+                      canManageClub={clubWebsiteManage}
+                      onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
+                      onClubBootstrapped={handleClubBootstrapped}
+                    />
+                    <ClubSocialSubmenu
+                      variant="section"
+                      onChatClick={onClubChatClick}
+                      onMessagesClick={openClubMessagesForCurrentClub}
+                    />
+                  </>
+                ) : null}
+
+                <ClubDashboardGroup enabled={false}>
                 {officialClubMyClub ? (
                   <button
                     type="button"
@@ -3422,7 +3467,6 @@ export default function DarkSidebar({
 
                 {officialClubMyClub ? (
                   <>
-                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
                     <ClubOfficialSectionRow icon={Timer} label="Section Training" />
                     <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
                     <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
@@ -4988,7 +5032,8 @@ export default function DarkSidebar({
                 )}
 
                 {renderFriendsAndCommunitiesMenus({
-                  showEvents: true,
+                  // Official My Club ends at Communities (Events was removed in the flat layout).
+                  showEvents: !officialClubMyClub,
                   titleCase: officialClubMyClub,
                 })}
               </div>
