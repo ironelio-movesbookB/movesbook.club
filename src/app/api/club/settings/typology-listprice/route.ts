@@ -94,7 +94,7 @@ async function ensureLocalListpriceTable(): Promise<string> {
       modified DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_listprice_user_club (user_id, club_id),
       INDEX idx_listprice_typology (typology_id)
-    )
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
   return tableName;
 }
