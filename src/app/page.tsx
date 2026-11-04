@@ -276,8 +276,9 @@ export default function HomePage() {
                 {t('home_subtitle')}
               </p>
               
-              {/* User Type Selection */}
-              <div className="flex justify-center space-x-4 mb-12 flex-wrap gap-4">
+              <div className="mx-auto mb-12 flex max-w-6xl flex-col items-stretch gap-8 lg:flex-row">
+              {/* User Type Selection — same width as one card on the right, stacked to the same height. */}
+              <div className="flex w-full flex-col gap-4 lg:flex-1 lg:self-stretch">
                 {[
                   { id: 'athlete' as const, label: t('user_type_athlete') },
                   { id: 'coach' as const, label: t('user_type_coach') },
@@ -288,10 +289,10 @@ export default function HomePage() {
                   <button
                     key={type.id}
                     onClick={() => setUserType(type.id)}
-                    className={`px-8 py-4 rounded-xl font-semibold transition-all duration-300 backdrop-blur-sm border-2 ${
+                    className={`flex flex-1 items-center justify-center rounded-2xl border-2 px-6 py-4 text-lg font-semibold transition-all duration-300 backdrop-blur-sm ${
                       userType === type.id
-                        ? 'bg-blue-600 text-white shadow-2xl transform scale-105 border-blue-400'
-                        : 'bg-white bg-opacity-15 text-white shadow-lg hover:bg-opacity-25 border-white border-opacity-30'
+                        ? 'border-blue-400 bg-blue-600 text-white shadow-2xl'
+                        : 'border-white border-opacity-30 bg-white bg-opacity-15 text-white shadow-lg hover:bg-opacity-25'
                     }`}
                   >
                     {type.label}
@@ -300,9 +301,9 @@ export default function HomePage() {
               </div>
 
               {/* Features Grid */}
-              <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 lg:flex-[2] lg:grid-cols-2">
                 {getFeaturesForUserType(userType).map((feature, index) => (
-                  <div key={index} className="bg-white bg-opacity-10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-500 hover:scale-105">
+                  <div key={index} className="flex h-full flex-col bg-white bg-opacity-10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-500">
                     <div className="w-20 h-20 bg-blue-500 bg-opacity-60 rounded-2xl flex items-center justify-center mb-6 mx-auto">
                       {(() => {
                         const Icon = feature.icon;
@@ -315,6 +316,7 @@ export default function HomePage() {
                     <p className="text-blue-100 text-lg leading-relaxed text-center">{feature.description}</p>
                   </div>
                 ))}
+              </div>
               </div>
             </div>
           </div>

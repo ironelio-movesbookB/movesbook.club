@@ -68,7 +68,9 @@ export default function DisplayModePanel({ onClose }: { onClose: () => void }) {
           <Monitor className="h-4 w-4 shrink-0" />
           Central toolbar
         </button>
-        <p className="pl-6 text-xs text-gray-500">Each click hides the next section. After the last one, the next click restores the full page.</p>
+        <p className="pl-6 text-xs text-gray-500">
+          Each click hides the next section. When all are hidden, the next click restores every section except the right sidebar, and the click after that restores the full page.
+        </p>
 
         <div className="flex gap-2 pl-6">
           {MODE_OPTIONS.map((mode) => {
