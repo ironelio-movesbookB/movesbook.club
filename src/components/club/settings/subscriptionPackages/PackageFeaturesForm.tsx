@@ -113,12 +113,28 @@ export default function PackageFeaturesForm({ listpriceId }: { listpriceId: stri
 
         <div className="p-4">
           <p className="mb-2 text-sm font-bold text-gray-800">Detailed Package Description:</p>
+          {/* Tailwind preflight resets headings/lists to plain text; restore them inside this editor only. */}
+          <style>{`
+            .package-features-editor .ck-content h1 { font-size: 2em; font-weight: 700; margin: 0.67em 0; }
+            .package-features-editor .ck-content h2 { font-size: 1.5em; font-weight: 700; margin: 0.75em 0; }
+            .package-features-editor .ck-content h3 { font-size: 1.25em; font-weight: 700; margin: 0.8em 0; }
+            .package-features-editor .ck-content h4 { font-size: 1.1em; font-weight: 700; margin: 0.9em 0; }
+            .package-features-editor .ck-content h5 { font-size: 1em; font-weight: 700; margin: 1em 0; }
+            .package-features-editor .ck-content h6 { font-size: 0.9em; font-weight: 700; margin: 1em 0; }
+            .package-features-editor .ck-content p { margin: 0 0 0.75em; }
+            .package-features-editor .ck-content ul { list-style: disc; padding-left: 1.5em; }
+            .package-features-editor .ck-content ol { list-style: decimal; padding-left: 1.5em; }
+            .package-features-editor .ck-content blockquote { border-left: 4px solid #ccc; padding-left: 1em; font-style: italic; }
+            .package-features-editor .ck-content a { color: #2563eb !important; text-decoration: underline; }
+          `}</style>
+          <div className="package-features-editor">
           <MovesbookEditor
             key={editorKey}
             value={feature}
             onChange={setFeature}
             placeholder="Describe the features of this package..."
           />
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 bg-gray-50 px-4 py-4">
