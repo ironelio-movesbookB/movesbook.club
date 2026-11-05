@@ -23,6 +23,7 @@ import {
 } from '@/lib/users/quickRegisterSubscriptionSeed';
 import { getSubscriptionEditData } from '@/lib/admin/subscriptionSettingsMock';
 import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
+import { getAdminRegistrationCredits } from '@/lib/promocodes/adminRegistrationCredits';
 import {
   getScenarioPricing,
   getTripleSubscriptionPricing,
@@ -1253,6 +1254,16 @@ export async function quickRegisterUser(
   if (!subSettings) {
     return { success: false, message: 'Invalid subscription version.' };
   }
+  const adminCredits = await getAdminRegistrationCredits(Number(versionId)).catch(() => null);
+  const directSenderCredit = adminCredits
+    ? String(adminCredits.directSender)
+    : parseSubscriptionCredit(subSettings, 'credit');
+  const friendOfFriendCredit = adminCredits
+    ? String(adminCredits.friendOfFriend)
+    : parseSubscriptionCredit(subSettings, 'credit1');
+  const newUserCredit = adminCredits
+    ? String(adminCredits.newUser)
+    : parseSubscriptionCredit(subSettings, 'credit2');
 
   const durationDays = rowNumber(subSettings, 'days_duration') ?? 365;
   let currentDate = todayYmd();
@@ -1506,7 +1517,7 @@ export async function quickRegisterUser(
     subscription_end_date: endDate,
     subscription_status: 'S',
     subscription_mail_status: 'SM',
-    credits: parseSubscriptionCredit(subSettings, 'credit2') || 0,
+    credits: newUserCredit || 0,
     delete_status: 'N',
     modified: new Date(),
   };
@@ -1624,10 +1635,9 @@ export async function quickRegisterUser(
     const receiverApply = receiverApplyRows[0];
     if (receiverApply?.id) {
       const applyColumns = await getTableColumns(appliesTable);
-      // Dashboard-Version settings: credit=direct sender, credit1=friend-of-friend (secondary), credit2=new user
-      const credit = parseSubscriptionCredit(subSettings, 'credit2');
-      const creditSender = parseSubscriptionCredit(subSettings, 'credit');
-      const creditSecondarySender = parseSubscriptionCredit(subSettings, 'credit1');
+      const credit = newUserCredit;
+      const creditSender = directSenderCredit;
+      const creditSecondarySender = friendOfFriendCredit;
       const registrationDate = new Date();
       const updates: Record<string, unknown> = {
         sender_credit: creditSender,
@@ -1780,7 +1790,6 @@ export async function quickRegisterUser(
               secondary_sender_id: secondarySenderId || null,
               secondary_sender_email: secondarySenderEmail,
               secondary_sender_username: secondarySenderUsername,
-              // Always write credit1 (friend-of-a-friend) from Dashboard-Version settings
               secondary_sender_credit: creditSecondarySender === '' ? 0 : creditSecondarySender,
             };
             const secondarySetParts = Object.keys(secondaryUpdates)

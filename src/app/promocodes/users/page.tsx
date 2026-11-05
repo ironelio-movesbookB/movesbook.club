@@ -360,11 +360,10 @@ export default function PromocodeUsersPage() {
                           const receiverName = registered
                             ? String(row.receiver_username || row.receiver_email || '')
                             : String(row.receiver_email || '');
-                          const direct = Number(row.sender_id ?? 0) === selectedUserId;
-                          const friendOfFriend =
-                            !direct &&
-                            (Number(row.secondary_sender_id ?? 0) === selectedUserId ||
-                              (registered && Number(row.viewer_credit ?? 0) > 0));
+                          const direct =
+                            row.viewer_relation === 'direct' ||
+                            Number(row.sender_id ?? 0) === selectedUserId;
+                          const friendOfFriend = !direct && row.viewer_relation === 'friend_of_friend';
                           const relation = direct
                             ? 'Direct'
                             : friendOfFriend
