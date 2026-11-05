@@ -41,17 +41,17 @@ export default function DisplayModePanel({ onClose }: { onClose: () => void }) {
       <div className="space-y-2 p-3">
         <SectionCheck
           checked={layout.showLeftSidebar}
-          label="Sections toolbar"
+          label="Left side bar"
           onChange={layout.setShowLeftSidebar}
         />
         <SectionCheck
           checked={layout.showAdBanner}
-          label="Banner section"
+          label="Advertising banner"
           onChange={layout.setShowAdBanner}
         />
         <SectionCheck
           checked={layout.showPersonalBanner}
-          label="MyPage/MyClub toolbar"
+          label="Personal banner"
           onChange={layout.setShowPersonalBanner}
         />
         <SectionCheck

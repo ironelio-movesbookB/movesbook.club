@@ -48,19 +48,19 @@ export default function DisplayOptionsToolbar({
         <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-hidden flex-wrap pr-12">
           <ToggleOption
             checked={showLeftSidebar}
-            label="Sections toolbar"
+            label="Left side bar"
             onChange={onToggleLeftSidebar}
           />
 
           <ToggleOption
             checked={showAdBanner}
-            label="Banner section"
+            label="Advertising banner"
             onChange={onToggleAdBanner}
           />
 
           <ToggleOption
             checked={showPersonalBanner}
-            label="MyPage/MyClub toolbar"
+            label="Personal banner"
             onChange={onTogglePersonalBanner}
           />
 
