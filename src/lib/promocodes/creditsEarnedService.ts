@@ -7,9 +7,9 @@ import {
   getCountriesTable,
   getLegacyUsersTable,
   getPromocodeAppliesTable,
-  getSubscriptionSettingsTable,
 } from '@/lib/promocodes/legacyDb';
 import { fetchModernUserCountries, findModernUserCountry } from '@/lib/promocodes/modernUserCountry';
+import { listFriendOfFriendApplies } from '@/lib/promocodes/friendOfFriendApplies';
 
 export type CreditsEarnedRow = {
   id: number;
@@ -115,72 +115,26 @@ export async function listCreditsEarnedUsers(searchUsername = ''): Promise<Credi
     const sumSender =
       applyColumns.has('sender_id') && applyColumns.has('sender_credit')
         ? await prisma.$queryRawUnsafe<{ total_sender: number | string | null }[]>(
-            `SELECT COALESCE(SUM(t.credit), 0) AS total_sender FROM (
-               SELECT MAX(CAST(sender_credit AS DECIMAL(12,2))) AS credit
-               FROM \`${appliesTable}\`
-               WHERE delete_status = 2 AND sender_id = ? AND receiver_id > 0
-               GROUP BY receiver_id, promocode_id
-             ) t`,
+            `SELECT COALESCE(SUM(CAST(sender_credit AS DECIMAL(12,2))), 0) AS total_sender
+             FROM \`${appliesTable}\`
+             WHERE delete_status = 2 AND sender_id = ? AND receiver_id > 0
+               AND CAST(COALESCE(sender_credit, 0) AS DECIMAL(12,2)) > 0`,
             uid
           )
         : [{ total_sender: 0 }];
-    const sumSecondary =
-      applyColumns.has('secondary_sender_id') && applyColumns.has('secondary_sender_credit')
-        ? await prisma.$queryRawUnsafe<
-            {
-              receiver_id: number | bigint | null;
-              promocode_id: number | bigint | null;
-              secondary_sender_credit: unknown;
-              receiver_version: string | null;
-            }[]
-          >(
-            `SELECT receiver_id, promocode_id, secondary_sender_credit,
-                    ${applyColumns.has('receiver_version') ? 'receiver_version' : "'' AS receiver_version"}
-             FROM \`${appliesTable}\`
-             WHERE delete_status = 2 AND secondary_sender_id = ? AND receiver_id > 0`,
-            uid
-          )
-        : [];
     let secondaryEarned = 0;
-    {
-      const seenSec = new Set<string>();
-      for (const row of sumSecondary) {
-        const rid = Number(row.receiver_id ?? 0);
-        const pid = Number(row.promocode_id ?? 0);
-        const key = `${rid}:${pid}`;
-        if (!rid || seenSec.has(key)) continue;
-        seenSec.add(key);
-        let credit = Number(row.secondary_sender_credit ?? 0) || 0;
-        if (credit <= 0 && row.receiver_version) {
-          const subTable = await getSubscriptionSettingsTable();
-          if (subTable) {
-            try {
-              const creditRows = await prisma.$queryRawUnsafe<{ credit1: unknown }[]>(
-                `SELECT credit1 FROM \`${subTable}\`
-                 WHERE subscription_name = ? LIMIT 1`,
-                String(row.receiver_version).trim()
-              );
-              const n = Number(creditRows[0]?.credit1 ?? 0);
-              if (Number.isFinite(n) && n > 0) credit = n;
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-        secondaryEarned += credit;
-      }
+    for (const row of await listFriendOfFriendApplies(appliesTable, uid)) {
+      secondaryEarned += row.friend_of_friend_credit;
     }
 
     const senderEarned = Number(sumSender[0]?.total_sender ?? 0);
     const sumReceiver =
       applyColumns.has('receiver_id') && applyColumns.has('receiver_credit')
         ? await prisma.$queryRawUnsafe<{ total_receiver: number | string | null }[]>(
-            `SELECT COALESCE(SUM(t.credit), 0) AS total_receiver FROM (
-               SELECT MAX(CAST(receiver_credit AS DECIMAL(12,2))) AS credit
-               FROM \`${appliesTable}\`
-               WHERE delete_status = 2 AND receiver_id = ?
-               GROUP BY promocode_id
-             ) t`,
+            `SELECT COALESCE(SUM(CAST(receiver_credit AS DECIMAL(12,2))), 0) AS total_receiver
+             FROM \`${appliesTable}\`
+             WHERE delete_status = 2 AND receiver_id = ?
+               AND CAST(COALESCE(receiver_credit, 0) AS DECIMAL(12,2)) > 0`,
             uid
           )
         : [{ total_receiver: 0 }];

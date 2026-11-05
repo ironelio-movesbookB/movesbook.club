@@ -152,9 +152,18 @@ export default function PublicInvitePage() {
           <p className="text-sm uppercase tracking-wide text-white/80">Official invite</p>
           <h2 className="mt-1 text-2xl font-bold">Join Movesbook with a promotional code</h2>
           <p className="mt-2 text-sm text-white/90">
-            Promocode <span className="rounded bg-white/15 px-2 py-0.5 font-semibold">{data.promocode}</span>
+            Promotional code{' '}
+            <span className="rounded bg-white/15 px-2 py-0.5 font-semibold">{data.promocode}</span>
           </p>
         </div>
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/banner_picture.jpg"
+          alt=""
+          className="w-full object-cover"
+          style={{ maxHeight: 320 }}
+        />
 
         {data.sections.intro && data.introMessage.trim() ? (
           <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-slate-800">

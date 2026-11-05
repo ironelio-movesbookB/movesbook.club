@@ -37,6 +37,9 @@ import {
   SUGGEST_MOVESBOOK_INTRO_EN,
   SUGGEST_MOVESBOOK_INTRO_IT,
   SUGGEST_MOVESBOOK_INTRO_KEY,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY,
 } from './suggestMovesbookLongText';
 import {
   ACTIVATION_EMAIL_BODY_EN,
@@ -117,6 +120,16 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     descriptionEn:
       'Suggest Movesbook — intro explaining advantages of inviting friends (login prompt + Suggest Movesbook page).',
     values: { en: SUGGEST_MOVESBOOK_INTRO_EN, it: SUGGEST_MOVESBOOK_INTRO_IT },
+  },
+  {
+    key: SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY,
+    category: 'social',
+    descriptionEn:
+      'Suggest Movesbook — default “message of intro” loaded into the invite (Load invite default).',
+    values: {
+      en: SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN,
+      it: SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT,
+    },
   },
   {
     key: ACTIVATION_EMAIL_SUBJECT_KEY,
