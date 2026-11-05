@@ -18,6 +18,7 @@ export function PromocodePersonMark({
   countryName,
   flagImage,
   registered,
+  showFlag = true,
   onClick,
 }: {
   label: string;
@@ -29,6 +30,8 @@ export function PromocodePersonMark({
   countryName?: string | null;
   flagImage?: string | null;
   registered?: boolean;
+  /** When false, omit inline flag (use dedicated Flag column instead). */
+  showFlag?: boolean;
   onClick?: (name: string) => void;
 }) {
   if (!label) return null;
@@ -40,6 +43,7 @@ export function PromocodePersonMark({
       : '';
   const hoverEmail = email && email.includes('@') && email !== label ? email : undefined;
   const countryTitle = countryName || countryCode || '';
+  const hasCountry = Boolean(flagImage || countryCode);
 
   return (
     <span className="inline-flex items-center gap-1.5 align-middle">
@@ -51,15 +55,17 @@ export function PromocodePersonMark({
           className={entity ? 'h-6 w-8 object-contain' : 'h-6 w-6 rounded-full object-cover'}
         />
       ) : null}
-      <span title={countryTitle}>
-        <PromocodeAssetImage
-          src={promocodeFlagImageUrl(flagImage, { countryCode })}
-          fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
-          countryCode={countryCode}
-          alt={countryTitle}
-          className="h-4 w-6 object-cover"
-        />
-      </span>
+      {showFlag && hasCountry ? (
+        <span title={countryTitle}>
+          <PromocodeAssetImage
+            src={promocodeFlagImageUrl(flagImage, { countryCode })}
+            fallbackSrc={PROMOCODE_NO_FLAG_IMAGE}
+            countryCode={countryCode}
+            alt={countryTitle}
+            className="h-4 w-6 object-cover"
+          />
+        </span>
+      ) : null}
       {onClick ? (
         <button
           type="button"

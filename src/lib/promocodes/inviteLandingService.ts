@@ -18,6 +18,7 @@ import {
 } from '@/lib/promocodes/inviteLanding';
 import { coercePublicOrigin } from '@/lib/siteUrl';
 import { ensurePromocodeMetaTables } from '@/lib/promocodes/ensureMetaTables';
+import { legacyLanguageIdFromCode } from '@/lib/promocodes/legacyLanguageCode';
 
 export type PublicInviteView = {
   promocode: string;
@@ -225,8 +226,7 @@ export async function loadPublicInvite(input: {
         : '';
 
   await ensurePromocodeMetaTables().catch(() => undefined);
-  const languageId =
-    language === 'it' ? '2' : language === 'fr' ? '3' : language === 'de' ? '4' : language === 'es' ? '5' : '1';
+  const languageId = legacyLanguageIdFromCode(language);
 
   let inviteBodyHtml = '';
   try {
@@ -255,17 +255,9 @@ export async function loadPublicInvite(input: {
           if (rows[0]?.help_id != null) htmlPageId = String(rows[0].help_id);
         }
       }
-      const helpTable = await getHelpHtmlPagesTable();
-      if (helpTable && htmlPageId) {
-        const helpCols = await getTableColumns(helpTable);
-        const contentCol = helpCols.has('content') ? 'content' : null;
-        if (contentCol) {
-          const helpRows = await prisma.$queryRawUnsafe<Array<{ content: string | null }>>(
-            `SELECT \`${contentCol}\` AS content FROM \`${helpTable}\` WHERE id = ? LIMIT 1`,
-            htmlPageId,
-          );
-          documentHtml = helpRows[0]?.content?.trim() || '';
-        }
+      if (htmlPageId) {
+        const { loadInviteHelpDocumentHtml } = await import('@/lib/promocodes/sendInviteService');
+        documentHtml = await loadInviteHelpDocumentHtml(htmlPageId, languageId);
       }
     } catch {
       documentHtml = '';
@@ -313,5 +305,32 @@ export async function loadPublicInvite(input: {
       staff: visual.staff,
       sinceYear: visual.sinceYear,
     },
+  };
+}
+
+export async function loadInviteSenderEmailAssets(
+  inviterUsername: string | null | undefined,
+  origin: string
+): Promise<{ displayName: string; photoUrl: string | null; bannerUrl: string | null }> {
+  const username = inviterUsername?.trim() ?? '';
+  if (!username) {
+    return { displayName: 'Movesbook', photoUrl: null, bannerUrl: null };
+  }
+  const sender = await loadSenderByUsername(username);
+  if (!sender) {
+    return { displayName: username, photoUrl: null, bannerUrl: null };
+  }
+  const visual = await senderVisual(sender);
+  const publicOrigin = coercePublicOrigin(origin).replace(/\/$/, '');
+  const absolutize = (url: string | null) => {
+    if (!url?.trim()) return null;
+    const u = url.trim();
+    if (/^https?:\/\//i.test(u)) return u;
+    return u.startsWith('/') ? `${publicOrigin}${u}` : `${publicOrigin}/${u}`;
+  };
+  return {
+    displayName: sender.name || sender.username,
+    photoUrl: absolutize(visual.photoUrl),
+    bannerUrl: absolutize(visual.bannerUrl),
   };
 }

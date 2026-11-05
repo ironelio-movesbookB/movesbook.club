@@ -2,7 +2,8 @@
 import Image from 'next/image';
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Facebook, Instagram, MessageCircle, RefreshCw, Send, Smartphone } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { NotificationByPromocodeDashboard, PromocodeOption } from '@/lib/promocodes/notificationByPromocodeService';
 import {
   isPromocodeInviteSentMessage,
@@ -22,6 +23,7 @@ import '@/components/promocodes/notification-by-promocode.css';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   fetchSuggestMovesbookIntroText,
+  fetchSuggestMovesbookInviteDefaultText,
   SUGGEST_MOVESBOOK_INTRO_EN,
 } from '@/constants/suggestMovesbookLongText';
 import { getSuggestMovesbookCopy } from '@/lib/promocodes/suggestMovesbookCopy';
@@ -41,10 +43,31 @@ import {
   buildInviteLandingUrl,
   DEFAULT_INVITE_SECTIONS,
 } from '@/lib/promocodes/inviteLanding';
+import { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
 
 type TabId = 'suggest' | 'invitations' | 'registered' | 'credits' | 'connections';
 type InvitationsSubTab = 'generated' | 'recipients' | 'allRecipients';
 type ShareChannel = 'WhatsApp' | 'Telegram' | 'SMS' | 'Facebook' | 'Instagram';
+
+const REG_CHART_COLORS: Record<string, string> = {
+  single: '#2563eb',
+  coaches: '#7c3aed',
+  clubs: '#ea580c',
+  teams: '#0891b2',
+};
+
+const SHARE_CHANNELS: {
+  id: ShareChannel;
+  label: string;
+  Icon: typeof MessageCircle;
+  iconClass: string;
+}[] = [
+  { id: 'WhatsApp', label: 'WhatsApp', Icon: MessageCircle, iconClass: 'share-icon-whatsapp' },
+  { id: 'Telegram', label: 'Telegram', Icon: Send, iconClass: 'share-icon-telegram' },
+  { id: 'Facebook', label: 'Facebook', Icon: Facebook, iconClass: 'share-icon-facebook' },
+  { id: 'Instagram', label: 'Instagram', Icon: Instagram, iconClass: 'share-icon-instagram' },
+  { id: 'SMS', label: 'SMS', Icon: Smartphone, iconClass: 'share-icon-sms' },
+];
 
 function paginateRows<T>(rows: T[], page: number, pageSize: number): T[] {
   const start = (page - 1) * pageSize;
@@ -121,6 +144,7 @@ export default function NotificationByPromocodeDashboardView() {
   const [registeredPage, setRegisteredPage] = useState(1);
   const [creditsPage, setCreditsPage] = useState(1);
   const [introMessage, setIntroMessage] = useState('');
+  const [lastSavedIntro, setLastSavedIntro] = useState('');
   const [introSaved, setIntroSaved] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [introText, setIntroText] = useState(SUGGEST_MOVESBOOK_INTRO_EN);
@@ -162,7 +186,9 @@ export default function NotificationByPromocodeDashboardView() {
       }
       const dashboard = json as NotificationByPromocodeDashboard;
       setData(dashboard);
-      setIntroMessage(dashboard.savedIntro || '');
+      const savedIntro = dashboard.savedIntro || '';
+      setIntroMessage(savedIntro);
+      setLastSavedIntro(savedIntro);
       setActiveTab(dashboard.defaultTab === 'invitations' ? 'invitations' : 'suggest');
       if (dashboard.promocode.id) {
         setPromocodeId(String(dashboard.promocode.id));
@@ -245,16 +271,44 @@ export default function NotificationByPromocodeDashboardView() {
     setValidEndDate(selected?.validTo ?? '');
   };
 
-  const openInvitePreview = () => {
+  const openInvitePreview = async () => {
     const selected = promocodeOptions.find((p) => String(p.id) === promocodeId);
     const code = selected?.code || data?.promocode.code || '';
     if (!code) {
-      window.alert('Please select a promocode to use for the invite.');
+      window.alert('Please select a promotional code to use for the invite.');
       return;
     }
     const inviter = data?.connectionChart.currentUserUsername?.trim() || '';
     if (!inviter) {
       window.alert('Unable to determine your username for the invite link. Please refresh and try again.');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        promocode: code,
+        inviter,
+        lang: currentLanguage || 'en',
+      });
+      if (receiverEmail.trim()) params.set('user_email', receiverEmail.trim());
+      const res = await fetch(`/api/public/invite?${params.toString()}`);
+      const json = (await res.json().catch(() => ({}))) as {
+        inviteBodyHtml?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        window.alert(json.error || 'Could not load invitation preview.');
+        return;
+      }
+      const bodyHtml = json.inviteBodyHtml ?? '';
+      if (isBlankInviteHtml(bodyHtml)) {
+        window.alert(
+          'Invitation body text is empty for the selected language. Add the invite text under Settings → Language (Long text) or choose another language before previewing.'
+        );
+        return;
+      }
+    } catch {
+      window.alert('Could not verify invitation body text. Please try again.');
       return;
     }
 
@@ -291,6 +345,7 @@ export default function NotificationByPromocodeDashboardView() {
           promocodeId: Number(promocodeId),
           introMessage: introMessage.trim(),
           inviteMode: 'Mail',
+          lang: currentLanguage || 'en',
         }),
       });
       const json = await res.json();
@@ -426,6 +481,53 @@ export default function NotificationByPromocodeDashboardView() {
       sections: { ...inviteSections, body: true },
     });
   }, [promocodeOptions, promocodeId, data, currentLanguage, inviteSections]);
+
+  const registrationChartSlices = useMemo(() => {
+    if (!data) return [];
+    return [
+      { key: 'single', label: 'Single users', value: data.regCount['5'] ?? 0, color: REG_CHART_COLORS.single },
+      { key: 'coaches', label: 'Coaches', value: data.regCount['6'] ?? 0, color: REG_CHART_COLORS.coaches },
+      { key: 'clubs', label: 'Clubs', value: data.regCount['8'] ?? 0, color: REG_CHART_COLORS.clubs },
+      { key: 'teams', label: 'Teams', value: data.regCount['7'] ?? 0, color: REG_CHART_COLORS.teams },
+    ].filter((s) => s.value > 0);
+  }, [data]);
+
+  const inviteSuccessChart = useMemo(() => {
+    if (!data) {
+      return { percent: 0, percentLabel: '0', slices: [] as { key: string; label: string; value: number; color: string }[] };
+    }
+    const registeredSum = Object.values(data.regCount).reduce((a, b) => a + b, 0);
+    const total = data.totalInviteCount;
+    const percent = total === 0 ? 0 : (registeredSum / total) * 100;
+    const pending = Math.max(0, total - registeredSum);
+    const slices: { key: string; label: string; value: number; color: string }[] = [];
+    if (registeredSum > 0) {
+      slices.push({ key: 'registered', label: 'Registered', value: registeredSum, color: '#16a34a' });
+    }
+    if (pending > 0) {
+      slices.push({ key: 'pending', label: 'Not registered', value: pending, color: '#d1d5db' });
+    }
+    if (slices.length === 0) {
+      slices.push({ key: 'none', label: 'No invites yet', value: 1, color: '#e5e7eb' });
+    }
+    return {
+      percent,
+      percentLabel: total === 0 ? '0' : percent.toFixed(1),
+      slices,
+    };
+  }, [data]);
+
+  const loadInviteDefaultIntro = useCallback(() => {
+    void fetchSuggestMovesbookInviteDefaultText(currentLanguage || 'en').then((text) => {
+      setIntroSaved(false);
+      setIntroMessage(text);
+    });
+  }, [currentLanguage]);
+
+  const loadInviteSavedIntro = useCallback(() => {
+    setIntroSaved(false);
+    setIntroMessage(lastSavedIntro);
+  }, [lastSavedIntro]);
 
   const copyInviteLink = async () => {
     if (!inviteShareLink) {
@@ -613,57 +715,66 @@ export default function NotificationByPromocodeDashboardView() {
             </div>
           ) : null}
 
-          <div className="invite-row" style={{ alignItems: 'flex-start' }}>
+          <div className="invite-row invite-intro-row">
             <span>{copy.yourIntro}</span>
-            <textarea
-              value={introMessage}
-              onChange={(e) => {
-                setIntroSaved(false);
-                setIntroMessage(e.target.value);
-              }}
-              rows={3}
-              style={{ width: '50%', minWidth: 260, padding: 8, border: '1px solid #d1d5db' }}
-              placeholder={copy.introPlaceholder}
-            />
-            <button
-              type="button"
-              className="button-black-promocode"
-              disabled={savingIntro}
-              onClick={() => {
-                setSavingIntro(true);
-                setIntroSaved(false);
-                void userPromocodeFetch('/api/users/notification-by-promocode/save-intro', {
-                  method: 'POST',
-                  body: JSON.stringify({ introMessage }),
-                })
-                  .then((res) => {
-                    if (res.ok) setIntroSaved(true);
-                  })
-                  .finally(() => setSavingIntro(false));
-              }}
-            >
-              {introSaved ? copy.saved : copy.save}
-            </button>
-          </div>
-
-          <div className="invite-row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
-            <span>{copy.shareVia}</span>
-            {(['WhatsApp', 'Telegram', 'SMS', 'Facebook', 'Instagram'] as const).map((channel) => (
+            <div className="invite-intro-controls">
+              <div className="invite-load-buttons">
+                <button type="button" className="invite-load-btn" onClick={loadInviteDefaultIntro}>
+                  Load invite default
+                </button>
+                <button type="button" className="invite-load-btn" onClick={loadInviteSavedIntro}>
+                  Load invite saved
+                </button>
+              </div>
+              <textarea
+                className="invite-intro-textarea"
+                value={introMessage}
+                onChange={(e) => {
+                  setIntroSaved(false);
+                  setIntroMessage(e.target.value);
+                }}
+                rows={3}
+                placeholder={copy.introPlaceholder}
+              />
               <button
-                key={channel}
                 type="button"
-                className="button-preview-promocode"
-                style={
-                  shareChannel === channel
-                    ? { background: '#7b0a26', color: '#fff', borderColor: '#7b0a26' }
-                    : undefined
-                }
+                className="button-black-promocode"
+                disabled={savingIntro}
                 onClick={() => {
-                  setShareChannel(channel);
-                  if (channel !== 'SMS') void shareInvite(channel);
+                  setSavingIntro(true);
+                  setIntroSaved(false);
+                  void userPromocodeFetch('/api/users/notification-by-promocode/save-intro', {
+                    method: 'POST',
+                    body: JSON.stringify({ introMessage }),
+                  })
+                    .then((res) => {
+                      if (res.ok) {
+                        setIntroSaved(true);
+                        setLastSavedIntro(introMessage);
+                      }
+                    })
+                    .finally(() => setSavingIntro(false));
                 }}
               >
-                {channel}
+                {introSaved ? copy.saved : copy.save}
+              </button>
+            </div>
+          </div>
+
+          <div className="invite-row share-via-row" style={{ marginTop: 12 }}>
+            <span>{copy.shareVia}</span>
+            {SHARE_CHANNELS.map(({ id, label, Icon, iconClass }) => (
+              <button
+                key={id}
+                type="button"
+                className={`share-channel-btn${shareChannel === id ? ' active' : ''}`}
+                onClick={() => {
+                  setShareChannel(id);
+                  if (id !== 'SMS') void shareInvite(id);
+                }}
+              >
+                <Icon size={22} className={iconClass} aria-hidden />
+                <span>{label}</span>
               </button>
             ))}
           </div>
@@ -684,42 +795,50 @@ export default function NotificationByPromocodeDashboardView() {
             </div>
           ) : null}
 
-          <div
-            className="invite-row"
-            style={{ marginTop: 16, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
-          >
-            <span style={{ fontWeight: 700 }}>Sections to include in the invite</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={inviteSections.intro}
-                onChange={(e) => setInviteSections((s) => ({ ...s, intro: e.target.checked }))}
-              />
-              Message of intro (default YES)
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85 }}>
-              <input type="checkbox" checked disabled readOnly />
-              Text of the invite (Dear user….) — mandatory
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={inviteSections.doc}
-                onChange={(e) => setInviteSections((s) => ({ ...s, doc: e.target.checked }))}
-              />
-              Document HTML in attachment (default YES)
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={inviteSections.links}
-                onChange={(e) => setInviteSections((s) => ({ ...s, links: e.target.checked }))}
-              />
-              Links in attachment (default YES)
-            </label>
-            <button type="button" className="button-preview-promocode" onClick={openInvitePreview}>
-              Preview
-            </button>
+          <div className="invite-sections-card">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/banner_picture.jpg"
+              alt=""
+              className="invite-sections-thumb"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/images/suggest-movesbook-banner.jpg';
+              }}
+            />
+            <div className="invite-sections-body">
+              <span style={{ fontWeight: 700 }}>Sections to include in the invite</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={inviteSections.intro}
+                  onChange={(e) => setInviteSections((s) => ({ ...s, intro: e.target.checked }))}
+                />
+                Message of intro (default YES)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85 }}>
+                <input type="checkbox" checked disabled readOnly />
+                Text of the invite (Dear user….) — mandatory
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={inviteSections.doc}
+                  onChange={(e) => setInviteSections((s) => ({ ...s, doc: e.target.checked }))}
+                />
+                Document HTML in attachment (default YES)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={inviteSections.links}
+                  onChange={(e) => setInviteSections((s) => ({ ...s, links: e.target.checked }))}
+                />
+                Links in attachment (default YES)
+              </label>
+              <button type="button" className="button-preview-promocode" onClick={openInvitePreview}>
+                Preview
+              </button>
+            </div>
           </div>
 
           <div className="invite-row" style={{ marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -754,7 +873,7 @@ export default function NotificationByPromocodeDashboardView() {
           </div>
 
           <div className="invite-row mtop20" style={{ marginTop: 16 }}>
-            <span>Select promocode to use for the invite</span>
+            <span>Select promotional code to use for the invite</span>
             <select
               value={promocodeId}
               onChange={(e) => onPromocodeChange(e.target.value)}
@@ -787,14 +906,65 @@ export default function NotificationByPromocodeDashboardView() {
               <div className="stat-box" style={{ marginTop: 8 }}><span>Registrations of clubs</span><span>{data.regCount['8'] ?? 0}</span></div>
               <div className="stat-box" style={{ marginTop: 8 }}><span>Registrations of teams</span><span>{data.regCount['7'] ?? 0}</span></div>
             </div>
-            <div>
-              <div style={{ marginBottom: 16 }}>
+            <div className="stats-charts-column">
+              <div style={{ marginBottom: 4 }}>
                 last mail of invites sent on
                 <input type="text" readOnly value={data.lastEmailSentDate} style={{ width: 85, marginLeft: 16, height: 35 }} />
               </div>
-              <div className="return-index">
-                <p style={{ fontWeight: 100 }}>% return index</p>
-                <div className="return-index-value">{data.returnIndex}</div>
+              <div className="stats-chart-box">
+                <h4>Registration breakdown</h4>
+                <div className="chart-wrap">
+                  {registrationChartSlices.length === 0 ? (
+                    <p style={{ textAlign: 'center', paddingTop: 60, fontSize: 13, color: '#666' }}>No registrations yet.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={registrationChartSlices}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius="78%"
+                          innerRadius="42%"
+                          paddingAngle={1}
+                          isAnimationActive={false}
+                        >
+                          {registrationChartSlices.map((entry) => (
+                            <Cell key={entry.key} fill={entry.color} stroke="#fff" strokeWidth={1} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [value, name]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="stats-chart-box">
+                <h4>% success on total invites</h4>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={inviteSuccessChart.slices}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius="78%"
+                        innerRadius="42%"
+                        paddingAngle={1}
+                        isAnimationActive={false}
+                      >
+                        {inviteSuccessChart.slices.map((entry) => (
+                          <Cell key={entry.key} fill={entry.color} stroke="#fff" strokeWidth={1} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value, name) => [value, name]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="stats-chart-pct-overlay">{inviteSuccessChart.percentLabel}%</div>
+                </div>
               </div>
             </div>
           </div>
