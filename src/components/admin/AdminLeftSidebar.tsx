@@ -1234,6 +1234,17 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
           </div>
         </div>
 
+        {/* Movesbook MUB templates (ID5–ID9) — Super Admin builds them here with his own login */}
+        {isSuperAdmin && (
+          <Link
+            href="/admin/mub"
+            className="mt-1 flex items-center justify-between bg-gradient-to-b from-[#ff6a6a] to-[#c81414] px-4 py-2 text-sm font-bold text-white hover:from-[#ff7474] hover:to-[#b80f0f]"
+          >
+            <span>Most used buttons (MUB)</span>
+            <Settings className="h-4 w-4 text-white" />
+          </Link>
+        )}
+
         {/* Draggable Sections — client-only to avoid dnd-kit aria-describedby hydration mismatch */}
         {isDndMounted ? (
           <DndContext
