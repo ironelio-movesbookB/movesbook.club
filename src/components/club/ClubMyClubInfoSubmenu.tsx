@@ -56,7 +56,7 @@ export default function ClubMyClubInfoSubmenu({ clubId }: { clubId?: string | nu
       label: 'Club settings',
       needsClub: true,
       icon: Settings,
-      href: clubId ? `/club/settings?clubId=${encodeURIComponent(clubId)}` : undefined,
+      href: clubId ? `/my-club?clubId=${encodeURIComponent(clubId)}` : undefined,
     },
   ];
 
