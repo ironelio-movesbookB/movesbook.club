@@ -276,45 +276,45 @@ export default function HomePage() {
                 {t('home_subtitle')}
               </p>
               
-              {/* User Type Selection */}
-              <div className="flex justify-center space-x-4 mb-12 flex-wrap gap-4">
-                {[
-                  { id: 'athlete' as const, label: t('user_type_athlete') },
-                  { id: 'coach' as const, label: t('user_type_coach') },
-                  { id: 'team' as const, label: t('user_type_team') },
-                  { id: 'group' as const, label: t('user_type_group') },
-                  { id: 'club' as const, label: t('user_type_club') }
-                ].map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => setUserType(type.id)}
-                    className={`px-8 py-4 rounded-xl font-semibold transition-all duration-300 backdrop-blur-sm border-2 ${
-                      userType === type.id
-                        ? 'bg-blue-600 text-white shadow-2xl transform scale-105 border-blue-400'
-                        : 'bg-white bg-opacity-15 text-white shadow-lg hover:bg-opacity-25 border-white border-opacity-30'
-                    }`}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
+              <div className="mx-auto mb-12 grid w-full max-w-6xl grid-cols-1 items-start gap-8 lg:grid-cols-2">
+                <div className="flex flex-col gap-8">
+                  {[
+                    { id: 'athlete' as const, label: t('user_type_athlete') },
+                    { id: 'coach' as const, label: t('user_type_coach') },
+                    { id: 'team' as const, label: t('user_type_team') },
+                    { id: 'group' as const, label: t('user_type_group') },
+                    { id: 'club' as const, label: t('user_type_club') }
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => setUserType(type.id)}
+                      className={`flex h-96 w-full items-center justify-center rounded-2xl border-2 p-8 text-2xl font-bold backdrop-blur-xl transition-all duration-300 ${
+                        userType === type.id
+                          ? 'border-blue-400 bg-blue-600 text-white shadow-2xl'
+                          : 'border-white/20 bg-white/10 text-white shadow-2xl hover:bg-white/20'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
 
-              {/* Features Grid */}
-              <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-                {getFeaturesForUserType(userType).map((feature, index) => (
-                  <div key={index} className="bg-white bg-opacity-10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-500 hover:scale-105">
-                    <div className="w-20 h-20 bg-blue-500 bg-opacity-60 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                      {(() => {
-                        const Icon = feature.icon;
-                        return <Icon className="w-10 h-10 text-white" />;
-                      })()}
+                <div className="flex flex-col gap-8">
+                  {getFeaturesForUserType(userType).map((feature, index) => (
+                    <div key={index} className="flex h-96 w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white/10 p-8 text-center shadow-2xl backdrop-blur-xl">
+                      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-500/60">
+                        {(() => {
+                          const Icon = feature.icon;
+                          return <Icon className="h-10 w-10 text-white" />;
+                        })()}
+                      </div>
+                      <h3 className="mb-4 text-2xl font-bold text-white">
+                        {feature.title}
+                      </h3>
+                      <p className="text-lg leading-relaxed text-blue-100">{feature.description}</p>
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-4 text-center">
-                      {feature.title}
-                    </h3>
-                    <p className="text-blue-100 text-lg leading-relaxed text-center">{feature.description}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>

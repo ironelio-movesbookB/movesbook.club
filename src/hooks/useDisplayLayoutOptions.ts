@@ -33,13 +33,22 @@ const EMPTY_MODES: SavedLayoutModes = {
   mode3: null,
 };
 
-/** Each carousel step hides the next section that is still visible. A full cycle restores everything. */
+/** Each carousel step hides the next section that is still visible. */
 const CAROUSEL_ORDER: (keyof DisplayLayoutOptions)[] = [
   'showLeftSidebar',
   'showAdBanner',
   'showPersonalBanner',
   'showRightSidebar',
 ];
+
+function allSectionsHidden(current: DisplayLayoutOptions): boolean {
+  return CAROUSEL_ORDER.every((key) => !current[key]);
+}
+
+/** The step after every section is hidden: the other sections return, the right sidebar stays off. */
+function isRightSidebarOnlyHidden(current: DisplayLayoutOptions): boolean {
+  return current.showLeftSidebar && current.showAdBanner && current.showPersonalBanner && !current.showRightSidebar;
+}
 
 function readOptions(): DisplayLayoutOptions {
   try {
@@ -78,6 +87,19 @@ function writeModes(next: SavedLayoutModes) {
 }
 
 export function nextCarouselLayout(current: DisplayLayoutOptions): DisplayLayoutOptions {
+  if (allSectionsHidden(current)) {
+    return {
+      ...current,
+      showLeftSidebar: true,
+      showAdBanner: true,
+      showPersonalBanner: true,
+      showRightSidebar: false,
+      showOptionsToolbar: true,
+    };
+  }
+  if (isRightSidebarOnlyHidden(current)) {
+    return { ...DEFAULTS };
+  }
   const key = CAROUSEL_ORDER.find((item) => current[item]);
   if (!key) return { ...DEFAULTS };
   return { ...current, [key]: false };

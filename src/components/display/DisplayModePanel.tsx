@@ -41,17 +41,17 @@ export default function DisplayModePanel({ onClose }: { onClose: () => void }) {
       <div className="space-y-2 p-3">
         <SectionCheck
           checked={layout.showLeftSidebar}
-          label="Sections toolbar"
+          label="Left side bar"
           onChange={layout.setShowLeftSidebar}
         />
         <SectionCheck
           checked={layout.showAdBanner}
-          label="Banner section"
+          label="Advertising banner"
           onChange={layout.setShowAdBanner}
         />
         <SectionCheck
           checked={layout.showPersonalBanner}
-          label="MyPage/MyClub toolbar"
+          label="Personal banner"
           onChange={layout.setShowPersonalBanner}
         />
         <SectionCheck
@@ -68,7 +68,9 @@ export default function DisplayModePanel({ onClose }: { onClose: () => void }) {
           <Monitor className="h-4 w-4 shrink-0" />
           Central toolbar
         </button>
-        <p className="pl-6 text-xs text-gray-500">Each click hides the next section. After the last one, the next click restores the full page.</p>
+        <p className="pl-6 text-xs text-gray-500">
+          Each click hides the next section. When all are hidden, the next click restores every section except the right sidebar, and the click after that restores the full page.
+        </p>
 
         <div className="flex gap-2 pl-6">
           {MODE_OPTIONS.map((mode) => {

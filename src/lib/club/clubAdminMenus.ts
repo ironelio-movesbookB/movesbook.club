@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { ArchiveType } from '@/lib/club/archives/clubArchiveClient';
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -274,18 +275,40 @@ export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
   (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),
 );
 
-/** Management data sub-buttons → existing archives (scoped with ?memberId=). */
-export const MEMBER_OVERVIEW_MNGMNT_LINKS: { label: string; path: string }[] = [
-  { label: 'Bookings', path: '/clubs/archive_reservations' },
-  { label: 'Subscriptions', path: '/clubs/subscription' },
-  { label: 'Accesses', path: '/clubs/access_list' },
-  { label: 'Memberships', path: '/clubs/memberships/archive' },
-  { label: 'Purchases', path: '/ArchiveSeles/product_sale_list' },
-  { label: 'Services', path: '/clubs/archive_service_list' },
-  { label: 'Deadlines', path: '/clubs/archive_deadlines' },
-  { label: 'Credits', path: '/clubMembers/member_credit_list' },
-  { label: 'Payments', path: '/clubs/archive_payments' },
-  { label: 'Receipts', path: '/clubs/archive_receipts' },
+/** Insert-data rows hidden on Member Overview only. */
+export const MEMBER_OVERVIEW_OMIT_INSERT_LABELS = new Set([
+  'New user',
+  'Payment other deadlines',
+  'Payment expenses',
+  'Card to a member',
+  'Card for operator',
+  'Quick door block',
+  'New Employee/Operator',
+  'New Poll',
+  'New Advertising campaign',
+]);
+
+export function memberOverviewInsertLabel(label: string): string {
+  if (label === 'Pay a member or an employee') return 'Pay a member';
+  return label;
+}
+
+/** Management buttons on Member Overview. Grids open under the buttons. */
+export const MEMBER_OVERVIEW_MNGMNT_LINKS: {
+  label: string;
+  archiveType?: ArchiveType;
+  services?: boolean;
+}[] = [
+  { label: 'Cash', archiveType: 'cash-movements' },
+  { label: 'Payments', archiveType: 'payments' },
+  { label: 'Deadlines', archiveType: 'deadlines' },
+  { label: 'Services', services: true },
+  { label: 'Products', archiveType: 'product-sales-unified' },
+  { label: 'Courses', archiveType: 'subscriptions' },
+  { label: 'Accesses', archiveType: 'accesses' },
+  { label: 'Credits', archiveType: 'credits' },
+  { label: 'Receipts', archiveType: 'receipts' },
+  { label: 'Bookings', archiveType: 'reservations' },
 ];
 
 export function appendMemberIdToPath(path: string, memberId: string): string {

@@ -9,15 +9,15 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
-import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
+import { fetchClubArchive, type ArchiveType } from '@/lib/club/archives/clubArchiveClient';
 import ClubArchivePage from '@/components/club/archives/ClubArchivePage';
-import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
+import { clubApiFetch, formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
+import { fetchPurchases } from '@/lib/club/serviceSaleClient';
+import { MEMBER_OVERVIEW_MNGMNT_LINKS } from '@/lib/club/clubAdminMenus';
 import {
-  appendMemberIdToPath,
-  CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS,
-  MEMBER_OVERVIEW_MNGMNT_LINKS,
-} from '@/lib/club/clubAdminMenus';
-import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
+  MEMBER_OVERVIEW_TOGGLE,
+  readMemberOverviewOpen,
+} from '@/lib/club/memberOverviewVisibility';
 import {
   readSelectedClubMember,
   writeSelectedClubMember,
@@ -27,11 +27,13 @@ import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import type { Column, Member } from '@/types/clubTable';
 import ClubNotificationsPanel from '@/components/notifications/ClubNotificationsPanel';
 import ClubAdminMenuDropdown from '@/components/club/topbar/ClubAdminMenuDropdown';
+import InlineMemberProfile from '@/components/club/memberOverview/InlineMemberProfile';
 
 type TopTab = 'member' | 'bookings' | 'insert';
 type Section =
   | 'home'
   | 'profile'
+  | 'settings'
   | 'notifies'
   | 'audio'
   | 'feedbacks'
@@ -40,6 +42,11 @@ type Section =
   | 'video'
   | 'friends'
   | 'mngmnt';
+
+type MgmtSelection =
+  | { kind: 'archive'; label: string; archiveType: ArchiveType }
+  | { kind: 'services'; label: string }
+  | null;
 
 const SECTION_BUTTONS: { id: Section; label: string }[] = [
   { id: 'profile', label: 'Profile' },
@@ -109,6 +116,15 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
   );
   const [topTab, setTopTab] = useState<TopTab>('member');
   const [section, setSection] = useState<Section>('home');
+  const [overviewOpen, setOverviewOpen] = useState(true);
+  const [mgmt, setMgmt] = useState<MgmtSelection>(null);
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mailSubject, setMailSubject] = useState('');
+  const [mailText, setMailText] = useState('');
+  const [mailInApp, setMailInApp] = useState(true);
+  const [mailByEmail, setMailByEmail] = useState(true);
+  const [mailError, setMailError] = useState('');
+  const [mailBusy, setMailBusy] = useState(false);
   const [members, setMembers] = useState<SelectedClubMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -144,6 +160,13 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
     void loadMembers();
   }, [loadMembers]);
 
+  useEffect(() => {
+    setOverviewOpen(readMemberOverviewOpen());
+    const onToggle = () => setOverviewOpen(readMemberOverviewOpen());
+    window.addEventListener(MEMBER_OVERVIEW_TOGGLE, onToggle);
+    return () => window.removeEventListener(MEMBER_OVERVIEW_TOGGLE, onToggle);
+  }, []);
+
   const photoUrl = useMemo(
     () => resolvePublicImageUrl(selectedMember?.image || null),
     [selectedMember?.image],
@@ -157,18 +180,66 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
     return selectedMember;
   };
 
-  const openArchiveForMember = (path: string) => {
-    const m = requireMember();
-    if (!m) return;
-    writeClubWorkspaceTab('my-entity');
-    router.push(appendMemberIdToPath(path, m.memberId));
-  };
-
   const onSelectMemberId = (memberId: string) => {
     const found = members.find((m) => m.memberId === memberId) || null;
     setSelectedMember(found);
     setSection('home');
+    setMgmt(null);
     setTopTab('member');
+  };
+
+  const showProfile = () => {
+    if (!requireMember()) return;
+    setMgmt(null);
+    setSection('profile');
+  };
+
+  const showSettings = () => {
+    if (!requireMember()) return;
+    setMgmt(null);
+    setSection('settings');
+  };
+
+  const openMail = () => {
+    if (!requireMember()) return;
+    setMailSubject('');
+    setMailText('');
+    setMailInApp(true);
+    setMailByEmail(true);
+    setMailError('');
+    setMailOpen(true);
+  };
+
+  const sendMail = async () => {
+    if (!selectedMember) return;
+    const content = mailText.trim();
+    if (!content) {
+      setMailError('Write a message.');
+      return;
+    }
+    if (!mailInApp && !mailByEmail) {
+      setMailError('Choose Club Channel and/or email.');
+      return;
+    }
+    setMailBusy(true);
+    setMailError('');
+    try {
+      await clubApiFetch('/api/club/members/send-message', {
+        method: 'POST',
+        body: JSON.stringify({
+          memberIds: [selectedMember.memberId],
+          content,
+          subject: mailSubject.trim(),
+          inApp: mailInApp,
+          byEmail: mailByEmail,
+        }),
+      });
+      setMailOpen(false);
+    } catch (e) {
+      setMailError(e instanceof Error ? e.message : 'Failed to send the message');
+    } finally {
+      setMailBusy(false);
+    }
   };
 
   if (!selectedClubId) {
@@ -208,38 +279,20 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
       ) : null}
 
       {topTab === 'insert' ? (
-        <div className="mt-3 rounded border border-gray-300 bg-[#2a2a2a] p-2">
-          <p className="mb-2 px-2 text-xs text-gray-300">Insert data — same links as Insert a new item</p>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS.map((group, gi) => (
-              <div key={gi} className={gi > 0 ? 'border-t border-gray-600/70' : ''}>
-                {group.map((item) => {
-                  const path = 'path' in item ? item.path : undefined;
-                  return (
-                    <button
-                      key={item.label}
-                      type="button"
-                      disabled={!path}
-                      onClick={() => {
-                        if (!path) return;
-                        writeClubWorkspaceTab('my-entity');
-                        router.push(path);
-                      }}
-                      className="flex w-full px-3 py-2 text-left text-[13px] text-white hover:bg-[#333] disabled:opacity-70"
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-2 px-2">
-            <ClubAdminMenuDropdown variant="insert" tone="dark" />
-          </div>
+        <div className="mt-3 rounded border border-gray-300 bg-white p-3">
+          <p className="mb-2 text-xs text-gray-600">
+            Insert data for the selected member. Items without a form stay in the menu until that form exists.
+          </p>
+          <ClubAdminMenuDropdown
+            variant="insert"
+            tone="dark"
+            memberOverview
+            memberId={selectedMember?.memberId}
+          />
         </div>
       ) : null}
 
+      {overviewOpen ? (
       <>
           {/* Select a member */}
           <div className="mt-0 flex flex-wrap items-center gap-3 border border-t-0 border-gray-300 bg-gray-100 px-3 py-2">
@@ -281,22 +334,15 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
                     <button
                       type="button"
                       title="View profile"
-                      onClick={() => {
-                        const m = requireMember();
-                        if (!m || !selectedClubId) return;
-                        writeClubWorkspaceTab('my-entity');
-                        router.push(
-                          `/clubMembers/memberProfile/${encodeURIComponent(m.memberId)}?clubId=${encodeURIComponent(selectedClubId)}&mode=edit`,
-                        );
-                      }}
+                      onClick={showProfile}
                       className="text-gray-800 hover:text-black"
                     >
                       <Eye size={16} />
                     </button>
                     <button
                       type="button"
-                      title="Notifies"
-                      onClick={() => setSection('notifies')}
+                      title="Send a message"
+                      onClick={openMail}
                       className="text-gray-800 hover:text-black"
                     >
                       <Mail size={16} />
@@ -304,14 +350,7 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
                     <button
                       type="button"
                       title="Settings"
-                      onClick={() => {
-                        const m = requireMember();
-                        if (!m || !selectedClubId) return;
-                        writeClubWorkspaceTab('my-entity');
-                        router.push(
-                          `/clubMembers/memberProfile/${encodeURIComponent(m.memberId)}?clubId=${encodeURIComponent(selectedClubId)}&mode=edit`,
-                        );
-                      }}
+                      onClick={showSettings}
                       className="text-gray-800 hover:text-black"
                     >
                       <Settings size={16} />
@@ -343,25 +382,22 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap gap-1 px-3 pb-2">
+              <div className="flex flex-wrap items-center gap-1 px-3 pb-2">
                 {SECTION_BUTTONS.map((btn) => (
                   <button
                     key={btn.id}
                     type="button"
                     onClick={() => {
+                      if (!requireMember()) return;
+                      setMgmt(null);
                       if (btn.id === 'profile') {
-                        const m = requireMember();
-                        if (!m || !selectedClubId) return;
-                        writeClubWorkspaceTab('my-entity');
-                        router.push(
-                          `/clubMembers/memberProfile/${encodeURIComponent(m.memberId)}?clubId=${encodeURIComponent(selectedClubId)}&mode=edit`,
-                        );
+                        setSection('profile');
                         return;
                       }
                       setSection(btn.id);
                     }}
                     className={`min-w-[72px] px-3 py-2 text-sm font-medium ${
-                      section === btn.id
+                      section === btn.id && !mgmt
                         ? 'bg-black text-yellow-300'
                         : 'bg-black text-white hover:bg-gray-900'
                     }`}
@@ -369,21 +405,51 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
                     {btn.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => router.push('/club/dashboard')}
+                  className="ml-auto bg-gray-500 px-3 py-2 text-sm font-medium text-white hover:bg-gray-600"
+                >
+                  Back to Dashboard
+                </button>
               </div>
 
-              {section === 'mngmnt' ? (
-                <div className="flex flex-wrap gap-1 border-t border-gray-200 bg-gray-100 px-3 py-2">
-                  {MEMBER_OVERVIEW_MNGMNT_LINKS.map((link) => (
+              <div className="flex flex-wrap gap-1 border-t border-gray-200 bg-gray-100 px-3 py-2">
+                {MEMBER_OVERVIEW_MNGMNT_LINKS.map((link) => {
+                  const active =
+                    mgmt?.label === link.label &&
+                    (link.services ? mgmt.kind === 'services' : mgmt?.kind === 'archive');
+                  return (
                     <button
                       key={link.label}
                       type="button"
-                      onClick={() => openArchiveForMember(link.path)}
-                      className="min-w-[88px] bg-gray-400 px-3 py-2 text-sm font-medium text-white hover:bg-gray-500"
+                      onClick={() => {
+                        if (!requireMember()) return;
+                        setSection('mngmnt');
+                        if (link.services) {
+                          setMgmt({ kind: 'services', label: link.label });
+                          return;
+                        }
+                        if (link.archiveType) {
+                          setMgmt({ kind: 'archive', label: link.label, archiveType: link.archiveType });
+                        }
+                      }}
+                      className={`min-w-[88px] px-3 py-2 text-sm font-medium text-white ${
+                        active ? 'bg-gray-700' : 'bg-gray-400 hover:bg-gray-500'
+                      }`}
                     >
                       {link.label}
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
+
+              {(section === 'profile' || section === 'settings') && selectedMember && selectedClubId ? (
+                <InlineMemberProfile
+                  clubId={selectedClubId}
+                  memberId={selectedMember.memberId}
+                  focus={section === 'settings' ? 'settings' : 'profile'}
+                />
               ) : null}
 
               {section === 'notifies' && selectedMember ? (
@@ -419,21 +485,164 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
             </div>
           )}
 
-          {selectedMember ? (
+          {selectedMember && mgmt?.kind === 'archive' ? (
             <div className="mt-4 border border-gray-300 bg-white">
               <ClubArchivePage
-                title="Cash (all movements)"
-                archiveType="cash-movements"
+                title={mgmt.label}
+                archiveType={mgmt.archiveType}
                 clubId={selectedClubId}
                 memberId={selectedMember.memberId}
                 columns={MEMBER_CASH_COLUMNS}
                 pageSize={10}
                 showFilters={false}
-                footerHint="Movements of the member selected above."
+                footerHint={`${mgmt.label} of the member selected above.`}
               />
             </div>
           ) : null}
+
+          {selectedMember && mgmt?.kind === 'services' ? (
+            <MemberServicesGrid memberId={selectedMember.memberId} />
+          ) : null}
         </>
+      ) : (
+        <div className="mt-3 rounded border border-gray-200 bg-white px-4 py-6 text-sm text-gray-500">
+          Member Overview is hidden. Press Member Overview again to show it.
+        </div>
+      )}
+
+      {mailOpen && selectedMember ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Send a Message to the selected members</h2>
+            <p className="mt-1 text-sm text-gray-600">To: {memberLabel(selectedMember)}</p>
+            <label className="mt-4 block">
+              <span className="text-sm text-gray-700">Subject (optional)</span>
+              <input
+                type="text"
+                maxLength={200}
+                value={mailSubject}
+                onChange={(e) => setMailSubject(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Message from your club"
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="text-sm text-gray-700">Message</span>
+              <textarea
+                autoFocus
+                rows={6}
+                maxLength={5000}
+                value={mailText}
+                onChange={(e) => setMailText(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Write your message..."
+              />
+            </label>
+            <div className="mt-3 space-y-2 text-sm text-gray-800">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={mailInApp}
+                  onChange={(e) => setMailInApp(e.target.checked)}
+                />
+                Send in the Club Channel (only these members will see it)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={mailByEmail}
+                  onChange={(e) => setMailByEmail(e.target.checked)}
+                />
+                Also send by email (registered address on file)
+              </label>
+            </div>
+            {mailError ? <p className="mt-3 text-sm text-red-600">{mailError}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMailOpen(false)}
+                className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-800 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={mailBusy}
+                onClick={() => void sendMail()}
+                className="rounded bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800 disabled:opacity-60"
+              >
+                {mailBusy ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MemberServicesGrid({ memberId }: { memberId: string }) {
+  const [rows, setRows] = useState<Array<{ id: string; name: string; detail: string; date: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    void fetchPurchases({ memberId, page: 1, pageSize: 20 })
+      .then((result) => {
+        if (cancelled) return;
+        setRows(
+          result.items.map((item) => ({
+            id: item.id,
+            name: item.memberName || '—',
+            detail: item.serviceName || item.notes || '—',
+            date: item.recordDate || '—',
+          })),
+        );
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load services');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId]);
+
+  return (
+    <div className="mt-4 border border-gray-300 bg-white p-3">
+      <h3 className="mb-2 text-sm font-semibold text-gray-800">Services</h3>
+      {loading ? <p className="text-sm text-gray-500">Loading…</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {!loading && !error && rows.length === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-500">No records.</p>
+      ) : null}
+      {rows.length > 0 ? (
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-teal-800 text-white">
+            <tr className="text-left">
+              <th className="px-3 py-2">Full name</th>
+              <th className="px-3 py-2">Detail</th>
+              <th className="px-3 py-2">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-gray-200">
+                <td className="px-3 py-2">{row.name}</td>
+                <td className="px-3 py-2">{row.detail}</td>
+                <td className="px-3 py-2">{row.date}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
     </div>
   );
 }

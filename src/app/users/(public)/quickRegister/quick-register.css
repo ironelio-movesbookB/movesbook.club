@@ -140,6 +140,12 @@
   height: auto;
   display: block;
   margin: 0 0 12px;
+  /* Below-form REGISTER NOW badge — never inherit dark header logo filters */
+  filter: none !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-register-badge {
+  filter: none !important;
 }
 
 .quick-register-body .quickregi-title {
@@ -944,4 +950,85 @@
   background: #2c2e53;
   border-color: #6b6f9b;
   color: #e8eaf6;
+}
+
+.quick-register-body .qr-register-badge-dark {
+  display: none;
+}
+
+.quick-register-body.qr-theme-dark .qr-register-badge-light {
+  display: none !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-register-badge-dark {
+  display: block !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-field-row-plan .qr-control:first-of-type select,
+.quick-register-body.qr-theme-dark .qr-field-row-plan .qr-control-version select {
+  background-color: #3a3d6b !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-hint,
+.quick-register-body.qr-theme-dark .qr-promo-credits-title,
+.quick-register-body.qr-theme-dark .qr-promo-intro-label,
+.quick-register-body.qr-theme-dark .qr-promo-label,
+.quick-register-body.qr-theme-dark .qr-payment-label,
+.quick-register-body.qr-theme-dark .qr-note {
+  color: #ffb4c0 !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-promo-credits {
+  background: #232546;
+  border-color: #6b6f9b;
+}
+
+.quick-register-body.qr-theme-dark .qr-promo-banner {
+  background: #4a4d7a;
+  color: #f8fafc;
+}
+
+.quick-register-body.qr-theme-dark .qr-input-numeric,
+.quick-register-body.qr-theme-dark .qr-row-input,
+.quick-register-body.qr-theme-dark .password-highlight {
+  background: #2c2e53 !important;
+  border-color: #6b6f9b !important;
+  color: #f8fafc !important;
+}
+
+.quick-register-body.qr-theme-dark .qr-registration-success {
+  background: #232546;
+  border-color: #4ade80;
+}
+
+.quick-register-body.qr-theme-dark .qr-registration-success p {
+  color: #bbf7d0;
+}
+
+.quick-register-body.qr-theme-dark .red {
+  color: #fca5a5 !important;
+}
+
+.quick-register-body.qr-theme-dark .div-line {
+  border-top-color: #6b6f9b;
+}
+
+.quick-register-body.qr-theme-dark #total-payment-row,
+.quick-register-body.qr-theme-dark #total-payment-row .payment-row-item,
+.quick-register-body.qr-theme-dark #total-payment-row .payment-logos label,
+.quick-register-body.qr-theme-dark #total-payment-row .payment-actions {
+  color: #f8fafc !important;
+}
+
+.quick-register-body.qr-theme-dark #total-payment-row .payment-total-input,
+.quick-register-body.qr-theme-dark #total-payment-row input[readonly],
+.quick-register-body.qr-theme-dark #price,
+.quick-register-body.qr-theme-dark input#price,
+.quick-register-body.qr-theme-dark .qr-price,
+.quick-register-body.qr-theme-dark .price-value,
+.quick-register-body.qr-theme-dark .qr-total-amount {
+  background: #232546 !important;
+  border-color: #6b6f9b !important;
+  color: #fef08a !important;
+  font-weight: 700;
 }

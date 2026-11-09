@@ -157,7 +157,7 @@ export default function PromocodeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-[#4a6fa5] text-white px-4 py-2 font-bold">Promo code setting</div>
+      <div className="bg-[#4a6fa5] text-white px-4 py-2 font-bold">Promotional code setting</div>
 
       {message && (
         <div className="px-4 py-2 bg-green-50 border border-green-200 text-green-800 text-sm">{message}</div>
@@ -165,7 +165,7 @@ export default function PromocodeForm({
 
       <div className="bg-white border border-gray-300 p-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-          <label className="font-medium">Promo code</label>
+          <label className="font-medium">Promotional code</label>
           <div className="md:col-span-2 flex items-center gap-2">
             <input
               value={form.code}

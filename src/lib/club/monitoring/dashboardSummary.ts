@@ -35,6 +35,16 @@ export type PreviewRow = {
   paidTotal?: string;
   rest?: string;
   nr?: string;
+  image?: string | null;
+  surname?: string;
+  firstName?: string;
+  gender?: string;
+  memberType?: string;
+  locality?: string;
+  userType?: string;
+  memberId?: string;
+  /** yyyy-mm-dd, used to filter Birth Days and Day Names. */
+  birthdate?: string;
 };
 
 export type DashboardSnapshot = {
@@ -253,7 +263,7 @@ export async function loadDashboardCounts(ctx: ClubAuthContext): Promise<Record<
     'next-appointments': nextAppointments,
     'payment-overdue': paymentOverdue,
     'present-today': presentToday,
-    'name-days': 0,
+    'name-days': birthdays,
     birthdays,
     'unread-messages': unreadMessages,
   };
@@ -411,6 +421,42 @@ function mapArchiveRows(items: Record<string, unknown>[]): PreviewRow[] {
   });
 }
 
+function displayDateToIso(value: unknown): string {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value ?? '').trim());
+  if (!match) return '';
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function memberDirectoryRow(row: Record<string, unknown>, index: number): PreviewRow {
+  const firstName = String(row.name ?? '').trim();
+  const surname = String(row.surname ?? '').trim();
+  const birthdate = displayDateToIso(row.dateOfBirth);
+  return {
+    id: String(row.memberId ?? row.id ?? index),
+    memberId: String(row.memberId ?? row.id ?? ''),
+    title: [firstName, surname].filter((part) => part && part !== '-').join(' ') || String(row.fullName ?? '-'),
+    firstName: firstName && firstName !== '-' ? firstName : '',
+    surname: surname && surname !== '-' ? surname : '',
+    detail: '',
+    date: birthdate,
+    birthdate,
+    image: row.image ? String(row.image) : null,
+    gender: String(row.gender ?? ''),
+    userType: String(row.operator ?? row.typology ?? ''),
+    memberType: String(row.memberType ?? ''),
+    locality: String(row.localCity ?? row.Localcity ?? ''),
+  };
+}
+
+async function previewMemberDirectory(ctx: ClubAuthContext): Promise<PreviewRow[]> {
+  const result = await listClubMembersArchive(ctx, {
+    page: 1,
+    pageSize: 500,
+    membershipStatus: 'member',
+  });
+  return result.items.map(memberDirectoryRow);
+}
+
 async function previewMembers(ctx: ClubAuthContext, activeOnly: boolean): Promise<PreviewRow[]> {
   if (!activeOnly) {
     const result = await listClubMembersArchive(ctx, { page: 1, pageSize: PREVIEW_LIMIT });
@@ -460,6 +506,7 @@ async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
     select: {
       id: true,
       dueDate: true,
+      paidAmount: true,
       balanceAmount: true,
       member: { select: { name: true, firstName: true, surname: true } },
       procedureType: { select: { name: true } },
@@ -472,30 +519,10 @@ async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
     detail: `${row.procedureType.name}`,
     date: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '',
     typology: row.procedureType.name,
+    paymentIn: Number(row.paidAmount).toFixed(2),
+    paymentOut: Number(row.balanceAmount).toFixed(2),
     rest: Number(row.balanceAmount).toFixed(2),
-    paidTotal: `0.00 / ${Number(row.balanceAmount).toFixed(2)}`,
-  }));
-}
-
-async function previewBirthdays(clubId: string): Promise<PreviewRow[]> {
-  const rows = await prisma.$queryRawUnsafe<
-    { id: string; name: string; firstName: string | null; surname: string | null; birthdate: Date }[]
-  >(
-    `SELECT u.id, u.name, u.firstName, u.surname, u.birthdate
-     FROM club_members_new cm
-     INNER JOIN users_new u ON u.id = cm.memberId
-     WHERE cm.clubId = ?
-       AND u.birthdate IS NOT NULL
-       AND MONTH(u.birthdate) = MONTH(CURDATE())
-       AND DAY(u.birthdate) = DAY(CURDATE())
-     LIMIT ${PREVIEW_LIMIT}`,
-    clubId,
-  );
-  return rows.map((row) => ({
-    id: row.id,
-    title: [row.firstName, row.surname].filter(Boolean).join(' ') || row.name || '-',
-    detail: 'Birthday',
-    date: row.birthdate ? String(row.birthdate).slice(0, 10) : '',
+    paidTotal: `${Number(row.paidAmount).toFixed(2)} / ${Number(row.balanceAmount).toFixed(2)}`,
   }));
 }
 
@@ -588,6 +615,9 @@ export async function getDashboardPreview(
   const items = await safe(sectionId, async () => {
     switch (sectionId) {
       case 'total-members':
+      case 'birthdays':
+      case 'name-days':
+        return previewMemberDirectory(ctx);
       case 'new-members':
         return previewMembers(ctx, false);
       case 'active-members':
@@ -615,10 +645,6 @@ export async function getDashboardPreview(
         return mapArchiveRows(
           (await listReservationsArchive(ctx, { page: 1, pageSize: PREVIEW_LIMIT, ...todayRange() })).items,
         );
-      case 'birthdays':
-        return previewBirthdays(ctx.club.id);
-      case 'name-days':
-        return [];
       case 'unread-messages':
         return previewUnread(ctx.userId);
       case 'memberships':

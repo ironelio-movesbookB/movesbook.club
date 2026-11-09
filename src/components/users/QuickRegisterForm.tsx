@@ -809,8 +809,13 @@ export default function QuickRegisterForm() {
         <div className="qr-register-split">
           <div className="qr-register-split-left">
             <img
-              className="qr-register-badge"
+              className="qr-register-badge qr-register-badge-light"
               src="/img/register-now.png"
+              alt="REGISTER NOW"
+            />
+            <img
+              className="qr-register-badge qr-register-badge-dark"
+              src="/img/dark_logo.jpg"
               alt="REGISTER NOW"
             />
 
@@ -967,7 +972,10 @@ export default function QuickRegisterForm() {
                 className="qr-intro-video-el"
                 controls
                 playsInline
-                preload="metadata"
+                autoPlay
+                loop
+                muted
+                preload="auto"
                 src="/video/Video_Movesbook_intro.mp4"
               >
                 <track kind="captions" />

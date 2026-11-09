@@ -117,18 +117,164 @@
   font-weight: bold;
 }
 
-.notification-promocode-page .return-index {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 8px;
+.notification-promocode-page .invite-intro-row {
+  align-items: flex-start;
 }
 
-.notification-promocode-page .return-index-value {
-  font-size: 50px;
-  color: #f31b25;
-  background: #cfee75;
-  padding: 2px 22px;
+.notification-promocode-page .invite-intro-controls {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.notification-promocode-page .invite-load-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.notification-promocode-page .invite-load-btn {
+  background: #fff;
+  border: 2px solid #c62828;
+  color: #c62828;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.notification-promocode-page .invite-load-btn:hover {
+  background: #fff5f5;
+}
+
+.notification-promocode-page .invite-intro-textarea {
+  flex: 1;
+  min-width: 260px;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  min-height: 72px;
+}
+
+.notification-promocode-page .share-via-row {
+  align-items: center;
+}
+
+.notification-promocode-page .share-channel-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  min-width: 72px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+}
+
+.notification-promocode-page .share-channel-btn:hover {
+  background: #f9fafb;
+}
+
+.notification-promocode-page .share-channel-btn.active {
+  border-color: #7b0a26;
+  box-shadow: 0 0 0 1px #7b0a26;
+  background: #fdf2f4;
+}
+
+.notification-promocode-page .share-icon-whatsapp {
+  color: #22c55e;
+}
+
+.notification-promocode-page .share-icon-telegram {
+  color: #0ea5e9;
+}
+
+.notification-promocode-page .share-icon-facebook {
+  color: #2563eb;
+}
+
+.notification-promocode-page .share-icon-instagram {
+  color: #db2777;
+}
+
+.notification-promocode-page .share-icon-sms {
+  color: #475569;
+}
+
+.notification-promocode-page .invite-sections-card {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  border: 2px solid #f5e6a8;
+  background: #fffef5;
+  padding: 14px 16px;
+  max-width: 900px;
+}
+
+.notification-promocode-page .invite-sections-thumb {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border: 1px solid #e5dcc0;
+  flex-shrink: 0;
+}
+
+.notification-promocode-page .invite-sections-body {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-promocode-page .stats-charts-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.notification-promocode-page .stats-chart-box {
+  border: 1px solid #c3c0c0;
+  padding: 12px;
+  background: #fff;
+}
+
+.notification-promocode-page .stats-chart-box h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  text-align: center;
+}
+
+.notification-promocode-page .stats-chart-box .chart-wrap {
+  height: 180px;
+  width: 100%;
+  position: relative;
+}
+
+.notification-promocode-page .stats-chart-pct-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 22px;
+  font-weight: 800;
+  color: #7b0a26;
 }
 
 .notification-promocode-page .print-table {
