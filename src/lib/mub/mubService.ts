@@ -46,6 +46,8 @@ const MAX_TRANSLATIONS_PER_BUTTON = 32;
  */
 const MUB_TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 10_000 };
 
+const ALL_MUB_CATEGORIES: MubCategory[] = ['CLUB_MANAGEMENT', 'WORKOUT', 'SOCIAL'];
+
 function normalizeLang(code: string): string {
   return sanitizeMubLang(code);
 }
@@ -99,7 +101,16 @@ function mapButton(
     };
   }
   const lang = normalizeLang(languageCode);
-  const primary = translations[lang] ?? translations.en ?? { shortText: '', extendedText: '' };
+  // Requested language → English → any language that has text. Without the last
+  // step a button saved (or imported) in one language only shows up blank as soon
+  // as the user switches language.
+  const hasText = (t?: { shortText: string; extendedText: string }) =>
+    Boolean(t && (t.shortText || t.extendedText));
+  const primary =
+    (hasText(translations[lang]) ? translations[lang] : undefined) ??
+    (hasText(translations.en) ? translations.en : undefined) ??
+    Object.values(translations).find(hasText) ??
+    { shortText: '', extendedText: '' };
 
   return {
     id: row.id,
@@ -148,15 +159,21 @@ export async function updateMubPageSettings(
   languageCode = 'en',
 ): Promise<MubPageDto> {
   const page = await ensurePageSettings(query);
-  await prisma.mubPageSettings.update({
-    where: { id: page.id },
-    data: {
-      ...(patch.backgroundColor != null
-        ? { backgroundColor: sanitizeMubBackground(patch.backgroundColor) }
-        : {}),
-      ...(patch.displayMode != null ? { displayMode: patch.displayMode === 2 ? 2 : 1 } : {}),
-    },
-  });
+  if (patch.displayMode != null) {
+    await prisma.mubPageSettings.update({
+      where: { id: page.id },
+      data: { displayMode: patch.displayMode === 2 ? 2 : 1 },
+    });
+  }
+  if (patch.backgroundColor != null) {
+    // "Background Setting" is one setting for the whole MUB page, but it is stored
+    // per category row. Apply it to every category so Workout / Social match.
+    const backgroundColor = sanitizeMubBackground(patch.backgroundColor);
+    for (const category of ALL_MUB_CATEGORIES) {
+      const row = await ensurePageSettings({ ...query, category });
+      await prisma.mubPageSettings.update({ where: { id: row.id }, data: { backgroundColor } });
+    }
+  }
   return getMubPage(query, languageCode);
 }
 
@@ -291,15 +308,24 @@ export async function resetMubPage(
   return getMubPage(query, languageCode);
 }
 
+/**
+ * "Remove MUB default": drops imported buttons from all three sections (Club
+ * management, Workout, Social) of the caller's MUB — the counterpart of Import,
+ * which also covers all three. Buttons the user created are never touched.
+ */
 export async function removeImportedMubButtons(
   query: MubPageQuery,
   languageCode = 'en',
-): Promise<MubPageDto> {
-  const page = await ensurePageSettings(query);
-  await prisma.mubButtonItem.deleteMany({
-    where: { pageId: page.id, isImported: true },
-  });
-  return getMubPage(query, languageCode);
+): Promise<{ page: MubPageDto; removedCount: number }> {
+  let removedCount = 0;
+  for (const category of ALL_MUB_CATEGORIES) {
+    const page = await ensurePageSettings({ ...query, category });
+    const removed = await prisma.mubButtonItem.deleteMany({
+      where: { pageId: page.id, isImported: true },
+    });
+    removedCount += removed.count;
+  }
+  return { page: await getMubPage(query, languageCode), removedCount };
 }
 
 type StaffButtonRow = Prisma.MubButtonItemGetPayload<{ include: { translations: true } }>;
@@ -380,21 +406,37 @@ async function copyStaffButtonsToPage(
   }, MUB_TRANSACTION_OPTIONS);
 }
 
+/**
+ * "Import Movesbook MUB": copies the Super Admin template for the account's user type
+ * into all three sections (Club management, Workout, Social) in one go, in the
+ * user's language. Per section, previously imported buttons are replaced and the
+ * user's own buttons are kept (see `copyStaffButtonsToPage`).
+ */
 export async function importStaffMubTemplate(
   targetQuery: MubPageQuery,
   roleTemplate: MubRoleTemplate,
   languageCode = 'en',
-): Promise<{ page: MubPageDto; importedCount: number }> {
-  const staffPage = await ensurePageSettings({
-    scope: 'STAFF',
-    ownerId: null,
-    roleTemplate,
-    category: targetQuery.category,
-  });
-  const targetPage = await ensurePageSettings(targetQuery);
-  const importedCount = await copyStaffButtonsToPage(staffPage.id, targetPage.id, languageCode);
+): Promise<{
+  page: MubPageDto;
+  importedCount: number;
+  importedByCategory: Record<MubCategory, number>;
+}> {
+  const importedByCategory = { CLUB_MANAGEMENT: 0, WORKOUT: 0, SOCIAL: 0 } as Record<
+    MubCategory,
+    number
+  >;
+  for (const category of ALL_MUB_CATEGORIES) {
+    const staffPage = await ensurePageSettings({ scope: 'STAFF', ownerId: null, roleTemplate, category });
+    const targetPage = await ensurePageSettings({ ...targetQuery, category });
+    importedByCategory[category] = await copyStaffButtonsToPage(
+      staffPage.id,
+      targetPage.id,
+      languageCode,
+    );
+  }
+  const importedCount = Object.values(importedByCategory).reduce((a, b) => a + b, 0);
   const page = await getMubPage(targetQuery, languageCode);
-  return { page, importedCount };
+  return { page, importedCount, importedByCategory };
 }
 
 /**

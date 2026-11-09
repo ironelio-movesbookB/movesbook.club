@@ -23,10 +23,19 @@ async function requirePersonalPassword(userId: string, password: string | undefi
     where: { id: userId },
     select: { password: true },
   });
-  if (!user?.password) {
+  // A Super Admin working from the admin panel (/admin/mub) has no users row:
+  // his "personal password" is his Super Admin password.
+  const superAdmin = user
+    ? null
+    : await prisma.superAdmin.findFirst({
+        where: { id: userId, isActive: true },
+        select: { password: true },
+      });
+  const hash = user?.password ?? superAdmin?.password;
+  if (!hash) {
     return { ok: false as const, status: 404, error: 'User not found' };
   }
-  const valid = await verifyPassword(password.trim(), user.password);
+  const valid = await verifyPassword(password.trim(), hash);
   if (!valid) {
     return { ok: false as const, status: 403, error: 'Invalid password' };
   }
@@ -42,9 +51,12 @@ export async function POST(request: NextRequest) {
 
     await prismaConnect();
     const parsed = parseMubPageRequest(request);
-    const resolved = await resolveMubPageQuery(parsed, userId, 'write');
+    const resolved = await resolveMubPageQuery(request, parsed, userId, 'write');
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      return NextResponse.json(
+        { error: resolved.error, code: resolved.code },
+        { status: resolved.status },
+      );
     }
     const query = resolved.query;
 
@@ -64,22 +76,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ page });
       }
       case 'remove_default': {
-        // Client answer #4 — requires personal user password; removes only imported buttons.
+        // Client answer #4 — requires personal user password; removes only imported
+        // buttons, in all three sections.
         const auth = await requirePersonalPassword(userId, body.password);
         if (!auth.ok) {
           return NextResponse.json({ error: auth.error }, { status: auth.status });
         }
-        const page = await removeImportedMubButtons(query, parsed.lang);
-        return NextResponse.json({ page });
+        const { page, removedCount } = await removeImportedMubButtons(query, parsed.lang);
+        return NextResponse.json({ page, removedCount });
       }
       case 'import': {
         // Client answer #3 — template chosen from the account's stored userType,
-        // never from the request body; language filtered in the service.
+        // never from the request body; language filtered in the service; all sections.
         const roleTemplate = await resolveImportRoleTemplate(userId);
         const result = await importStaffMubTemplate(query, roleTemplate, parsed.lang);
         return NextResponse.json({
           page: result.page,
           importedCount: result.importedCount,
+          importedByCategory: result.importedByCategory,
           roleTemplate,
         });
       }
