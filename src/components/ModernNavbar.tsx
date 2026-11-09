@@ -977,14 +977,14 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                 <label htmlFor="navbar-network-search-scope" className="sr-only">
                   {t('nav_search_scope_label')}
                 </label>
-                <div className="flex h-8 max-w-[4.25rem] shrink-0 items-center rounded-md bg-white shadow-sm ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-cyan-400/70">
+                <div className="flex h-8 min-w-[5.5rem] shrink-0 items-center rounded-md bg-white shadow-sm ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-cyan-400/70">
                   <select
                     id="navbar-network-search-scope"
                     value={networkSearchScope}
                     onChange={(e) =>
                       setNetworkSearchScope(e.target.value as typeof networkSearchScope)
                     }
-                    className="h-full min-h-0 w-full cursor-pointer border-0 bg-transparent py-0 pl-1.5 pr-1 text-[11px] font-medium leading-none text-zinc-900 focus:outline-none focus:ring-0"
+                    className="h-8 w-full cursor-pointer border-0 bg-transparent py-0 pl-2 pr-1 text-[11px] font-medium leading-8 text-zinc-900 focus:outline-none focus:ring-0"
                   >
                     <option value="single_user">{t('nav_search_scope_single_user')}</option>
                     <option value="coach">{t('nav_search_scope_coach')}</option>
@@ -1246,7 +1246,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                         onChange={(e) =>
                           setNetworkSearchScope(e.target.value as typeof networkSearchScope)
                         }
-                        className="h-full min-h-0 w-full cursor-pointer border-0 bg-transparent py-0 pl-3 pr-1 text-sm font-medium leading-none text-zinc-900 focus:outline-none focus:ring-0"
+                        className="h-10 w-full cursor-pointer border-0 bg-transparent py-0 pl-3 pr-1 text-sm font-medium leading-10 text-zinc-900 focus:outline-none focus:ring-0"
                         aria-label={t('nav_search_scope_label')}
                       >
                         <option value="single_user">{t('nav_search_scope_single_user')}</option>

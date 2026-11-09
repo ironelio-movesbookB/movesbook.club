@@ -6,6 +6,9 @@ import { Bell, ChevronDown, Radio, Shield, Star, User } from 'lucide-react';
 import {
   CLUB_ADMIN_ARCHIVE_GROUPS,
   CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS,
+  MEMBER_OVERVIEW_OMIT_INSERT_LABELS,
+  memberOverviewInsertLabel,
+  appendMemberIdToPath,
   type ClubAdminArchiveItem,
   type ClubAdminInsertItem,
 } from '@/lib/club/clubAdminMenus';
@@ -60,9 +63,17 @@ type Props = {
   variant: Variant;
   /** Dark filled button (Insert) vs outlined (Archive). */
   tone?: 'dark' | 'light';
+  /** Member Overview uses a shorter insert menu and keeps the current member selected. */
+  memberOverview?: boolean;
+  memberId?: string | null;
 };
 
-export default function ClubAdminMenuDropdown({ variant, tone = 'dark' }: Props) {
+export default function ClubAdminMenuDropdown({
+  variant,
+  tone = 'dark',
+  memberOverview = false,
+  memberId = null,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -77,12 +88,18 @@ export default function ClubAdminMenuDropdown({ variant, tone = 'dark' }: Props)
   }, [open]);
 
   const label = variant === 'insert' ? 'Insert data' : 'Archive data';
-  const groups = variant === 'insert' ? CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS : CLUB_ADMIN_ARCHIVE_GROUPS;
+  const groups =
+    variant === 'insert'
+      ? CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS.map((group) =>
+          group.filter((item) => !memberOverview || !MEMBER_OVERVIEW_OMIT_INSERT_LABELS.has(item.label)),
+        ).filter((group) => group.length > 0)
+      : CLUB_ADMIN_ARCHIVE_GROUPS;
 
   const go = (path: string) => {
     writeClubWorkspaceTab('my-entity');
     setOpen(false);
-    router.push(path);
+    const next = memberOverview && memberId ? appendMemberIdToPath(path, memberId) : path;
+    router.push(next);
   };
 
   const btnClass =
@@ -139,7 +156,11 @@ export default function ClubAdminMenuDropdown({ variant, tone = 'dark' }: Props)
                     } ${rowBorder}`}
                   >
                     {leading}
-                    <span className="min-w-0 leading-snug">{item.label}</span>
+                    <span className="min-w-0 leading-snug">
+                      {variant === 'insert' && memberOverview
+                        ? memberOverviewInsertLabel(item.label)
+                        : item.label}
+                    </span>
                   </button>
                 );
               })}

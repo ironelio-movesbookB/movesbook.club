@@ -47,26 +47,26 @@ export default function DisplayOptionsToolbar({
         {showOptionsToolbar ? (
         <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-hidden flex-wrap pr-12">
           <ToggleOption
+            checked={showLeftSidebar}
+            label="Left side bar"
+            onChange={onToggleLeftSidebar}
+          />
+
+          <ToggleOption
             checked={showAdBanner}
-            label="Advertising Banner"
+            label="Advertising banner"
             onChange={onToggleAdBanner}
           />
 
           <ToggleOption
             checked={showPersonalBanner}
-            label="Personal Banner & Picture"
+            label="Personal banner"
             onChange={onTogglePersonalBanner}
           />
 
           <ToggleOption
-            checked={showLeftSidebar}
-            label="Left Sidebar"
-            onChange={onToggleLeftSidebar}
-          />
-
-          <ToggleOption
             checked={showRightSidebar}
-            label="Right Sidebar"
+            label="Right sidebar"
             onChange={onToggleRightSidebar}
           />
         </div>
