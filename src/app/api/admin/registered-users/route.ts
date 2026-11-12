@@ -14,6 +14,7 @@ import {
   type ClubSubscriptionStatusTone,
 } from '@/lib/admin/clubSubscriptionStatus';
 import { sortClubsByCreatedAtAsc } from '@/lib/club/clubSidebarLabel';
+import { parseListSortDir, parseListSortKey, sortListRows } from '@/lib/admin/listColumnSort';
 import {
   expandRegisteredUserListRows,
   isClubUserType,
@@ -153,6 +154,8 @@ export async function GET(request: NextRequest) {
   const hasSubDateRange = Boolean(subRangeFrom || subRangeTo);
   const paymentStatus = parseListPaymentStatus(url.searchParams.get('paymentStatus'));
   const paymentMode = parseListPaymentMode(url.searchParams.get('paymentMode'));
+  const sortKey = parseListSortKey(url.searchParams.get('sort'));
+  const sortDir = parseListSortDir(url.searchParams.get('dir'));
   const needsRowLevelSearchFilter = Boolean(
     search &&
       (segment === 'all' ||
@@ -244,6 +247,7 @@ export async function GET(request: NextRequest) {
     andClauses.push(
       buildMovesbookUserTextSearchOr(search, {
         matchOwnedClubs: segmentShouldMatchOwnedClubs(segment),
+        matchUserTypeAndCountry: true,
       }),
     );
   }
@@ -806,7 +810,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (needsRowLevelSearchFilter) {
-    users = filterListRowsByTextSearch(users, search);
+    users = filterListRowsByTextSearch(users, search, { matchUserTypeAndCountry: true });
   }
 
   if (hasSubDateRange) {
@@ -821,7 +825,9 @@ export async function GET(request: NextRequest) {
   users = filterListRowsByPayment(users, paymentStatus, paymentMode);
   const payments = summarizeListPayments(users);
 
-  if (fetchAllMatchingUsers) {
+  if (sortKey) users = sortListRows(users, sortKey, sortDir);
+
+  if (fetchAllMatchingUsers || sortKey) {
     const totalFiltered = users.length;
     users = users.slice((page - 1) * pageSize, page * pageSize);
     return NextResponse.json({

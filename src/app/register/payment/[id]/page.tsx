@@ -8,7 +8,9 @@ import { formatEuroAmount, formatLocalAmount } from '@/lib/countries/countryPric
 
 type PaymentView = {
   id: string;
+  kind?: 'register' | 'quick_register' | 'deadline' | 'renewal';
   status: 'pending' | 'paid' | 'test' | 'free';
+  testMode?: boolean;
   versionName: string;
   specialOffer: boolean;
   amountEur: number;
@@ -130,6 +132,27 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
       ? formatLocalAmount(payment.amountLocal, payment.currencyCode)
       : '';
   const noProvider = payment && !payment.providers.paypal && !payment.providers.stripe;
+  /** Later deadline / renewal of an existing account (not a registration). */
+  const isAccountPayment = payment?.kind === 'deadline' || payment?.kind === 'renewal';
+  const canTestPay = Boolean(isAccountPayment && payment?.testMode);
+
+  const handleTestPay = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/registration-payments/${encodeURIComponent(params.id)}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'test' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.paid) throw new Error(data.error || 'The test payment failed');
+      router.replace(data.next || successUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The test payment failed');
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-start justify-center p-4 py-12 relative">
@@ -141,7 +164,13 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
       <div className="relative z-10 w-full max-w-xl bg-white rounded-xl shadow-2xl overflow-hidden">
         <div className="bg-[#8b2942] px-6 py-4 text-white">
           <h1 className="text-xl font-bold">Movesbook</h1>
-          <p className="text-sm opacity-90">Complete your registration</p>
+          <p className="text-sm opacity-90">
+            {payment?.kind === 'renewal'
+              ? 'Renew your subscription'
+              : payment?.kind === 'deadline'
+                ? 'Pay your subscription deadline'
+                : 'Complete your registration'}
+          </p>
         </div>
 
         <div className="p-6 space-y-5">
@@ -158,7 +187,11 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                   Welcome <span className="font-semibold">{payment.name || payment.username}</span>
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  To activate your account, pay the subscription below.
+                  {payment.kind === 'renewal'
+                    ? 'Pay the first payment of your renewal below.'
+                    : payment.kind === 'deadline'
+                      ? 'Pay this deadline of your subscription below.'
+                      : 'To activate your account, pay the subscription below.'}
                 </p>
               </div>
 
@@ -178,10 +211,27 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                 {localText ? <div className="text-base text-gray-700">= {localText}</div> : null}
               </div>
 
+              {canTestPay ? (
+                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <p className="text-sm text-amber-800">Payments are in test mode: no money is charged.</p>
+                  <button
+                    type="button"
+                    onClick={handleTestPay}
+                    disabled={busy}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-600 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                    Confirm test payment ({formatEuroAmount(payment.amountEur)})
+                  </button>
+                </div>
+              ) : null}
+
               {noProvider ? (
+                canTestPay ? null : (
                 <p className="text-amber-700 text-sm">
                   Online payment is not available at the moment. Please try again later.
                 </p>
+                )
               ) : (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-gray-800">Payment method</div>

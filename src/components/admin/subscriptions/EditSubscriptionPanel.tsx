@@ -15,12 +15,14 @@ import SubscriptionGeneralForm from './SubscriptionGeneralForm';
 import SubscriptionEditSettingsForm from './SubscriptionEditSettingsForm';
 import SubscriptionExpirationSections from './SubscriptionExpirationSections';
 import SpecialOfferSettingsPanel from './SpecialOfferSettingsPanel';
+import SubscriptionPriceListForm from './SubscriptionPriceListForm';
 import SpecialUpgradeSettingsPanel from './SpecialUpgradeSettingsPanel';
 
-type EditTab = 'general' | 'special_offer' | 'special_upgrade';
+type EditTab = 'general' | 'price_list' | 'special_offer' | 'special_upgrade';
 
 const EDIT_TABS: { key: EditTab; label: string }[] = [
   { key: 'general', label: 'General' },
+  { key: 'price_list', label: 'Price list' },
   { key: 'special_offer', label: 'Special offer' },
   { key: 'special_upgrade', label: 'Special Upgrade' },
 ];
@@ -90,6 +92,26 @@ export default function EditSubscriptionPanel({
       ? 'coach'
       : 'athlete';
 
+  const saveButtons = (
+    <div className="flex justify-center gap-3 py-6">
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-[#333] hover:bg-black text-white px-8 py-2 text-sm font-bold disabled:opacity-60"
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="bg-[#333] hover:bg-black text-white px-8 py-2 text-sm font-bold"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col bg-gray-100">
       <SubscriptionSystemDashboardHeader />
@@ -114,6 +136,15 @@ export default function EditSubscriptionPanel({
           <SpecialOfferSettingsPanel versionId={subscriptionId} versionName={row.name} />
         ) : activeTab === 'special_upgrade' ? (
           <SpecialUpgradeSettingsPanel versionId={subscriptionId} versionName={row.name} />
+        ) : activeTab === 'price_list' ? (
+          <>
+            <SubscriptionPriceListForm
+              general={data.general}
+              row={row}
+              onChange={(general) => setData({ ...data, general })}
+            />
+            {saveButtons}
+          </>
         ) : (
         <>
         <SubscriptionGeneralForm
@@ -141,23 +172,7 @@ export default function EditSubscriptionPanel({
           onChange={(settings) => setData({ ...data, settings })}
         />
 
-        <div className="flex justify-center gap-3 py-6">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-[#333] hover:bg-black text-white px-8 py-2 text-sm font-bold disabled:opacity-60"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="bg-[#333] hover:bg-black text-white px-8 py-2 text-sm font-bold"
-          >
-            Cancel
-          </button>
-        </div>
+        {saveButtons}
         </>
         )}
       </div>

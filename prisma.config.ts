@@ -43,6 +43,8 @@ export default defineConfig({
       'club_setting_typology_listprices',
       'club_setting_subscription_packages',
       'lanes_for_days',
+      'subscription_modality_presets',
+      'movesbook_deadlines',
     ]
   }
 });

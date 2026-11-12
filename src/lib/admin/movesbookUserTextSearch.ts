@@ -1,4 +1,5 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, UserType } from '@prisma/client';
+import { typeBadgeLabel } from '@/lib/admin/userPcuPanel';
 
 /** Case-insensitive match; spaces ignored so "Fitclub2" matches "Fitclub 2". */
 export function normalizeTextSearchValue(value: string): string {
@@ -21,11 +22,28 @@ export type SearchableMembershipListRow = {
   companyName?: string;
   email?: string;
   location?: string | null;
+  userType?: string | null;
+  country?: string | null;
 };
+
+export type TextSearchOptions = {
+  /** Also match the "Type of User" label (e.g. "Athlete") and the country (admin payment/subscription lists). */
+  matchUserTypeAndCountry?: boolean;
+};
+
+/** User types whose list label ("Athlete", "Team manager", …) contains the search text. */
+export function userTypesMatchingSearch(q: string): UserType[] {
+  const needle = normalizeTextSearchValue(q);
+  if (!needle) return [];
+  return Object.values(UserType).filter((type) =>
+    normalizeTextSearchValue(typeBadgeLabel(type)).includes(needle),
+  );
+}
 
 export function rowMatchesTextSearch(
   row: SearchableMembershipListRow,
   q: string,
+  opts?: TextSearchOptions,
 ): boolean {
   const needle = q.trim();
   if (!needle) return true;
@@ -35,17 +53,23 @@ export function rowMatchesTextSearch(
     textMatchesSearch(row.accountUsername, needle) ||
     textMatchesSearch(row.companyName, needle) ||
     textMatchesSearch(row.email, needle) ||
-    textMatchesSearch(row.location, needle)
+    textMatchesSearch(row.location, needle) ||
+    Boolean(
+      opts?.matchUserTypeAndCountry &&
+        ((row.userType && textMatchesSearch(typeBadgeLabel(row.userType as UserType), needle)) ||
+          textMatchesSearch(row.country, needle)),
+    )
   );
 }
 
 export function filterListRowsByTextSearch<T extends SearchableMembershipListRow>(
   rows: T[],
   q: string,
+  opts?: TextSearchOptions,
 ): T[] {
   const needle = q.trim();
   if (!needle) return rows;
-  return rows.filter((row) => rowMatchesTextSearch(row, needle));
+  return rows.filter((row) => rowMatchesTextSearch(row, needle, opts));
 }
 
 /**
@@ -57,7 +81,7 @@ export function filterListRowsByTextSearch<T extends SearchableMembershipListRow
  */
 export function buildMovesbookUserTextSearchOr(
   q: string,
-  opts?: { matchOwnedClubs?: boolean },
+  opts?: { matchOwnedClubs?: boolean } & TextSearchOptions,
 ): Prisma.UserWhereInput {
   const or: Prisma.UserWhereInput[] = [
     { username: { contains: q } },
@@ -66,6 +90,12 @@ export function buildMovesbookUserTextSearchOr(
     { firstName: { contains: q } },
     { surname: { contains: q } },
   ];
+
+  if (opts?.matchUserTypeAndCountry) {
+    or.push({ country: { contains: q } });
+    const types = userTypesMatchingSearch(q);
+    if (types.length > 0) or.push({ userType: { in: types } });
+  }
 
   if (opts?.matchOwnedClubs) {
     or.push({

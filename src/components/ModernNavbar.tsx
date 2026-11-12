@@ -638,6 +638,11 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
         router.push(data.paymentUrl);
         return;
       }
+      if (data?.reason === 'deadline_overdue' && typeof data.paymentUrl === 'string') {
+        window.alert(data.error || 'Your subscription has an unpaid deadline. Pay it to log in again.');
+        router.push(data.paymentUrl);
+        return;
+      }
       if (data?.reason === 'activation_pending') {
         setLoginError(data.error || 'Your account is not activated yet.');
         return;
