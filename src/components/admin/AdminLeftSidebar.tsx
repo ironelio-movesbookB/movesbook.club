@@ -401,6 +401,11 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                     <span>List of payments</span>
                  </Link>
 
+                 <Link href="/admin/deadlines" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
+                    <PoundSterling className="w-4 h-4 text-white" />
+                    <span>Archive of Deadlines</span>
+                 </Link>
+
                  {/* Club accounts */}
                  <Link href="/admin/club-accounts" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <UserCircle className="w-4 h-4 text-white" />

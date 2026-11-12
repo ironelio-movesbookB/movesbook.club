@@ -2776,6 +2776,9 @@ model RegistrationPaymentRow {
   periodId     String?   @db.VarChar(64) @map("period_id")
   kind         String    @default("register") @db.VarChar(24)
   pendingData  String?   @db.MediumText @map("pending_data")
+  paymentModality   String?  @db.VarChar(2) @map("payment_modality")
+  modalityTotalEur  Decimal? @db.Decimal(10, 2) @map("modality_total_eur")
+  modalityDeadlines Int?     @map("modality_deadlines")
   createdAt    DateTime  @default(now()) @db.DateTime(0) @map("created_at")
   paidAt       DateTime? @db.DateTime(0) @map("paid_at")
 
