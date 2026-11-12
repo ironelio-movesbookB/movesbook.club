@@ -107,7 +107,7 @@ export default function InlineMemberProfile({ clubId, memberId, focus }: Props) 
     if (focus === 'settings') {
       return [{ id: 'owner-profile' as const, label: 'Profile', clubScoped: false }, ...club];
     }
-    return [...shared, ...club];
+    return shared;
   }, [data, focus]);
 
   if (loading) {
@@ -134,7 +134,11 @@ export default function InlineMemberProfile({ clubId, memberId, focus }: Props) 
       <div className="border-b border-gray-200 px-3 py-2">
         {focus === 'settings' ? (
           <p className="mb-1 text-xs font-semibold text-red-700">Managed by the Club Admin</p>
-        ) : null}
+        ) : (
+          <p className="mb-1 text-xs font-semibold text-gray-700">
+            Managed by the member (*Member profile can be shared)
+          </p>
+        )}
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
