@@ -25,7 +25,11 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       getActivePaymentCredentials(),
     ]);
     const successText =
-      payment.kind === 'quick_register'
+      payment.kind === 'deadline' || payment.kind === 'renewal'
+        ? payment.kind === 'renewal'
+          ? 'Payment received, thank you. Your subscription has been renewed.'
+          : 'Payment received, thank you. Your deadline is paid and you can log in again.'
+        : payment.kind === 'quick_register'
         ? QUICK_REGISTER_SUCCESS_MESSAGE
         : await registrationLongText(
             PAYMENT_SUCCESS_TEXT_KEY,
@@ -37,6 +41,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({
       id: payment.id,
+      kind: payment.kind,
       status: payment.status,
       versionName: payment.versionName,
       specialOffer: payment.specialOffer,

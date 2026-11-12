@@ -10,6 +10,7 @@ import {
 import { formatLocalAmount } from '@/lib/countries/countryPriceFormula';
 import {
   getQuickRegisterPendingData,
+  getRegistrationPayment,
   issueActivationToken,
   linkQuickRegisterPaymentUser,
   markRegistrationPaymentPaid,
@@ -17,6 +18,12 @@ import {
   type RegistrationPayment,
 } from '@/lib/registration/registrationPayments';
 import { decryptPrivateData } from '@/lib/payments/paymentSettings';
+import {
+  createDeadlinesForPayment,
+  ensureMovesbookDeadlinesTable,
+  markFirstDeadlinePaid,
+} from '@/lib/movesbookDeadlines/movesbookDeadlines';
+import { completeRenewalPayment, settleDeadlinePayment } from '@/lib/movesbookDeadlines/subscriptionStatus';
 import { quickRegisterUser, type QuickRegisterPayload } from '@/lib/users/quickRegisterService';
 import {
   ACTIVATION_EMAIL_BODY_EN,
@@ -150,10 +157,23 @@ export async function finalizePaidRegistration(
   const first = await markRegistrationPaymentPaid(payment.id, providerTxn, payment.provider);
   if (!first) return;
 
-  if (payment.kind === 'quick_register') {
-    await completePaidQuickRegister(payment);
+  // Later deadline / renewal of an existing account: no activation step.
+  const testPayMode = providerTxn.startsWith('test-') ? 'test' : undefined;
+  if (payment.kind === 'deadline') {
+    await settleDeadlinePayment(payment, testPayMode);
     return;
   }
+  if (payment.kind === 'renewal') {
+    await completeRenewalPayment(payment, testPayMode);
+    return;
+  }
+
+  if (payment.kind === 'quick_register') {
+    await completePaidQuickRegister(payment);
+    await syncPaidPaymentDeadlines(payment.id);
+    return;
+  }
+  await syncPaidPaymentDeadlines(payment.id);
 
   const settings = await prisma.userSettings.findUnique({
     where: { userId: payment.userId },
@@ -185,6 +205,26 @@ export async function finalizePaidRegistration(
  * Paid promocode registration: create the account from the stored form data (credentials email included).
  * On failure the form data is kept so the account can still be created from the paid row.
  */
+/**
+ * Archive of Deadlines: the paid registration payment settles its first deadline. Deadlines are
+ * created here when missing (quick register accounts exist only after payment; older payments).
+ * Never blocks the payment flow.
+ */
+async function syncPaidPaymentDeadlines(paymentId: string): Promise<void> {
+  try {
+    const fresh = await getRegistrationPayment(paymentId);
+    if (!fresh) return;
+    await ensureMovesbookDeadlinesTable();
+    await createDeadlinesForPayment(prisma, fresh, {
+      dateStart: fresh.createdAt.toISOString().slice(0, 10),
+      typology: 'A',
+    });
+    await markFirstDeadlinePaid(fresh.id, fresh.provider);
+  } catch (e) {
+    console.error('Archive of Deadlines update failed for payment', paymentId, e);
+  }
+}
+
 async function completePaidQuickRegister(payment: RegistrationPayment): Promise<void> {
   const encrypted = await getQuickRegisterPendingData(payment.id);
   if (!encrypted) return;

@@ -190,6 +190,7 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
       label: 'Purchase options',
       items: [
         { label: 'List of payments', icon: CreditCard, href: '/admin/payments' },
+        { label: 'Archive of Deadlines', icon: CreditCard, href: '/admin/deadlines' },
         { label: 'Club accounts', icon: UserCircle, href: '/admin/club-accounts' },
         {
           label: "Coach's Members Accounts",

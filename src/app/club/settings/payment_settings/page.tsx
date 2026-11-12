@@ -35,6 +35,7 @@ export default function PaymentSettingsPage() {
   const [objectDraft, setObjectDraft] = useState('');
   const [causalDraft, setCausalDraft] = useState('');
   const [percentDraft, setPercentDraft] = useState('0');
+  const [deadlinesDraft, setDeadlinesDraft] = useState('1');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -185,28 +186,55 @@ export default function PaymentSettingsPage() {
     );
   };
 
+  const deadlineTaken = (deadlines: number, exceptId?: string) =>
+    deadlines > 0 &&
+    settings.vatRules.some((rule) => rule.id !== exceptId && rule.deadlines === deadlines);
+
   const addVatRule = (event: FormEvent) => {
     event.preventDefault();
     const percent = Number(percentDraft);
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      setFieldError('Enter a percent from 0 to 100.');
+    const deadlines = Number(deadlinesDraft);
+    if (!Number.isInteger(deadlines) || deadlines < 1) {
+      setFieldError('Enter the number of deadlines (1 or more).');
       return;
     }
-    const rule: PaymentVatRule = { id: newId(), percent };
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      setFieldError('Enter a discount percent from 0 to 100.');
+      return;
+    }
+    if (deadlineTaken(deadlines)) {
+      setFieldError('This number of deadlines is already used.');
+      return;
+    }
+    const rule: PaymentVatRule = { id: newId(), percent, deadlines };
     void persist({ ...settings, vatRules: [...settings.vatRules, rule] }).then((ok) => {
-      if (ok) setPercentDraft('0');
+      if (ok) {
+        setPercentDraft('0');
+        setDeadlinesDraft('1');
+      }
     });
   };
 
-  const updateVatRule = (id: string, raw: string) => {
-    const percent = Number(raw);
+  const updateVatRule = (id: string, patch: Partial<Pick<PaymentVatRule, 'percent' | 'deadlines'>>) => {
+    const current = settings.vatRules.find((rule) => rule.id === id);
+    if (!current) return;
+    const percent = patch.percent ?? current.percent;
+    const deadlines = patch.deadlines ?? current.deadlines;
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      setFieldError('Enter a percent from 0 to 100.');
+      setFieldError('Enter a discount percent from 0 to 100.');
+      return;
+    }
+    if (!Number.isInteger(deadlines) || deadlines < 1) {
+      setFieldError('Enter the number of deadlines (1 or more).');
+      return;
+    }
+    if (deadlineTaken(deadlines, id)) {
+      setFieldError('This number of deadlines is already used.');
       return;
     }
     void persist({
       ...settings,
-      vatRules: settings.vatRules.map((rule) => (rule.id === id ? { ...rule, percent } : rule)),
+      vatRules: settings.vatRules.map((rule) => (rule.id === id ? { ...rule, percent, deadlines } : rule)),
     });
   };
 
@@ -303,16 +331,13 @@ export default function PaymentSettingsPage() {
             <section className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-[11rem_1fr]">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Rules</h2>
-                <p className="mt-1 text-sm text-gray-500">for payments with VAT</p>
+                <p className="mt-1 text-sm text-gray-500">discount for each number of deadlines</p>
               </div>
               <div>
                 <p className="text-sm leading-relaxed text-gray-700">
-                  All operations with the different methods and applied bands (the different VAT rates,
-                  tax deductions, etc.).
-                </p>
-                <p className="mt-3 text-sm leading-relaxed text-gray-600">
-                  You can set exemption rules that apply to payments made with VAT. Each rule defines the
-                  discount percent based on the amount paid in the same transaction.
+                  Set a discount percent for a number of deadlines. The operator enters the number of
+                  deadlines and the percent. The same number of deadlines cannot be used twice while it
+                  is active.
                 </p>
                 <form onSubmit={addVatRule} className="mt-4">
                   <button
@@ -320,43 +345,83 @@ export default function PaymentSettingsPage() {
                     disabled={saving}
                     className="rounded-md bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
                   >
-                    Add VAT exemption rule
+                    Add deadline discount
                   </button>
-                  <label className="mt-4 block text-sm font-medium text-gray-800" htmlFor="vat-percent">
-                    Percent
-                  </label>
-                  <input
-                    id="vat-percent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    value={percentDraft}
-                    disabled={saving}
-                    onChange={(event) => setPercentDraft(event.target.value)}
-                    className="mt-2 w-24 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
-                  />
-                </form>
-                <ul className="mt-4 space-y-2">
-                  {settings.vatRules.map((rule) => (
-                    <li key={rule.id} className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm text-gray-600">Percent</span>
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    <label className="block text-sm font-medium text-gray-800" htmlFor="deadline-count">
+                      No. of deadlines
                       <input
-                        key={`${rule.id}-${rule.percent}`}
+                        id="deadline-count"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={deadlinesDraft}
+                        disabled={saving}
+                        onChange={(event) => setDeadlinesDraft(event.target.value)}
+                        className="mt-2 w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
+                      />
+                    </label>
+                    <label className="block text-sm font-medium text-gray-800" htmlFor="vat-percent">
+                      Percent
+                      <input
+                        id="vat-percent"
                         type="number"
                         min={0}
                         max={100}
                         step="0.01"
-                        defaultValue={rule.percent}
+                        value={percentDraft}
                         disabled={saving}
-                        aria-label={`VAT exemption ${rule.percent}%`}
-                        onBlur={(event) => {
-                          if (Number(event.target.value) !== rule.percent) {
-                            updateVatRule(rule.id, event.target.value);
-                          }
-                        }}
-                        className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
+                        onChange={(event) => setPercentDraft(event.target.value)}
+                        className="mt-2 w-24 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
                       />
+                    </label>
+                  </div>
+                </form>
+                <ul className="mt-4 space-y-2">
+                  {settings.vatRules.map((rule) => (
+                    <li key={rule.id} className="flex flex-wrap items-center gap-3">
+                      <span className="w-28 text-sm text-gray-700">
+                        {rule.deadlines === 1
+                          ? '1 deadline'
+                          : rule.deadlines > 1
+                            ? `${rule.deadlines} deadlines`
+                            : 'Set deadlines'}
+                      </span>
+                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                        No. of deadlines
+                        <input
+                          key={`${rule.id}-deadlines-${rule.deadlines}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          defaultValue={rule.deadlines || ''}
+                          disabled={saving}
+                          aria-label={`Deadlines for ${rule.percent}%`}
+                          onBlur={(event) => {
+                            const next = Number(event.target.value);
+                            if (next !== rule.deadlines) updateVatRule(rule.id, { deadlines: next });
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                        Percent
+                        <input
+                          key={`${rule.id}-percent-${rule.percent}`}
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          defaultValue={rule.percent}
+                          disabled={saving}
+                          aria-label={`Discount for ${rule.deadlines} deadlines`}
+                          onBlur={(event) => {
+                            const next = Number(event.target.value);
+                            if (next !== rule.percent) updateVatRule(rule.id, { percent: next });
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-700"
+                        />
+                      </label>
                       <span className="text-sm font-medium text-gray-800">{rule.percent}%</span>
                       <button
                         type="button"

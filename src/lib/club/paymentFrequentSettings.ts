@@ -10,6 +10,8 @@ export type PaymentLabelItem = {
 export type PaymentVatRule = {
   id: string;
   percent: number;
+  /** Number of payment deadlines this discount applies to. Each active count can be used once. */
+  deadlines: number;
 };
 
 /** Frequent objects and causals a club offers when recording a payment. */
@@ -68,7 +70,7 @@ function normalizeDefaultId(value: unknown, items: PaymentLabelItem[]): string |
 
 function normalizeVatRules(value: unknown): PaymentVatRule[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set<string>();
+  const seenDeadlines = new Set<number>();
   const rules: PaymentVatRule[] = [];
   for (const entry of value) {
     if (rules.length >= PAYMENT_VAT_RULE_MAX) break;
@@ -77,10 +79,13 @@ function normalizeVatRules(value: unknown): PaymentVatRule[] {
     if (!Number.isFinite(percent)) continue;
     const rounded = Math.round(percent * 100) / 100;
     if (rounded < 0 || rounded > 100) continue;
-    const key = rounded.toFixed(2);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rules.push({ id: safeId((entry as PaymentVatRule).id), percent: rounded });
+    const rawDeadlines = Number((entry as PaymentVatRule).deadlines);
+    const deadlines = Number.isFinite(rawDeadlines) ? Math.max(0, Math.round(rawDeadlines)) : 0;
+    if (deadlines > 0) {
+      if (seenDeadlines.has(deadlines)) continue;
+      seenDeadlines.add(deadlines);
+    }
+    rules.push({ id: safeId((entry as PaymentVatRule).id), percent: rounded, deadlines });
   }
   return rules;
 }
