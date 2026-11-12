@@ -45,6 +45,63 @@ export const TO_BE_VERIFIED_METHODS: readonly PaymentTypeValue[] = [
   'bank_transfer',
 ];
 
+/** Red methods: the buyer gets a pay link and the payment is recorded when they pay. */
+export const PAY_LINK_METHODS: readonly string[] = [
+  'prepaid_card',
+  'credit_card',
+  'debit_card',
+  'paypal',
+  'satispay',
+  'multisafepay',
+  'apple_pay',
+  'google_pay',
+  'stripe',
+];
+
+/** Blue methods: the member pays outside Movesbook and the club must verify it. */
+export const EXTERNAL_VERIFY_METHODS: readonly string[] = [
+  'bank_transfer',
+  'sepa',
+  'cbill',
+  'mav',
+  'payment_slip',
+];
+
+export type PayModeTone = 'link' | 'external' | 'plain';
+
+export function payModeTone(value: string | null | undefined): PayModeTone {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'plain';
+  const normalized = raw.toLowerCase() === 'stripe' ? 'stripe' : normalizePaymentTypeValue(raw);
+  if (normalized && PAY_LINK_METHODS.includes(normalized)) return 'link';
+  if (normalized && EXTERNAL_VERIFY_METHODS.includes(normalized)) return 'external';
+  return 'plain';
+}
+
+/** Inline colors: `<option>` elements ignore most utility classes. */
+export const PAY_MODE_TONE_COLOR: Record<PayModeTone, string> = {
+  link: '#dc2626',
+  external: '#1d4ed8',
+  plain: '#111827',
+};
+
+/** Pay-link methods with a connected gateway: cards and wallets go through Stripe Checkout. */
+export function payLinkProviderForMethod(method: string | null | undefined): 'stripe' | 'paypal' | null {
+  const value = String(method ?? '').trim();
+  if (value === 'paypal') return 'paypal';
+  if (
+    value === 'stripe' ||
+    value === 'credit_card' ||
+    value === 'debit_card' ||
+    value === 'prepaid_card' ||
+    value === 'apple_pay' ||
+    value === 'google_pay'
+  ) {
+    return 'stripe';
+  }
+  return null;
+}
+
 /** Only these methods allow marking the first deadline as Paid on the member Settings. */
 export const PAID_AT_FIRST_DEADLINE_METHODS: readonly PaymentTypeValue[] = [
   'cash',

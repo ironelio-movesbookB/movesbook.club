@@ -27,6 +27,12 @@ import type {
 } from "@/lib/club/serviceSaleClient";
 import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmModal";
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
+import PayModeAlert from "@/components/club/PayModeAlert";
+import PaymentLinkChannelModal, {
+  type PaymentLinkChannel,
+  type PaymentLinkResult,
+} from "@/components/club/PaymentLinkChannelModal";
+import { PAY_LINK_METHODS } from "@/lib/procedures/payModes";
 import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 import { useClubEnabledPaymentMethods } from "@/lib/club/useClubEnabledPaymentMethods";
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
@@ -254,8 +260,10 @@ export default function ServicePaymentForm({
   );
   const amountPaidTouchedRef = useRef(false);
   const [payMode, setPayMode] = useState("cash");
-  const [linkNotice, setLinkNotice] = useState("");
-  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkRequest, setLinkRequest] = useState<{
+    amountEur: number;
+    lines: { recordId: string; amount: number }[];
+  } | null>(null);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
   const enabledMethods = useClubEnabledPaymentMethods();
@@ -940,43 +948,20 @@ export default function ServicePaymentForm({
     }
 
     const onlinePay =
-      procedureType !== "expense" &&
-      (payMode === "credit_card" || payMode === "debit_card" || payMode === "paypal" || payMode === "stripe");
+      procedureType !== "expense" && PAY_LINK_METHODS.includes(payMode);
     if (onlinePay) {
       const totals = new Map<string, number>();
       for (const row of distributions) {
         const recordId = row.recordId || purchase.id;
         totals.set(recordId, Math.round(((totals.get(recordId) ?? 0) + row.amount) * 100) / 100);
       }
-      setLinkBusy(true);
-      setLinkNotice("");
-      try {
-        const data = await clubApiFetch<{ payUrl?: string; emailed?: boolean }>(
-          "/api/club/member-online-payments",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              memberUserId: purchase.userId,
-              amountEur: paidAmount,
-              description: description.trim() || `${purchase.sectorName} ${purchase.serviceName}`.trim(),
-              payMode,
-              procedureType,
-              operatorId,
-              paymentDate,
-              lines: [...totals.entries()].map(([recordId, amount]) => ({ recordId, amount })),
-            }),
-          },
-        );
-        setLinkNotice(
-          data.emailed
-            ? `Payment link emailed to the member. ${data.payUrl ?? ""}`
-            : `The member has no email, so no mail was sent. Share this link: ${data.payUrl ?? ""}`,
-        );
-      } catch (err) {
-        setInstallmentError(err instanceof Error ? err.message : "Could not send the payment link");
-      } finally {
-        setLinkBusy(false);
-      }
+      setLinkRequest({
+        amountEur: paidAmount,
+        lines: [...totals.entries()].map(([recordId, amount]) => ({
+          recordId,
+          amount,
+        })),
+      });
       return;
     }
 
@@ -1005,6 +990,40 @@ export default function ServicePaymentForm({
 
     // Close the form after a successful save.
     if (saved !== false) onCancel?.();
+  }
+
+  async function sendPaymentLink(
+    channel: PaymentLinkChannel,
+    email: string,
+  ): Promise<PaymentLinkResult> {
+    if (!linkRequest) throw new Error("Nothing to send");
+    const desc =
+      description.trim() ||
+      `${purchase.sectorName} ${purchase.serviceName}`.trim();
+    return clubApiFetch<PaymentLinkResult>("/api/club/member-online-payments", {
+      method: "POST",
+      body: JSON.stringify({
+        memberUserId: purchase.userId,
+        amountEur: linkRequest.amountEur,
+        description: desc,
+        payMode,
+        procedureType,
+        operatorId,
+        paymentDate,
+        lines: linkRequest.lines,
+        channel,
+        email,
+        receipt:
+          showTaxDocument && taxDoc && taxDocument
+            ? {
+                documentType: taxDocument.documentType,
+                documentNumber: taxDocument.documentNumber,
+                annotations: taxDocument.causal,
+                serviceName: purchase.serviceName,
+              }
+            : null,
+      }),
+    });
   }
 
   async function handleExpenseInvoiceUpload(file: File | undefined) {
@@ -1519,6 +1538,7 @@ export default function ServicePaymentForm({
                 </div>
               )}
             </div>
+            {!isExpensePayment && <PayModeAlert className="mt-2" />}
           </div>
 
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -1648,7 +1668,6 @@ export default function ServicePaymentForm({
         {installmentError && (
           <p className="text-red-600 text-sm">{installmentError}</p>
         )}
-        {linkNotice && <p className="text-green-700 text-sm break-all">{linkNotice}</p>}
         {success && <p className="text-green-700 text-sm">{success}</p>}
 
         <div className="flex justify-center gap-3">
@@ -1656,7 +1675,7 @@ export default function ServicePaymentForm({
             type="submit"
             disabled={
               saving ||
-              linkBusy ||
+              Boolean(linkRequest) ||
               invoiceBusy ||
               (isExpensePayment && !purchase.expenseInvoice) ||
               !hasPayableRest ||
@@ -1665,7 +1684,7 @@ export default function ServicePaymentForm({
             }
             className="px-6 py-2 bg-red-700 text-white rounded hover:bg-red-800 disabled:opacity-50"
           >
-            {saving || linkBusy ? "Saving..." : "Confirm"}
+            {saving ? "Saving..." : "Confirm"}
           </button>
           {onCancel && (
             <button
@@ -1678,6 +1697,20 @@ export default function ServicePaymentForm({
           )}
         </div>
       </form>
+
+      <PaymentLinkChannelModal
+        open={Boolean(linkRequest)}
+        memberUserId={purchase.userId}
+        memberName={purchase.memberName}
+        amountEur={linkRequest?.amountEur ?? 0}
+        onClose={() => setLinkRequest(null)}
+        sendLink={sendPaymentLink}
+        onSent={(notice) => {
+          setLinkRequest(null);
+          window.alert(notice);
+          onCancel?.();
+        }}
+      />
 
       {showTaxDocument && (
         <TaxDocumentModal

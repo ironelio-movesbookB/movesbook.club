@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import ProcedureFormSection, {
@@ -14,7 +14,14 @@ import TaxDocumentModal, { type TaxDocumentFormValues } from '@/components/proce
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import { fetchCompanies } from '@/lib/club/archives/clubArchiveClient';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
+import PayModeAlert from '@/components/club/PayModeAlert';
+import PaymentLinkChannelModal, {
+  type PaymentLinkChannel,
+  type PaymentLinkResult,
+} from '@/components/club/PaymentLinkChannelModal';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
+import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
+import { PAY_LINK_METHODS } from '@/lib/procedures/payModes';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 
@@ -57,6 +64,8 @@ export default function ProductPurchaseForm() {
   const [payMode, setPayMode] = useState('cash');
   const [taxDoc, setTaxDoc] = useState(true);
   const [taxDocument, setTaxDocument] = useState<TaxDocumentFormValues | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const linkRecordId = useRef<string | null>(null);
 
   useEffect(() => {
     Promise.all([client.fetchFormOptions<ProductFormOptions>(), fetchCompanies()])
@@ -91,36 +100,77 @@ export default function ProductPurchaseForm() {
     if (!operatorPassword.trim()) return setError('Operator password is required.');
     if (paid > total) return setError('Payment cannot exceed total.');
 
+    if (paid > 0 && PAY_LINK_METHODS.includes(payMode)) {
+      setLinkOpen(true);
+      return;
+    }
+
     setSaving(true);
     try {
-      await client.createRecord({
-        memberId,
-        totalAmount: total,
-        initialPayment: paid,
-        recordDate: movementDate,
-        paymentDate: paydate,
-        causal,
-        notes: causal,
-        productId,
-        productName: selectedProduct?.name,
-        operatorId,
-        operatorPassword,
-        payMode,
-        movementTime,
-        taxDoc,
-        taxDocument: taxDocument ?? undefined,
-        companyId,
-        companyName: selectedCompany?.name,
-        createReceipt: Boolean(taxDoc && taxDocument && paid > 0),
-        receiptNumber: taxDocument?.documentNumber,
-        receiptAnnotations: taxDocument?.causal || undefined,
-      });
+      await client.createRecord(recordPayload(paid));
       router.push(def.routes.records);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
+  }
+
+  function recordPayload(payNow: number) {
+    return {
+      memberId,
+      totalAmount: total,
+      initialPayment: payNow,
+      recordDate: movementDate,
+      paymentDate: paydate,
+      causal,
+      notes: causal,
+      productId,
+      productName: selectedProduct?.name,
+      operatorId,
+      operatorPassword,
+      payMode,
+      movementTime,
+      taxDoc,
+      taxDocument: taxDocument ?? undefined,
+      companyId,
+      companyName: selectedCompany?.name,
+      createReceipt: Boolean(taxDoc && taxDocument && payNow > 0),
+      receiptNumber: taxDocument?.documentNumber,
+      receiptAnnotations: taxDocument?.causal || undefined,
+    };
+  }
+
+  /** The sale and its deadline are saved unpaid; the link pays the "Pay" amount later. */
+  async function sendPaymentLink(channel: PaymentLinkChannel, email: string): Promise<PaymentLinkResult> {
+    if (!linkRecordId.current) {
+      const created = await client.createRecord(recordPayload(0));
+      linkRecordId.current = created.recordId;
+    }
+    return clubApiFetch<PaymentLinkResult>('/api/club/member-online-payments', {
+      method: 'POST',
+      body: JSON.stringify({
+        memberUserId: memberId,
+        amountEur: paid,
+        description: causal.trim() || selectedProduct?.name || 'Product',
+        payMode,
+        procedureType: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
+        operatorId,
+        paymentDate: paydate,
+        lines: [{ recordId: linkRecordId.current, amount: paid }],
+        channel,
+        email,
+        receipt:
+          taxDoc && taxDocument
+            ? {
+                documentType: taxDocument.documentType,
+                documentNumber: taxDocument.documentNumber,
+                annotations: taxDocument.causal,
+                serviceName: selectedProduct?.name,
+              }
+            : null,
+      }),
+    });
   }
 
   if (loading) return <div className="p-6 text-gray-600">Loading form...</div>;
@@ -210,6 +260,7 @@ export default function ProductPurchaseForm() {
               </div>
             </ProcedureFormCell>
           </ProcedureFormGrid>
+          <PayModeAlert className="mt-3" />
         </ProcedureFormSection>
 
         <ProcedureFormSection title="Company" titleClassName="text-green-800">
@@ -233,6 +284,20 @@ export default function ProductPurchaseForm() {
           <button type="button" onClick={() => router.push(def.routes.records)} className="px-6 py-2 bg-gray-200 rounded">Cancel</button>
         </div>
       </form>
+
+      <PaymentLinkChannelModal
+        open={linkOpen}
+        memberUserId={memberId}
+        memberName={selectedMember?.name}
+        amountEur={paid}
+        onClose={() => setLinkOpen(false)}
+        sendLink={sendPaymentLink}
+        onSent={(notice) => {
+          setLinkOpen(false);
+          window.alert(notice);
+          router.push(def.routes.records);
+        }}
+      />
 
       <TaxDocumentModal
         open={taxModalOpen}

@@ -9,7 +9,8 @@ import {
   type MemberPaymentMethodSettings,
   type MemberPaymentSiteMode,
 } from '@/lib/club/memberPaymentMethods';
-import { PAYMENT_TYPE_OPTIONS } from '@/lib/procedures/payModes';
+import { PAY_MODE_TONE_COLOR, PAYMENT_TYPE_OPTIONS, payModeTone } from '@/lib/procedures/payModes';
+import PayModeAlert from '@/components/club/PayModeAlert';
 
 const API_PATH = '/api/club/settings/member-payment-methods';
 
@@ -314,14 +315,15 @@ function MethodList({
                 disabled={saving}
                 onChange={() => onToggle(option.value)}
               />
-              {option.label}
+              <span style={{ color: PAY_MODE_TONE_COLOR[payModeTone(option.value)] }}>{option.label}</span>
             </label>
           ))}
           <label className="flex items-center gap-2 text-sm text-gray-800">
             <input type="checkbox" checked={settings.stripeEnabled} disabled={saving} onChange={onToggleStripe} />
-            Stripe (card payments to your Stripe account)
+            <span style={{ color: PAY_MODE_TONE_COLOR.link }}>Stripe (card payments to your Stripe account)</span>
           </label>
         </div>
+        <PayModeAlert className="mt-4" />
       </section>
 
       {paypalOn ? (

@@ -11,6 +11,7 @@ import {
 } from '@/lib/club/memberPaymentMethods';
 import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
 import { procedureService } from '@/lib/procedures';
+import { payLinkProviderForMethod, payModeLabel } from '@/lib/procedures/payModes';
 
 export type MemberOnlineProvider = 'stripe' | 'paypal';
 
@@ -24,7 +25,8 @@ export type MemberOnlinePayment = {
   provider: MemberOnlineProvider;
   amountEur: number;
   description: string;
-  status: 'pending' | 'paid';
+  /** `cancelled` links were replaced by a newer link for the same deadlines. */
+  status: 'pending' | 'paid' | 'cancelled';
   providerMode: string | null;
   providerRef: string | null;
 };
@@ -73,11 +75,19 @@ export type OnlineSettlementLine = {
   description: string;
 };
 
-/** Card methods are collected on the club's Stripe account. PayPal uses the club's PayPal account. */
+/** Tax document chosen at Confirm; the receipt is written when the member pays. */
+export type OnlineReceiptIntent = {
+  documentType?: string;
+  documentNumber?: string;
+  annotations?: string;
+  serviceName?: string;
+};
+
+type StoredSettlement = { lines?: OnlineSettlementLine[]; receipt?: OnlineReceiptIntent | null };
+
+/** Card methods and wallets are collected on the club's Stripe account. PayPal uses the club's PayPal account. */
 export function onlineProviderForMethod(method: string): MemberOnlineProvider | null {
-  if (method === 'paypal') return 'paypal';
-  if (method === 'credit_card' || method === 'debit_card' || method === 'stripe') return 'stripe';
-  return null;
+  return payLinkProviderForMethod(method);
 }
 
 function escapeHtml(value: string): string {
@@ -138,7 +148,7 @@ function mapRow(row: Row): MemberOnlinePayment {
     provider,
     amountEur: Number(row.amount_eur) || 0,
     description: row.description,
-    status: row.status === 'paid' ? 'paid' : 'pending',
+    status: row.status === 'paid' ? 'paid' : row.status === 'cancelled' ? 'cancelled' : 'pending',
     providerMode: row.provider_mode,
     providerRef: row.provider_ref,
   };
@@ -166,12 +176,15 @@ export async function createMemberOnlinePayment(input: {
   amountEur: number;
   description: string;
   settlement?: OnlineSettlementLine[];
+  receipt?: OnlineReceiptIntent | null;
 }): Promise<MemberOnlinePayment> {
   await ensureTable();
   const id = crypto.randomUUID();
   const description = input.description.slice(0, 255);
   const settlement =
-    input.settlement && input.settlement.length > 0 ? JSON.stringify({ lines: input.settlement }) : null;
+    input.settlement && input.settlement.length > 0
+      ? JSON.stringify({ lines: input.settlement, receipt: input.receipt ?? null } satisfies StoredSettlement)
+      : null;
   await prisma.$executeRaw`
     INSERT INTO club_member_online_payments (
       id, entity_id, entity_name, member_user_id, member_name, created_by_user_id,
@@ -198,12 +211,67 @@ export async function setMemberOnlineCheckout(
   `;
 }
 
-export async function markMemberOnlinePaymentPaid(id: string, ref: string): Promise<void> {
-  await prisma.$executeRaw`
+/**
+ * Claims the payment as paid. Returns false when another request already did it, so the
+ * deadlines are settled only once. A replaced (cancelled) link that was still paid counts too.
+ */
+export async function markMemberOnlinePaymentPaid(id: string, ref: string): Promise<boolean> {
+  const changed = await prisma.$executeRaw`
     UPDATE club_member_online_payments
     SET status = 'paid', paid_at = NOW(), provider_ref = ${ref.slice(0, 255)}
-    WHERE id = ${id} AND status = 'pending'
+    WHERE id = ${id} AND status IN ('pending', 'cancelled')
   `;
+  return Number(changed) > 0;
+}
+
+function parseSettlement(raw: string | null | undefined): StoredSettlement | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredSettlement;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Older unpaid links for the same deadlines stop working, so only the latest amount can be paid. */
+export async function cancelPendingLinksForRecords(entityId: string, recordIds: string[]): Promise<number> {
+  await ensureTable();
+  const wanted = new Set(recordIds.filter(Boolean));
+  if (wanted.size === 0) return 0;
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; settlement_json: string | null }>>(
+    `SELECT id, settlement_json FROM \`${TABLE}\` WHERE entity_id = ? AND status = 'pending' AND settlement_json IS NOT NULL`,
+    entityId,
+  );
+  let cancelled = 0;
+  for (const row of rows) {
+    const lines = parseSettlement(row.settlement_json)?.lines ?? [];
+    if (!lines.some((line) => wanted.has(line.recordId))) continue;
+    await prisma.$executeRaw`
+      UPDATE club_member_online_payments SET status = 'cancelled'
+      WHERE id = ${row.id} AND status = 'pending'
+    `;
+    cancelled += 1;
+  }
+  return cancelled;
+}
+
+/** Member email (account) and phone (profile Address: mobile 1, else phone). */
+export async function memberPayLinkContact(memberUserId: string): Promise<{ email: string; phone: string }> {
+  const user = await prisma.user.findUnique({ where: { id: memberUserId }, select: { email: true } });
+  let phone = '';
+  try {
+    const extras = await prisma.userProfileExtras.findUnique({
+      where: { userId: memberUserId },
+      select: { ownerJson: true },
+    });
+    const owner = extras?.ownerJson ? (JSON.parse(String(extras.ownerJson)) as Record<string, unknown>) : {};
+    const address = (owner.address ?? {}) as Record<string, unknown>;
+    phone = String(address.mobile1 || address.phone || '').trim();
+  } catch {
+    /* No profile extras yet. */
+  }
+  return { email: user?.email?.trim() ?? '', phone };
 }
 
 /** The club or team account that should receive this payment, or null when it is not connected. */
@@ -231,32 +299,29 @@ export async function credentialsForMemberPayment(
 }
 
 function cashPayModeLabel(payMode: string, provider: MemberOnlineProvider): string {
-  if (payMode === 'paypal' || provider === 'paypal') return 'PayPal';
-  if (payMode === 'debit_card') return 'Debit card';
-  if (payMode === 'stripe') return 'Stripe';
-  return 'Credit card';
+  if (payMode) return payModeLabel(payMode);
+  return provider === 'paypal' ? 'PayPal' : 'Credit card';
 }
 
-/** Writes the deadline payment after the member pays a link that was started from the reception form. */
+/**
+ * Writes the deadline payment after the member pays a link, plus the receipt when Tax doc was
+ * ticked at Confirm (the receipt PDF is then mailed to the member by the procedure service).
+ */
 export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): Promise<void> {
   await ensureTable();
   const rows = await prisma.$queryRawUnsafe<Array<{ settlement_json: string | null }>>(
     `SELECT settlement_json FROM \`${TABLE}\` WHERE id = ? LIMIT 1`,
     payment.id,
   );
-  const raw = rows[0]?.settlement_json;
-  if (!raw) return;
-  let lines: OnlineSettlementLine[] = [];
-  try {
-    const parsed = JSON.parse(raw) as { lines?: OnlineSettlementLine[] };
-    lines = Array.isArray(parsed.lines) ? parsed.lines : [];
-  } catch {
-    return;
-  }
+  const settlement = parseSettlement(rows[0]?.settlement_json);
+  if (!settlement) return;
+  const lines = Array.isArray(settlement.lines) ? settlement.lines : [];
+  const receipt = settlement.receipt ?? null;
   const ctx = {
     userId: payment.createdByUserId,
     club: { id: payment.entityId, name: payment.entityName },
   };
+  let receiptNumberUsed = false;
   for (const line of lines) {
     if (!line.recordId || !(Number(line.amount) > 0) || !line.procedureType) continue;
     if (line.procedureType === 'expense') continue;
@@ -268,7 +333,18 @@ export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): P
         operatorId: line.operatorId || payment.createdByUserId,
         payMode: cashPayModeLabel(line.payMode, payment.provider),
         skipOperatorPassword: true,
+        ...(receipt
+          ? {
+              createReceipt: true,
+              taxDoc: true,
+              receiptDocumentType: receipt.documentType || undefined,
+              receiptNumber: receiptNumberUsed ? undefined : receipt.documentNumber || undefined,
+              receiptAnnotations: receipt.annotations || undefined,
+              serviceName: receipt.serviceName || undefined,
+            }
+          : {}),
       });
+      if (receipt?.documentNumber) receiptNumberUsed = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message.includes('exceeds remaining balance') || message.includes('Record not found')) continue;
@@ -284,12 +360,17 @@ export async function emailMemberPayLink(input: {
   amountEur: number;
   payUrl: string;
   description: string;
+  /** Address typed by the operator; defaults to the member account email. */
+  to?: string;
 }): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: input.memberUserId },
-    select: { email: true },
-  });
-  const to = user?.email?.trim();
+  let to = input.to?.trim() ?? '';
+  if (!to) {
+    const user = await prisma.user.findUnique({
+      where: { id: input.memberUserId },
+      select: { email: true },
+    });
+    to = user?.email?.trim() ?? '';
+  }
   if (!to) return false;
   const amount = input.amountEur.toFixed(2);
   const entity = input.entityName.trim() || 'the club';

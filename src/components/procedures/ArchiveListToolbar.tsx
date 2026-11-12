@@ -38,6 +38,8 @@ type Props = {
   onDeleteSelected?: () => void;
   /** Hide filter form (actions + pagination only). */
   hideFilters?: boolean;
+  onSendData?: () => void;
+  sendDataTitle?: string;
 };
 
 const inputClass =
@@ -58,6 +60,8 @@ export default function ArchiveListToolbar({
   selectedCount,
   onDeleteSelected,
   hideFilters = false,
+  onSendData,
+  sendDataTitle,
 }: Props) {
   const orderControl = (
     <label className="flex min-w-[150px] flex-col">
@@ -147,6 +151,8 @@ export default function ArchiveListToolbar({
         paginationTrailing={paginationTrailing}
         selectedCount={selectedCount}
         onDeleteSelected={onDeleteSelected}
+        onSendData={onSendData}
+        sendDataTitle={sendDataTitle}
       />
     </div>
   );

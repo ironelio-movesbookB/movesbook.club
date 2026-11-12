@@ -55,8 +55,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
-      await settleMemberOnlinePayment(payment);
-      await markMemberOnlinePaymentPaid(payment.id, session.paymentIntent || sessionId);
+      if (!(await markMemberOnlinePaymentPaid(payment.id, session.paymentIntent || sessionId))) {
+        return NextResponse.json({ paid: true });
+      }
     } else {
       const orderId = (body.orderId || payment.providerRef || '').trim();
       if (!orderId) return NextResponse.json({ error: 'The PayPal payment is missing' }, { status: 400 });
@@ -69,9 +70,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
-      await settleMemberOnlinePayment(payment);
-      await markMemberOnlinePaymentPaid(payment.id, capture.captureId || orderId);
+      if (!(await markMemberOnlinePaymentPaid(payment.id, capture.captureId || orderId))) {
+        return NextResponse.json({ paid: true });
+      }
     }
+    // The money is already taken, so a settle error is logged instead of failing the member's page.
+    await settleMemberOnlinePayment(payment).catch((error) => {
+      console.error('club member settle:', payment.id, error);
+    });
 
     const paid = await getMemberOnlinePayment(payment.id);
     const how = payment.provider === 'paypal' ? 'PayPal' : 'card';
