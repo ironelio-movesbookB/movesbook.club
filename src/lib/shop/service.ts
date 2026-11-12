@@ -383,8 +383,12 @@ function extractTaxCodes(raw: string | null | undefined) {
   return found;
 }
 
+function normalizeTaxCode(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '');
+}
+
 export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: string) {
-  const needle = taxCode.trim().toLowerCase();
+  const needle = normalizeTaxCode(taxCode);
   if (!needle) return null;
 
   if (workspace.kind === 'club') {
@@ -392,16 +396,15 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
       where: { clubId: workspace.id },
       include: {
         member: {
-          select: { id: true, email: true, username: true, name: true, firstName: true, surname: true },
+          select: { id: true, email: true, name: true, firstName: true, surname: true },
         },
         profile: { select: { profileJson: true } },
       },
       take: 2000,
     });
     for (const row of members) {
-      const codes = extractTaxCodes(row.profile?.profileJson).map((code) => code.toLowerCase());
-      const aliases = [row.member.email, row.member.username].map((value) => value.toLowerCase());
-      if (codes.includes(needle) || aliases.includes(needle)) {
+      const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+      if (codes.includes(needle)) {
         return {
           userId: row.member.id,
           name: personName(row.member),
@@ -416,14 +419,15 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
     where: { teamId: workspace.id },
     include: {
       athlete: {
-        select: { id: true, email: true, username: true, name: true, firstName: true, surname: true },
+        select: { id: true, email: true, name: true, firstName: true, surname: true },
       },
+      profile: { select: { profileJson: true } },
     },
     take: 2000,
   });
   for (const row of members) {
-    const aliases = [row.athlete.email, row.athlete.username].map((value) => value.toLowerCase());
-    if (aliases.includes(needle)) {
+    const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+    if (codes.includes(needle)) {
       return {
         userId: row.athlete.id,
         name: personName(row.athlete),
@@ -440,8 +444,25 @@ async function customerNameOf(input: ShopBuyerInput, memberName?: string) {
   return name || 'Customer';
 }
 
+async function assertWorkspaceMember(workspace: ShopWorkspace, userId: string) {
+  if (workspace.kind === 'club') {
+    const row = await prisma.clubMember.findFirst({
+      where: { clubId: workspace.id, memberId: userId },
+      select: { id: true },
+    });
+    if (!row) throw new Error('The selected member is not in this club.');
+    return;
+  }
+  const row = await prisma.teamMember.findFirst({
+    where: { teamId: workspace.id, athleteId: userId },
+    select: { id: true },
+  });
+  if (!row) throw new Error('The selected member is not in this team.');
+}
+
 async function resolveBuyer(workspace: ShopWorkspace, input: ShopBuyerInput) {
   if (input.memberUserId) {
+    await assertWorkspaceMember(workspace, input.memberUserId);
     const user = await prisma.user.findUnique({
       where: { id: input.memberUserId },
       select: { id: true, email: true, name: true, firstName: true, surname: true },
@@ -723,7 +744,9 @@ export async function createPublicOrder(
 
   let buyer: Awaited<ReturnType<typeof resolveBuyer>>;
   if (input.userType === 'affiliated') {
-    const member = await findMemberByTaxCode(workspace, input.customerDetails.taxCode ?? '');
+    const taxCode = input.customerDetails.taxCode?.trim() ?? '';
+    if (!taxCode) throw new Error('Enter your tax code.');
+    const member = await findMemberByTaxCode(workspace, taxCode);
     if (!member) throw new Error('No member matches this tax code.');
     buyer = { memberUserId: member.userId, customerId: null, name: member.name, email: member.email };
   } else {
