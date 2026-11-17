@@ -45,6 +45,8 @@ function toTableRow(
     number: index + 1,
     name: record.memberName,
     typology: record.typology,
+    procedureType: record.procedureType,
+    expenseDirection: record.expenseDirection,
     service: record.primaryLabel,
     course: record.secondaryLabel || undefined,
     insertDate: record.recordDate ?? undefined,
@@ -153,13 +155,24 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
       activeTab={activeTab}
       tabs={getProcedureTabs(procedureCode, activeTab, selectedId, selectedMemberId)}
       headerAction={
-        <button
-          type="button"
-          onClick={() => router.push(def.routes.form)}
-          className="text-sm bg-white text-teal-800 px-3 py-1 rounded hover:bg-teal-50"
-        >
-          {def.archiveTitles.newRecordButton}
-        </button>
+        <div className="flex items-center gap-2">
+          {procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && (
+            <button
+              type="button"
+              onClick={() => router.push('/clubs/expense_dead_line')}
+              className="text-sm border border-white/80 text-white px-3 py-1 rounded hover:bg-white/10"
+            >
+              Expense Planner
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => router.push(def.routes.form)}
+            className="text-sm bg-white text-teal-800 px-3 py-1 rounded hover:bg-teal-50"
+          >
+            {def.archiveTitles.newRecordButton}
+          </button>
+        </div>
       }
       error={error}
       footerHint="Check rows to delete selected · Click to select · Double-click to open payment form · Edit and Delete ask for your password"

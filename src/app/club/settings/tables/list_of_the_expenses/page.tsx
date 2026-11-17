@@ -28,6 +28,7 @@ type ExpenseChild = {
   name: string;
   parentId: string;
   icon: ExpenseIconName | null;
+  color: string | null;
   created: string | null;
   modified: string | null;
 };
@@ -37,6 +38,7 @@ type ExpenseGroup = {
   name: string;
   parentId: string;
   icon: ExpenseIconName | null;
+  color: string | null;
   created: string | null;
   modified: string | null;
   children: ExpenseChild[];
@@ -48,9 +50,10 @@ type ExpenseDraft = {
   parentId: string;
   isSubExpense: boolean;
   icon: ExpenseIconName | null;
+  color: string | null;
 };
 
-type FieldErrors = Partial<Record<"name" | "parentId" | "icon", string>>;
+type FieldErrors = Partial<Record<"name" | "parentId" | "icon" | "color", string>>;
 type PageItem = number | "ellipsis-left" | "ellipsis-right";
 type SortKey = "name" | "modified";
 type SortDirection = "asc" | "desc";
@@ -244,14 +247,14 @@ export default function ClubTablesListOfExpensesPage() {
   const isExpanded = (id: string) => expandAll || expandedIds.has(id);
 
   const openAddParentModal = () => {
-    setDraft({ name: "", parentId: "0", isSubExpense: false, icon: null });
+    setDraft({ name: "", parentId: "0", isSubExpense: false, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
   };
 
   const openAddSubModal = (parentId: string) => {
-    setDraft({ name: "", parentId, isSubExpense: true, icon: null });
+    setDraft({ name: "", parentId, isSubExpense: true, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
@@ -267,6 +270,7 @@ export default function ClubTablesListOfExpensesPage() {
       parentId: item.parentId,
       isSubExpense,
       icon: item.icon,
+      color: item.color,
     });
     setFieldErrors({});
     setError(null);
@@ -303,6 +307,7 @@ export default function ClubTablesListOfExpensesPage() {
           name: draft.name.trim(),
           parentId: draft.isSubExpense ? draft.parentId : "0",
           icon: draft.icon,
+          color: draft.color,
         }),
       });
 
@@ -507,6 +512,12 @@ export default function ClubTablesListOfExpensesPage() {
                         name={group.icon}
                         className="h-4 w-4 shrink-0 text-gray-500"
                       />
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                        style={{ backgroundColor: group.color ?? '#0f766e' }}
+                        title={`Chart color ${group.color ?? 'default'}`}
+                        aria-hidden="true"
+                      />
                       <span className="truncate font-semibold text-gray-950">
                         {group.name}
                       </span>
@@ -556,6 +567,12 @@ export default function ClubTablesListOfExpensesPage() {
                             <ExpenseCategoryIcon
                               name={child.icon}
                               className="h-4 w-4 shrink-0 text-gray-500"
+                            />
+                            <span
+                              className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                              style={{ backgroundColor: child.color ?? '#0f766e' }}
+                              title={`Chart color ${child.color ?? 'default'}`}
+                              aria-hidden="true"
                             />
                             <span className="truncate text-sm font-medium text-gray-900">
                               {child.name}
@@ -658,6 +675,34 @@ export default function ClubTablesListOfExpensesPage() {
                   )
                 }
               />
+              <div className="space-y-2">
+                <label htmlFor="expense-chart-color" className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  Chart color
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="expense-chart-color"
+                    type="color"
+                    value={draft.color ?? '#0f766e'}
+                    onChange={(event) =>
+                      setDraft((current) => current ? { ...current, color: event.target.value } : current)
+                    }
+                    className="h-9 w-12 cursor-pointer rounded border border-gray-300 bg-white p-1"
+                    aria-label="Choose chart color for this expense category"
+                  />
+                  <span className="text-sm text-gray-700">{draft.color ?? 'Default chart color'}</span>
+                  {draft.color && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft((current) => current ? { ...current, color: null } : current)}
+                      className="text-xs font-semibold text-gray-600 underline underline-offset-2 hover:text-gray-950"
+                    >
+                      Use default
+                    </button>
+                  )}
+                </div>
+                {fieldErrors.color && <p className="text-xs text-red-600">{fieldErrors.color}</p>}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">

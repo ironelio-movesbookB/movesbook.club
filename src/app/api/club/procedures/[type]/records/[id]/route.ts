@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { getClubAuthContext, procedureService } from "@/lib/procedures";
 import { parseAddPayment } from "@/lib/procedures/validators";
+import { verifyOperatorPassword } from '@/lib/procedures/operatorAuth';
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +40,37 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const body = (await request.json()) as {
       recordDate?: string;
       dueDate?: string | null;
+      expenseExpirationDate?: string | null;
+      adminPassword?: string;
       notes?: string;
       operatorId?: string;
       totalAmount?: number;
     };
 
+    const changesProtectedExpenseFields =
+      params.type === 'expense' &&
+      (body.totalAmount !== undefined ||
+        body.dueDate !== undefined ||
+        body.expenseExpirationDate !== undefined);
+    if (changesProtectedExpenseFields) {
+      if (!body.adminPassword?.trim()) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is required' },
+          { status: 400 },
+        );
+      }
+      if (!(await verifyOperatorPassword(auth.ctx.userId, body.adminPassword))) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is incorrect' },
+          { status: 401 },
+        );
+      }
+    }
+
     await procedureService.updateRecord(auth.ctx, params.type, params.id, {
       recordDate: body.recordDate,
       dueDate: body.dueDate,
+      expenseExpirationDate: body.expenseExpirationDate,
       notes: body.notes,
       operatorId: body.operatorId,
       totalAmount: body.totalAmount,
