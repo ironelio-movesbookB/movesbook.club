@@ -19,6 +19,7 @@ import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import type { ProcedureTypeCode } from '@/lib/procedures/types';
+import { payModeLabel, payModeTone } from '@/lib/procedures/payModes';
 import { clubApiFetch, formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
 import type { Column, Member } from '@/types/clubTable';
 
@@ -43,11 +44,18 @@ const columns: Column[] = [
       `${Number(row.paid ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
   },
   { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
+  { key: 'payMod', header: 'Pay mode', render: (v) => (v ? payModeLabel(String(v)) : '-') },
   { key: 'casual', header: 'Notes' },
   { key: 'operator', header: 'Operator' },
   { key: 'edit', header: 'Edit', sortable: false },
   { key: 'delete', header: 'Delete', sortable: false },
 ];
+
+/** Grey = still to be verified; blue = paid outside Movesbook (bank transfer, SEPA, …); others dark green. */
+function paymentRowClassName(row: Member): string {
+  if (row.toBeVerified) return 'text-gray-400';
+  return payModeTone(String(row.payMod ?? '')) === 'external' ? 'text-blue-700' : 'text-green-800';
+}
 
 function recordIdOf(row: Member): string | undefined {
   return row.procedureRecordId ?? row.id;
@@ -238,7 +246,11 @@ function ArchivePaymentsPageInner() {
           Payments to be verified
           <span className="text-xs font-normal text-gray-500">{onlyToBeVerified ? 'On' : 'Off'}</span>
         </label>
-        <p className="text-xs text-gray-500">Grey rows are payments to be verified — click one to confirm it.</p>
+        <p className="text-xs text-gray-500">
+          Grey rows are payments to be verified — click one to confirm it.{' '}
+          <span className="text-blue-700">Blue</span>: paid outside Movesbook (bank transfer, SEPA, CBILL, MAV, payment
+          slip). <span className="text-green-800">Dark green</span>: all other pay modes.
+        </p>
       </div>
       <ProcedureArchiveTable
         columns={columns}
@@ -248,7 +260,7 @@ function ArchivePaymentsPageInner() {
         selectable
         selectOnlyOpenRest={false}
         selectedIds={selectedIds}
-        getRowClassName={(row) => (row.toBeVerified ? 'text-gray-400' : 'text-black')}
+        getRowClassName={(row) => paymentRowClassName(row)}
         onRowClick={(row) => {
           if (!row.id) return;
           setSelectedId(row.id);

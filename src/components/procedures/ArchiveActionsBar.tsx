@@ -23,6 +23,9 @@ type Props = {
   paginationTrailing?: ReactNode;
   /** Optional title used in mail / share copy. */
   shareTitle?: string;
+  /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
+  onSendData?: () => void;
+  sendDataTitle?: string;
 };
 
 const inactiveBtn =
@@ -59,6 +62,8 @@ export default function ArchiveActionsBar({
   onDeleteSelected,
   shareTitle,
   paginationTrailing,
+  onSendData,
+  sendDataTitle,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
   const canDelete = selectedCount > 0 && typeof onDeleteSelected === 'function';
@@ -74,8 +79,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => handleSendDataByMail(shareTitle)}
-            title="Send current page link by mail"
+            onClick={() => (onSendData ? onSendData() : handleSendDataByMail(shareTitle))}
+            title={sendDataTitle ?? 'Send current page link by mail'}
           >
             <Send className="h-3.5 w-3.5" />
             Send data

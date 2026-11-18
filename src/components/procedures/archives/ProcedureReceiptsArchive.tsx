@@ -16,6 +16,7 @@ import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
 import { buildProcedureColumns } from '@/components/procedures/configs/buildColumns';
 import EditReceiptModal from '@/components/club/archives/EditReceiptModal';
+import SendReceiptPdfModal from '@/components/procedures/SendReceiptPdfModal';
 import { createProcedureClient, type ProcedureReceiptView } from '@/lib/club/procedureClient';
 import {
   getProcedureDefinition,
@@ -71,6 +72,7 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
   const [pageSize, setPageSize] = useState(client.pageSize);
   const [total, setTotal] = useState(0);
   const [editTarget, setEditTarget] = useState<ProcedureReceiptView | null>(null);
+  const [sendPdfIds, setSendPdfIds] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +183,14 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
+        sendDataTitle="Mail the PDF of the checked receipts"
+        onSendData={() => {
+          if (selectedIds.size === 0) {
+            setError('Check one or more receipts to send their PDF.');
+            return;
+          }
+          setSendPdfIds(Array.from(selectedIds));
+        }}
         pagination={
           <ProcedurePagination
             page={page}
@@ -220,6 +230,8 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
       />
 
       {passwordModal}
+
+      {sendPdfIds && <SendReceiptPdfModal receiptIds={sendPdfIds} onClose={() => setSendPdfIds(null)} />}
 
       {editTarget && (
         <EditReceiptModal

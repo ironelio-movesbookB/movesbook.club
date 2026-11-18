@@ -2,27 +2,71 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getClubAuthContext } from '@/lib/procedures/clubAuth';
 import {
+  cancelPendingLinksForRecords,
   createMemberOnlinePayment,
   emailMemberPayLink,
+  memberPayLinkContact,
   onlineProviderForMethod,
+  type OnlineReceiptIntent,
 } from '@/lib/club/memberOnlinePayments';
 import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
 import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
 import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
+import { PAY_LINK_METHODS, payModeLabel } from '@/lib/procedures/payModes';
 import { registrationOrigin } from '@/lib/registration/registrationFlow';
 
 export const dynamic = 'force-dynamic';
 
 type LineInput = { recordId?: unknown; amount?: unknown };
 
-/** Starts a club/team pay link from the reception payment form and emails it. */
+const CHANNELS = ['mail', 'whatsapp', 'telegram', 'facebook', 'sms'] as const;
+type PayLinkChannel = (typeof CHANNELS)[number];
+
+function text(value: unknown, max: number): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function receiptIntent(raw: unknown): OnlineReceiptIntent | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  return {
+    documentType: text(value.documentType, 120) || undefined,
+    documentNumber: text(value.documentNumber, 120) || undefined,
+    annotations: text(value.annotations, 1000) || undefined,
+    serviceName: text(value.serviceName, 255) || undefined,
+  };
+}
+
+async function workspaceAuth(request: NextRequest) {
+  const auth = await getClubAuthContext(request);
+  if ('error' in auth) return auth;
+  if (auth.ctx.workspaceKind !== 'club' && auth.ctx.workspaceKind !== 'team') {
+    return {
+      error: NextResponse.json({ error: 'Payment links are available for a club or a team' }, { status: 403 }),
+    };
+  }
+  return auth;
+}
+
+/** Member email and phone, used to prefill the "send the link by" dialog. */
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await workspaceAuth(request);
+    if ('error' in auth) return auth.error;
+    const memberUserId = String(request.nextUrl.searchParams.get('memberUserId') ?? '').trim();
+    if (!memberUserId) return NextResponse.json({ error: 'Member is required' }, { status: 400 });
+    return NextResponse.json(await memberPayLinkContact(memberUserId));
+  } catch (error) {
+    console.error('GET member online payment contact:', error);
+    return NextResponse.json({ email: '', phone: '' });
+  }
+}
+
+/** Starts a club/team pay link from a reception form; mails it only when Mail is the chosen channel. */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getClubAuthContext(request);
+    const auth = await workspaceAuth(request);
     if ('error' in auth) return auth.error;
-    if (auth.ctx.workspaceKind !== 'club' && auth.ctx.workspaceKind !== 'team') {
-      return NextResponse.json({ error: 'Payment links are available for a club or a team' }, { status: 403 });
-    }
 
     const body = (await request.json().catch(() => ({}))) as {
       memberUserId?: unknown;
@@ -33,6 +77,9 @@ export async function POST(request: NextRequest) {
       operatorId?: unknown;
       paymentDate?: unknown;
       lines?: LineInput[];
+      channel?: unknown;
+      email?: unknown;
+      receipt?: unknown;
     };
 
     const memberUserId = String(body.memberUserId ?? '').trim();
@@ -40,8 +87,20 @@ export async function POST(request: NextRequest) {
     const procedureType = String(body.procedureType ?? '').trim();
     const provider = onlineProviderForMethod(payMode);
     const amountEur = Math.round(Number(body.amountEur) * 100) / 100;
+    const channelRaw = String(body.channel ?? 'mail').trim().toLowerCase();
+    const channel: PayLinkChannel = (CHANNELS as readonly string[]).includes(channelRaw)
+      ? (channelRaw as PayLinkChannel)
+      : 'mail';
+    if (!provider && PAY_LINK_METHODS.includes(payMode)) {
+      return NextResponse.json(
+        {
+          error: `${payModeLabel(payMode)} links are not connected yet. Use Credit card, Debit card, Prepaid card, Apple Pay, Google Pay, Stripe or PayPal.`,
+        },
+        { status: 400 },
+      );
+    }
     if (!memberUserId || !provider || !procedureType || procedureType === 'expense') {
-      return NextResponse.json({ error: 'Choose credit card, debit card, PayPal, Satispay, or Stripe.' }, { status: 400 });
+      return NextResponse.json({ error: 'Choose a payment method marked in red.' }, { status: 400 });
     }
     if (!Number.isFinite(amountEur) || amountEur <= 0) {
       return NextResponse.json({ error: 'Enter an amount greater than 0.' }, { status: 400 });
@@ -103,12 +162,13 @@ export async function POST(request: NextRequest) {
       where: { id: memberUserId },
       select: { name: true, username: true },
     });
-    const description = String(body.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 255) || 'Payment';
+    const description = text(body.description, 255) || 'Payment';
     const paymentDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body.paymentDate ?? ''))
       ? String(body.paymentDate)
       : new Date().toISOString().slice(0, 10);
     const operatorId = String(body.operatorId ?? '').trim() || auth.ctx.userId;
 
+    const replaced = await cancelPendingLinksForRecords(auth.ctx.club.id, [...grouped.keys()]);
     const payment = await createMemberOnlinePayment({
       entityId: auth.ctx.club.id,
       entityName: auth.ctx.club.name,
@@ -127,18 +187,30 @@ export async function POST(request: NextRequest) {
         paymentDate,
         description,
       })),
+      receipt: receiptIntent(body.receipt),
     });
 
     const payUrl = `${registrationOrigin(request)}/pay/club/${payment.id}`;
-    const emailed = await emailMemberPayLink({
-      memberUserId,
-      entityName: auth.ctx.club.name,
-      amountEur,
-      payUrl,
-      description,
-    }).catch(() => false);
+    let emailed = false;
+    if (channel === 'mail') {
+      emailed = await emailMemberPayLink({
+        memberUserId,
+        entityName: auth.ctx.club.name,
+        amountEur,
+        payUrl,
+        description,
+        to: text(body.email, 191) || undefined,
+      }).catch(() => false);
+    }
 
-    return NextResponse.json({ ok: true, payUrl, emailed });
+    return NextResponse.json({
+      ok: true,
+      payUrl,
+      emailed,
+      channel,
+      replacedLinks: replaced,
+      entityName: auth.ctx.club.name,
+    });
   } catch (error) {
     console.error('POST member online payment:', error);
     return NextResponse.json(

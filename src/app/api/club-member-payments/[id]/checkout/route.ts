@@ -18,6 +18,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const origin = registrationOrigin(request);
     const pageUrl = `${origin}/pay/club/${payment.id}`;
     if (payment.status === 'paid') return NextResponse.json({ url: pageUrl });
+    if (payment.status === 'cancelled') {
+      return NextResponse.json(
+        { error: 'This payment link was replaced by a newer one. Use the latest link you received.' },
+        { status: 410 },
+      );
+    }
 
     const credentials = await credentialsForMemberPayment(payment);
     if (!credentials) {

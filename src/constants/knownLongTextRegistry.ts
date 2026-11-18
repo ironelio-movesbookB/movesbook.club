@@ -17,6 +17,7 @@ import {
   PAYMENT_INFO_DEFAULT_IT,
   PAYMENT_INFO_TRANSLATION_KEY,
 } from './paymentInfoLongText';
+import { PAY_MODE_ALERT_EN, PAY_MODE_ALERT_IT, PAY_MODE_ALERT_KEY } from './payModeAlertLongText';
 import {
   ADD_AVAILABLE_SLOTS_FORM_EN,
   ADD_AVAILABLE_SLOTS_FORM_IT,
@@ -85,6 +86,13 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     category: 'management',
     descriptionEn: 'Member profile Settings — “Type of payments — method default” Info popup.',
     values: { en: PAYMENT_INFO_DEFAULT_EN, it: PAYMENT_INFO_DEFAULT_IT },
+  },
+  {
+    key: PAY_MODE_ALERT_KEY,
+    category: 'management',
+    descriptionEn:
+      'Pay mode dropdowns and “Methods your members can use” — alert explaining red (pay link) and blue (verify) methods.',
+    values: { en: PAY_MODE_ALERT_EN, it: PAY_MODE_ALERT_IT },
   },
   {
     key: MEMBER_REMOVE_SLOTS_INFO_KEY,

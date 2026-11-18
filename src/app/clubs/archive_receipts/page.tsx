@@ -15,6 +15,7 @@ import {
   usePasswordGate,
 } from '@/components/procedures/ArchiveRowActions';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
+import SendReceiptPdfModal from '@/components/procedures/SendReceiptPdfModal';
 import type { ProcedureTab } from '@/components/procedures/types';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
@@ -63,6 +64,7 @@ function ArchiveReceiptsPageInner() {
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [taxTarget, setTaxTarget] = useState<Member | null>(null);
+  const [sendPdfIds, setSendPdfIds] = useState<string[] | null>(null);
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -195,6 +197,15 @@ function ArchiveReceiptsPageInner() {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
+        sendDataTitle="Mail the PDF of the checked (or selected) receipts"
+        onSendData={() => {
+          const ids = selectedIds.size > 0 ? Array.from(selectedIds) : selectedId ? [selectedId] : [];
+          if (ids.length === 0) {
+            alert('Check one or more receipts to send their PDF.');
+            return;
+          }
+          setSendPdfIds(ids);
+        }}
         pagination={
           <ProcedurePagination
             page={page}
@@ -239,6 +250,8 @@ function ArchiveReceiptsPageInner() {
       />
 
       {passwordModal}
+
+      {sendPdfIds && <SendReceiptPdfModal receiptIds={sendPdfIds} onClose={() => setSendPdfIds(null)} />}
 
       {taxTarget && (
         <TaxDocumentModal
