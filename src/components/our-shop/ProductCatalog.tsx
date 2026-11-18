@@ -79,8 +79,10 @@ function ProductImage({ product }: { product: Product }) {
 
 function ShopShareCard({
   shopUrl,
+  linkFailed,
 }: {
   shopUrl: string;
+  linkFailed: boolean;
 }) {
   const handleShare = async () => {
     try {
@@ -153,12 +155,18 @@ function ShopShareCard({
 
         <div className="flex shrink-0 items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-col sm:gap-2">
           <div className="flex h-[104px] w-[104px] items-center justify-center rounded-lg bg-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrUrl}
-              alt="QR code for your online shop"
-              className="h-[100px] w-[100px]"
-            />
+            {qrUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qrUrl}
+                alt="QR code for your online shop"
+                className="h-[100px] w-[100px]"
+              />
+            ) : (
+              <span className="px-2 text-center text-[11px] leading-4 text-gray-400">
+                {linkFailed ? 'QR unavailable' : 'Loading QR...'}
+              </span>
+            )}
           </div>
 
           <div className="sm:text-center">
@@ -274,6 +282,7 @@ export default function ProductsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [shopUrl, setShopUrl] = useState('');
+  const [shopLinkFailed, setShopLinkFailed] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const listed = products.filter((product) => {
     const productSector = shopSector(product.sector);
@@ -296,7 +305,10 @@ export default function ProductsPage() {
       const response = await shopFetch('/api/club/shop/products');
 
       if (!response.ok) {
-        throw new Error('Unable to load products.');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.error === 'string' && body.error ? body.error : 'Unable to load products.',
+        );
       }
 
       const data = await response.json();
@@ -324,13 +336,14 @@ export default function ProductsPage() {
     void loadProducts();
     shopFetch('/api/club/shop/settings')
       .then(async (response) => {
-        if (!response.ok) return;
-        const data = await response.json();
-        if (typeof data.publicPath === 'string') {
+        const data = response.ok ? await response.json() : null;
+        if (typeof data?.publicPath === 'string' && data.publicPath) {
           setShopUrl(`${window.location.origin}${data.publicPath}`);
+        } else {
+          setShopLinkFailed(true);
         }
       })
-      .catch(() => undefined);
+      .catch(() => setShopLinkFailed(true));
   }, [loadProducts]);
 
   return (
@@ -387,7 +400,7 @@ export default function ProductsPage() {
           </Link>
         </ShopHeader>
 
-        <ShopShareCard shopUrl={shopUrl} />
+        <ShopShareCard shopUrl={shopUrl} linkFailed={shopLinkFailed} />
 
           {error && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
