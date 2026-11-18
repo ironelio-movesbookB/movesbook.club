@@ -2,6 +2,12 @@ import { prisma } from '@/lib/prisma';
 import { sendIonosEmail } from '@/lib/ionosEmail';
 import { findPublicOrg } from '@/lib/club/publicOrg';
 import { payModeLabel } from '@/lib/procedures/payModes';
+import { procedureSubscriber } from '@/lib/procedures/subscriberOverride';
+
+function recordCurrency(metadata: unknown): string {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 'EUR';
+  return String((metadata as Record<string, unknown>).currency ?? '').trim().toUpperCase() || 'EUR';
+}
 
 export type ReceiptPdfData = {
   id: string;
@@ -10,6 +16,7 @@ export type ReceiptPdfData = {
   memberId: string;
   memberName: string;
   memberEmail: string;
+  currency: string;
   documentType: string;
   documentNumber: string;
   receiptDate: string;
@@ -40,14 +47,14 @@ function personName(user: { firstName?: string | null; surname?: string | null; 
   return full || (user.name ?? '').trim();
 }
 
-function money(value: number): string {
-  return `EUR ${value.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function money(value: number, currency = 'EUR'): string {
+  return `${currency || 'EUR'} ${value.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function recordDetail(metadata: unknown): string {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return '';
   const meta = metadata as Record<string, unknown>;
-  for (const key of ['serviceName', 'productName', 'expenseName', 'debtLabel', 'membershipName', 'courseName']) {
+  for (const key of ['serviceName', 'productName', 'expenseName', 'debtLabel', 'membershipName', 'courseName', 'eventName']) {
     const value = String(meta[key] ?? '').trim();
     if (value) return value;
   }
@@ -73,13 +80,15 @@ export async function loadReceiptPdfData(receiptId: string, clubId?: string): Pr
       ? Number(receipt.procedurePayment.balanceAfter)
       : Math.max(0, Number(receipt.procedureRecord?.balanceAmount ?? total - paid));
   const payMode = receipt.procedurePayment?.payMode ?? '';
+  const subscriber = procedureSubscriber(receipt.procedureRecord?.metadata);
   return {
     id: receipt.id,
     clubId: receipt.clubId,
     clubName: org?.name ?? 'Club',
     memberId: receipt.memberId,
-    memberName: personName(receipt.member) || 'Member',
-    memberEmail: receipt.member?.email?.trim() ?? '',
+    memberName: subscriber?.name || personName(receipt.member) || 'Member',
+    memberEmail: subscriber ? subscriber.email : receipt.member?.email?.trim() ?? '',
+    currency: subscriber?.currency || recordCurrency(receipt.procedureRecord?.metadata),
     documentType: receipt.documentType?.trim() || 'Receipt',
     documentNumber: receipt.documentNumber?.trim() ?? '',
     receiptDate: receipt.receiptDate.toISOString().slice(0, 10),
@@ -118,9 +127,9 @@ export async function buildReceiptPdf(data: ReceiptPdfData): Promise<Buffer> {
   const rows: Array<[string, string]> = [
     ['Member', data.memberName],
     ['Detail', data.detail],
-    ['Total', money(data.total)],
-    ['Paid', money(data.paid)],
-    ['Residual', money(data.residual)],
+    ['Total', money(data.total, data.currency)],
+    ['Paid', money(data.paid, data.currency)],
+    ['Residual', money(data.residual, data.currency)],
   ];
   if (data.payMode) rows.push(['Pay mode', data.payMode]);
   if (data.operatorName) rows.push(['Operator', data.operatorName]);
@@ -176,7 +185,7 @@ export async function emailReceiptPdfs(input: {
       ? `${first.documentType}${first.documentNumber ? ` n. ${first.documentNumber}` : ''} - ${first.clubName}`
       : `${receipts.length} receipts - ${first.clubName}`;
   const listText = receipts
-    .map((r) => `${r.documentType} ${r.documentNumber} (${r.receiptDate}): ${money(r.paid)}`)
+    .map((r) => `${r.documentType} ${r.documentNumber} (${r.receiptDate}): ${money(r.paid, r.currency)}`)
     .join('\n');
   await sendIonosEmail({
     to,
@@ -186,7 +195,7 @@ export async function emailReceiptPdfs(input: {
       .map(
         (r) =>
           `<li>${escapeHtml(r.documentType)} ${escapeHtml(r.documentNumber)} (${escapeHtml(r.receiptDate)}): ${escapeHtml(
-            money(r.paid),
+            money(r.paid, r.currency),
           )}</li>`,
       )
       .join('')}</ul>`,

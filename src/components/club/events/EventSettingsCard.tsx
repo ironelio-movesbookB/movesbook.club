@@ -5,14 +5,32 @@ import { inputClass, labelClass, primaryButton, secondaryButton, dangerButton } 
 import { eventApi } from '@/lib/club/events/eventClient';
 import type { ClubEventDiscountRule, ClubEventSettings } from '@/lib/club/events/eventConstants';
 
+const HIDDEN_KEY = 'clubEventSettingsHidden';
+
 export default function EventSettingsCard() {
-  const [settings, setSettings] = useState<ClubEventSettings>({ disableSubscriptionEmails: false });
+  const [settings, setSettings] = useState<ClubEventSettings>({
+    disableSubscriptionEmails: false,
+    autoRemoveExpired: false,
+    requireConfirmation: true,
+  });
   const [rules, setRules] = useState<ClubEventDiscountRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [minSubevents, setMinSubevents] = useState('2');
   const [discountPercent, setDiscountPercent] = useState('5');
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    setHidden(localStorage.getItem(HIDDEN_KEY) === '1');
+  }, []);
+
+  const toggleHidden = () => {
+    setHidden((h) => {
+      localStorage.setItem(HIDDEN_KEY, h ? '0' : '1');
+      return !h;
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,7 +58,12 @@ export default function EventSettingsCard() {
     try {
       const data = await eventApi<{ settings: ClubEventSettings }>('/settings', {
         method: 'PATCH',
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({
+          settings: {
+            disableSubscriptionEmails: settings.disableSubscriptionEmails,
+            requireConfirmation: settings.requireConfirmation,
+          },
+        }),
       });
       setSettings(data.settings);
     } catch (e) {
@@ -88,12 +111,22 @@ export default function EventSettingsCard() {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-bold text-gray-900">Event settings</h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-gray-900">Event settings</h2>
+        <button
+          type="button"
+          className="text-sm font-semibold text-red-600 hover:underline"
+          aria-expanded={!hidden}
+          onClick={toggleHidden}
+        >
+          {hidden ? 'Show' : 'Hide'}
+        </button>
+      </div>
       <p className="mt-1 text-sm text-gray-600">
         Email notifications and multi-selection discounts when a visitor picks several sub-events.
       </p>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      {loading ? (
+      {hidden ? null : error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {hidden ? null : loading ? (
         <p className="mt-3 text-sm text-gray-500">Loading…</p>
       ) : (
         <div className="mt-4 space-y-4">
@@ -101,9 +134,18 @@ export default function EventSettingsCard() {
             <input
               type="checkbox"
               checked={settings.disableSubscriptionEmails}
-              onChange={(e) => setSettings({ disableSubscriptionEmails: e.target.checked })}
+              onChange={(e) => setSettings((s) => ({ ...s, disableSubscriptionEmails: e.target.checked }))}
             />
             Disable subscription confirmation emails
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-800">
+            <input
+              type="checkbox"
+              disabled={settings.disableSubscriptionEmails}
+              checked={settings.requireConfirmation && !settings.disableSubscriptionEmails}
+              onChange={(e) => setSettings((s) => ({ ...s, requireConfirmation: e.target.checked }))}
+            />
+            Ask subscribers to confirm with the link in the email (status Confirmed after the click)
           </label>
           <button type="button" className={primaryButton} disabled={saving} onClick={() => void saveSettings()}>
             Save settings

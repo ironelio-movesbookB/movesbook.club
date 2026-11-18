@@ -7,7 +7,15 @@ import { getServerPublicDir } from '@/lib/serverPublicDir';
 import { toMediaApiPath } from '@/lib/uploadMediaUrl';
 import {
   CLUB_EVENT_TYPES,
+  EVENT_ATTACHMENT_EXTENSIONS,
+  EVENT_ATTACHMENT_MAX_BYTES,
+  EVENT_AUTO_REMOVE_DAYS,
+  EVENT_SUBEVENT_TEXT_COLORS,
+  EVENT_TEXT_FILE_EXTENSIONS,
+  EVENT_TEXT_FILE_MAX_BYTES,
   emptyEventProfile,
+  normalizePaymentModality,
+  todayYmd,
   locationOf,
   type ClubEvent,
   type ClubEventDiscountRule,
@@ -21,6 +29,7 @@ import {
   type ClubEventType,
   type ClubEventWorkspace,
 } from '@/lib/club/events/eventConstants';
+import { getWorkspaceCurrency } from '@/lib/club/clubCurrency.server';
 
 export class ClubEventError extends Error {
   constructor(
@@ -195,7 +204,47 @@ export async function ensureClubEventTables(): Promise<void> {
       KEY org_club_event_discount_ws (workspace_kind, workspace_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  await ensureColumn('org_club_events', 'sibling_non_members TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('org_club_event_texts', 'file_upload_enabled TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('org_club_event_texts', "file_upload_label VARCHAR(191) NOT NULL DEFAULT ''");
+  await ensureColumn('org_club_event_registrations', "relative_name VARCHAR(191) NOT NULL DEFAULT ''");
+  await ensureColumn('org_club_event_registrations', "relative_fiscal_code VARCHAR(32) NOT NULL DEFAULT ''");
+  await ensureColumn('org_club_event_registrations', 'text_files_json TEXT NULL');
+  await ensureColumn('org_club_events', 'subscription_close_date DATE NULL');
+  await ensureColumn('org_club_events', 'removed_at DATETIME(3) NULL');
+  await ensureColumn('org_club_event_subevents', "text_color VARCHAR(20) NOT NULL DEFAULT ''");
+  await ensureColumn('org_club_event_settings', 'auto_remove_expired TINYINT(1) NOT NULL DEFAULT 0');
+  for (const ddl of [
+    "first_name VARCHAR(120) NOT NULL DEFAULT ''",
+    "last_name VARCHAR(120) NOT NULL DEFAULT ''",
+    "sex VARCHAR(1) NOT NULL DEFAULT ''",
+    "birth_country VARCHAR(80) NOT NULL DEFAULT ''",
+    "birth_locality VARCHAR(120) NOT NULL DEFAULT ''",
+    "foreign_id_code VARCHAR(64) NOT NULL DEFAULT ''",
+  ]) {
+    await ensureColumn('org_club_event_registrations', ddl);
+  }
+  await ensureColumn('org_club_events', "payment_modality VARCHAR(1) NOT NULL DEFAULT 'D'");
+  await ensureColumn('org_club_event_settings', 'require_confirmation TINYINT(1) NOT NULL DEFAULT 1');
+  for (const ddl of [
+    'confirmed_at DATETIME(3) NULL',
+    'confirm_token VARCHAR(64) NULL',
+    "language VARCHAR(10) NOT NULL DEFAULT 'en'",
+    'procedure_record_id VARCHAR(191) NULL',
+    'amount_due DECIMAL(10,2) NULL',
+    "currency VARCHAR(10) NOT NULL DEFAULT 'EUR'",
+  ]) {
+    await ensureColumn('org_club_event_registrations', ddl);
+  }
   tablesReady = true;
+}
+
+async function ensureColumn(table: string, ddl: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE \`${table}\` ADD COLUMN ${ddl}`);
+  } catch {
+    /* column already exists */
+  }
 }
 
 type EventRow = {
@@ -235,6 +284,10 @@ type EventRow = {
   sibling_parent_name: string;
   sibling_fiscal_code: string;
   sibling_percent: unknown;
+  sibling_non_members?: number | boolean;
+  subscription_close_date?: Date | string | null;
+  removed_at?: Date | string | null;
+  payment_modality?: string | null;
   public_token: string;
   created_at: Date | string;
   updated_at: Date | string;
@@ -269,9 +322,18 @@ async function loadChildren(eventId: string): Promise<{
       eventId,
     ),
     prisma.$queryRawUnsafe<
-      Array<{ id: string; label: string; mandatory: number | boolean; enabled: number | boolean; sort_order: number }>
+      Array<{
+        id: string;
+        label: string;
+        mandatory: number | boolean;
+        enabled: number | boolean;
+        sort_order: number;
+        file_upload_enabled: number | boolean;
+        file_upload_label: string;
+      }>
     >(
-      `SELECT id, label, mandatory, enabled, sort_order FROM org_club_event_texts WHERE event_id = ? ORDER BY sort_order ASC`,
+      `SELECT id, label, mandatory, enabled, sort_order, file_upload_enabled, file_upload_label
+       FROM org_club_event_texts WHERE event_id = ? ORDER BY sort_order ASC`,
       eventId,
     ),
     prisma.$queryRawUnsafe<
@@ -284,9 +346,10 @@ async function loadChildren(eventId: string): Promise<{
         seats: number;
         external_to_main: number | boolean;
         sort_order: number;
+        text_color: string | null;
       }>
     >(
-      `SELECT id, name, start_date, end_date, cost, seats, external_to_main, sort_order
+      `SELECT id, name, start_date, end_date, cost, seats, external_to_main, sort_order, text_color
        FROM org_club_event_subevents WHERE event_id = ? ORDER BY sort_order ASC, start_date ASC`,
       eventId,
     ),
@@ -317,6 +380,8 @@ async function loadChildren(eventId: string): Promise<{
       mandatory: bool(t.mandatory),
       enabled: bool(t.enabled),
       sortOrder: t.sort_order,
+      fileUploadEnabled: bool(t.file_upload_enabled),
+      fileUploadLabel: t.file_upload_label || '',
     })),
     subevents: subevents.map((s) => ({
       id: s.id,
@@ -328,7 +393,24 @@ async function loadChildren(eventId: string): Promise<{
       registered: subCounts.get(s.id) ?? 0,
       externalToMain: bool(s.external_to_main),
       sortOrder: s.sort_order,
+      textColor: s.text_color || '',
     })),
+  };
+}
+
+export const LEGACY_UPLOAD_TEXT_ID = 'legacy-file';
+
+/** The old single event-level upload option, shown as an additional text until the event is saved again. */
+function legacyUploadText(row: EventRow, sortOrder: number): ClubEventExtraText {
+  const label = row.file_upload_label || emptyEventProfile().fileUploadLabel;
+  return {
+    id: LEGACY_UPLOAD_TEXT_ID,
+    label,
+    mandatory: false,
+    enabled: true,
+    sortOrder,
+    fileUploadEnabled: true,
+    fileUploadLabel: label,
   };
 }
 
@@ -349,6 +431,9 @@ function mapEvent(row: EventRow, children: Awaited<ReturnType<typeof loadChildre
       : 'Event') as ClubEventType,
     startDate: dbYmd(row.start_date),
     endDate: dbYmd(row.end_date),
+    subscriptionCloseDate: row.subscription_close_date
+      ? dbYmd(row.subscription_close_date)
+      : dbYmd(row.end_date),
     cost: num(row.cost),
     seats: row.seats,
     allowSubevents: bool(row.allow_subevents),
@@ -376,15 +461,17 @@ function mapEvent(row: EventRow, children: Awaited<ReturnType<typeof loadChildre
     fileUploadLabel: row.file_upload_label || emptyEventProfile().fileUploadLabel,
     siblingDiscount: {
       enabled: bool(row.sibling_enabled),
-      parentName: row.sibling_parent_name || '',
-      fiscalCode: row.sibling_fiscal_code || '',
       percent: num(row.sibling_percent),
+      applyToNonMembers: bool(row.sibling_non_members),
     },
+    paymentModality: normalizePaymentModality(row.payment_modality),
     publicToken: row.public_token,
     subeventCount: children.subevents.length,
     registered,
     services: children.services,
-    texts: children.texts,
+    texts: bool(row.file_upload_enabled)
+      ? [...children.texts, legacyUploadText(row, children.texts.length)]
+      : children.texts,
     subevents: children.subevents,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -405,20 +492,25 @@ async function getEventRow(ws: ClubEventWorkspace, id: string): Promise<EventRow
 export async function listClubEvents(ws: ClubEventWorkspace): Promise<ClubEventListItem[]> {
   await ensureClubEventTables();
   const rows = await prisma.$queryRawUnsafe<EventRow[]>(
-    `SELECT * FROM org_club_events WHERE workspace_kind = ? AND workspace_id = ? ORDER BY start_date DESC, name ASC`,
+    `SELECT * FROM org_club_events
+     WHERE workspace_kind = ? AND workspace_id = ? AND removed_at IS NULL
+     ORDER BY start_date DESC, name ASC`,
     ws.kind,
     ws.id,
   );
   const out: ClubEventListItem[] = [];
+  const currency = await getWorkspaceCurrency(ws.kind, ws.id);
   for (const row of rows) {
     const [children, registered] = await Promise.all([loadChildren(row.id), countRegistered(row.id)]);
     const mapped = mapEvent(row, children, registered);
     out.push({
+      currency,
       id: mapped.id,
       name: mapped.name,
       location: mapped.location,
       startDate: mapped.startDate,
       endDate: mapped.endDate,
+      subscriptionCloseDate: mapped.subscriptionCloseDate,
       eventType: mapped.eventType,
       subeventCount: mapped.subeventCount,
       cost: mapped.cost,
@@ -434,21 +526,29 @@ export async function listClubEvents(ws: ClubEventWorkspace): Promise<ClubEventL
 export async function getClubEvent(ws: ClubEventWorkspace, id: string): Promise<ClubEvent> {
   await ensureClubEventTables();
   const row = await getEventRow(ws, id);
-  const [children, registered] = await Promise.all([loadChildren(row.id), countRegistered(row.id)]);
-  return mapEvent(row, children, registered);
+  const [children, registered, currency] = await Promise.all([
+    loadChildren(row.id),
+    countRegistered(row.id),
+    getWorkspaceCurrency(ws.kind, ws.id),
+  ]);
+  return { ...mapEvent(row, children, registered), currency };
 }
 
 export async function getClubEventByToken(token: string): Promise<ClubEvent | null> {
   if (!/^[a-f0-9]{16,64}$/i.test(token)) return null;
   await ensureClubEventTables();
   const rows = await prisma.$queryRawUnsafe<EventRow[]>(
-    `SELECT * FROM org_club_events WHERE public_token = ? LIMIT 1`,
+    `SELECT * FROM org_club_events WHERE public_token = ? AND removed_at IS NULL LIMIT 1`,
     token,
   );
   const row = rows[0];
   if (!row) return null;
-  const [children, registered] = await Promise.all([loadChildren(row.id), countRegistered(row.id)]);
-  return mapEvent(row, children, registered);
+  const [children, registered, currency] = await Promise.all([
+    loadChildren(row.id),
+    countRegistered(row.id),
+    getWorkspaceCurrency(row.workspace_kind === 'team' ? 'team' : 'club', row.workspace_id),
+  ]);
+  return { ...mapEvent(row, children, registered), currency };
 }
 
 function profileFromInput(input: Partial<ClubEventProfile>): ClubEventProfile {
@@ -463,6 +563,7 @@ function profileFromInput(input: Partial<ClubEventProfile>): ClubEventProfile {
     name: str(input.name ?? base.name, 191),
     startDate: ymd(input.startDate, base.startDate),
     endDate: ymd(input.endDate, base.endDate),
+    subscriptionCloseDate: ymd(input.subscriptionCloseDate, ymd(input.endDate, base.endDate)),
     cost: Math.max(0, num(input.cost)),
     seats: Math.max(0, Math.round(num(input.seats))),
     allowSubevents: bool(input.allowSubevents),
@@ -492,10 +593,10 @@ function profileFromInput(input: Partial<ClubEventProfile>): ClubEventProfile {
     fileUploadLabel: str(input.fileUploadLabel ?? base.fileUploadLabel, 191),
     siblingDiscount: {
       enabled: bool(input.siblingDiscount?.enabled),
-      parentName: str(input.siblingDiscount?.parentName, 191),
-      fiscalCode: str(input.siblingDiscount?.fiscalCode, 32),
       percent: Math.min(100, Math.max(0, num(input.siblingDiscount?.percent))),
+      applyToNonMembers: bool(input.siblingDiscount?.applyToNonMembers),
     },
+    paymentModality: normalizePaymentModality(input.paymentModality),
   };
 }
 
@@ -506,6 +607,9 @@ export async function createClubEvent(
   await ensureClubEventTables();
   const p = profileFromInput(input);
   if (!p.name) throw new ClubEventError('Event name is required');
+  if (!p.membersOnly && !p.openToNonMembers) {
+    throw new ClubEventError('Who can subscribe: tick Member and/or Not member');
+  }
   const id = randomUUID();
   const token = randomBytes(24).toString('hex');
   const now = new Date();
@@ -515,9 +619,9 @@ export async function createClubEvent(
        allow_subevents, hide_from_share, allow_multi_subevent, subscriber_type, members_only, open_to_non_members,
        confirmation_text, city, zip, address, province, description, banner_url, sponsor_id,
        privacy_text, photo_video_text, file_upload_enabled, file_upload_label,
-       sibling_enabled, sibling_parent_name, sibling_fiscal_code, sibling_percent,
-       public_token, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       sibling_enabled, sibling_percent, sibling_non_members,
+       public_token, created_at, updated_at, subscription_close_date, payment_modality)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     id,
     ws.kind,
     ws.id,
@@ -546,12 +650,13 @@ export async function createClubEvent(
     p.fileUploadEnabled ? 1 : 0,
     p.fileUploadLabel,
     p.siblingDiscount.enabled ? 1 : 0,
-    p.siblingDiscount.parentName,
-    p.siblingDiscount.fiscalCode,
     p.siblingDiscount.percent,
+    p.siblingDiscount.applyToNonMembers ? 1 : 0,
     token,
     now,
     now,
+    p.subscriptionCloseDate,
+    p.paymentModality,
   );
   return getClubEvent(ws, id);
 }
@@ -565,6 +670,9 @@ export async function updateClubEvent(
   await getEventRow(ws, id);
   const p = profileFromInput(input);
   if (!p.name) throw new ClubEventError('Event name is required');
+  if (!p.membersOnly && !p.openToNonMembers) {
+    throw new ClubEventError('Who can subscribe: tick Member and/or Not member');
+  }
   await prisma.$executeRawUnsafe(
     `UPDATE org_club_events SET
       name=?, event_type=?, start_date=?, end_date=?, cost=?, seats=?,
@@ -574,8 +682,8 @@ export async function updateClubEvent(
       privacy_text=?, photo_video_text=?,
       attachment1_name=?, attachment2_name=?,
       file_upload_enabled=?, file_upload_label=?,
-      sibling_enabled=?, sibling_parent_name=?, sibling_fiscal_code=?, sibling_percent=?,
-      updated_at=?
+      sibling_enabled=?, sibling_percent=?, sibling_non_members=?,
+      subscription_close_date=?, payment_modality=?, updated_at=?
      WHERE id=? AND workspace_kind=? AND workspace_id=?`,
     p.name,
     p.eventType,
@@ -604,9 +712,10 @@ export async function updateClubEvent(
     p.fileUploadEnabled ? 1 : 0,
     p.fileUploadLabel,
     p.siblingDiscount.enabled ? 1 : 0,
-    p.siblingDiscount.parentName,
-    p.siblingDiscount.fiscalCode,
     p.siblingDiscount.percent,
+    p.siblingDiscount.applyToNonMembers ? 1 : 0,
+    p.subscriptionCloseDate,
+    p.paymentModality,
     new Date(),
     id,
     ws.kind,
@@ -615,13 +724,24 @@ export async function updateClubEvent(
   return getClubEvent(ws, id);
 }
 
+/**
+ * Deletes an event. An expired event with subscribers is only hidden (removed_at) so its
+ * subscriptions and cash archive rows are kept.
+ */
 export async function deleteClubEvent(ws: ClubEventWorkspace, id: string): Promise<void> {
   await ensureClubEventTables();
+  const row = await getEventRow(ws, id);
   const registered = await countRegistered(id);
   if (registered > 0) {
-    throw new ClubEventError(`Cannot delete: ${registered} subscriber(s) registered. Remove or cancel them first.`, 409);
+    if (dbYmd(row.end_date) >= todayYmd()) {
+      throw new ClubEventError(
+        `Cannot delete: ${registered} subscriber(s) registered and the event is not expired.`,
+        409,
+      );
+    }
+    await prisma.$executeRawUnsafe(`UPDATE org_club_events SET removed_at = ? WHERE id = ?`, new Date(), id);
+    return;
   }
-  await getEventRow(ws, id);
   await prisma.$executeRawUnsafe(`DELETE FROM org_club_event_services WHERE event_id = ?`, id);
   await prisma.$executeRawUnsafe(`DELETE FROM org_club_event_texts WHERE event_id = ?`, id);
   await prisma.$executeRawUnsafe(`DELETE FROM org_club_event_subevents WHERE event_id = ?`, id);
@@ -632,6 +752,23 @@ export async function deleteClubEvent(ws: ClubEventWorkspace, id: string): Promi
     ws.kind,
     ws.id,
   );
+}
+
+/** Removes events whose end date is more than EVENT_AUTO_REMOVE_DAYS days ago. Returns how many. */
+export async function removeExpiredEvents(ws: ClubEventWorkspace): Promise<number> {
+  await ensureClubEventTables();
+  const limit = new Date();
+  limit.setDate(limit.getDate() - EVENT_AUTO_REMOVE_DAYS);
+  const limitYmd = `${limit.getFullYear()}-${String(limit.getMonth() + 1).padStart(2, '0')}-${String(limit.getDate()).padStart(2, '0')}`;
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT id FROM org_club_events
+     WHERE workspace_kind = ? AND workspace_id = ? AND removed_at IS NULL AND end_date < ?`,
+    ws.kind,
+    ws.id,
+    limitYmd,
+  );
+  for (const r of rows) await deleteClubEvent(ws, r.id);
+  return rows.length;
 }
 
 export async function replaceEventServices(
@@ -660,7 +797,13 @@ export async function replaceEventServices(
 export async function replaceEventTexts(
   ws: ClubEventWorkspace,
   eventId: string,
-  texts: Array<{ label: string; mandatory?: boolean; enabled?: boolean }>,
+  texts: Array<{
+    label: string;
+    mandatory?: boolean;
+    enabled?: boolean;
+    fileUploadEnabled?: boolean;
+    fileUploadLabel?: string;
+  }>,
 ): Promise<ClubEvent> {
   await getEventRow(ws, eventId);
   await prisma.$executeRawUnsafe(`DELETE FROM org_club_event_texts WHERE event_id = ?`, eventId);
@@ -669,15 +812,24 @@ export async function replaceEventTexts(
     const label = str(t.label, 500);
     if (!label) continue;
     await prisma.$executeRawUnsafe(
-      `INSERT INTO org_club_event_texts (id, event_id, label, mandatory, enabled, sort_order) VALUES (?,?,?,?,?,?)`,
+      `INSERT INTO org_club_event_texts
+        (id, event_id, label, mandatory, enabled, sort_order, file_upload_enabled, file_upload_label)
+       VALUES (?,?,?,?,?,?,?,?)`,
       randomUUID(),
       eventId,
       label,
       t.mandatory ? 1 : 0,
       t.enabled === false ? 0 : 1,
       i++,
+      t.fileUploadEnabled ? 1 : 0,
+      t.fileUploadEnabled ? str(t.fileUploadLabel, 191) : '',
     );
   }
+  /* The old event-level upload option now lives in the texts list. */
+  await prisma.$executeRawUnsafe(
+    `UPDATE org_club_events SET file_upload_enabled = 0 WHERE id = ?`,
+    eventId,
+  );
   return getClubEvent(ws, eventId);
 }
 
@@ -692,9 +844,10 @@ export async function upsertSubevent(
   const startDate = ymd(input.startDate, emptyEventProfile().startDate);
   const endDate = ymd(input.endDate, startDate);
   const id = input.id || randomUUID();
+  const textColor = EVENT_SUBEVENT_TEXT_COLORS.some((c) => c.key === input.textColor) ? String(input.textColor) : '';
   if (input.id) {
     await prisma.$executeRawUnsafe(
-      `UPDATE org_club_event_subevents SET name=?, start_date=?, end_date=?, cost=?, seats=?, external_to_main=?, sort_order=?
+      `UPDATE org_club_event_subevents SET name=?, start_date=?, end_date=?, cost=?, seats=?, external_to_main=?, sort_order=?, text_color=?
        WHERE id=? AND event_id=?`,
       name,
       startDate,
@@ -703,14 +856,15 @@ export async function upsertSubevent(
       Math.max(0, Math.round(num(input.seats))),
       input.externalToMain ? 1 : 0,
       Math.round(num(input.sortOrder)),
+      textColor,
       id,
       eventId,
     );
   } else {
     await prisma.$executeRawUnsafe(
       `INSERT INTO org_club_event_subevents
-        (id, event_id, name, start_date, end_date, cost, seats, external_to_main, sort_order)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
+        (id, event_id, name, start_date, end_date, cost, seats, external_to_main, sort_order, text_color)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
       id,
       eventId,
       name,
@@ -720,6 +874,7 @@ export async function upsertSubevent(
       Math.max(0, Math.round(num(input.seats))),
       input.externalToMain ? 1 : 0,
       Math.round(num(input.sortOrder)),
+      textColor,
     );
   }
   return getClubEvent(ws, eventId);
@@ -741,6 +896,15 @@ async function storeFile(file: Blob, originalName: string, allowed: string[], ma
   const stored = `${randomBytes(16).toString('hex')}.${ext}`;
   await writeFile(join(dir, stored), Buffer.from(await file.arrayBuffer()));
   return `/uploads/${UPLOAD_SUBDIR}/${stored}`;
+}
+
+/** Stores a file a subscriber attached to an additional text; returns its public path. */
+export async function storeRegistrationTextFile(file: Blob, fileName: string): Promise<string> {
+  return storeFile(file, fileName, [...EVENT_TEXT_FILE_EXTENSIONS], EVENT_TEXT_FILE_MAX_BYTES);
+}
+
+export function eventMediaUrl(path: string | null | undefined): string | null {
+  return mediaUrl(path);
 }
 
 async function removeStored(path: string | null) {
@@ -776,7 +940,7 @@ export async function setEventAttachment(
 ): Promise<ClubEvent> {
   const row = await getEventRow(ws, eventId);
   const path = file
-    ? await storeFile(file, fileName, ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'], 8 * 1024 * 1024)
+    ? await storeFile(file, fileName, [...EVENT_ATTACHMENT_EXTENSIONS], EVENT_ATTACHMENT_MAX_BYTES)
     : null;
   const nameCol = slot === 1 ? 'attachment1_name' : 'attachment2_name';
   const pathCol = slot === 1 ? 'attachment1_path' : 'attachment2_path';
@@ -798,8 +962,15 @@ export async function getEventSettings(ws: ClubEventWorkspace): Promise<{
   discountRules: ClubEventDiscountRule[];
 }> {
   await ensureClubEventTables();
-  const rows = await prisma.$queryRawUnsafe<Array<{ disable_subscription_emails: number | boolean }>>(
-    `SELECT disable_subscription_emails FROM org_club_event_settings WHERE workspace_kind = ? AND workspace_id = ? LIMIT 1`,
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      disable_subscription_emails: number | boolean;
+      auto_remove_expired: number | boolean;
+      require_confirmation: number | boolean | null;
+    }>
+  >(
+    `SELECT disable_subscription_emails, auto_remove_expired, require_confirmation FROM org_club_event_settings
+     WHERE workspace_kind = ? AND workspace_id = ? LIMIT 1`,
     ws.kind,
     ws.id,
   );
@@ -812,7 +983,11 @@ export async function getEventSettings(ws: ClubEventWorkspace): Promise<{
     ws.id,
   );
   return {
-    settings: { disableSubscriptionEmails: bool(rows[0]?.disable_subscription_emails) },
+    settings: {
+      disableSubscriptionEmails: bool(rows[0]?.disable_subscription_emails),
+      autoRemoveExpired: bool(rows[0]?.auto_remove_expired),
+      requireConfirmation: rows[0] ? bool(rows[0].require_confirmation) : true,
+    },
     discountRules: rules.map((r) => ({
       id: r.id,
       minSubevents: r.min_subevents,
@@ -825,18 +1000,32 @@ export async function saveEventSettings(
   ws: ClubEventWorkspace,
   input: Partial<ClubEventSettings>,
 ): Promise<ClubEventSettings> {
-  await ensureClubEventTables();
-  const disable = bool(input.disableSubscriptionEmails);
+  const { settings: current } = await getEventSettings(ws);
+  const next: ClubEventSettings = {
+    disableSubscriptionEmails:
+      input.disableSubscriptionEmails === undefined
+        ? current.disableSubscriptionEmails
+        : bool(input.disableSubscriptionEmails),
+    autoRemoveExpired:
+      input.autoRemoveExpired === undefined ? current.autoRemoveExpired : bool(input.autoRemoveExpired),
+    requireConfirmation:
+      input.requireConfirmation === undefined ? current.requireConfirmation : bool(input.requireConfirmation),
+  };
   await prisma.$executeRawUnsafe(
-    `INSERT INTO org_club_event_settings (workspace_kind, workspace_id, disable_subscription_emails, updated_at)
-     VALUES (?,?,?,?)
-     ON DUPLICATE KEY UPDATE disable_subscription_emails = VALUES(disable_subscription_emails), updated_at = VALUES(updated_at)`,
+    `INSERT INTO org_club_event_settings
+       (workspace_kind, workspace_id, disable_subscription_emails, auto_remove_expired, require_confirmation, updated_at)
+     VALUES (?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE disable_subscription_emails = VALUES(disable_subscription_emails),
+       auto_remove_expired = VALUES(auto_remove_expired), require_confirmation = VALUES(require_confirmation),
+       updated_at = VALUES(updated_at)`,
     ws.kind,
     ws.id,
-    disable ? 1 : 0,
+    next.disableSubscriptionEmails ? 1 : 0,
+    next.autoRemoveExpired ? 1 : 0,
+    next.requireConfirmation ? 1 : 0,
     new Date(),
   );
-  return { disableSubscriptionEmails: disable };
+  return next;
 }
 
 export async function addDiscountRule(
@@ -889,6 +1078,7 @@ export async function listEventArchiveCash(ws: ClubEventWorkspace): Promise<Reco
      FROM org_club_event_registrations r
      INNER JOIN org_club_events e ON e.id = r.event_id
      WHERE e.workspace_kind = ? AND e.workspace_id = ? AND r.amount_paid > 0 AND r.status = 'confirmed'
+       AND r.procedure_record_id IS NULL
      ORDER BY r.created_at DESC`,
     ws.kind,
     ws.id,
@@ -921,24 +1111,45 @@ export async function listPublicWorkspaceEvents(ws: ClubEventWorkspace): Promise
   });
 }
 
-export async function listPublicEventsForOrg(orgId: string): Promise<ClubEventPublicCard[]> {
+export type PublicEventsFilter = {
+  /** Only these event types (empty = all). */
+  types?: string[];
+  /** Only these events, by public token (empty = all). */
+  tokens?: string[];
+};
+
+/** Shared events page: not hidden and not expired (end date today or later). */
+export async function listPublicEventsForOrg(
+  orgId: string,
+  filter: PublicEventsFilter = {},
+): Promise<ClubEventPublicCard[]> {
   await ensureClubEventTables();
   const rows = await prisma.$queryRawUnsafe<EventRow[]>(
     `SELECT * FROM org_club_events
-     WHERE workspace_id = ? AND hide_from_share = 0
+     WHERE workspace_id = ? AND hide_from_share = 0 AND removed_at IS NULL AND end_date >= ?
      ORDER BY start_date ASC, name ASC`,
     orgId,
+    todayYmd(),
   );
+  const types = new Set((filter.types || []).filter(Boolean));
+  const tokens = new Set((filter.tokens || []).filter(Boolean));
   const out: ClubEventPublicCard[] = [];
+  const currency = rows[0]
+    ? await getWorkspaceCurrency(rows[0].workspace_kind === 'team' ? 'team' : 'club', orgId)
+    : 'EUR';
   for (const row of rows) {
+    if (types.size && !types.has(row.event_type)) continue;
+    if (tokens.size && !tokens.has(row.public_token)) continue;
     const [children, registered] = await Promise.all([loadChildren(row.id), countRegistered(row.id)]);
     const mapped = mapEvent(row, children, registered);
     out.push({
+      currency,
       id: mapped.id,
       name: mapped.name,
       location: mapped.location,
       startDate: mapped.startDate,
       endDate: mapped.endDate,
+      subscriptionCloseDate: mapped.subscriptionCloseDate,
       eventType: mapped.eventType,
       subeventCount: mapped.subeventCount,
       cost: mapped.cost,

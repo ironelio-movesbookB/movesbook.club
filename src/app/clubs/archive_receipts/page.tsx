@@ -16,6 +16,7 @@ import {
 } from '@/components/procedures/ArchiveRowActions';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import SendReceiptPdfModal from '@/components/procedures/SendReceiptPdfModal';
+import PublicLinkBanner from '@/components/club/sponsors/PublicLinkBanner';
 import type { ProcedureTab } from '@/components/procedures/types';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
@@ -127,6 +128,29 @@ function ArchiveReceiptsPageInner() {
     selectedRow?.userId ?? selectedRow?.memberId ?? scope.memberId
   );
 
+  const [share, setShare] = useState<{ receiptId: string; path: string } | null>(null);
+  const [shareError, setShareError] = useState('');
+  useEffect(() => {
+    if (!selectedId) {
+      setShare(null);
+      return;
+    }
+    let active = true;
+    setShareError('');
+    clubApiFetch<{ path: string }>(`/api/club/receipts/${encodeURIComponent(selectedId)}/share`, { method: 'POST' })
+      .then((res) => {
+        if (active) setShare({ receiptId: selectedId, path: res.path });
+      })
+      .catch((e) => {
+        if (!active) return;
+        setShare(null);
+        setShareError(e instanceof Error ? e.message : 'Could not create the link');
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedId]);
+
   const tabs: ProcedureTab[] = [
     { id: 'deadlines', label: 'Archive of Deadlines', href: `/clubs/archive_deadlines${scopeQuery}` },
     { id: 'payments', label: 'Archive of Payments', href: `/clubs/archive_payments${scopeQuery}` },
@@ -181,8 +205,25 @@ function ArchiveReceiptsPageInner() {
         <ArchiveScopeRadios state={scope} name="receiptsScope" onChange={() => setPage(1)} />
       }
       error={error}
-      footerHint="All typologies (Services, Products, Expenses, Member debts, …). Select a row then open Deadlines/Payments to keep that record/member. Double-click a row to open the receipt. Check rows to delete selected. Edit and Delete ask for your password."
+      footerHint="All typologies (Services, Products, Expenses, Member debts, Events, …). Select a row then open Deadlines/Payments to keep that record/member. Select a row to share its public link. Double-click a row to open the receipt. Check rows to delete selected. Edit and Delete ask for your password."
     >
+      <div className="mb-3">
+        {share && selectedRow ? (
+          <PublicLinkBanner
+            title={`Receipt ${String(selectedRow.contract || '')} — ${String(selectedRow.name || '')}`.trim()}
+            description="Public read-only page of the selected receipt: open it, copy the link, download the QR code or share it."
+            path={share.path}
+            qrFileName={`receipt-${String(selectedRow.contract || share.receiptId)}`}
+          />
+        ) : (
+          <div className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-5 py-3 text-sm text-white shadow">
+            <span className="font-bold">Share a receipt</span>
+            <span className="ml-2 text-blue-100">
+              {shareError || 'Select a receipt in the list to get its public link, QR code and share buttons.'}
+            </span>
+          </div>
+        )}
+      </div>
       <ArchiveListToolbar
         title="Filter · Archive of Receipts"
         values={filters.draft}

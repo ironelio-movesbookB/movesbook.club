@@ -37,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const stripe = credentials as ActiveStripeCredentials;
       const session = await createStripeCheckoutSession(stripe, {
         amountEur: payment.amountEur,
+        currency: payment.currency,
         productName: payment.description,
         reference: payment.id,
         successUrl: `${pageUrl}?provider=stripe&session_id={CHECKOUT_SESSION_ID}`,
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const paypal = credentials as ActivePaypalCredentials;
     const order = await createPaypalOrder(paypal, {
       amountEur: payment.amountEur,
+      currency: payment.currency,
       description: payment.description,
       reference: payment.id,
       returnUrl: `${pageUrl}?provider=paypal`,

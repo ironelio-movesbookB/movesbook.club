@@ -4,6 +4,7 @@ import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   getProcedureDefinition,
   getProcedureTypology,
+  procedureTypologyFor,
   type ProcedureDefinition,
 } from '@/lib/procedures/registry';
 import type {
@@ -115,7 +116,7 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
     userId: record.memberId,
     memberName: record.memberName,
     memberImage: record.memberImage ?? null,
-    typology: getProcedureTypology(def.code),
+    typology: procedureTypologyFor(def.code, metadata),
     procedureType: record.procedureTypeCode,
     primaryLabel: metaString(metadata, def.metadataKeys.primary) || '-',
     secondaryLabel: def.metadataKeys.secondary

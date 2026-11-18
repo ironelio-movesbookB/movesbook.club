@@ -28,6 +28,15 @@ export function euroCents(amountEur: number): number {
   return Math.round(amountEur * 100);
 }
 
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+]);
+
+/** Amount in the smallest unit of the currency (cents, or whole units for JPY and similar). */
+export function currencyMinorUnits(amount: number, currency = 'EUR'): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? Math.round(amount) : Math.round(amount * 100);
+}
+
 /** Hosted Stripe Checkout page for one EUR amount. */
 export async function createStripeCheckoutSession(
   creds: ActiveStripeCredentials,
@@ -41,8 +50,11 @@ export async function createStripeCheckoutSession(
     /** Klarna installments. Card checkout does not set this, so Stripe keeps the Dashboard method list. */
     installment?: boolean;
     locale?: string;
+    /** ISO currency code; defaults to EUR (amountEur is then in that currency). */
+    currency?: string;
   },
 ): Promise<{ id: string; url: string }> {
+  const currency = (input.currency || 'EUR').toUpperCase();
   const form: Record<string, string> = {
     mode: 'payment',
     success_url: input.successUrl,
@@ -50,8 +62,8 @@ export async function createStripeCheckoutSession(
     client_reference_id: input.reference,
     'metadata[registration_payment_id]': input.reference,
     'line_items[0][quantity]': '1',
-    'line_items[0][price_data][currency]': 'eur',
-    'line_items[0][price_data][unit_amount]': String(euroCents(input.amountEur)),
+    'line_items[0][price_data][currency]': currency.toLowerCase(),
+    'line_items[0][price_data][unit_amount]': String(currencyMinorUnits(input.amountEur, currency)),
     'line_items[0][price_data][product_data][name]': input.productName.slice(0, 250),
   };
   if (input.installment) {

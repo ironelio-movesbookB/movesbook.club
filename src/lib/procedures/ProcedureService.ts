@@ -1,7 +1,11 @@
 import { Prisma, ProcedureRecordStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { findExistingTable } from "@/lib/club/legacyTableLookup";
-import { getProcedureDefinition, getProcedureTypology } from "./registry";
+import {
+  getProcedureDefinition,
+  procedureTypologyFor,
+} from "./registry";
+import { procedureSubscriber } from "./subscriberOverride";
 import { paginated, parsePagination } from "./pagination";
 import { verifyOperatorPassword } from "./operatorAuth";
 import {
@@ -141,6 +145,8 @@ function receiptMemberName(
     );
     if (displayName) return displayName;
   }
+  const subscriber = procedureSubscriber(metadata);
+  if (subscriber) return subscriber.name;
   return nameById.get(memberId) ?? memberId;
 }
 
@@ -334,7 +340,7 @@ export class ProcedureService {
       "form_pay_deadline_status",
       ctx.userId,
     );
-    const skipDeadlines = deadlineStatus === "No";
+    const skipDeadlines = deadlineStatus === "No" && !input.forceDeadline;
 
     const totalAmount = skipDeadlines ? 0 : roundMoney(input.totalAmount);
     const initialPayment = skipDeadlines
@@ -1275,7 +1281,8 @@ export class ProcedureService {
       memberName:
         procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE
           ? ctx.club.name
-          : metaString(row.metadata as Record<string, unknown> | null, "shopCustomerName") ||
+          : procedureSubscriber(row.metadata)?.name ||
+            metaString(row.metadata as Record<string, unknown> | null, "shopCustomerName") ||
             (profileById.get(row.memberId)?.name ?? row.memberId),
       memberImage: profileById.get(row.memberId)?.image ?? null,
       operatorId: row.operatorId,
@@ -1395,6 +1402,7 @@ export class ProcedureService {
         reversalOfId: row.reversalOfId,
         memberId: row.procedureRecord.memberId,
         memberName:
+          procedureSubscriber(metadata)?.name ||
           metaString(metadata, "shopCustomerName") ||
           (nameById.get(row.procedureRecord.memberId) ??
             row.procedureRecord.memberId),
@@ -1407,7 +1415,7 @@ export class ProcedureService {
         payMode: row.payMode,
         notes: row.notes,
         serviceName: metaString(metadata, primaryKey) || null,
-        typology: getProcedureTypology(procedureTypeCode),
+        typology: procedureTypologyFor(procedureTypeCode, metadata),
         balanceAfter: readBalanceAfter(row),
         originalDebt: decimalToNumber(row.procedureRecord.totalAmount),
         residualDebt: decimalToNumber(row.procedureRecord.balanceAmount),
@@ -1509,7 +1517,7 @@ export class ProcedureService {
           row.serviceName || metaString(metadata, primaryKey) || null,
         receiptDate: row.receiptDate.toISOString().slice(0, 10),
         annotations: row.annotations,
-        typology: getProcedureTypology(procedureTypeCode),
+        typology: procedureTypologyFor(procedureTypeCode, metadata),
         operatorName: row.operatorId
           ? (nameById.get(row.operatorId) ?? "-")
           : "-",

@@ -6,12 +6,23 @@ export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ orgId: string }> };
 
-export async function GET(_request: NextRequest, context: Ctx) {
+function listParam(request: NextRequest, name: string): string[] {
+  return (request.nextUrl.searchParams.get(name) || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+}
+
+export async function GET(request: NextRequest, context: Ctx) {
   try {
     const { orgId } = await context.params;
     const org = await findPublicOrg(orgId);
     if (!org) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const events = await listPublicEventsForOrg(orgId);
+    const events = await listPublicEventsForOrg(orgId, {
+      types: listParam(request, 'types'),
+      tokens: listParam(request, 'events'),
+    });
     return NextResponse.json({ org: publicOrgCard(org), events });
   } catch (error) {
     console.error('GET /api/public/club-events/[orgId]', error);

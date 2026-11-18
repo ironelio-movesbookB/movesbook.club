@@ -6,7 +6,8 @@ import {
   projectInstallmentsOnBalance,
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
-import { getProcedureDirection, getProcedureTypology } from '@/lib/procedures/registry';
+import { getProcedureDirection, procedureTypologyFor } from '@/lib/procedures/registry';
+import { procedureSubscriber } from '@/lib/procedures/subscriberOverride';
 import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
@@ -1228,6 +1229,7 @@ export async function listCashMovements(
   await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
   await pushPayments(PROCEDURE_TYPE_CODES.MEMBERSHIP, 'min-');
   await pushPayments(PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION, 'cin-');
+  await pushPayments(PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION, 'evin-');
   await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
 
   if (direction === 'all' || direction === 'IN') {
@@ -1359,6 +1361,7 @@ const UNIFIED_PROCEDURE_TYPES = [
   PROCEDURE_TYPE_CODES.MEMBER_DEBT,
   PROCEDURE_TYPE_CODES.MEMBERSHIP,
   PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION,
+  PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION,
 ] as const;
 
 type UnifiedDeadlineRecord = Awaited<
@@ -1372,16 +1375,19 @@ function deadlineRecordRow(
 ): Record<string, unknown> {
   const meta = r.metadata ?? {};
   const primary =
-    String(meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? '').trim() ||
-    '-';
+    String(
+      meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? meta.eventName ?? ''
+    ).trim() || '-';
+  const subscriber = procedureSubscriber(meta);
   const secondary = String(meta.sectorName ?? meta.typologyName ?? '').trim() || '';
   return {
     id: r.id,
     userId: r.memberId,
     memberId: r.memberId,
     name: r.memberName,
-    image: r.memberImage,
-    typology: getProcedureTypology(procedureType),
+    image: subscriber ? null : r.memberImage,
+    subscriberEmail: subscriber?.email || undefined,
+    typology: procedureTypologyFor(procedureType, meta),
     procedureType,
     procedureRecordId: r.id,
     service: primary,
@@ -1539,7 +1545,7 @@ export async function listUnifiedPayments(
         procedureRecordId: p.procedureRecordId,
         procedureType,
         name: p.memberName,
-        typology: getProcedureTypology(procedureType),
+        typology: p.typology,
         service: p.serviceName ?? '-',
         insertDate: p.paymentDate,
         paid: p.amount,
@@ -1593,7 +1599,7 @@ export async function listUnifiedReceipts(
         procedureRecordId: r.procedureRecordId,
         procedureType,
         name: r.memberName,
-        typology: getProcedureTypology(procedureType),
+        typology: r.typology,
         service: r.serviceName ?? '-',
         insertDate: r.receiptDate,
         category: r.documentType,

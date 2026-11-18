@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClubEventByToken } from '@/lib/club/events/eventService';
+import { getClubEventByToken, storeRegistrationTextFile } from '@/lib/club/events/eventService';
 import {
   findMemberByCredentials,
   findMemberByFiscalCode,
+  quoteEventRegistration,
   registerForEvent,
 } from '@/lib/club/events/eventRegistrationService';
 import { ClubEventError } from '@/lib/club/events/eventService';
 import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
-import { listSponsors } from '@/lib/club/sponsors/sponsorService';
+import { getSponsor } from '@/lib/club/sponsors/sponsorService';
+import { eventsOnlineProviders } from '@/lib/club/events/eventSubscriptionPayments';
+import { resolvePublicOrigin } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,11 +26,10 @@ export async function GET(_request: NextRequest, context: Ctx) {
       null;
     if (event.sponsorId && org) {
       try {
-        const sponsors = await listSponsors({
-          kind: event.workspaceKind === 'team' ? 'team' : 'club',
-          id: event.workspaceId,
-        });
-        const s = sponsors.find((x) => x.id === event.sponsorId);
+        const s = await getSponsor(
+          { kind: event.workspaceKind === 'team' ? 'team' : 'club', id: event.workspaceId },
+          event.sponsorId,
+        );
         if (s) {
           sponsor = { name: s.name, logoUrl: s.logoUrl, bannerUrl: s.bannerUrl, landingUrl: s.landingUrl };
         }
@@ -39,6 +41,7 @@ export async function GET(_request: NextRequest, context: Ctx) {
       org: org ? publicOrgCard(org) : null,
       event,
       sponsor,
+      onlineProviders: await eventsOnlineProviders(event.workspaceId),
     });
   } catch (error) {
     console.error('GET /api/public/club-events/by-token/[token]', error);
@@ -49,7 +52,13 @@ export async function GET(_request: NextRequest, context: Ctx) {
 export async function POST(request: NextRequest, context: Ctx) {
   try {
     const { token } = await context.params;
+    if ((request.headers.get('content-type') || '').includes('multipart/form-data')) {
+      return await uploadTextFile(request, token);
+    }
     const body = await request.json().catch(() => ({}));
+    if (body?.action === 'quote') {
+      return NextResponse.json({ quote: await quoteEventRegistration(token, body ?? {}) });
+    }
     if (body?.action === 'lookup-member') {
       const event = await getClubEventByToken(token);
       if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -61,7 +70,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       const member = await findMemberByFiscalCode(ws, String(body.fiscalCode || ''));
       return NextResponse.json({ member });
     }
-    const result = await registerForEvent(token, body ?? {});
+    const result = await registerForEvent(token, body ?? {}, { origin: resolvePublicOrigin(request) });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof ClubEventError) {
@@ -70,4 +79,18 @@ export async function POST(request: NextRequest, context: Ctx) {
     console.error('POST /api/public/club-events/by-token/[token]', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
+}
+
+async function uploadTextFile(request: NextRequest, token: string): Promise<NextResponse> {
+  const event = await getClubEventByToken(token);
+  if (!event || event.hideFromShare) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const form = await request.formData();
+  const textId = String(form.get('textId') || '');
+  const text = event.texts.find((t) => t.id === textId && t.enabled && t.fileUploadEnabled);
+  if (!text) return NextResponse.json({ error: 'This text does not accept files' }, { status: 400 });
+  const file = form.get('file');
+  if (!(file instanceof Blob)) return NextResponse.json({ error: 'File is required' }, { status: 400 });
+  const name = file instanceof File ? file.name : 'file';
+  const path = await storeRegistrationTextFile(file, name);
+  return NextResponse.json({ file: { name, path } }, { status: 201 });
 }

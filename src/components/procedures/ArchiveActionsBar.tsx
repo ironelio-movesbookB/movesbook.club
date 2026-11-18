@@ -31,6 +31,9 @@ type Props = {
   /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
   onSendData?: () => void;
   sendDataTitle?: string;
+  /** Replaces the default "share the current page" action. */
+  onShare?: () => void;
+  shareButtonTitle?: string;
 };
 
 const inactiveBtn =
@@ -71,6 +74,8 @@ export default function ArchiveActionsBar({
   onStatisticsClick,
   onSendData,
   sendDataTitle,
+  onShare,
+  shareButtonTitle,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
   const statisticsEnabled = Boolean(statisticsHref || onStatisticsClick);
@@ -96,8 +101,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => setShareOpen(true)}
-            title="Share the current page"
+            onClick={() => (onShare ? onShare() : setShareOpen(true))}
+            title={shareButtonTitle ?? 'Share the current page'}
           >
             <Share2 className="h-3.5 w-3.5" />
             Share

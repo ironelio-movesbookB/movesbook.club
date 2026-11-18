@@ -12,6 +12,7 @@ import {
 import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
 import { procedureService } from '@/lib/procedures';
 import { payLinkProviderForMethod, payModeLabel } from '@/lib/procedures/payModes';
+import { formatClubMoney } from '@/lib/club/clubCurrency';
 
 export type MemberOnlineProvider = 'stripe' | 'paypal';
 
@@ -24,6 +25,8 @@ export type MemberOnlinePayment = {
   createdByUserId: string;
   provider: MemberOnlineProvider;
   amountEur: number;
+  /** ISO currency of amountEur (EUR unless the club uses another currency). */
+  currency: string;
   description: string;
   /** `cancelled` links were replaced by a newer link for the same deadlines. */
   status: 'pending' | 'paid' | 'cancelled';
@@ -40,6 +43,7 @@ type Row = {
   created_by_user_id: string;
   provider: string;
   amount_eur: number | string;
+  currency?: string | null;
   description: string;
   status: string;
   provider_mode: string | null;
@@ -120,14 +124,19 @@ async function ensureTable() {
     )
   `);
   if (settlementReady) return;
-  const rows = await prisma.$queryRawUnsafe<Array<{ c: number | bigint }>>(
-    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'settlement_json'`,
-    TABLE,
-  );
-  if (Number(rows[0]?.c ?? 0) === 0) {
+  for (const [column, ddl] of [
+    ['settlement_json', 'settlement_json LONGTEXT NULL'],
+    ['currency', "currency VARCHAR(10) NOT NULL DEFAULT 'EUR'"],
+  ] as const) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ c: number | bigint }>>(
+      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      TABLE,
+      column,
+    );
+    if (Number(rows[0]?.c ?? 0) > 0) continue;
     try {
-      await prisma.$executeRawUnsafe(`ALTER TABLE \`${TABLE}\` ADD COLUMN settlement_json LONGTEXT NULL`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE \`${TABLE}\` ADD COLUMN ${ddl}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (!/duplicate|exists/i.test(message)) throw error;
@@ -147,6 +156,7 @@ function mapRow(row: Row): MemberOnlinePayment {
     createdByUserId: row.created_by_user_id,
     provider,
     amountEur: Number(row.amount_eur) || 0,
+    currency: (row.currency || 'EUR').toUpperCase(),
     description: row.description,
     status: row.status === 'paid' ? 'paid' : row.status === 'cancelled' ? 'cancelled' : 'pending',
     providerMode: row.provider_mode,
@@ -158,7 +168,7 @@ export async function getMemberOnlinePayment(id: string): Promise<MemberOnlinePa
   await ensureTable();
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT id, entity_id, entity_name, member_user_id, member_name, created_by_user_id,
-           provider, amount_eur, description, status, provider_mode, provider_ref
+           provider, amount_eur, currency, description, status, provider_mode, provider_ref
     FROM club_member_online_payments
     WHERE id = ${id}
     LIMIT 1
@@ -177,9 +187,11 @@ export async function createMemberOnlinePayment(input: {
   description: string;
   settlement?: OnlineSettlementLine[];
   receipt?: OnlineReceiptIntent | null;
+  currency?: string;
 }): Promise<MemberOnlinePayment> {
   await ensureTable();
   const id = crypto.randomUUID();
+  const currency = (input.currency || 'EUR').toUpperCase().slice(0, 10);
   const description = input.description.slice(0, 255);
   const settlement =
     input.settlement && input.settlement.length > 0
@@ -188,11 +200,11 @@ export async function createMemberOnlinePayment(input: {
   await prisma.$executeRaw`
     INSERT INTO club_member_online_payments (
       id, entity_id, entity_name, member_user_id, member_name, created_by_user_id,
-      provider, amount_eur, description, status, settlement_json
+      provider, amount_eur, description, status, settlement_json, currency
     ) VALUES (
       ${id}, ${input.entityId}, ${input.entityName.slice(0, 255)}, ${input.memberUserId},
       ${input.memberName.slice(0, 255)}, ${input.createdByUserId}, ${input.provider},
-      ${input.amountEur}, ${description}, 'pending', ${settlement}
+      ${input.amountEur}, ${description}, 'pending', ${settlement}, ${currency}
     )
   `;
   const created = await getMemberOnlinePayment(id);
@@ -298,6 +310,13 @@ export async function credentialsForMemberPayment(
   };
 }
 
+/** Online providers the club / team can collect with right now (keys saved for the site mode). */
+export async function readyMemberProviders(entityId: string): Promise<MemberOnlineProvider[]> {
+  const stored = await loadStoredMemberPaymentMethods(entityId);
+  const siteMode = await getMemberPaymentMode();
+  return (['stripe', 'paypal'] as const).filter((p) => memberGatewayReady(stored, p, siteMode));
+}
+
 function cashPayModeLabel(payMode: string, provider: MemberOnlineProvider): string {
   if (payMode) return payModeLabel(payMode);
   return provider === 'paypal' ? 'PayPal' : 'Credit card';
@@ -362,6 +381,7 @@ export async function emailMemberPayLink(input: {
   description: string;
   /** Address typed by the operator; defaults to the member account email. */
   to?: string;
+  currency?: string;
 }): Promise<boolean> {
   let to = input.to?.trim() ?? '';
   if (!to) {
@@ -372,14 +392,14 @@ export async function emailMemberPayLink(input: {
     to = user?.email?.trim() ?? '';
   }
   if (!to) return false;
-  const amount = input.amountEur.toFixed(2);
+  const amount = formatClubMoney(input.amountEur, input.currency);
   const entity = input.entityName.trim() || 'the club';
   const description = input.description.trim();
   await sendIonosEmail({
     to,
-    subject: `Payment of €${amount} to ${entity}`,
-    text: `${entity} asks you to pay €${amount}.\n${description}\n\nPay here: ${input.payUrl}`,
-    html: `<p>${escapeHtml(entity)} asks you to pay <strong>€${amount}</strong>.</p>${
+    subject: `Payment of ${amount} to ${entity}`,
+    text: `${entity} asks you to pay ${amount}.\n${description}\n\nPay here: ${input.payUrl}`,
+    html: `<p>${escapeHtml(entity)} asks you to pay <strong>${escapeHtml(amount)}</strong>.</p>${
       description ? `<p>${escapeHtml(description)}</p>` : ''
     }<p><a href="${escapeHtml(input.payUrl)}">Pay now</a></p><p>${escapeHtml(input.payUrl)}</p>`,
   });
