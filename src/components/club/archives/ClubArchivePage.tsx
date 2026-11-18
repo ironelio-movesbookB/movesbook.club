@@ -67,6 +67,7 @@ function ClubArchivePageInner({
   const searchParams = useSearchParams();
   const memberIdFromUrl = searchParams?.get('memberId') || null;
   const memberId = memberIdProp || memberIdFromUrl;
+  const productId = searchParams?.get('productId') || undefined;
   const filters = useArchiveListFilters();
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -87,6 +88,7 @@ function ClubArchivePageInner({
         clubId: clubId || undefined,
         teamId: teamId || undefined,
         memberId: memberId || undefined,
+        productId,
         ...filters.applied,
       });
       setTotal(res.total);
@@ -142,6 +144,7 @@ function ClubArchivePageInner({
     clubId,
     teamId,
     memberId,
+    productId,
     onEditItem,
     onDeleteItem,
     refreshKey,
@@ -153,7 +156,7 @@ function ClubArchivePageInner({
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied, memberId, archiveType]);
+  }, [filters.applied, memberId, archiveType, productId]);
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;

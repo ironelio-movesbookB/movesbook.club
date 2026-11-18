@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     const provider = onlineProviderForMethod(payMode);
     const amountEur = Math.round(Number(body.amountEur) * 100) / 100;
     if (!memberUserId || !provider || !procedureType || procedureType === 'expense') {
-      return NextResponse.json({ error: 'Choose credit card, debit card, Stripe, or PayPal.' }, { status: 400 });
+      return NextResponse.json({ error: 'Choose credit card, debit card, PayPal, Satispay, or Stripe.' }, { status: 400 });
     }
     if (!Number.isFinite(amountEur) || amountEur <= 0) {
       return NextResponse.json({ error: 'Enter an amount greater than 0.' }, { status: 400 });

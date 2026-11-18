@@ -4,6 +4,9 @@ import { fetchProcedureCustomerOptions } from './clubMembers';
 import { fetchClubOperatorOptions } from './clubOperators';
 import { listCompanies } from '@/lib/club/archives/clubArchiveService';
 import type { ClubAuthContext } from './types';
+import { isHardwareProductSector, shopSector } from '@/lib/shop/sectors';
+import { formatSellingNumber } from '@/lib/shop/sellingNumber';
+import { PROCEDURE_TYPE_CODES } from './types';
 
 const PRODUCT_TABLE_CANDIDATES = ['products', 'product'];
 
@@ -16,38 +19,75 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export type ProductSaleFormProduct = {
+  id: string;
+  name: string;
+  cost: number;
+  sector: string;
+  allowMultipleUnits: boolean;
+};
+
 export type ProductSaleFormOptions = {
-  products: { id: string; name: string; cost: number }[];
+  products: ProductSaleFormProduct[];
   members: { id: string; name: string }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   currentOperatorId: string | null;
+  nextSellingNumber: string;
 };
 
 export async function fetchProductSaleFormOptions(
   ctx: ClubAuthContext
 ): Promise<ProductSaleFormOptions> {
-  const products: { id: string; name: string; cost: number }[] = [];
-  const productTable = await findExistingTable(PRODUCT_TABLE_CANDIDATES);
+  const products: ProductSaleFormProduct[] = [];
+  const shopRows = await prisma.shopProduct.findMany({
+    where: { workspaceKind: 'club', workspaceId: ctx.club.id },
+    orderBy: { name: 'asc' },
+    take: 500,
+  });
+  for (const row of shopRows) {
+    if (isHardwareProductSector(row.sector)) continue;
+    products.push({
+      id: row.id,
+      name: text(row.name) || `Product ${row.id}`,
+      cost: num(row.price),
+      sector: shopSector(row.sector),
+      allowMultipleUnits: row.allowMultipleUnits,
+    });
+  }
 
-  if (productTable) {
-    const rows = await prisma.$queryRawUnsafe<
-      { id: bigint | number; product_name: string | null; price: string | number | null }[]
-    >(`SELECT id, product_name, price FROM \`${productTable}\` ORDER BY product_name ASC LIMIT 500`);
-    for (const row of rows) {
-      products.push({
-        id: String(row.id),
-        name: text(row.product_name) || `Product ${row.id}`,
-        cost: num(row.price),
-      });
+  if (products.length === 0) {
+    const productTable = await findExistingTable(PRODUCT_TABLE_CANDIDATES);
+    if (productTable) {
+      const rows = await prisma.$queryRawUnsafe<
+        { id: bigint | number; product_name: string | null; price: string | number | null }[]
+      >(`SELECT id, product_name, price FROM \`${productTable}\` ORDER BY product_name ASC LIMIT 500`);
+      for (const row of rows) {
+        products.push({
+          id: String(row.id),
+          name: text(row.product_name) || `Product ${row.id}`,
+          cost: num(row.price),
+          sector: 'Shop',
+          allowMultipleUnits: true,
+        });
+      }
     }
   }
 
-  const [members, operators, companies] = await Promise.all([
+  const [members, operators, companies, procedureType] = await Promise.all([
     fetchProcedureCustomerOptions(ctx.club.id),
     fetchClubOperatorOptions(ctx.club.id),
     listCompanies(ctx),
+    prisma.procedureType.findFirst({
+      where: { code: PROCEDURE_TYPE_CODES.PRODUCT_SALE, isActive: true },
+      select: { id: true },
+    }),
   ]);
+  const existingCount = procedureType
+    ? await prisma.procedureRecord.count({
+        where: { procedureTypeId: procedureType.id, clubId: ctx.club.id },
+      })
+    : 0;
 
   return {
     products,
@@ -55,5 +95,6 @@ export async function fetchProductSaleFormOptions(
     operators,
     companies,
     currentOperatorId: ctx.userId,
+    nextSellingNumber: formatSellingNumber(existingCount + 1),
   };
 }

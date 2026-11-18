@@ -76,7 +76,14 @@ export type OnlineSettlementLine = {
 /** Card methods are collected on the club's Stripe account. PayPal uses the club's PayPal account. */
 export function onlineProviderForMethod(method: string): MemberOnlineProvider | null {
   if (method === 'paypal') return 'paypal';
-  if (method === 'credit_card' || method === 'debit_card' || method === 'stripe') return 'stripe';
+  if (
+    method === 'credit_card' ||
+    method === 'debit_card' ||
+    method === 'stripe' ||
+    method === 'satispay'
+  ) {
+    return 'stripe';
+  }
   return null;
 }
 
@@ -234,6 +241,7 @@ function cashPayModeLabel(payMode: string, provider: MemberOnlineProvider): stri
   if (payMode === 'paypal' || provider === 'paypal') return 'PayPal';
   if (payMode === 'debit_card') return 'Debit card';
   if (payMode === 'stripe') return 'Stripe';
+  if (payMode === 'satispay') return 'Satispay';
   return 'Credit card';
 }
 

@@ -20,7 +20,7 @@ import type { ProcedureTab } from '@/components/procedures/types';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { deleteArchiveDeadline, fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
 import { createProcedureClient, type ProcedureRecordView } from '@/lib/club/procedureClient';
-import { getProcedureDefinition } from '@/lib/procedures/registry';
+import { procedurePaymentHref } from '@/lib/procedures/registry';
 import type { ProcedureTypeCode } from '@/lib/procedures/types';
 import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
 import type { Column, Member } from '@/types/clubTable';
@@ -121,15 +121,8 @@ function paymentHref(
   recordId: string | undefined,
   ids?: string[]
 ): string | null {
-  const code = procedureType as ProcedureTypeCode | undefined;
-  if (!code || !recordId) return null;
-  const def = getProcedureDefinition(code);
-  if (!def) return null;
-  const base = def.routes.paymentDetail(recordId);
-  if (ids && ids.length > 1) {
-    return `${base}?ids=${encodeURIComponent(ids.join(','))}`;
-  }
-  return base;
+  if (!procedureType || !recordId) return null;
+  return procedurePaymentHref(procedureType, recordId, ids);
 }
 
 /** Multi-select payment across mixed typologies routes through the generic pay_deadlines page. */
