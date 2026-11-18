@@ -27,10 +27,21 @@ import type {
 } from "@/lib/club/serviceSaleClient";
 import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmModal";
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
+import ShareModal from "@/components/ShareModal";
+import {
+  isShareOnlinePayMode,
+  PAYMENT_TYPE_OPTIONS,
+  SHARE_ONLINE_PAY_MODES,
+} from "@/lib/procedures/payModes";
 import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 import { useClubEnabledPaymentMethods } from "@/lib/club/useClubEnabledPaymentMethods";
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
 import { SIGNED_RECEIPT_DOCUMENT_TYPE } from "@/lib/procedures/taxDocumentDefaults";
+
+const SHARE_PAY_EXTRA_OPTIONS = SHARE_ONLINE_PAY_MODES.map((value) => ({
+  value,
+  label: PAYMENT_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value,
+}));
 
 export type PaymentDistribution = {
   installmentId: string;
@@ -256,6 +267,8 @@ export default function ServicePaymentForm({
   const [payMode, setPayMode] = useState("cash");
   const [linkNotice, setLinkNotice] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
   const enabledMethods = useClubEnabledPaymentMethods();
@@ -939,10 +952,14 @@ export default function ServicePaymentForm({
       return;
     }
 
-    const onlinePay =
-      procedureType !== "expense" &&
-      (payMode === "credit_card" || payMode === "debit_card" || payMode === "paypal" || payMode === "stripe");
+    const onlinePay = procedureType !== "expense" && isShareOnlinePayMode(payMode);
     if (onlinePay) {
+      if (!purchase.userId) {
+        setInstallmentError(
+          "This selling has no member. Pick a member before sharing a payment link.",
+        );
+        return;
+      }
       const totals = new Map<string, number>();
       for (const row of distributions) {
         const recordId = row.recordId || purchase.id;
@@ -967,10 +984,18 @@ export default function ServicePaymentForm({
             }),
           },
         );
+        const rawUrl = (data.payUrl ?? "").trim();
+        const absoluteUrl = rawUrl.startsWith("http")
+          ? rawUrl
+          : rawUrl
+            ? `${window.location.origin}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`
+            : "";
+        setShareUrl(absoluteUrl);
+        setShareOpen(Boolean(absoluteUrl));
         setLinkNotice(
           data.emailed
-            ? `Payment link emailed to the member. ${data.payUrl ?? ""}`
-            : `The member has no email, so no mail was sent. Share this link: ${data.payUrl ?? ""}`,
+            ? `Payment link emailed to the member. Share it from the window as well.`
+            : `Share this payment link with the member.`,
         );
       } catch (err) {
         setInstallmentError(err instanceof Error ? err.message : "Could not send the payment link");
@@ -1392,7 +1417,10 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowedMethods={enabledMethods}
-                extraOptions={stripeEnabled ? [{ value: 'stripe', label: 'Stripe' }] : []}
+                extraOptions={[
+                  ...SHARE_PAY_EXTRA_OPTIONS,
+                  ...(stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []),
+                ]}
               />
               {isExpensePayment ? (
                 <div className="min-w-0 space-y-2 lg:col-span-2">
@@ -1665,7 +1693,11 @@ export default function ServicePaymentForm({
             }
             className="px-6 py-2 bg-red-700 text-white rounded hover:bg-red-800 disabled:opacity-50"
           >
-            {saving || linkBusy ? "Saving..." : "Confirm"}
+            {saving || linkBusy
+              ? "Saving..."
+              : isShareOnlinePayMode(payMode)
+                ? "Share payment link"
+                : "Confirm"}
           </button>
           {onCancel && (
             <button
@@ -1942,6 +1974,16 @@ export default function ServicePaymentForm({
           </form>
         </div>
       )}
+
+      <ShareModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Share payment link"
+        url={shareUrl}
+        description="Send this payment link to the member. They can pay by Credit card, PayPal, or Satispay from their phone."
+        hidePost
+        showEmail
+      />
 
       <AdminPasswordConfirmModal
         isOpen={showAdminPasswordModal}
