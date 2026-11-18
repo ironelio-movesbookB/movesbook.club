@@ -45,6 +45,16 @@ async function clubMemberUserIds(clubId: string): Promise<string[]> {
   return rows.map((r) => r.memberId);
 }
 
+function metadataHasProduct(meta: Record<string, unknown>, productId: string): boolean {
+  if (!productId) return true;
+  if (text(meta.productId) === productId) return true;
+  const products = Array.isArray(meta.products) ? meta.products : [];
+  return products.some((line) => {
+    if (!line || typeof line !== 'object') return false;
+    return text((line as Record<string, unknown>).productId) === productId;
+  });
+}
+
 function formatArchiveDate(value: Date | null | undefined): string {
   if (!value || Number.isNaN(value.getTime())) return '-';
   const dd = String(value.getDate()).padStart(2, '0');
@@ -827,7 +837,8 @@ export async function listUnifiedProductSales(
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const items = await loadLegacyProductSaleItems(ctx);
+  const productId = text(params.productId);
+  const items: Record<string, unknown>[] = productId ? [] : await loadLegacyProductSaleItems(ctx);
 
   try {
     const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
@@ -835,18 +846,61 @@ export async function listUnifiedProductSales(
       pageSize: 500,
       memberId: params.memberId,
     });
+    const recordIds = procedure.items.map((row) => row.id);
+    const receipts = recordIds.length
+      ? await prisma.procedureReceipt.findMany({
+          where: { procedureRecordId: { in: recordIds } },
+          select: { procedureRecordId: true, documentNumber: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const invoiceByRecord = new Map<string, string>();
+    for (const receipt of receipts) {
+      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
+        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
+      }
+    }
+
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      if (productId && !metadataHasProduct(meta, productId)) continue;
+      const products = Array.isArray(meta.products) ? meta.products : [];
+      const purchaseLines = products
+        .map((line) => {
+          if (!line || typeof line !== 'object') return null;
+          const item = line as Record<string, unknown>;
+          const name = text(item.name);
+          const quantity = num(item.quantity);
+          if (!name) return null;
+          return {
+            name,
+            quantity: quantity > 0 ? quantity : 1,
+            productId: text(item.productId) || undefined,
+          };
+        })
+        .filter((line): line is { name: string; quantity: number; productId?: string } => Boolean(line));
+      const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
+      const online = text(meta.source).toLowerCase() === 'online';
       items.push({
         id: `proc-${row.id}`,
+        procedureRecordId: row.id,
         memberId: row.memberId,
         userId: row.memberId,
         name: row.memberName,
-        image: null,
+        image: row.memberImage,
         insertDate: row.recordDate,
-        typology: 'Sellings',
-        casual: text(meta.sector) || text(meta.productName) || row.notes || '-',
+        typology: 'PURCHASE PRODUCTS',
+        casual: online ? 'Shop online' : text(meta.sector) || text(meta.sectorName) || 'Shop',
+        description: online ? 'Member' : 'Operator',
+        course: purchaseLines[0]?.name || text(meta.productName) || '-',
         value: row.totalAmount,
+        paid: row.paidAmount,
+        rest: row.balanceAmount,
+        number: productCount,
+        purchaseLines,
+        category: text(meta.sellingNumber) || '-',
+        service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
+        operator: online ? '-' : row.operatorName || '-',
         status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
         source: 'procedure',
       });

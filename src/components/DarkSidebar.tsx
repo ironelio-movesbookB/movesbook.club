@@ -18,6 +18,8 @@ import {
   Music,
   CalendarDays,
   LayoutDashboard,
+  ListOrdered,
+  Shirt,
   ChevronDown,
   Plus,
   UserCircle,
@@ -748,6 +750,7 @@ export default function DarkSidebar({
   const [clubMonitoringsOpen, setClubMonitoringsOpen] = useState(false);
   const [clubAdminSubscriptionsOpen, setClubAdminSubscriptionsOpen] = useState(false);
   const [clubGeneralSettingsOpen, setClubGeneralSettingsOpen] = useState(false);
+  const [clubShopOpen, setClubShopOpen] = useState(false);
   const [clubSecurityOpen, setClubSecurityOpen] = useState(false);
   const [clubAdminInsertNewItemOpen, setClubAdminInsertNewItemOpen] = useState(false);
   const [clubArchivesOpen, setClubArchivesOpen] = useState(false);
@@ -904,10 +907,12 @@ export default function DarkSidebar({
   // Keep TEAM/CLUB Archives expanded while browsing archive routes (remount resets state).
   useEffect(() => {
     if (!pathname) return;
+    const onShopRoute = pathname.startsWith('/clubs/shop');
     const onArchiveRoute =
-      pathname.startsWith('/clubMembers') ||
-      pathname.startsWith('/clubs/') ||
-      pathname.startsWith('/club/staff');
+      !onShopRoute &&
+      (pathname.startsWith('/clubMembers') ||
+        pathname.startsWith('/clubs/') ||
+        pathname.startsWith('/club/staff'));
     if (!onArchiveRoute) return;
     if (
       isTeamManagerUser ||
@@ -919,6 +924,13 @@ export default function DarkSidebar({
       setClubArchivesOpen(true);
     }
   }, [pathname, userType, isTeamManagerUser, isCoachUser, isGroupAdminUser]);
+
+  useEffect(() => {
+    if (!pathname?.startsWith('/clubs/shop')) return;
+    setClubManagementOpen(true);
+    setClubShopOpen(true);
+    setClubArchivesOpen(false);
+  }, [pathname]);
 
   // Team archive pages: keep My Team menu (TEAM'S MANAGEMENT) even if tab state lags.
   useEffect(() => {
@@ -4523,9 +4535,72 @@ export default function DarkSidebar({
                             )}
                           </div>
 
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubShopOpen((open) => !open)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <ShoppingCart className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className={`truncate text-sm font-medium ${clubShopOpen ? 'text-yellow-300' : 'text-white'}`}>
+                                    Shop
+                                  </span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubShopOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubShopOpen && (
+                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                                {(
+                                  [
+                                    { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard, disabled: true },
+                                    { label: 'Products', path: '/clubs/shop/products/shop', Icon: Shirt },
+                                    { label: 'List of hardware purchasable', path: '/clubs/shop/products/hardware', Icon: Monitor },
+                                    { label: 'Orders', path: '/clubs/shop/orders', Icon: ListOrdered },
+                                    { label: 'Settings', path: '/clubs/shop/settings', Icon: Settings },
+                                  ] as const
+                                ).map((item, index, list) => {
+                                  const disabled = 'disabled' in item && item.disabled;
+                                  return (
+                                  <button
+                                    key={item.path}
+                                    type="button"
+                                    disabled={disabled}
+                                    title={disabled ? 'Dashboard is disabled for now' : undefined}
+                                    onClick={() => {
+                                      if (disabled) return;
+                                      if (isClubAccountUserType(userType)) {
+                                        writeClubWorkspaceTab('my-entity');
+                                        setCurrentTab('my-entity');
+                                      }
+                                      router.push(item.path);
+                                    }}
+                                    className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors ${
+                                      disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-[#333]'
+                                    } ${index < list.length - 1 ? 'border-b border-gray-600/50' : ''}`}
+                                  >
+                                    <item.Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                                    <span className="leading-snug">{item.label}</span>
+                                  </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
                           {(
                             [
-                              { Icon: ShoppingCart, label: 'Shop', arrow: 'right' as const },
                               {
                                 Icon: ScanLine,
                                 label: 'Access Control',
@@ -4639,6 +4714,41 @@ export default function DarkSidebar({
                                       path: '/club/settings/member_payment_methods',
                                     },
                                     {
+                                      Icon: ShoppingBasket,
+                                      label: 'Products for selling',
+                                      group: true as const,
+                                    },
+                                    {
+                                      Icon: LayoutGrid,
+                                      label: 'ALL products',
+                                      path: '/clubs/shop/products/all',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Bar',
+                                      path: '/clubs/shop/products/bar',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Restaurant',
+                                      path: '/clubs/shop/products/restaurant',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Shop',
+                                      path: '/clubs/shop/products/shop',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: Monitor,
+                                      label: 'List of hardware purchasable',
+                                      path: '/clubs/shop/products/hardware',
+                                      nested: true as const,
+                                    },
+                                    {
                                       Icon: LayoutGrid,
                                       label: 'Tables',
                                       path: '/club/settings/tables/areas',
@@ -4675,6 +4785,19 @@ export default function DarkSidebar({
                                   const path = 'path' in item ? item.path : undefined;
                                   const panel =
                                     'panel' in item ? item.panel : undefined;
+                                  const group = 'group' in item && item.group;
+                                  const nested = 'nested' in item && item.nested;
+                                  if (group) {
+                                    return (
+                                      <div
+                                        key={subLabel}
+                                        className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-[13px] font-semibold text-white"
+                                      >
+                                        <SubIcon className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                        <span className="leading-snug">{subLabel}</span>
+                                      </div>
+                                    );
+                                  }
                                   return (
                                     <button
                                       key={subLabel}
@@ -4697,7 +4820,9 @@ export default function DarkSidebar({
                                           router.push(href);
                                         }
                                       }}
-                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                      className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                        nested ? 'pl-8' : 'pl-3'
+                                      } ${
                                         subIdx < arr.length - 1 ? 'border-b border-gray-600/70' : ''
                                       }`}
                                     >

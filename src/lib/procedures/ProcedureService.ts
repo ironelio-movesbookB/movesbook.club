@@ -97,7 +97,7 @@ function buildPaymentCreateData(data: {
   amount: number;
   balanceAfter: number;
   paymentDate: Date;
-  operatorId: string;
+  operatorId: string | null;
   payMode: string | null;
   notes: string | null;
 }): Prisma.ProcedurePaymentUncheckedCreateInput {
@@ -127,6 +127,8 @@ function receiptMemberName(
   metadata: Record<string, unknown> | null | undefined,
   nameById: Map<string, string>,
 ): string {
+  const shopCustomerName = metaString(metadata, "shopCustomerName");
+  if (shopCustomerName) return shopCustomerName;
   const taxDocument = metadata?.taxDocument;
   if (
     taxDocument &&
@@ -1273,7 +1275,8 @@ export class ProcedureService {
       memberName:
         procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE
           ? ctx.club.name
-          : (profileById.get(row.memberId)?.name ?? row.memberId),
+          : metaString(row.metadata as Record<string, unknown> | null, "shopCustomerName") ||
+            (profileById.get(row.memberId)?.name ?? row.memberId),
       memberImage: profileById.get(row.memberId)?.image ?? null,
       operatorId: row.operatorId,
       operatorName: row.operatorId
@@ -1392,8 +1395,9 @@ export class ProcedureService {
         reversalOfId: row.reversalOfId,
         memberId: row.procedureRecord.memberId,
         memberName:
-          nameById.get(row.procedureRecord.memberId) ??
-          row.procedureRecord.memberId,
+          metaString(metadata, "shopCustomerName") ||
+          (nameById.get(row.procedureRecord.memberId) ??
+            row.procedureRecord.memberId),
         amount: decimalToNumber(row.amount),
         paymentDate: row.paymentDate.toISOString().slice(0, 10),
         operatorId: row.operatorId,

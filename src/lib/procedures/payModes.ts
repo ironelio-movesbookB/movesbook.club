@@ -23,6 +23,18 @@ export type PaymentTypeValue = (typeof PAYMENT_TYPE_OPTIONS)[number]['value'];
 /** No longer offered on forms; kept so older payments still show their label. */
 const RETIRED_PAYMENT_TYPES = [{ value: 'f24', label: 'F24 form **', legacyCode: '12' }] as const;
 
+/** Desk operator shares the member pay URL instead of taking cash on the form. */
+export const SHARE_ONLINE_PAY_MODES: readonly PaymentTypeValue[] = [
+  'credit_card',
+  'debit_card',
+  'paypal',
+  'satispay',
+];
+
+export function isShareOnlinePayMode(mode: string): boolean {
+  return mode === 'stripe' || SHARE_ONLINE_PAY_MODES.includes(mode as PaymentTypeValue);
+}
+
 /** Methods that can receive the "Send payment module" message. */
 export const SEND_PAYMENT_MODULE_METHODS: readonly PaymentTypeValue[] = [
   'credit_card',
@@ -94,6 +106,7 @@ export function payLinkProviderForMethod(method: string | null | undefined): 'st
     value === 'credit_card' ||
     value === 'debit_card' ||
     value === 'prepaid_card' ||
+    value === 'satispay' ||
     value === 'apple_pay' ||
     value === 'google_pay'
   ) {
