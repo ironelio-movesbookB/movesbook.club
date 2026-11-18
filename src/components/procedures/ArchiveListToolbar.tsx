@@ -43,6 +43,8 @@ type Props = {
   /** Enable Statistics as a link (Archive of Expenses → Expense graphs). */
   statisticsHref?: string;
   onStatisticsClick?: () => void;
+  onSendData?: () => void;
+  sendDataTitle?: string;
 };
 
 const inputClass =
@@ -66,6 +68,8 @@ export default function ArchiveListToolbar({
   compact = false,
   statisticsHref,
   onStatisticsClick,
+  onSendData,
+  sendDataTitle,
 }: Props) {
   const orderControl = (
     <label className={`flex min-w-[150px] flex-col ${compact ? 'min-w-[130px]' : ''}`}>
@@ -167,6 +171,8 @@ export default function ArchiveListToolbar({
         onDeleteSelected={onDeleteSelected}
         statisticsHref={statisticsHref}
         onStatisticsClick={onStatisticsClick}
+        onSendData={onSendData}
+        sendDataTitle={sendDataTitle}
       />
     </div>
   );

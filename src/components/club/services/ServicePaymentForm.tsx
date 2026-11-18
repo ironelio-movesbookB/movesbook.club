@@ -27,9 +27,13 @@ import type {
 } from "@/lib/club/serviceSaleClient";
 import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmModal";
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
-import ShareModal from "@/components/ShareModal";
+import PayModeAlert from "@/components/club/PayModeAlert";
+import PaymentLinkChannelModal, {
+  type PaymentLinkChannel,
+  type PaymentLinkResult,
+} from "@/components/club/PaymentLinkChannelModal";
 import {
-  isShareOnlinePayMode,
+  PAY_LINK_METHODS,
   PAYMENT_TYPE_OPTIONS,
   SHARE_ONLINE_PAY_MODES,
 } from "@/lib/procedures/payModes";
@@ -265,10 +269,10 @@ export default function ServicePaymentForm({
   );
   const amountPaidTouchedRef = useRef(false);
   const [payMode, setPayMode] = useState("cash");
-  const [linkNotice, setLinkNotice] = useState("");
-  const [linkBusy, setLinkBusy] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
+  const [linkRequest, setLinkRequest] = useState<{
+    amountEur: number;
+    lines: { recordId: string; amount: number }[];
+  } | null>(null);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
   const enabledMethods = useClubEnabledPaymentMethods();
@@ -952,7 +956,8 @@ export default function ServicePaymentForm({
       return;
     }
 
-    const onlinePay = procedureType !== "expense" && isShareOnlinePayMode(payMode);
+    const onlinePay =
+      procedureType !== "expense" && PAY_LINK_METHODS.includes(payMode);
     if (onlinePay) {
       if (!purchase.userId) {
         setInstallmentError(
@@ -965,43 +970,13 @@ export default function ServicePaymentForm({
         const recordId = row.recordId || purchase.id;
         totals.set(recordId, Math.round(((totals.get(recordId) ?? 0) + row.amount) * 100) / 100);
       }
-      setLinkBusy(true);
-      setLinkNotice("");
-      try {
-        const data = await clubApiFetch<{ payUrl?: string; emailed?: boolean }>(
-          "/api/club/member-online-payments",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              memberUserId: purchase.userId,
-              amountEur: paidAmount,
-              description: description.trim() || `${purchase.sectorName} ${purchase.serviceName}`.trim(),
-              payMode,
-              procedureType,
-              operatorId,
-              paymentDate,
-              lines: [...totals.entries()].map(([recordId, amount]) => ({ recordId, amount })),
-            }),
-          },
-        );
-        const rawUrl = (data.payUrl ?? "").trim();
-        const absoluteUrl = rawUrl.startsWith("http")
-          ? rawUrl
-          : rawUrl
-            ? `${window.location.origin}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`
-            : "";
-        setShareUrl(absoluteUrl);
-        setShareOpen(Boolean(absoluteUrl));
-        setLinkNotice(
-          data.emailed
-            ? `Payment link emailed to the member. Share it from the window as well.`
-            : `Share this payment link with the member.`,
-        );
-      } catch (err) {
-        setInstallmentError(err instanceof Error ? err.message : "Could not send the payment link");
-      } finally {
-        setLinkBusy(false);
-      }
+      setLinkRequest({
+        amountEur: paidAmount,
+        lines: [...totals.entries()].map(([recordId, amount]) => ({
+          recordId,
+          amount,
+        })),
+      });
       return;
     }
 
@@ -1030,6 +1005,40 @@ export default function ServicePaymentForm({
 
     // Close the form after a successful save.
     if (saved !== false) onCancel?.();
+  }
+
+  async function sendPaymentLink(
+    channel: PaymentLinkChannel,
+    email: string,
+  ): Promise<PaymentLinkResult> {
+    if (!linkRequest) throw new Error("Nothing to send");
+    const desc =
+      description.trim() ||
+      `${purchase.sectorName} ${purchase.serviceName}`.trim();
+    return clubApiFetch<PaymentLinkResult>("/api/club/member-online-payments", {
+      method: "POST",
+      body: JSON.stringify({
+        memberUserId: purchase.userId,
+        amountEur: linkRequest.amountEur,
+        description: desc,
+        payMode,
+        procedureType,
+        operatorId,
+        paymentDate,
+        lines: linkRequest.lines,
+        channel,
+        email,
+        receipt:
+          showTaxDocument && taxDoc && taxDocument
+            ? {
+                documentType: taxDocument.documentType,
+                documentNumber: taxDocument.documentNumber,
+                annotations: taxDocument.causal,
+                serviceName: purchase.serviceName,
+              }
+            : null,
+      }),
+    });
   }
 
   async function handleExpenseInvoiceUpload(file: File | undefined) {
@@ -1547,6 +1556,7 @@ export default function ServicePaymentForm({
                 </div>
               )}
             </div>
+            {!isExpensePayment && <PayModeAlert className="mt-2" />}
           </div>
 
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -1676,7 +1686,6 @@ export default function ServicePaymentForm({
         {installmentError && (
           <p className="text-red-600 text-sm">{installmentError}</p>
         )}
-        {linkNotice && <p className="text-green-700 text-sm break-all">{linkNotice}</p>}
         {success && <p className="text-green-700 text-sm">{success}</p>}
 
         <div className="flex justify-center gap-3">
@@ -1684,7 +1693,7 @@ export default function ServicePaymentForm({
             type="submit"
             disabled={
               saving ||
-              linkBusy ||
+              Boolean(linkRequest) ||
               invoiceBusy ||
               (isExpensePayment && !purchase.expenseInvoice) ||
               !hasPayableRest ||
@@ -1693,11 +1702,7 @@ export default function ServicePaymentForm({
             }
             className="px-6 py-2 bg-red-700 text-white rounded hover:bg-red-800 disabled:opacity-50"
           >
-            {saving || linkBusy
-              ? "Saving..."
-              : isShareOnlinePayMode(payMode)
-                ? "Share payment link"
-                : "Confirm"}
+            {saving ? "Saving..." : "Confirm"}
           </button>
           {onCancel && (
             <button
@@ -1710,6 +1715,20 @@ export default function ServicePaymentForm({
           )}
         </div>
       </form>
+
+      <PaymentLinkChannelModal
+        open={Boolean(linkRequest)}
+        memberUserId={purchase.userId}
+        memberName={purchase.memberName}
+        amountEur={linkRequest?.amountEur ?? 0}
+        onClose={() => setLinkRequest(null)}
+        sendLink={sendPaymentLink}
+        onSent={(notice) => {
+          setLinkRequest(null);
+          window.alert(notice);
+          onCancel?.();
+        }}
+      />
 
       {showTaxDocument && (
         <TaxDocumentModal
@@ -1974,16 +1993,6 @@ export default function ServicePaymentForm({
           </form>
         </div>
       )}
-
-      <ShareModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        title="Share payment link"
-        url={shareUrl}
-        description="Send this payment link to the member. They can pay by Credit card, PayPal, or Satispay from their phone."
-        hidePost
-        showEmail
-      />
 
       <AdminPasswordConfirmModal
         isOpen={showAdminPasswordModal}

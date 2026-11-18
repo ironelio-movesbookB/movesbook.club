@@ -4,9 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   normalizePaymentTypeValue,
   OTHERS_PAYMENT_OPTION,
+  PAY_MODE_TONE_COLOR,
   PAYMENT_TYPE_OPTIONS,
+  payModeTone,
   splitPaymentMethodsForForm,
 } from '@/lib/procedures/payModes';
+
+function toneStyle(value: string) {
+  return { color: PAY_MODE_TONE_COLOR[payModeTone(value)] };
+}
 
 type Props = {
   value: string;
@@ -89,28 +95,33 @@ export default function PaymentModeSelect({
       id={id}
       disabled={disabled}
       className={className}
+      style={toneStyle(selectValue)}
       value={selectValue}
       onChange={(e) => handleChange(e.target.value)}
     >
-      {allowEmpty ? <option value="">select</option> : null}
+      {allowEmpty ? <option value="" style={toneStyle('')}>select</option> : null}
       {locked
         ? lockedOptions.map((m) => (
-            <option key={m.value} value={m.value}>
+            <option key={m.value} value={m.value} style={toneStyle(m.value)}>
               {m.label}
             </option>
           ))
         : null}
       {!locked
         ? defaults.map((m) => (
-            <option key={m.value} value={m.value}>
+            <option key={m.value} value={m.value} style={toneStyle(m.value)}>
               {m.label}
             </option>
           ))
         : null}
-      {!locked && others.length > 0 ? <option value={OTHERS_PAYMENT_OPTION}>Others</option> : null}
+      {!locked && others.length > 0 ? (
+        <option value={OTHERS_PAYMENT_OPTION} style={toneStyle('')}>
+          Others
+        </option>
+      ) : null}
       {!locked && showOthers
         ? others.map((m) => (
-            <option key={`other-${m.value}`} value={m.value}>
+            <option key={`other-${m.value}`} value={m.value} style={toneStyle(m.value)}>
               {m.label}
             </option>
           ))
