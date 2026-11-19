@@ -156,7 +156,10 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
     const code = deadline?.procedureType as ProcedureTypeCode | undefined;
     const routeDef = code ? getProcedureDefinition(code) : def;
 
-    const base = routeDef?.routes.paymentDetail(primary) ?? def.routes.paymentDetail(primary);
+    const base =
+      code === PROCEDURE_TYPE_CODES.PRODUCT_SALE && ids.length > 1
+        ? `/clubs/payment_detail/${encodeURIComponent(primary)}?type=product_sale`
+        : routeDef?.routes.paymentDetail(primary) ?? def.routes.paymentDetail(primary);
     router.push(withPaymentIds(base, ids));
   }
 
