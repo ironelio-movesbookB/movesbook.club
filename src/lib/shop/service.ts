@@ -387,6 +387,17 @@ function normalizeTaxCode(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '');
 }
 
+async function ownerTaxCodesByUser(userIds: string[]) {
+  if (!userIds.length) return new Map<string, string[]>();
+  const extras = await prisma.userProfileExtras.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, ownerJson: true },
+  });
+  return new Map(
+    extras.map((row) => [row.userId, extractTaxCodes(row.ownerJson).map(normalizeTaxCode)]),
+  );
+}
+
 export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: string) {
   const needle = normalizeTaxCode(taxCode);
   if (!needle) return null;
@@ -402,8 +413,12 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
       },
       take: 2000,
     });
+    const ownerCodes = await ownerTaxCodesByUser(members.map((row) => row.member.id));
     for (const row of members) {
-      const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+      const codes = [
+        ...extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode),
+        ...(ownerCodes.get(row.member.id) ?? []),
+      ];
       if (codes.includes(needle)) {
         return {
           userId: row.member.id,
@@ -425,8 +440,12 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
     },
     take: 2000,
   });
+  const ownerCodes = await ownerTaxCodesByUser(members.map((row) => row.athlete.id));
   for (const row of members) {
-    const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+    const codes = [
+      ...extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode),
+      ...(ownerCodes.get(row.athlete.id) ?? []),
+    ];
     if (codes.includes(needle)) {
       return {
         userId: row.athlete.id,

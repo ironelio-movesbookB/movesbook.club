@@ -404,6 +404,20 @@ export default function ServicePaymentForm({
         disabled: false,
         recordId: purchase.id,
       }));
+    } else if (purchase.rest > 0) {
+      // Without installment rows the record is one deadline; its payments are not extra deadlines.
+      rows = [
+        {
+          id: "current",
+          balance: purchase.rest,
+          paymentDate: purchase.paydate,
+          expireDate: purchase.paydate,
+          createdAt: purchase.createdAt ?? null,
+          paid: purchase.pay,
+          disabled: false,
+          recordId: purchase.id,
+        },
+      ];
     } else {
       rows = payments.map((p) => ({
         id: p.id,
@@ -415,18 +429,6 @@ export default function ServicePaymentForm({
         disabled: true,
         recordId: purchase.id,
       }));
-      if (purchase.rest > 0) {
-        rows.unshift({
-          id: "current",
-          balance: purchase.rest,
-          paymentDate: purchase.paydate,
-          expireDate: purchase.paydate,
-          createdAt: purchase.createdAt ?? null,
-          paid: purchase.pay,
-          disabled: false,
-          recordId: purchase.id,
-        });
-      }
     }
     // Client: list chronologically — oldest deadline at the top (date, then time).
     return [...rows].sort(compareDeadlinesOldestFirst);
