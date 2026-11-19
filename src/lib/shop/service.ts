@@ -10,6 +10,7 @@ import { personName } from './auth';
 import { sellingArchiveSector, sellingPerformedBy, shopSector } from './sectors';
 import { formatSellingNumber } from './sellingNumber';
 import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { createMemberOnlinePayment, type MemberOnlineProvider } from '@/lib/club/memberOnlinePayments';
 import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
 import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
@@ -511,7 +512,11 @@ async function assertWorkspaceMember(workspace: ShopWorkspace, userId: string) {
       where: { clubId: workspace.id, memberId: userId },
       select: { id: true },
     });
-    if (!row) throw new Error('The selected member is not in this club.');
+    if (row) return;
+    const options = await fetchProcedureCustomerOptions(workspace.id);
+    if (!options.some((option) => option.id === userId)) {
+      throw new Error('The selected member is not in this club.');
+    }
     return;
   }
   const row = await prisma.teamMember.findFirst({
@@ -1003,7 +1008,7 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
   const [users, receipts] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: peopleIds } },
-      select: { id: true, email: true, name: true, firstName: true, surname: true },
+      select: { id: true, email: true, name: true, firstName: true, surname: true, image: true },
     }),
     prisma.procedureReceipt.findMany({
       where: { procedureRecordId: { in: records.map((record) => record.id) } },
@@ -1036,6 +1041,7 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
     const fallbackName = guestName || (user ? personName(user) : 'Customer');
     const fallbackEmail = textOf(meta.customerEmail) || user?.email || '';
     const party = partyOf(meta, fallbackName, fallbackEmail);
+    if (!party.photoUrl && ownMember) party.photoUrl = resolvePublicImageUrl(user.image) || '';
     const editedName = meta.customer
       ? [party.surname, party.firstName].filter(Boolean).join(' ').trim()
       : '';

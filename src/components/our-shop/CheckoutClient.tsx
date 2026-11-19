@@ -824,12 +824,24 @@ export default function CheckoutClient({ slug }: { slug: string }) {
                       key={product.id}
                       className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
                     >
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
+                        {product.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <ShoppingBag size={22} className="text-gray-400" />
+                        )}
+                      </div>
+
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold">{product.name}</p>
 
                         <p className="mt-1 text-sm text-gray-500">
-                          Quantity: {quantity} ×{' '}
-                          {euro.format(product.price)}
+                          {euro.format(product.price)} each
                         </p>
 
                         <button
@@ -842,7 +854,14 @@ export default function CheckoutClient({ slug }: { slug: string }) {
                         </button>
                       </div>
 
-                      <p className="shrink-0 text-sm font-bold">
+                      <div className="shrink-0 text-center">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Qty</p>
+                        <p className="mt-1 min-w-10 rounded-lg bg-gray-50 px-3 py-1.5 text-sm font-bold text-gray-900 ring-1 ring-gray-200">
+                          {quantity}
+                        </p>
+                      </div>
+
+                      <p className="w-20 shrink-0 text-right text-sm font-bold">
                         {euro.format(product.price * quantity)}
                       </p>
                     </div>

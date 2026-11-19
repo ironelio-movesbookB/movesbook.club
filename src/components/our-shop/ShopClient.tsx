@@ -15,6 +15,7 @@ import {
   Eye,
   ArrowRight,
   Package,
+  Search,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
@@ -76,6 +77,7 @@ const [cart, setCart] = useState<CartItem[]>([]);
 const [cartReady, setCartReady] = useState(false);
 const [cartOpen, setCartOpen] = useState(false);
 
+  const [productSearch, setProductSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [cartNotice, setCartNotice] = useState('');
@@ -382,6 +384,12 @@ const [cartOpen, setCartOpen] = useState(false);
   const availableProducts = shop.products.filter(
     (product) => product.isVisible,
   );
+  const searchTerm = productSearch.trim().toLowerCase();
+  const shownProducts = searchTerm
+    ? availableProducts.filter((product) =>
+        `${product.name} ${product.description ?? ''}`.toLowerCase().includes(searchTerm),
+      )
+    : availableProducts;
   const heroBanner =
     shop.club.headerMode === 'banner' && shop.club.bannerUrl ? shop.club.bannerUrl : '';
   const heroLogo = !heroBanner && shop.club.logoUrl ? shop.club.logoUrl : '';
@@ -459,14 +467,49 @@ const [cartOpen, setCartOpen] = useState(false);
               </p>
             </div>
 
-            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm font-medium text-gray-600 ring-1 ring-gray-100">
-              <Package size={17} className="text-purple-600" />
-              {availableProducts.length}{' '}
-              {availableProducts.length === 1 ? 'product' : 'products'}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {availableProducts.length > 0 ? (
+                <label className="relative block w-full sm:w-72">
+                  <span className="sr-only">Search products</span>
+                  <Search
+                    size={17}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="search"
+                    value={productSearch}
+                    onChange={(event) => setProductSearch(event.target.value)}
+                    placeholder="Search products"
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                </label>
+              ) : null}
+
+              <div className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm font-medium text-gray-600 ring-1 ring-gray-100">
+                <Package size={17} className="text-purple-600" />
+                {shownProducts.length}{' '}
+                {shownProducts.length === 1 ? 'product' : 'products'}
+              </div>
             </div>
           </div>
 
-          {availableProducts.length === 0 ? (
+          {availableProducts.length > 0 && shownProducts.length === 0 ? (
+            <div className="px-5 py-16 text-center sm:px-8">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
+                <Search size={28} />
+              </div>
+              <h3 className="mt-4 text-lg font-bold text-gray-900">
+                No products match &quot;{productSearch.trim()}&quot;
+              </h3>
+              <button
+                type="button"
+                onClick={() => setProductSearch('')}
+                className="mt-3 text-sm font-semibold text-purple-600 hover:text-purple-800"
+              >
+                Clear search
+              </button>
+            </div>
+          ) : availableProducts.length === 0 ? (
             <div className="px-5 py-20 text-center sm:px-8">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
                 <ShoppingBag size={30} />
@@ -480,7 +523,7 @@ const [cartOpen, setCartOpen] = useState(false);
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 sm:gap-4 sm:p-5 lg:grid-cols-4 lg:gap-4 lg:p-6">
-              {availableProducts.map((product) => {
+              {shownProducts.map((product) => {
                 const cartItem = cart.find(
                   (item) => item.product.id === product.id,
                 );

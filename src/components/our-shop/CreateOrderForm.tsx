@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import {
@@ -21,9 +21,23 @@ type CatalogProduct = {
   price: number;
   quantity: number;
   sector?: string;
+  imageUrl?: string;
 };
 
-type Line = { id: string; name: string; unitPrice: number; quantity: number };
+type Line = { id: string; name: string; unitPrice: number; quantity: number; imageUrl?: string };
+
+function ProductThumb({ src, size = 'h-9 w-9' }: { src?: string; size?: string }) {
+  return (
+    <span className={`flex ${size} shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100`}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Package size={16} className="text-gray-400" />
+      )}
+    </span>
+  );
+}
 
 type Buyer = {
   id: string;
@@ -125,7 +139,10 @@ export default function CreateOrderForm() {
           line.id === product.id ? { ...line, quantity: line.quantity + 1 } : line,
         );
       }
-      return [...current, { id: product.id, name: product.name, unitPrice: product.price, quantity: 1 }];
+      return [
+        ...current,
+        { id: product.id, name: product.name, unitPrice: product.price, quantity: 1, imageUrl: product.imageUrl },
+      ];
     });
     setQuery('');
   }
@@ -250,9 +267,12 @@ export default function CreateOrderForm() {
                 key={product.id}
                 type="button"
                 onClick={() => addProduct(product)}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50"
               >
-                <span className="min-w-0 truncate">{product.name}</span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <ProductThumb src={product.imageUrl} />
+                  <span className="min-w-0 truncate">{product.name}</span>
+                </span>
                 <span className="shrink-0 text-gray-500">
                   {shopSector(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
                 </span>
@@ -263,6 +283,7 @@ export default function CreateOrderForm() {
         <div className="mt-4 space-y-3">
           {lines.map((line) => (
             <div key={line.id} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+              <ProductThumb src={line.imageUrl} size="h-11 w-11" />
               <input
                 type="number"
                 min={1}

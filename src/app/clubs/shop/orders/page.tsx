@@ -36,6 +36,7 @@ type Order = {
   clubName?: string;
   customerName: string;
   customerEmail: string;
+  customer?: { photoUrl?: string | null } | null;
   items: OrderItem[];
   subtotal: number;
   total?: number;
@@ -68,6 +69,26 @@ const dateFormatter = new Intl.DateTimeFormat('en-IE', {
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Unknown date' : dateFormatter.format(date);
+}
+
+function MemberAvatar({ src, name }: { src?: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        onError={() => setFailed(true)}
+        className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+      />
+    );
+  }
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100 text-xs font-semibold uppercase text-purple-700">
+      {(name || '?').trim().charAt(0) || '?'}
+    </span>
+  );
 }
 
 function getPaymentStatus(order: Order): PaymentStatus {
@@ -335,8 +356,11 @@ function OrdersPage() {
                       {order.performedBy || 'Operator'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-slate-700">{order.sector || 'Shop'}</td>
-                    <td className="max-w-[160px] truncate px-3 py-3 font-medium text-slate-900">
-                      {order.customerName || '-'}
+                    <td className="max-w-[200px] px-3 py-3 font-medium text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <MemberAvatar src={order.customer?.photoUrl} name={order.customerName} />
+                        <span className="truncate">{order.customerName || '-'}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       <ProductCountPopup
