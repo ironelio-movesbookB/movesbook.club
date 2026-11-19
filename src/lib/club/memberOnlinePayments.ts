@@ -245,22 +245,42 @@ function cashPayModeLabel(payMode: string, provider: MemberOnlineProvider): stri
   return 'Credit card';
 }
 
-/** Writes the deadline payment after the member pays a link that was started from the reception form. */
-export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): Promise<void> {
+async function settlementLines(paymentId: string): Promise<OnlineSettlementLine[]> {
   await ensureTable();
   const rows = await prisma.$queryRawUnsafe<Array<{ settlement_json: string | null }>>(
     `SELECT settlement_json FROM \`${TABLE}\` WHERE id = ? LIMIT 1`,
-    payment.id,
+    paymentId,
   );
   const raw = rows[0]?.settlement_json;
-  if (!raw) return;
-  let lines: OnlineSettlementLine[] = [];
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as { lines?: OnlineSettlementLine[] };
-    lines = Array.isArray(parsed.lines) ? parsed.lines : [];
+    return Array.isArray(parsed.lines) ? parsed.lines : [];
   } catch {
-    return;
+    return [];
   }
+}
+
+/** False once a linked deadline was paid another way or deleted: collecting the link would overcharge. */
+export async function memberOnlinePaymentStillDue(paymentId: string): Promise<boolean> {
+  const owed = new Map<string, number>();
+  for (const line of await settlementLines(paymentId)) {
+    if (!line.recordId || !(Number(line.amount) > 0) || line.procedureType === 'expense') continue;
+    owed.set(line.recordId, (owed.get(line.recordId) ?? 0) + Number(line.amount));
+  }
+  if (owed.size === 0) return true;
+  const records = await prisma.procedureRecord.findMany({
+    where: { id: { in: [...owed.keys()] }, status: 'ACTIVE' },
+    select: { id: true, balanceAmount: true },
+  });
+  const balanceById = new Map(records.map((row) => [row.id, Number(row.balanceAmount)]));
+  return [...owed.entries()].every(([id, amount]) => (balanceById.get(id) ?? 0) + 0.001 >= amount);
+}
+
+/** Writes the deadline payment after the member pays a link that was started from the reception form. */
+export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): Promise<void> {
+  const lines = await settlementLines(payment.id);
+  if (lines.length === 0) return;
   const ctx = {
     userId: payment.createdByUserId,
     club: { id: payment.entityId, name: payment.entityName },

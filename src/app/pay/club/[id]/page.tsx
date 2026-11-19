@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 
 type PaymentView = {
   id: string;
-  status: 'pending' | 'paid';
+  status: 'pending' | 'paid' | 'closed';
   amountEur: number;
   description: string;
   entityName: string;
@@ -144,6 +144,14 @@ export default function ClubMemberPayPage({ params, searchParams }: PageProps) {
             <p className="mt-2 text-sm text-gray-700">
               {euro(payment.amountEur)} is paid to {payment.entityName}. You can close this page.
             </p>
+          </div>
+        ) : payment.status === 'closed' ? (
+          <div>
+            <p className="text-lg font-semibold text-gray-900">This payment link is closed</p>
+            <p className="mt-2 text-sm text-gray-700">
+              The deadline was already paid to {payment.entityName}. Nothing more is due on this link.
+            </p>
+            {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
           </div>
         ) : (
           <div>
