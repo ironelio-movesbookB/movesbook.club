@@ -914,6 +914,123 @@ export async function listUnifiedProductSales(
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
+function soldProductSector(sector: string | null | undefined) {
+  const value = String(sector ?? '').trim().toLowerCase();
+  if (value === 'shop' || value === 'bar' || value === 'restaurant') return value.toUpperCase();
+  return 'OTHER';
+}
+
+export async function listProductSaleLines(
+  ctx: ClubAuthContext,
+  params: ArchiveQueryParams = {}
+): Promise<PaginatedArchive<Record<string, unknown>>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  const productId = text(params.productId);
+  const items: Record<string, unknown>[] = productId
+    ? []
+    : (await loadLegacyProductSaleItems(ctx)).map((item) => ({
+        ...item,
+        course: '-',
+        description: '',
+        typology: 'Selling',
+        casual: soldProductSector(text(item.casual)),
+        paid: item.value,
+        status: item.status === 'Paid' ? 'Paid' : 'Unpaid',
+        service: '-',
+        operator: '-',
+      }));
+
+  try {
+    const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
+      page: 1,
+      pageSize: 500,
+      memberId: params.memberId,
+    });
+    const recordIds = procedure.items.map((row) => row.id);
+    const receipts = recordIds.length
+      ? await prisma.procedureReceipt.findMany({
+          where: { procedureRecordId: { in: recordIds } },
+          select: { procedureRecordId: true, documentNumber: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const invoiceByRecord = new Map<string, string>();
+    for (const receipt of receipts) {
+      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
+        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
+      }
+    }
+
+    const productIds = new Set<string>();
+    for (const row of procedure.items) {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      for (const line of Array.isArray(meta.products) ? meta.products : []) {
+        const id = line && typeof line === 'object' ? text((line as Record<string, unknown>).productId) : '';
+        if (id) productIds.add(id);
+      }
+    }
+    const shopProducts = productIds.size
+      ? await prisma.shopProduct.findMany({
+          where: { id: { in: [...productIds] } },
+          select: { id: true, imageUrl: true, sector: true },
+        })
+      : [];
+    const productById = new Map(shopProducts.map((product) => [product.id, product]));
+
+    for (const row of procedure.items) {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      if (productId && !metadataHasProduct(meta, productId)) continue;
+      const online = text(meta.source).toLowerCase() === 'online';
+      const lines = (Array.isArray(meta.products) ? meta.products : [])
+        .filter((line): line is Record<string, unknown> => Boolean(line) && typeof line === 'object')
+        .map((line) => ({
+          productId: text(line.productId),
+          name: text(line.name) || '-',
+          quantity: num(line.quantity) > 0 ? num(line.quantity) : 1,
+          price: num(line.price),
+        }));
+      if (lines.length === 0) {
+        lines.push({ productId: text(meta.productId), name: text(meta.productName) || '-', quantity: 1, price: row.totalAmount });
+      }
+      const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+      const paidRatio = subtotal > 0 ? row.totalAmount / subtotal : 1;
+      const saleSector = text(meta.sector) || text(meta.sectorName);
+
+      lines.forEach((line, index) => {
+        if (productId && line.productId !== productId) return;
+        const product = productById.get(line.productId);
+        const value = Math.round(line.price * line.quantity * 100) / 100;
+        items.push({
+          id: `proc-${row.id}-${index}`,
+          procedureRecordId: row.id,
+          memberId: row.memberId,
+          userId: row.memberId,
+          name: row.memberName,
+          image: row.memberImage,
+          description: product?.imageUrl || '',
+          course: line.quantity > 1 ? `${line.name} × ${line.quantity}` : line.name,
+          insertDate: row.recordDate,
+          typology: 'Selling',
+          casual: soldProductSector(product?.sector || (saleSector.includes(' - ') ? '' : saleSector) || 'Shop'),
+          value,
+          paid: Math.round(value * paidRatio * 100) / 100,
+          category: displaySellingNumber(meta.sellingNumber) || '-',
+          service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
+          operator: online ? 'Online shop' : row.operatorName || '-',
+          status: row.balanceAmount > 0 ? 'Unpaid' : 'Paid',
+          source: 'procedure',
+        });
+      });
+    }
+  } catch {
+    // product_sale procedure type may not be seeded yet
+  }
+
+  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
+  return paginate(applyFilters(items, params), page, pageSize);
+}
+
 export async function listLegacyProductSales(
   ctx: ClubAuthContext,
   params: ArchiveQueryParams = {}
