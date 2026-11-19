@@ -299,11 +299,15 @@ export default function CreateOrderForm() {
                 }
                 className="w-20 rounded-lg border border-gray-200 px-2 py-2 text-center text-sm"
               />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{line.name}</p>
-                <p className="text-xs text-gray-500">{formatPrice(line.unitPrice)} per unit</p>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">{line.name}</p>
+              <div className="w-24 shrink-0 text-right">
+                <p className="text-xs text-gray-500">Unit price</p>
+                <p className="text-sm tabular-nums text-gray-700">{formatPrice(line.unitPrice)}</p>
               </div>
-              <p className="text-sm font-semibold">{formatPrice(line.unitPrice * line.quantity)}</p>
+              <div className="w-24 shrink-0 text-right">
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="text-sm font-semibold tabular-nums">{formatPrice(line.unitPrice * line.quantity)}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))}

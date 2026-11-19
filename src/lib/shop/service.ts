@@ -1055,7 +1055,12 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
       memberUserId: ownMember ? user.id : null,
       customerName: editedName || fallbackName,
       customerEmail: party.email || fallbackEmail,
-      status: record.status === 'DELETED' ? 'CANCELLED' : settled ? 'COMPLETED' : 'PENDING',
+      status:
+        record.status === 'DELETED'
+          ? 'CANCELLED'
+          : settled || textOf(meta.orderStatus) === 'completed'
+            ? 'COMPLETED'
+            : 'PENDING',
       paid: settled,
       paidAmount: money(record.paidAmount),
       restAmount: money(record.balanceAmount),
@@ -1112,6 +1117,9 @@ export async function updateOrder(
 
   const locked = existing.status === 'COMPLETED' || existing.status === 'CANCELLED';
   const status = input.status ? statusIn(input.status) : existing.status;
+  if (existing.status === 'COMPLETED' && status !== 'COMPLETED') {
+    throw new Error('A completed order can only change the email and the payment method.');
+  }
   const discount = locked || input.discount == null ? money(existing.discount) : money(input.discount);
   let items = existing.items;
 
@@ -1133,16 +1141,22 @@ export async function updateOrder(
       data: { status: 'DELETED' },
     });
   } else if (existing.status !== 'CANCELLED') {
-    const customerName = input.customer
-      ? [input.customer.surname, input.customer.firstName].filter(Boolean).join(' ').trim()
-      : existing.customerName;
+    const customer =
+      locked && input.customer
+        ? { ...existing.customer, email: input.customer.email ?? existing.customer.email }
+        : input.customer;
+    const customerName =
+      customer && !locked
+        ? [customer.surname, customer.firstName].filter(Boolean).join(' ').trim()
+        : existing.customerName;
     await saveSaleDetails(workspace, existing, {
       items: locked ? existing.items : items,
       discount,
       customerName,
-      customerEmail: input.customer?.email?.trim() ?? existing.customerEmail,
+      customerEmail: customer?.email?.trim() ?? existing.customerEmail,
       paymentMethod: input.paymentMethod || existing.paymentMethod,
-      customer: input.customer,
+      customer,
+      orderStatus: status === 'COMPLETED' ? 'completed' : 'pending',
     });
   }
 
@@ -1172,6 +1186,7 @@ async function saveSaleDetails(
       postalCode?: string;
       dateOfBirth?: string;
     };
+    orderStatus: 'pending' | 'completed';
   },
 ) {
   const record = await prisma.procedureRecord.findFirst({
@@ -1219,6 +1234,7 @@ async function saveSaleDetails(
         customerName,
         customerEmail: party?.email || patch.customerEmail,
         paymentMethod: patch.paymentMethod,
+        orderStatus: patch.orderStatus,
         ...(party ? { customer: party } : {}),
         ...(existing.memberUserId ? {} : { shopCustomerName: customerName }),
       } as Prisma.InputJsonValue,

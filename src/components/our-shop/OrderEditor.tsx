@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopHeader } from '@/components/our-shop/pageChrome';
+import { normalizePaymentTypeValue, PAYMENT_TYPE_OPTIONS } from '@/lib/procedures/payModes';
 import {
   ArrowLeft,
   Save,
@@ -58,6 +59,11 @@ function formatPrice(price: number) {
   return `€${price.toFixed(2)}`;
 }
 
+/** Order payment method as a Pay Mode of the payment form; on-site/online pick nothing. */
+function payModeOf(paymentMethod: string) {
+  return normalizePaymentTypeValue(paymentMethod.replace(/-/g, '_'));
+}
+
 export default function OrderEditor({ orderId }: { orderId: string }) {
   const router = useRouter();
   const [orderProducts, setOrderProducts] = useState<Product[]>([]);
@@ -87,6 +93,8 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   const [receiptNumber, setReceiptNumber] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const linesLocked = savedStatus === 'completed' || savedStatus === 'cancelled';
+  const cancelled = savedStatus === 'cancelled';
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     shopFetch('/api/club/shop/products')
@@ -143,6 +151,23 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   }, [orderId]);
 
   async function saveOrder() {
+    if (await persistOrder()) router.push('/clubs/shop/orders');
+  }
+
+  async function openPaymentForm() {
+    if (!procedureRecordId) return;
+    setOpening(true);
+    const saved = cancelled || (await persistOrder());
+    setOpening(false);
+    if (!saved) return;
+    const params = new URLSearchParams({ type: 'product_sale' });
+    if (saleClubId) params.set('clubId', saleClubId);
+    const payMode = payModeOf(paymentMethod);
+    if (payMode) params.set('payMode', payMode);
+    router.push(`/clubs/payment_detail/${encodeURIComponent(procedureRecordId)}?${params.toString()}`);
+  }
+
+  async function persistOrder() {
     setError('');
     setMessage('');
     const response = await shopFetch('/api/club/shop/orders', {
@@ -175,9 +200,9 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setError(data.error || 'Could not save the order.');
-      return;
+      return false;
     }
-    router.push('/clubs/shop/orders');
+    return true;
   }
 
   async function issue(kind: 'receipt' | 'invoice') {
@@ -261,13 +286,15 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   return (
     <div className="space-y-4 md:space-y-6">
       <ShopHeader title={customerName || 'Order'} subtitle={`Shop / Orders / ${orderId ? 'Edit order' : 'Order'}`}>
-            <button
-              type="button"
-              onClick={() => void cancelOrder()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-            >
-              Cancel order
-            </button>
+            {!linesLocked && (
+              <button
+                type="button"
+                onClick={() => void cancelOrder()}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+              >
+                Cancel order
+              </button>
+            )}
 
             <button
               type="button"
@@ -455,6 +482,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                 <Field label="Order status" required>
                   <select
                     value={orderStatus}
+                    disabled={linesLocked}
                     onChange={(event) => setOrderStatus(event.target.value)}
                     className={inputClass}
                   >
@@ -466,8 +494,9 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
 
                 {orderStatus === 'completed' && (
                   <p className="mt-2 text-xs leading-5 text-red-600">
-                    If set as completed, only the email, payment status and
-                    payment method can be changed.
+                    {savedStatus === 'completed'
+                      ? 'This order is completed: only the email and the payment method can be changed. Use Open payment form to take the payment.'
+                      : 'Once saved as completed, only the email and the payment method can be changed, and the payment is taken with Open payment form.'}
                   </p>
                 )}
               </div>
@@ -518,12 +547,14 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
               </div>
               <div className="mt-4">
                 {procedureRecordId ? (
-                  <Link
-                    href={`/clubs/payment_detail/${encodeURIComponent(procedureRecordId)}?type=product_sale${saleClubId ? `&clubId=${encodeURIComponent(saleClubId)}` : ''}`}
-                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                  <button
+                    type="button"
+                    disabled={opening}
+                    onClick={() => void openPaymentForm()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
                   >
-                    Open payment form
-                  </Link>
+                    {opening ? 'Saving...' : 'Open payment form'}
+                  </button>
                 ) : (
                   <p className="text-sm text-gray-500">This selling has no deadline yet.</p>
                 )}
@@ -534,18 +565,30 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
               <Field label="Payment method" required>
                 <select
                   value={paymentMethod}
+                  disabled={cancelled}
                   onChange={(event) => setPaymentMethod(event.target.value)}
                   className={inputClass}
                 >
                   <option value="">Select payment method</option>
                   <option value="pickup">Collect and pay on site</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank-transfer">Bank transfer</option>
-                  <option value="online">Online payment</option>
-                  <option value="other">Other</option>
+                  {PAYMENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  {paymentMethod &&
+                  paymentMethod !== 'pickup' &&
+                  !PAYMENT_TYPE_OPTIONS.some((option) => option.value === paymentMethod) ? (
+                    <option value={paymentMethod}>
+                      {PAYMENT_TYPE_OPTIONS.find((option) => option.value === payModeOf(paymentMethod))?.label ??
+                        paymentMethod}
+                    </option>
+                  ) : null}
                 </select>
               </Field>
+              <p className="mt-2 text-xs leading-5 text-gray-500">
+                Open payment form starts with this method as the Pay Mode.
+              </p>
             </div>
           </div>
         </div>
@@ -627,6 +670,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                 <input
                   type="email"
                   value={email}
+                  disabled={cancelled}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="Enter email address"
                   className={inputClass}

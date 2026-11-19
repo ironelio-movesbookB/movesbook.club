@@ -6,7 +6,11 @@ import ServicePaymentForm, {
   type ServicePaymentSubmitValues,
 } from '@/components/club/services/ServicePaymentForm';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
+import PaymentFormArchiveView, {
+  type PaymentFormArchiveTab,
+} from '@/components/procedures/PaymentFormArchiveView';
 import { getServiceSaleTabs } from '@/components/procedures/configs/serviceSale';
+import type { ProcedureTab } from '@/components/procedures/types';
 import {
   addPayment,
   fetchFormOptions,
@@ -20,6 +24,7 @@ import {
 import { updateInstallment } from '@/lib/club/archives/clubArchiveClient';
 import { fetchOtherSettings } from '@/lib/club/otherSettingsClient';
 import { createProcedureClient, type ProcedurePaymentView, type ProcedureRecordView } from '@/lib/club/procedureClient';
+import { normalizePaymentTypeValue } from '@/lib/procedures/payModes';
 import { getProcedureTabs } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 
@@ -118,6 +123,7 @@ function PaymentDetailPageInner() {
   } | null>(null);
   const autoPaid = useRef(false);
   const [scopedRecordIds, setScopedRecordIds] = useState<string[]>([id].filter(Boolean));
+  const [view, setView] = useState<'deadline' | PaymentFormArchiveTab>('deadline');
 
   useEffect(() => {
     setProductSale(hintedProductSale);
@@ -302,6 +308,21 @@ function PaymentDetailPageInner() {
     return <div className="p-6 text-gray-500">Loading...</div>;
   }
 
+  const openRecords = purchase
+    ? [purchase, ...extraPurchases].filter(
+        (record) => record.id === purchase.id || scopedRecordIds.includes(record.id),
+      )
+    : [];
+  const productTabs: ProcedureTab[] = getProcedureTabs(
+    PROCEDURE_TYPE_CODES.PRODUCT_SALE,
+    'deadlines',
+    id,
+    purchase?.userId ?? null,
+  ).map((tab) => {
+    const tabView = tab.id === 'deadlines' ? 'deadline' : (tab.id as PaymentFormArchiveTab);
+    return { id: tabView, label: tab.label, onClick: () => setView(tabView) };
+  });
+
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <ProcedureArchiveShell
@@ -316,16 +337,23 @@ function PaymentDetailPageInner() {
               }
             : undefined
         }
-        activeTab="deadline"
+        activeTab={productSale ? view : 'deadline'}
         tabs={
           productSale
-            ? getProcedureTabs(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'deadlines', id, purchase?.userId ?? null)
+            ? productTabs
             : getServiceSaleTabs('deadline', id, scopedRecordIds, null, purchase?.userId ?? null)
         }
         error={!purchase ? error : undefined}
       >
+        {productSale && view !== 'deadline' && (
+          <PaymentFormArchiveView
+            procedureCode={PROCEDURE_TYPE_CODES.PRODUCT_SALE}
+            tab={view}
+            records={openRecords}
+          />
+        )}
         {purchase && options && (
-          <>
+          <div className={productSale && view !== 'deadline' ? 'hidden' : undefined}>
             <ServicePaymentForm
               purchase={purchase}
               extraPurchases={extraPurchases}
@@ -340,6 +368,7 @@ function PaymentDetailPageInner() {
               onAddToRecordTotal={
                 extraPurchases.length > 0 ? undefined : handleAddToRecordTotal
               }
+              defaultPayMode={normalizePaymentTypeValue(searchParams?.get('payMode')) || undefined}
               operatorPassStatus={otherSettings?.operatorPassStatus ?? 'Yes'}
               notEnterCustData={otherSettings?.notEnterCustData ?? false}
               onSelectedRecordIdsChange={(ids) => {
@@ -354,7 +383,7 @@ function PaymentDetailPageInner() {
                 });
               }}
             />
-          </>
+          </div>
         )}
       </ProcedureArchiveShell>
     </div>

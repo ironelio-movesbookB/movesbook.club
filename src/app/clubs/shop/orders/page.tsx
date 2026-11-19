@@ -332,6 +332,7 @@ function OrdersPage() {
                 <th className="px-3 py-3 font-semibold">Sector</th>
                 <th className="px-3 py-3 font-semibold">Member</th>
                 <th className="px-3 py-3 font-semibold">No. of products</th>
+                <th className="px-3 py-3 font-semibold">Status</th>
                 <th className="px-3 py-3 font-semibold">1th product purchased</th>
                 <th className="px-3 py-3 font-semibold">Total cost</th>
                 <th className="px-3 py-3 font-semibold">Paid</th>
@@ -350,7 +351,14 @@ function OrdersPage() {
                 const paidAmount = order.paidAmount ?? (getPaymentStatus(order) === 'paid' ? total : 0);
                 const restAmount = order.restAmount ?? Math.max(0, total - paidAmount);
                 return (
-                  <tr key={order.id} className="hover:bg-slate-50">
+                  <tr
+                    key={order.id}
+                    className={
+                      order.status === 'cancelled'
+                        ? 'bg-slate-100 opacity-60 grayscale'
+                        : 'hover:bg-slate-50'
+                    }
+                  >
                     <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatDate(order.createdAt)}</td>
                     <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-800">
                       {order.performedBy || 'Operator'}
@@ -367,6 +375,19 @@ function OrdersPage() {
                         count={productCount}
                         lines={order.items.map((item) => ({ name: item.name, quantity: item.quantity }))}
                       />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          order.status === 'completed'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : order.status === 'cancelled'
+                              ? 'bg-slate-200 text-slate-600'
+                              : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {getStatusLabel(order.status)}
+                      </span>
                     </td>
                     <td className="max-w-[180px] truncate px-3 py-3 text-slate-700">{firstProduct}</td>
                     <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
@@ -405,7 +426,7 @@ function OrdersPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={busy || order.status === 'cancelled'}
+                          disabled={busy || order.status !== 'pending'}
                           title="Delete"
                           onClick={() => void changeStatus(order, 'cancelled')}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"

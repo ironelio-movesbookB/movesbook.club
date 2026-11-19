@@ -96,6 +96,8 @@ type Props = {
   onSelectedRecordIdsChange?: (recordIds: string[]) => void;
   onUploadExpenseInvoice?: (file: File) => Promise<void>;
   onRemoveExpenseInvoice?: () => Promise<void>;
+  /** Pay Mode preselected when the form opens (e.g. the shop order's payment method). */
+  defaultPayMode?: string;
 };
 
 function formatDisplayDate(iso: string | null | undefined): string {
@@ -234,6 +236,7 @@ export default function ServicePaymentForm({
   onSelectedRecordIdsChange,
   onUploadExpenseInvoice,
   onRemoveExpenseInvoice,
+  defaultPayMode,
 }: Props) {
   const isMemberCreditPayment = procedureType === "member_credit";
   const isExpensePayment = procedureType === "expense";
@@ -264,7 +267,7 @@ export default function ServicePaymentForm({
     procedureType === "member_credit" ? "0.0" : "0",
   );
   const amountPaidTouchedRef = useRef(false);
-  const [payMode, setPayMode] = useState("cash");
+  const [payMode, setPayMode] = useState(defaultPayMode || "cash");
   const [linkNotice, setLinkNotice] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
