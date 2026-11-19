@@ -9,6 +9,42 @@ import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
 import { sellingArchiveSector, sellingPerformedBy, shopSector } from './sectors';
 import { formatSellingNumber } from './sellingNumber';
+import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
+import { createMemberOnlinePayment, type MemberOnlineProvider } from '@/lib/club/memberOnlinePayments';
+import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
+import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
+import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
+
+export type ShopHeaderMode = 'logo' | 'banner';
+
+export function shopHeaderMode(value: unknown): ShopHeaderMode {
+  return value === 'banner' ? 'banner' : 'logo';
+}
+
+export type ShopPaymentMethod = 'onsite' | 'bank_transfer' | 'online';
+
+/** The club's own card or PayPal account, when one is connected for the current site mode. */
+async function shopOnlineProvider(workspaceId: string): Promise<MemberOnlineProvider | null> {
+  const stored = await loadStoredMemberPaymentMethods(workspaceId);
+  const siteMode = await getMemberPaymentMode();
+  if (memberGatewayReady(stored, 'stripe', siteMode)) return 'stripe';
+  if (memberGatewayReady(stored, 'paypal', siteMode)) return 'paypal';
+  return null;
+}
+
+export async function shopOnlinePaymentReady(workspaceId: string): Promise<boolean> {
+  return Boolean(await shopOnlineProvider(workspaceId).catch(() => null));
+}
+
+/** Without any method switched on the shop would take no orders, so paying on site stays available. */
+function shopPaymentMethods(
+  settings: { onsitePaymentEnabled: boolean; bankTransferEnabled: boolean; onlinePaymentEnabled: boolean },
+  onlineReady: boolean,
+) {
+  const online = settings.onlinePaymentEnabled && onlineReady;
+  const bankTransfer = settings.bankTransferEnabled;
+  return { onsite: settings.onsitePaymentEnabled || (!online && !bankTransfer), bankTransfer, online };
+}
 
 export type ShopLineInput = { productId: string; quantity: number };
 
@@ -246,7 +282,13 @@ export function settingsDto(
     shopDescription: row.shopDescription ?? '',
     shopActive: row.shopActive,
     orderEmailsEnabled: row.orderEmailsEnabled,
-    onlinePaymentEnabled: false,
+    headerMode: shopHeaderMode(row.headerMode),
+    onsitePaymentEnabled: row.onsitePaymentEnabled,
+    bankTransferEnabled: row.bankTransferEnabled,
+    bankTransferDetails: row.bankTransferDetails ?? '',
+    onlinePaymentEnabled: row.onlinePaymentEnabled,
+    shopAlert: row.shopAlert ?? '',
+    afterSalesInfo: row.afterSalesInfo ?? '',
     slug: row.slug,
     publicPath: `/our-shop/shop/${row.slug}`,
     updatedAt: row.updatedAt.toISOString(),
@@ -745,12 +787,26 @@ export async function createPublicOrder(
       dateOfBirth?: string;
     };
     items: ShopLineInput[];
+    paymentMethod?: ShopPaymentMethod;
   },
 ) {
   const settings = await prisma.shopSettings.findUnique({ where: { slug } });
   if (!settings || !settings.shopActive) throw new Error('This shop is currently closed.');
   const org = await loadOrg(settings.workspaceKind, settings.workspaceId);
   if (!org) throw new Error('This shop could not be found.');
+  const paymentMethod = input.paymentMethod ?? 'onsite';
+  const onlineProvider =
+    paymentMethod === 'online' && settings.onlinePaymentEnabled
+      ? await shopOnlineProvider(org.id).catch(() => null)
+      : null;
+  const allowed = shopPaymentMethods(settings, Boolean(onlineProvider));
+  if (
+    (paymentMethod === 'onsite' && !allowed.onsite) ||
+    (paymentMethod === 'bank_transfer' && !allowed.bankTransfer) ||
+    (paymentMethod === 'online' && !allowed.online)
+  ) {
+    throw new Error('This payment method is not available in this shop.');
+  }
   const workspace: ShopWorkspace = {
     userId: org.adminId,
     userType: settings.workspaceKind === 'team' ? 'TEAM' : 'CLUB',
@@ -782,9 +838,42 @@ export async function createPublicOrder(
   const order = await createOneOrder(workspace, lines, buyer, {
     paid: false,
     source: 'online',
-    paymentMethod: 'pickup',
+    paymentMethod: paymentMethod === 'onsite' ? 'pickup' : paymentMethod,
   });
-  return orderDto(order, { slug: settings.slug, name: settings.displayName || org.name });
+  const shopName = settings.displayName || org.name;
+  const total = money(order.subtotal - order.discount);
+
+  let onlinePaymentId: string | null = null;
+  if (onlineProvider && order.procedureRecordId && total > 0) {
+    const description = `${shopName} order ${order.orderNumber}`.slice(0, 255);
+    const link = await createMemberOnlinePayment({
+      entityId: org.id,
+      entityName: shopName,
+      memberUserId: buyer.memberUserId || workspace.adminId,
+      memberName: buyer.name,
+      createdByUserId: workspace.adminId,
+      provider: onlineProvider,
+      amountEur: total,
+      description,
+      settlement: [
+        {
+          procedureType: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
+          recordId: order.procedureRecordId,
+          amount: total,
+          payMode: onlineProvider === 'paypal' ? 'paypal' : 'credit_card',
+          operatorId: workspace.adminId,
+          paymentDate: todayIso(),
+          description,
+        },
+      ],
+    });
+    onlinePaymentId = link.id;
+  }
+
+  return {
+    order: orderDto(order, { slug: settings.slug, name: shopName }),
+    onlinePaymentId,
+  };
 }
 
 async function loadOrg(kind: string, id: string) {
@@ -843,13 +932,25 @@ export async function getPublicShop(slug: string, viewerUserId?: string | null) 
     },
     orderBy: { name: 'asc' },
   });
+  const publicOrg = await findPublicOrg(org.id);
+  const card = publicOrg ? publicOrgCard(publicOrg) : null;
   return {
     club: {
       id: org.id,
       slug: settings.slug,
       name: settings.displayName?.trim() || org.name,
       description: settings.shopDescription ?? '',
+      logoUrl: card?.logoUrl ?? null,
+      bannerUrl: card?.bannerUrl ?? null,
+      headerMode: shopHeaderMode(settings.headerMode),
     },
+    alert: settings.shopAlert ?? '',
+    afterSalesInfo: settings.afterSalesInfo ?? '',
+    bankTransferDetails: settings.bankTransferEnabled ? settings.bankTransferDetails ?? '' : '',
+    paymentMethods: shopPaymentMethods(
+      settings,
+      settings.onlinePaymentEnabled && Boolean(await shopOnlineProvider(org.id).catch(() => null)),
+    ),
     shopActive: settings.shopActive,
     viewer: { isMember },
     products: products.map(productDto),

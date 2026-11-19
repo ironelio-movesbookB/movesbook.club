@@ -7,9 +7,12 @@ import { shopFetch } from '@/lib/shop/browser';
 import { cartAddBlockReason } from '@/lib/shop/cartRules';
 import {
   ArrowLeft,
+  AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
+  CreditCard,
+  Landmark,
   RefreshCw,
   ShoppingBag,
   Trash2,
@@ -61,8 +64,47 @@ type ShopData = {
   };
   shopActive: boolean;
   viewer?: { isMember: boolean };
+  alert?: string;
+  afterSalesInfo?: string;
+  bankTransferDetails?: string;
+  paymentMethods?: { onsite: boolean; bankTransfer: boolean; online: boolean };
   products: Product[];
 };
+
+type PaymentChoice = 'onsite' | 'bank_transfer' | 'online';
+
+const PAYMENT_OPTIONS: {
+  id: PaymentChoice;
+  title: string;
+  text: string;
+  Icon: typeof ShoppingBag;
+}[] = [
+  {
+    id: 'online',
+    title: 'Pay online',
+    text: 'Pay now by card or PayPal. The order is marked paid as soon as the payment arrives.',
+    Icon: CreditCard,
+  },
+  {
+    id: 'bank_transfer',
+    title: 'Bank transfer',
+    text: 'Place the order now and pay by bank transfer using the bank details shown after the order.',
+    Icon: Landmark,
+  },
+  {
+    id: 'onsite',
+    title: 'Collect and pay on site',
+    text: 'Place your order now and pay when you collect it. No online payment will be taken.',
+    Icon: ShoppingBag,
+  },
+];
+
+function paymentChoiceAvailable(shop: ShopData | null, id: PaymentChoice): boolean {
+  const methods = shop?.paymentMethods ?? { onsite: true, bankTransfer: false, online: false };
+  if (id === 'online') return methods.online;
+  if (id === 'bank_transfer') return methods.bankTransfer;
+  return methods.onsite;
+}
 
 const euro = new Intl.NumberFormat('en-IE', {
   style: 'currency',
@@ -141,6 +183,7 @@ export default function CheckoutClient({ slug }: { slug: string }) {
   const [details, setDetails] = useState<CustomerDetails>(emptyDetails);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [onsiteSelected, setOnsiteSelected] = useState(false);
+  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice | null>(null);
   const [orderNumber, setOrderNumber] = useState('');
 
   useEffect(() => {
@@ -267,6 +310,12 @@ export default function CheckoutClient({ slug }: { slug: string }) {
     };
   }, [slug, cartStorageKey]);
 
+  useEffect(() => {
+    if (!shop || paymentChoice) return;
+    const available = PAYMENT_OPTIONS.filter((option) => paymentChoiceAvailable(shop, option.id));
+    if (available.length === 1) setPaymentChoice(available[0].id);
+  }, [shop, paymentChoice]);
+
   const totalItems = useMemo(
     () => cart.reduce((total, item) => total + item.quantity, 0),
     [cart],
@@ -328,6 +377,7 @@ export default function CheckoutClient({ slug }: { slug: string }) {
     setDetails(emptyDetails);
     setPrivacyAccepted(false);
     setOnsiteSelected(false);
+    setPaymentChoice(null);
     setCart([]);
     setSubmitting(false);
 
@@ -412,7 +462,7 @@ export default function CheckoutClient({ slug }: { slug: string }) {
         );
       }
 
-      if (!onsiteSelected) {
+      if (!onsiteSelected || !paymentChoice) {
         throw new Error('Please select a payment method.');
       }
 
@@ -428,7 +478,7 @@ export default function CheckoutClient({ slug }: { slug: string }) {
           customerDetails: details,
           privacyPolicyAccepted:
             userType === 'non-affiliated' ? privacyAccepted : false,
-          paymentMethod: 'onsite',
+          paymentMethod: paymentChoice,
           items: cart.map(({ product, quantity }) => ({
             productId: product.id,
             quantity,
@@ -472,6 +522,12 @@ export default function CheckoutClient({ slug }: { slug: string }) {
         sessionStorage.removeItem(cartStorageKey);
       } catch (storageError) {
         console.error('Could not clear the saved cart:', storageError);
+      }
+
+      const payUrl = 'payUrl' in data && typeof data.payUrl === 'string' ? data.payUrl : '';
+      if (payUrl) {
+        window.location.href = payUrl;
+        return;
       }
 
       setConfirmedItems(itemsToConfirm);
@@ -529,9 +585,9 @@ export default function CheckoutClient({ slug }: { slug: string }) {
               After-sales info
             </h2>
 
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              Please keep your order number for reference if you have any
-              questions about your purchase.
+            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-600">
+              {shop?.afterSalesInfo ||
+                'Please keep your order number for reference if you have any questions about your purchase.'}
             </p>
           </section>
 
@@ -613,17 +669,33 @@ export default function CheckoutClient({ slug }: { slug: string }) {
             </h2>
 
             <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-gray-200 px-4 py-4">
-              <span className="text-sm text-gray-700">Payment on site</span>
+              <span className="text-sm text-gray-700">
+                {paymentChoice === 'bank_transfer' ? 'Bank transfer' : 'Payment on site'}
+              </span>
 
               <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
                 Unpaid
               </span>
             </div>
 
-            <p className="mt-3 text-sm leading-6 text-gray-500">
-              Online payment has not been taken. Payment is due at the shop
-              when you collect your order.
-            </p>
+            {paymentChoice === 'bank_transfer' ? (
+              <div className="mt-3 text-sm leading-6 text-gray-600">
+                <p>
+                  Pay {euro.format(confirmedTotal)} by bank transfer, writing order number {orderNumber} in the
+                  payment reason, then send the payment receipt to the shop.
+                </p>
+                {shop?.bankTransferDetails ? (
+                  <p className="mt-3 whitespace-pre-line rounded-lg bg-gray-50 px-4 py-3 font-medium text-gray-900">
+                    {shop.bankTransferDetails}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-gray-500">
+                Online payment has not been taken. Payment is due at the shop
+                when you collect your order.
+              </p>
+            )}
           </section>
 
           <section className="py-7">
@@ -719,6 +791,13 @@ export default function CheckoutClient({ slug }: { slug: string }) {
             ))}
           </div>
         </header>
+
+        {shop?.alert ? (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+            <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+            <p className="whitespace-pre-line">{shop.alert}</p>
+          </div>
+        ) : null}
 
         {error && (
           <div
@@ -1122,25 +1201,37 @@ export default function CheckoutClient({ slug }: { slug: string }) {
             <h2 className="text-lg font-bold">Payment method</h2>
 
             <p className="mt-2 text-sm leading-6 text-gray-500">
-              Choose how you will pay for this order. Online payment is not
-              connected yet, so this version supports payment at the shop.
+              Choose how you will pay for this order.
             </p>
 
-            <div className="mt-6 rounded-2xl border border-purple-300 bg-purple-50 p-5">
-              <div className="flex items-start gap-3">
-                <ShoppingBag className="mt-0.5 text-purple-700" size={22} />
-
-                <div>
-                  <h3 className="font-bold text-gray-900">
-                    Collect and pay on site
-                  </h3>
-
-                  <p className="mt-2 text-sm leading-6 text-gray-600">
-                    Place your order now and arrange payment with the company
-                    when you collect it. No online payment will be taken.
-                  </p>
-                </div>
-              </div>
+            <div className="mt-6 space-y-3">
+              {PAYMENT_OPTIONS.filter((option) => paymentChoiceAvailable(shop, option.id)).map(
+                ({ id, title, text, Icon }) => {
+                  const selected = paymentChoice === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setPaymentChoice(id);
+                        setError('');
+                      }}
+                      className={`flex w-full items-start gap-3 rounded-2xl border p-5 text-left transition ${
+                        selected
+                          ? 'border-purple-400 bg-purple-50 ring-2 ring-purple-200'
+                          : 'border-gray-200 bg-white hover:border-purple-200'
+                      }`}
+                    >
+                      <Icon className="mt-0.5 shrink-0 text-purple-700" size={22} />
+                      <span>
+                        <span className="block font-bold text-gray-900">{title}</span>
+                        <span className="mt-2 block text-sm leading-6 text-gray-600">{text}</span>
+                      </span>
+                    </button>
+                  );
+                },
+              )}
             </div>
 
             <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-5">
@@ -1168,7 +1259,7 @@ export default function CheckoutClient({ slug }: { slug: string }) {
 
               <button
                 type="button"
-                disabled={cart.length === 0 || !shop?.shopActive}
+                disabled={cart.length === 0 || !shop?.shopActive || !paymentChoice}
                 onClick={() => {
                   setOnsiteSelected(true);
                   setError('');
@@ -1188,13 +1279,16 @@ export default function CheckoutClient({ slug }: { slug: string }) {
             <h2 className="text-lg font-bold">Complete the order</h2>
 
             <p className="mt-2 text-sm leading-6 text-gray-500">
-              Check your total and confirm that you will collect and pay on
-              site.
+              Check your total and confirm the payment method.
             </p>
 
             <div className="mt-6 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-4">
               <span className="text-sm font-semibold text-gray-600">
-                Total due at collection
+                {paymentChoice === 'online'
+                  ? 'Total to pay now'
+                  : paymentChoice === 'bank_transfer'
+                    ? 'Total to pay by bank transfer'
+                    : 'Total due at collection'}
               </span>
 
               <span className="text-xl font-bold text-gray-900">
@@ -1214,12 +1308,16 @@ export default function CheckoutClient({ slug }: { slug: string }) {
 
               <span>
                 <span className="block font-semibold text-gray-900">
-                  Collect and pay on site
+                  {PAYMENT_OPTIONS.find((option) => option.id === paymentChoice)?.title ??
+                    'Collect and pay on site'}
                 </span>
 
                 <span className="mt-1 block text-sm leading-6 text-gray-500">
-                  By selecting this method, you will place the order and can
-                  arrange payment with the company at a later time.
+                  {paymentChoice === 'online'
+                    ? 'Confirming opens the secure payment page. The order is paid once the payment is complete.'
+                    : paymentChoice === 'bank_transfer'
+                      ? 'Confirming places the order. The bank details for the transfer are shown next.'
+                      : 'By selecting this method, you will place the order and can arrange payment with the company at a later time.'}
                 </span>
               </span>
             </label>
@@ -1263,7 +1361,6 @@ export default function CheckoutClient({ slug }: { slug: string }) {
 
         <p className="mt-6 text-center text-xs leading-5 text-gray-400">
           Your order total is recalculated from the products stored by the shop.
-          No online payment is taken in this version.
         </p>
       </div>
       <CartNotice message={cartNotice} onClose={() => setCartNotice('')} />

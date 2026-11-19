@@ -12,12 +12,6 @@ import {
   AlertCircle,
   RotateCcw,
   Check,
-  Bold,
-  Italic,
-  Underline,
-  Link as LinkIcon,
-  List,
-  ListOrdered,
 } from 'lucide-react';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { shopFetch } from '@/lib/shop/browser';
@@ -28,10 +22,31 @@ type ShopSettings = {
   shopDescription: string;
   shopActive: boolean;
   orderEmailsEnabled: boolean;
+  headerMode: 'logo' | 'banner';
+  onsitePaymentEnabled: boolean;
+  bankTransferEnabled: boolean;
+  bankTransferDetails: string;
   onlinePaymentEnabled: boolean;
+  onlinePaymentReady?: boolean;
+  shopAlert: string;
+  afterSalesInfo: string;
   publicPath?: string;
   updatedAt: string;
 };
+
+const EDITABLE_KEYS = [
+  'shopName',
+  'shopDescription',
+  'shopActive',
+  'orderEmailsEnabled',
+  'headerMode',
+  'onsitePaymentEnabled',
+  'bankTransferEnabled',
+  'bankTransferDetails',
+  'onlinePaymentEnabled',
+  'shopAlert',
+  'afterSalesInfo',
+] as const;
 
 const defaults: Omit<ShopSettings, 'updatedAt'> = {
   clubId: '',
@@ -39,7 +54,13 @@ const defaults: Omit<ShopSettings, 'updatedAt'> = {
   shopDescription: '',
   shopActive: true,
   orderEmailsEnabled: true,
+  headerMode: 'logo',
+  onsitePaymentEnabled: true,
+  bankTransferEnabled: false,
+  bankTransferDetails: '',
   onlinePaymentEnabled: false,
+  shopAlert: '',
+  afterSalesInfo: '',
   publicPath: '',
 };
 
@@ -93,11 +114,7 @@ export default function SettingsPage() {
   }, [loadSettings]);
 
   const hasChanges = savedSettings
-    ? settings.shopName !== savedSettings.shopName ||
-      settings.shopDescription !== savedSettings.shopDescription ||
-      settings.shopActive !== savedSettings.shopActive ||
-      settings.orderEmailsEnabled !== savedSettings.orderEmailsEnabled ||
-      settings.onlinePaymentEnabled !== savedSettings.onlinePaymentEnabled
+    ? EDITABLE_KEYS.some((key) => settings[key] !== savedSettings[key])
     : false;
 
   function updateSetting<K extends keyof ShopSettings>(
@@ -119,16 +136,12 @@ export default function SettingsPage() {
     setSuccess('');
 
     try {
-      // Keep the existing API endpoint and payload unchanged.
       const response = await shopFetch('/api/club/shop/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopName: settings.shopName,
-          shopDescription: settings.shopDescription,
-          shopActive: settings.shopActive,
-          orderEmailsEnabled: settings.orderEmailsEnabled,
-        }),
+        body: JSON.stringify(
+          Object.fromEntries(EDITABLE_KEYS.map((key) => [key, settings[key]])),
+        ),
       });
 
       const data = await response.json();
@@ -249,15 +262,33 @@ export default function SettingsPage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field label="Introduction">
-                  <textarea
-                    value={settings.shopDescription}
-                    onChange={(event) => updateSetting('shopDescription', event.target.value)}
-                    rows={4}
-                    placeholder="Shown under the club or team name"
-                    className={inputClass}
-                  />
-                </Field>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-700">Top of the shop page</p>
+                  <div className="flex flex-wrap gap-5">
+                    {(
+                      [
+                        ['logo', 'Logo'],
+                        ['banner', 'Banner'],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <label key={mode} className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                        <input
+                          type="radio"
+                          name="shopHeaderMode"
+                          checked={settings.headerMode === mode}
+                          onChange={() => updateSetting('headerMode', mode)}
+                          className="h-4 w-4 accent-purple-600"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-gray-400">
+                    Logo shows the club or team logo above the name. Banner puts the club or team banner behind the
+                    name, as on the sponsor kit page. Both come from the club or team profile; without a banner the
+                    logo is shown.
+                  </p>
+                </div>
                 <SettingsCheckbox
                   checked={settings.shopActive}
                   onChange={(value) => updateSetting('shopActive', value)}
@@ -278,30 +309,46 @@ export default function SettingsPage() {
             <SettingsSection title="Payment methods">
               <div className="space-y-6">
                 <SettingsCheckbox
-                  checked={false}
-                  onChange={() => {}}
+                  checked={settings.onlinePaymentEnabled}
+                  onChange={(value) => updateSetting('onlinePaymentEnabled', value)}
                   label="Enable order completion with online payment"
-                  description="Card charging is not part of this shop. Customers collect the order and pay on site."
-                  visualOnly
+                  description="Customers pay by card or PayPal on the club or team account set in Payment methods for members. The selling is marked paid when the payment arrives."
                 />
+                {settings.onlinePaymentEnabled && settings.onlinePaymentReady === false && (
+                  <p className="-mt-3 text-xs leading-5 text-amber-700">
+                    No card or PayPal account is connected yet, so customers will not see this option. Connect one
+                    in Payment methods for members.
+                  </p>
+                )}
 
                 <div className="border-t border-gray-100 pt-5">
                   <SettingsCheckbox
-                    checked={false}
-                    onChange={() => {}}
+                    checked={settings.bankTransferEnabled}
+                    onChange={(value) => updateSetting('bankTransferEnabled', value)}
                     label="Enable order completion with bank transfer"
-                    description="Allow customers to place orders using a bank transfer and send their payment receipt."
-                    visualOnly
+                    description="Customers place the order and pay by bank transfer, then send their payment receipt. The selling stays unpaid until staff register the payment."
                   />
+                  {settings.bankTransferEnabled && (
+                    <div className="mt-4">
+                      <Field label="Bank details shown to the customer">
+                        <textarea
+                          value={settings.bankTransferDetails}
+                          onChange={(event) => updateSetting('bankTransferDetails', event.target.value)}
+                          rows={3}
+                          placeholder="Account holder, IBAN, bank, and where to send the receipt"
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-gray-100 pt-5">
                   <SettingsCheckbox
-                    checked
-                    onChange={() => {}}
+                    checked={settings.onsitePaymentEnabled}
+                    onChange={(value) => updateSetting('onsitePaymentEnabled', value)}
                     label="Collect and pay on site"
-                    description="This is how every order is completed. The order stays unpaid until staff mark it paid."
-                    visualOnly
+                    description="Customers collect the order and pay at the club or team. The order stays unpaid until staff register the payment."
                   />
                 </div>
               </div>
@@ -319,11 +366,13 @@ export default function SettingsPage() {
                     the page, under the main title.
                   </p>
 
-                  <div className="mt-4">
-                    <RichTextPlaceholder
-                      placeholder="Introduce your shop to customers..."
-                    />
-                  </div>
+                  <textarea
+                    value={settings.shopDescription}
+                    onChange={(event) => updateSetting('shopDescription', event.target.value)}
+                    rows={4}
+                    placeholder="Introduce your shop to customers..."
+                    className={`${inputClass} mt-4`}
+                  />
                 </div>
 
                 <div className="border-t border-gray-100 pt-6">
@@ -335,11 +384,13 @@ export default function SettingsPage() {
                     closure notices or collection information.
                   </p>
 
-                  <div className="mt-4">
-                    <RichTextPlaceholder
-                      placeholder="Enter an important notice for customers..."
-                    />
-                  </div>
+                  <textarea
+                    value={settings.shopAlert}
+                    onChange={(event) => updateSetting('shopAlert', event.target.value)}
+                    rows={3}
+                    placeholder="Enter an important notice for customers..."
+                    className={`${inputClass} mt-4`}
+                  />
                 </div>
 
                 <div className="border-t border-gray-100 pt-6">
@@ -351,11 +402,13 @@ export default function SettingsPage() {
                     on the customer's order summary page.
                   </p>
 
-                  <div className="mt-4">
-                    <RichTextPlaceholder
-                      placeholder="Enter after-sales information..."
-                    />
-                  </div>
+                  <textarea
+                    value={settings.afterSalesInfo}
+                    onChange={(event) => updateSetting('afterSalesInfo', event.target.value)}
+                    rows={3}
+                    placeholder="Enter after-sales information..."
+                    className={`${inputClass} mt-4`}
+                  />
                 </div>
               </div>
             </SettingsSection>
@@ -534,69 +587,5 @@ function SettingsCheckbox({
         </div>
       </div>
     </div>
-  );
-}
-
-/* Reference-style rich-text editor preview.
-   Toolbar and text area are intentionally non-interactive. */
-function RichTextPlaceholder({
-  placeholder,
-}: {
-  placeholder: string;
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-2">
-        <ToolbarIcon>
-          <Bold size={16} />
-        </ToolbarIcon>
-        <ToolbarIcon>
-          <Italic size={16} />
-        </ToolbarIcon>
-        <ToolbarIcon>
-          <Underline size={16} />
-        </ToolbarIcon>
-
-        <div className="mx-1 h-5 w-px bg-gray-200" />
-
-        <ToolbarIcon>
-          <LinkIcon size={16} />
-        </ToolbarIcon>
-        <ToolbarIcon>
-          <List size={16} />
-        </ToolbarIcon>
-        <ToolbarIcon>
-          <ListOrdered size={16} />
-        </ToolbarIcon>
-      </div>
-
-      <textarea
-        aria-label={placeholder}
-        placeholder={placeholder}
-        readOnly
-        rows={4}
-        className="w-full resize-none bg-white px-4 py-3 text-sm leading-6 text-gray-800 outline-none placeholder:text-gray-400"
-      />
-
-      <div className="border-t border-gray-100 px-4 py-2">
-        <span className="text-[11px] text-gray-400">
-          Visual placeholder — not saved
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ToolbarIcon({ children }: { children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      disabled
-      tabIndex={-1}
-      aria-hidden="true"
-      className="inline-flex h-8 w-8 cursor-default items-center justify-center rounded-md text-gray-500 opacity-70"
-    >
-      {children}
-    </button>
   );
 }

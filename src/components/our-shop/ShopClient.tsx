@@ -42,9 +42,13 @@ type ShopData = {
     slug: string;
     name: string;
     description: string;
+    logoUrl?: string | null;
+    bannerUrl?: string | null;
+    headerMode?: 'logo' | 'banner';
   };
   shopActive: boolean;
   viewer?: { isMember: boolean };
+  alert?: string;
   products: Product[];
 };
 
@@ -378,12 +382,34 @@ const [cartOpen, setCartOpen] = useState(false);
   const availableProducts = shop.products.filter(
     (product) => product.isVisible,
   );
+  const heroBanner =
+    shop.club.headerMode === 'banner' && shop.club.bannerUrl ? shop.club.bannerUrl : '';
+  const heroLogo = !heroBanner && shop.club.logoUrl ? shop.club.logoUrl : '';
 
   return (
     <main className="min-h-screen bg-[#f7f7fb] text-gray-900">
       {/* Black hero section */}
-      <section className="relative flex justify-content-center min-h-[340px] bg-[#111111] px-5 pb-28 pt-12 text-white sm:min-h-[390px] sm:px-8 sm:pt-16 lg:min-h-[420px]">
+      <section
+        className="relative flex justify-content-center min-h-[340px] bg-[#111111] px-5 pb-28 pt-12 text-white sm:min-h-[390px] sm:px-8 sm:pt-16 lg:min-h-[420px]"
+        style={
+          heroBanner
+            ? {
+                backgroundImage: `linear-gradient(rgba(15,23,42,.55), rgba(15,23,42,.8)), url(${heroBanner})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
         <div className="mx-auto max-w-7xl">
+          {heroLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroLogo}
+              alt=""
+              className="absolute left-5 top-5 h-14 w-14 rounded-full bg-white object-contain p-1 shadow-lg sm:left-8 sm:top-8 sm:h-16 sm:w-16"
+            />
+          ) : null}
           <div className="mt-10 max-w-4xl sm:mt-12 text-center">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-purple-300 sm:text-sm">
               Official merchandise
@@ -391,7 +417,7 @@ const [cartOpen, setCartOpen] = useState(false);
             <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
               {shop.club.name}
             </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-7 text-gray-300 sm:text-base">
+            <p className="mt-5 max-w-2xl whitespace-pre-line text-sm leading-7 text-gray-300 sm:text-base">
               {shop.club.description ||
                 'Explore our official collection and find your favourites.'}
             </p>
@@ -414,6 +440,12 @@ const [cartOpen, setCartOpen] = useState(false);
       {/* One large panel overlapping the hero */}
       <div className="relative mx-auto -mt-16 max-w-7xl px-4 pb-12 sm:-mt-20 sm:px-8">
         <section className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-[0_20px_70px_rgba(20,20,40,0.10)]">
+          {shop.alert ? (
+            <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-900 sm:px-8">
+              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+              <p className="whitespace-pre-line">{shop.alert}</p>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-8 sm:py-7">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-purple-600">
