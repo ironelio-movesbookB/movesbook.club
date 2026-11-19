@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import type { ArticlePasted, ArticleTyped, OgpNewsGroupCard } from '@/app/news/components/NewsArticlesList';
 import type { OGPData, OgpVisibilitySettingsExport } from '@/app/news/components/OGPForm';
 import { NEWS_TOPICS } from '@/app/news/components/NewsTopicBar';
+import { resolveIsSuperAdminFromStorage } from '@/lib/panelSession';
 
 function getAuthHeaders(adminContext?: boolean): HeadersInit {
   if (typeof window === 'undefined') return {};
@@ -66,6 +67,7 @@ export interface UseNewsDataResult {
       musicTitle?: string | null;
       registrationType?: string | null;
       typology?: string | null;
+      sportEquipment?: string | null;
       isFavourite?: boolean;
     },
     topic: string,
@@ -86,6 +88,7 @@ export interface UseNewsDataResult {
       musicTitle?: string | null;
       registrationType?: string | null;
       typology?: string | null;
+      sportEquipment?: string | null;
       isFavourite?: boolean;
     }
   ) => Promise<void>;
@@ -116,8 +119,13 @@ export interface UseNewsDataResult {
     }
   ) => Promise<void>;
   removeTypedArticle: (id: string) => Promise<void>;
-  /** Super admin: toggle OGP article in Global News feed. */
+  /** Super admin: toggle OGP article/group in Global News (or Global Exercises when apiBase is `/api/exercises`). */
   toggleOgpGlobalNews: (id: string, inGlobalNews: boolean) => Promise<void>;
+  /** Club admin creator: share / unshare an OGP exercise in the Movesbook library. */
+  toggleSharedInMovesbookLibrary: (
+    id: string,
+    sharedInMovesbookLibrary: boolean,
+  ) => Promise<void>;
   /** Super admin: toggle featured News Card flags on an OGP article. */
   toggleOgpFeatured: (
     id: string,
@@ -166,6 +174,7 @@ function mapGroupFromApi(g: any): OgpNewsGroupCard {
     creatorName: g.creatorName ?? g.creatorUsername ?? null,
     creatorCountry: g.creatorCountry ?? null,
     createdByCurrentUser: g.createdByCurrentUser === true,
+    createdBySuperAdmin: g.createdBySuperAdmin === true,
     title: g.title,
     image: g.image,
     coverImage: g.coverImage ?? null,
@@ -345,6 +354,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           siteName: a.siteName,
           type: a.type,
           typology: a.typology ?? null,
+          sportEquipment: a.sportEquipment ?? null,
           customDescription: a.customDescription,
           topic: a.topic,
           genre: a.genre ?? null,
@@ -354,6 +364,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           savedAt: a.savedAt,
           viewCount: typeof a.viewCount === 'number' ? a.viewCount : Number(a.viewCount) || 0,
           inGlobalNews: a.inGlobalNews === true,
+          sharedInMovesbookLibrary: a.sharedInMovesbookLibrary === true,
           isFeatured: a.isFeatured === true,
           displayInEvidence: a.displayInEvidence !== false,
           deletedAt: a.deletedAt,
@@ -505,6 +516,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         musicTitle?: string | null;
         registrationType?: string | null;
         typology?: string | null;
+        sportEquipment?: string | null;
         isFavourite?: boolean;
       },
       topic: string,
@@ -527,6 +539,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           siteName: data.siteName,
           type: data.type,
           typology: data.typology ?? null,
+          sportEquipment: data.sportEquipment ?? null,
           customDescription: data.customDescription,
           topic: topic || (defaultTopics[0] ?? 'News'),
           genre: data.musicalGenre ?? null,
@@ -559,6 +572,11 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         : shareToClubId
           ? [shareToClubId]
           : [];
+      // MB badge uses createdBySuperAdmin; set it immediately so Super Admin creates
+      // don't briefly show the generic User icon until the next list refresh.
+      const createdBySuperAdmin =
+        created.createdBySuperAdmin === true ||
+        (adminContext && resolveIsSuperAdminFromStorage());
       setPastedArticles((prev) => [
         ...prev,
         {
@@ -566,6 +584,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           userId: effectiveUserId ?? undefined,
           creatorCountry: user?.country ?? null,
           createdByCurrentUser: true,
+          createdBySuperAdmin,
           title: created.title,
           artist: created.artist ?? data.artist ?? null,
           image: created.image,
@@ -574,6 +593,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           siteName: created.siteName,
           type: created.type,
           typology: created.typology ?? data.typology ?? null,
+          sportEquipment: created.sportEquipment ?? data.sportEquipment ?? null,
           customDescription: created.customDescription,
           topic: created.topic,
           genre: created.genre ?? data.musicalGenre ?? null,
@@ -597,7 +617,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
       ]);
       return { id: created.id as string, sharedClubIds };
     },
-    [effectiveUserId, getHeaders, user?.country, apiBase, defaultTopics, category]
+    [effectiveUserId, getHeaders, user?.country, apiBase, defaultTopics, category, adminContext]
   );
 
   const removePastedArticle = useCallback(
@@ -689,6 +709,8 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         artist?: string | null;
         musicTitle?: string | null;
         registrationType?: string | null;
+        typology?: string | null;
+        sportEquipment?: string | null;
         isFavourite?: boolean;
       }
     ) => {
@@ -711,6 +733,8 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
           url: data.url,
           siteName: data.siteName,
           type: data.type,
+          typology: data.typology ?? null,
+          sportEquipment: data.sportEquipment ?? null,
           customDescription: data.customDescription ?? null,
           genre: data.musicalGenre ?? null,
           registrationType: data.registrationType ?? null,
@@ -740,6 +764,8 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
                 url: data.url,
                 siteName: data.siteName,
                 type: data.type,
+                typology: data.typology ?? a.typology ?? null,
+                sportEquipment: data.sportEquipment ?? null,
                 customDescription: data.customDescription,
                 genre: data.musicalGenre ?? null,
                 registrationType: data.registrationType ?? null,
@@ -978,9 +1004,14 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
       const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
       if (!token) throw new Error('Not authenticated');
       const isGroup = ogpNewsGroups.some((g) => g.id === id);
-      const path = isGroup
-        ? `/api/admin/global-news/ogp-group/${encodeURIComponent(id)}`
-        : `/api/admin/global-news/ogp/${encodeURIComponent(id)}`;
+      const isExercise = apiBase === '/api/exercises';
+      const path = isExercise
+        ? isGroup
+          ? `/api/admin/global-news/exercise-ogp-group/${encodeURIComponent(id)}`
+          : `/api/admin/global-news/exercise-ogp/${encodeURIComponent(id)}`
+        : isGroup
+          ? `/api/admin/global-news/ogp-group/${encodeURIComponent(id)}`
+          : `/api/admin/global-news/ogp/${encodeURIComponent(id)}`;
       const res = await fetch(path, {
         method: 'PATCH',
         headers: {
@@ -989,7 +1020,11 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         },
         body: JSON.stringify({ inGlobalNews }),
       });
-      if (!res.ok) throw new Error('Failed to update Global News');
+      if (!res.ok) {
+        throw new Error(
+          isExercise ? 'Failed to update Global Exercises' : 'Failed to update Global News',
+        );
+      }
       if (isGroup) {
         setOgpNewsGroups((prev) =>
           prev.map((g) => (g.id === id ? { ...g, inGlobalNews } : g)),
@@ -1000,7 +1035,29 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
         );
       }
     },
-    [ogpNewsGroups],
+    [ogpNewsGroups, apiBase],
+  );
+
+  const toggleSharedInMovesbookLibrary = useCallback(
+    async (id: string, sharedInMovesbookLibrary: boolean) => {
+      if (apiBase !== '/api/exercises') {
+        throw new Error('Share in Movesbook library is only available for OGP Exercises');
+      }
+      const headers = getHeaders();
+      const res = await fetch(`${apiBase}/ogp/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ sharedInMovesbookLibrary }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || 'Failed to update Movesbook library share');
+      }
+      setPastedArticles((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, sharedInMovesbookLibrary } : a)),
+      );
+    },
+    [apiBase, getHeaders],
   );
 
   const toggleOgpFeatured = useCallback(
@@ -1073,6 +1130,7 @@ export function useNewsData(options?: UseNewsDataOptions): UseNewsDataResult {
     addTypedArticle,
     removeTypedArticle,
     toggleOgpGlobalNews,
+    toggleSharedInMovesbookLibrary,
     toggleOgpFeatured,
   };
 }

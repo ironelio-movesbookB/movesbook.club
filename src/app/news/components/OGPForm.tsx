@@ -15,6 +15,7 @@ import {
   EXERCISE_OGP_TYPOLOGIES,
   EXERCISE_OGP_TYPOLOGY_SINGLE,
 } from '@/constants/exerciseLibrary.constants';
+import { SECTION_EXERCISE_MUSCLE_GROUPS } from '@/constants/sectionExercise.constants';
 import RichTextEditor from '@/components/settings/RichTextEditor';
 import { hasRichTextContent } from '@/utils/richTextTranslation';
 
@@ -37,6 +38,7 @@ export type MusicOgpFormMeta = {
   registrationType?: string | null;
   isFavourite?: boolean;
   typology?: string | null;
+  sportEquipment?: string | null;
 };
 
 /** Prefill values when editing an existing OGP (Music pencil → Add Music modal). */
@@ -49,6 +51,8 @@ export type OGPFormInitialValues = {
   musicalGenre?: string | null;
   registrationType?: string | null;
   typology?: string | null;
+  /** Exercise OGP: optional main-area value (Machines → Main area list). */
+  sportEquipment?: string | null;
   visibility?: OgpVisibilitySettings;
   /** Existing OGP preview (title/image/description/url) so Save works without re-fetch. */
   og?: OGPData | null;
@@ -65,6 +69,7 @@ interface OGPFormProps {
       musicTitle?: string | null;
       registrationType?: string | null;
       typology?: string | null;
+      sportEquipment?: string | null;
       isFavourite?: boolean;
     }
   ) => void;
@@ -115,6 +120,9 @@ export default function OGPForm({
   );
   const [typology, setTypology] = useState(
     () => initialValues?.typology?.trim() || (isExercise ? EXERCISE_OGP_TYPOLOGY_SINGLE : '')
+  );
+  const [sportEquipment, setSportEquipment] = useState(
+    () => initialValues?.sportEquipment?.trim() || ''
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,6 +221,7 @@ export default function OGPForm({
 
   const resetExerciseFields = () => {
     setTypology(EXERCISE_OGP_TYPOLOGY_SINGLE);
+    setSportEquipment('');
   };
 
   const handleSave = () => {
@@ -224,6 +233,7 @@ export default function OGPForm({
     const typologyToSave = isExercise
       ? typology.trim() || EXERCISE_OGP_TYPOLOGY_SINGLE
       : null;
+    const sportEquipmentToSave = isExercise && sportEquipment.trim() ? sportEquipment.trim() : null;
     const descriptionToSave = hasRichTextContent(description) ? description.trim() : '';
     if (fetchedOg) {
       onPastedArticle({
@@ -236,6 +246,7 @@ export default function OGPForm({
         musicTitle: musicTitleToSave,
         registrationType: registrationTypeToSave,
         typology: typologyToSave,
+        sportEquipment: sportEquipmentToSave,
         isFavourite: isMusic ? isFavourite : undefined,
       });
       setUrl('');
@@ -253,6 +264,7 @@ export default function OGPForm({
         musicalGenre: genreToSave,
         registrationType: registrationTypeToSave,
         typology: typologyToSave,
+        sportEquipment: sportEquipmentToSave,
         isFavourite: isMusic ? isFavourite : undefined,
       });
       setDescription('');
@@ -463,6 +475,35 @@ export default function OGPForm({
           minHeight="120px"
         />
       </div>
+
+      {isExercise && (
+        <div className="mb-4 rounded-xl bg-gray-100 border border-gray-200 p-4">
+          <label
+            htmlFor="exercise-sport-equipment"
+            className="block text-sm font-medium text-gray-700 mb-1.5"
+          >
+            Select sport equipment or leave blank
+          </label>
+          <select
+            id="exercise-sport-equipment"
+            value={sportEquipment}
+            onChange={(e) => setSportEquipment(e.target.value)}
+            className={fieldSelectClass}
+            aria-label="Select sport equipment or leave blank"
+          >
+            <option value=""></option>
+            {sportEquipment &&
+              !(SECTION_EXERCISE_MUSCLE_GROUPS as readonly string[]).includes(sportEquipment) && (
+                <option value={sportEquipment}>{sportEquipment} (legacy)</option>
+              )}
+            {SECTION_EXERCISE_MUSCLE_GROUPS.map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Language + Visibility */}
       <div className="mb-6 rounded-xl bg-gray-50 border border-gray-100 p-4">

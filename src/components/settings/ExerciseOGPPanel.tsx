@@ -76,6 +76,8 @@ export default function ExerciseOGPPanel({
     updateOgpNewsGroupSettings,
     addTypedArticle,
     removeTypedArticle,
+    toggleOgpGlobalNews,
+    toggleSharedInMovesbookLibrary,
   } = useNewsData({
     apiBase: EXERCISE_API_BASE,
     defaultTopics,
@@ -93,6 +95,30 @@ export default function ExerciseOGPPanel({
   const [topicModalEditingId, setTopicModalEditingId] = useState<string | null>(null);
   const [showOgpForm, setShowOgpForm] = useState(false);
   const [localExpanded, setLocalExpanded] = useState(false);
+  /** Super admin: header “Visible by user” checkbox (relocated from list filter bar). */
+  const [visibleByUser, setVisibleByUser] = useState(false);
+  /**
+   * Super admin: audience-scope buttons shown only while “Visible by user” is on.
+   * - Movesbook → OGP exercises created by super-admin
+   * - Users → user-created OGPs approved as Global (`inGlobalNews`)
+   * - All OGPs → Movesbook + Users
+   */
+  const [visibleByUserScope, setVisibleByUserScope] = useState<'all' | 'movesbook' | 'users'>(
+    'all'
+  );
+  const visibleByUserToggleRef = useRef<((checked: boolean) => void) | null>(null);
+
+  const handleVisibleByUserActiveChange = useCallback((active: boolean) => {
+    setVisibleByUser(active);
+    if (!active) setVisibleByUserScope('all');
+  }, []);
+
+  const handleRegisterVisibleByUserToggle = useCallback(
+    (toggle: (checked: boolean) => void) => {
+      visibleByUserToggleRef.current = toggle;
+    },
+    []
+  );
 
   const expanded = onExpandReduce ? isExpanded : localExpanded;
   const handleExpandReduce =
@@ -100,6 +126,10 @@ export default function ExerciseOGPPanel({
     (() => {
       setLocalExpanded((e) => !e);
     });
+
+  /** Athletes may browse the library but cannot create OGP exercises. */
+  const athleteCannotCreateOgp =
+    !adminContext && (user?.userType ?? '').toUpperCase() === 'ATHLETE';
 
   // Resolve admin / superadmin identity (Sport settings uses adminToken).
   useEffect(() => {
@@ -366,10 +396,56 @@ export default function ExerciseOGPPanel({
             </button>
           </>
         ) : (
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-gray-900">OGP Exercises</h2>
-            <p className="text-xs text-gray-500 truncate">{categoryLabel}</p>
-          </div>
+          <>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900">OGP Exercises</h2>
+              <p className="text-xs text-gray-500 truncate">{categoryLabel}</p>
+            </div>
+            {adminContext && isSuperAdmin && (
+              <div className="flex items-center gap-3 ml-auto shrink-0 flex-wrap justify-end">
+                {visibleByUser && (
+                  <div className="flex items-center gap-1.5" role="group" aria-label="OGP audience scope">
+                    {(
+                      [
+                        { key: 'all', label: 'All OGPs' },
+                        { key: 'movesbook', label: 'Movesbook' },
+                        { key: 'users', label: 'Users' },
+                      ] as const
+                    ).map(({ key, label }) => {
+                      const isActive = visibleByUserScope === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setVisibleByUserScope(key)}
+                          className={`px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors ${
+                            isActive
+                              ? 'bg-gray-800 text-white'
+                              : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
+                          aria-pressed={isActive}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={visibleByUser}
+                    onChange={(e) => visibleByUserToggleRef.current?.(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-400 text-red-800 focus:ring-red-700"
+                    aria-label="Visible by user"
+                  />
+                  <span className="text-sm font-medium text-red-800 whitespace-nowrap">
+                    Visible by user
+                  </span>
+                </label>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -433,7 +509,7 @@ export default function ExerciseOGPPanel({
           onAfterDeleteOgNews={adminContext ? refresh : undefined}
         />
 
-        {showOgpForm && (
+        {showOgpForm && !athleteCannotCreateOgp && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowOgpForm(false)}
@@ -442,7 +518,7 @@ export default function ExerciseOGPPanel({
             aria-labelledby="exercise-ogp-modal-title"
           >
             <div
-              className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+              className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.key === 'Escape' && setShowOgpForm(false)}
             >
@@ -487,9 +563,19 @@ export default function ExerciseOGPPanel({
           }
           onUpdatePastedSettings={handleUpdatePastedSettings}
           onUpdatePastedTopic={handleUpdatePastedTopic}
-          onAddClick={viewingAsUser ? undefined : () => setShowOgpForm((prev) => !prev)}
+          onAddClick={
+            viewingAsUser
+              ? undefined
+              : () => {
+                  if (athleteCannotCreateOgp) return;
+                  setShowOgpForm((prev) => !prev);
+                }
+          }
           addButtonDisabled={
-            !activeTopic || activeTopic === ALL_TOPICS || activeTopic === ALL_SUPER_ADMIN
+            athleteCannotCreateOgp ||
+            !activeTopic ||
+            activeTopic === ALL_TOPICS ||
+            activeTopic === ALL_SUPER_ADMIN
           }
           apiBase={EXERCISE_API_BASE}
           adminContext={adminContext || undefined}
@@ -507,12 +593,46 @@ export default function ExerciseOGPPanel({
           showOnlyMyOgNewsLabelUsername={viewAsUsername}
           viewerScopedOgpList={!!viewAsUsername}
           superAdminReadOnlyOgpActions={!!viewAsUsername}
+          hideVisibleByThisUserControl={adminContext && isSuperAdmin && !viewAsUsername}
+          onVisibleByThisUserActiveChange={
+            adminContext && isSuperAdmin && !viewAsUsername
+              ? handleVisibleByUserActiveChange
+              : undefined
+          }
+          onRegisterVisibleByThisUserToggle={
+            adminContext && isSuperAdmin && !viewAsUsername
+              ? handleRegisterVisibleByUserToggle
+              : undefined
+          }
+          ogpAudienceScope={
+            adminContext && isSuperAdmin && !viewAsUsername ? visibleByUserScope : undefined
+          }
+          showGlobalNewsButton={adminContext && isSuperAdmin && !viewAsUsername}
+          onToggleGlobalNews={
+            adminContext && isSuperAdmin && !viewAsUsername ? toggleOgpGlobalNews : undefined
+          }
+          currentUserType={adminContext ? null : (user?.userType ?? null)}
+          onToggleSharedInMovesbookLibrary={
+            !adminContext && !athleteCannotCreateOgp
+              ? toggleSharedInMovesbookLibrary
+              : undefined
+          }
           ogpNewsGroups={ogpNewsGroups}
-          onSaveOgpNewsGroup={viewingAsUser ? undefined : saveOgpNewsGroup}
-          onCreateTopic={viewingAsUser ? undefined : addTopic}
-          onRemoveOgpNewsGroup={viewingAsUser ? undefined : removeOgpNewsGroup}
-          onUpdateOgpNewsGroup={viewingAsUser ? undefined : updateOgpNewsGroup}
-          onUpdateOgpNewsGroupSettings={viewingAsUser ? undefined : updateOgpNewsGroupSettings}
+          onSaveOgpNewsGroup={
+            viewingAsUser || athleteCannotCreateOgp ? undefined : saveOgpNewsGroup
+          }
+          onCreateTopic={viewingAsUser || athleteCannotCreateOgp ? undefined : addTopic}
+          onRemoveOgpNewsGroup={
+            viewingAsUser || athleteCannotCreateOgp ? undefined : removeOgpNewsGroup
+          }
+          onUpdateOgpNewsGroup={
+            viewingAsUser || athleteCannotCreateOgp ? undefined : updateOgpNewsGroup
+          }
+          onUpdateOgpNewsGroupSettings={
+            viewingAsUser || athleteCannotCreateOgp
+              ? undefined
+              : updateOgpNewsGroupSettings
+          }
         />
       </div>
     </div>

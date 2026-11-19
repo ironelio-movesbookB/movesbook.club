@@ -333,7 +333,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthForNews(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, isSuperAdmin } = auth;
 
   try {
     const body = await request.json();
@@ -420,6 +420,7 @@ export async function POST(request: NextRequest) {
       isFavourite: isFavouriteValue,
       languageCode: created.languageCode ?? null,
       savedAt: created.savedAt.toISOString(),
+      createdBySuperAdmin: isSuperAdmin,
     });
   } catch (e) {
     console.error('POST /api/music/ogp', e);

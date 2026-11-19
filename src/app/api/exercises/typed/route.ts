@@ -33,7 +33,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthForNews(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, userType } = auth;
+
+  if ((userType ?? '').toUpperCase() === 'ATHLETE') {
+    return NextResponse.json(
+      { error: 'Athletes cannot create OGP exercises' },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await request.json();

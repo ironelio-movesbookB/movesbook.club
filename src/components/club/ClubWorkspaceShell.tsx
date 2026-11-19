@@ -73,6 +73,7 @@ import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
 import ChatPanel from '@/components/chat/ChatPanel';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
+import PersonalSettingsPanel from '@/components/settings/PersonalSettingsPanel';
 
 function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -108,6 +109,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [myClubTabVisible, setMyClubTabVisible] = useState(false);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
+  const [showPersonalSettings, setShowPersonalSettings] = useState(false);
   const [orgFeedbackScope, setOrgFeedbackScope] = useState<'mine' | 'manage' | null>(null);
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
   const [telegramAccount, setTelegramAccount] = useState('');
@@ -319,6 +321,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleChatPanelClick = useCallback(() => {
+    setShowPersonalSettings(false);
     setShowStaffFeedbacks(false);
     setOrgFeedbackScope(null);
     writeClubWorkspaceTab('my-page');
@@ -333,9 +336,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const handleChatAudienceSelect = useCallback((audience: ChatAudience) => {
     setChatAudience(audience);
     setShowChatAudienceModal(false);
+    setShowPersonalSettings(false);
     setShowStaffFeedbacks(false);
     setOrgFeedbackScope(null);
     setShowChatPanel(true);
+  }, []);
+
+  const openPersonalSettings = useCallback(() => {
+    setShowStaffFeedbacks(false);
+    setOrgFeedbackScope(null);
+    setShowChatPanel(false);
+    setChatAudience(null);
+    setMyPageNewsPanel(null);
+    setShowPersonalSettings(true);
   }, []);
 
   const handleJoinChat = useCallback(async () => {
@@ -516,6 +529,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [user, canUseClubShell, canUseMembersArchive, loadClubs, loadBannerProfile, loadTelegramAccount]);
 
   const handleTabChange = useCallback((tab: ClubWorkspaceTab) => {
+    setShowPersonalSettings(false);
     if (tab === 'my-page') {
       clearEntityCompanyLoginSession();
       hideMyClubTab();
@@ -717,6 +731,8 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         | 'club-global-news'
         | 'club-movesbook-news'
         | 'club-movesbook-archive-news'
+        | 'club-exercise-global-library'
+        | 'club-exercise-ogp-library'
     ) => {
       if (!hasFormClub) return;
       const clubId = selectedClubId ?? formClubs[0]?.id ?? null;
@@ -726,6 +742,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       }
       writeClubWorkspaceTab('my-entity');
       setActiveTab('my-entity');
+      setShowPersonalSettings(false);
       setMyPageNewsPanel(null);
 
       if (panel === 'outcome-settings') {
@@ -747,6 +764,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
   const openMyPageNewsPanel = useCallback(
     (panel: Exclude<ClubMyPageNewsPanel, null>) => {
+      setShowPersonalSettings(false);
       setShowStaffFeedbacks(false);
       setOrgFeedbackScope(null);
       setShowChatPanel(false);
@@ -860,12 +878,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 onClubMovesbookNewsSectionClick={() => goToDashboardPanel('club-movesbook-news')}
                 onClubOgpNewsSectionClick={() => goToDashboardPanel('club-news-ogp')}
                 onClubGlobalNewsSectionClick={() => goToDashboardPanel('club-global-news')}
+                onClubGlobalExerciseLibraryClick={() =>
+                  goToDashboardPanel('club-exercise-global-library')
+                }
+                onClubOgpExerciseLibraryClick={() =>
+                  goToDashboardPanel('club-exercise-ogp-library')
+                }
                 onMyPageMovesbookNewsClick={() => openMyPageNewsPanel('movesbook-news')}
                 onMyPageNewsClick={() => openMyPageNewsPanel('mb-news')}
                 onMyPageOgpNewsClick={() => openMyPageNewsPanel('ogp-news')}
                 onCreateClubClick={openCreateClubFlow}
                 creatableCompaniesQuota={creatableCompaniesQuota}
                 onMyFeedbacksStaffClick={() => {
+                  setShowPersonalSettings(false);
                   setShowChatPanel(false);
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
@@ -874,6 +899,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setShowStaffFeedbacks(true);
                 }}
                 onOrgFeedbacksClick={(scope) => {
+                  setShowPersonalSettings(false);
                   setShowChatPanel(false);
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
@@ -884,9 +910,15 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             </aside>
           )}
 
-          <main className="flex-1 min-w-0 flex flex-col px-4 overflow-y-auto">
-            <TopBar onChatPanelClick={handleChatPanelClick} />
-            {showStaffFeedbacks ? (
+          <main
+            className={`flex-1 min-w-0 flex flex-col overflow-y-auto ${
+              showPersonalSettings ? '' : 'px-4'
+            }`}
+          >
+            {!showPersonalSettings && <TopBar onChatPanelClick={handleChatPanelClick} />}
+            {showPersonalSettings ? (
+              <PersonalSettingsPanel user={user} />
+            ) : showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
             ) : orgFeedbackScope ? (
               <OrgFeedbacksPanel
@@ -912,11 +944,12 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             )}
           </main>
 
-          {showRightSidebar && (
+          {!showPersonalSettings && showRightSidebar && (
             <RightSidebar
               context={shellActiveTab === 'my-entity' ? 'my-club' : 'my-page'}
               activeTab={shellActiveTab}
               onAddMember={() => undefined}
+              onNavigateToSettings={openPersonalSettings}
               isClubAccount
               athleteMyPageRightSidebar={shellActiveTab === 'my-page'}
               athleteMyClubRightSidebar={shellActiveTab === 'my-entity'}

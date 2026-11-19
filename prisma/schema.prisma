@@ -558,6 +558,8 @@ model ExerciseOgpArticle {
   type                  String?
   /// "Single exercises" | "Playlist of exercises" (Add OGP exercise Typology).
   typology              String?
+  /// Optional main-area value (same list as Machines → Main area) from Add OGP exercise.
+  sportEquipment        String?
   customDescription     String?   @db.Text
   topic                 String
   languageCode          String?
@@ -569,6 +571,10 @@ model ExerciseOgpArticle {
   visibilityCountries   String?   @db.Text
   visibilityLanguages   String?   @db.Text
   visibilitySports      String?   @db.Text
+  /// Super admin: marked for Global Exercises (same pattern as OGP News → Global News)
+  inGlobalNews          Boolean   @default(false)
+  /// Club admin creator: shared into the Movesbook exercise library (visible to super admin via “OGP exercises shared”).
+  sharedInMovesbookLibrary Boolean @default(false)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   deletedBy             User?     @relation("ExerciseOgpDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   likes                 ExerciseOgpArticleLike[]
@@ -579,6 +585,8 @@ model ExerciseOgpArticle {
   @@index([userId, category, topic])
   @@index([category])
   @@index([deletedAt])
+  @@index([inGlobalNews])
+  @@index([sharedInMovesbookLibrary])
   @@map("exercise_ogp_articles")
 }
 
@@ -613,6 +621,8 @@ model ExerciseOgpGroup {
   visibilityCountries   String?   @db.Text
   visibilityLanguages   String?   @db.Text
   visibilitySports      String?   @db.Text
+  /// Super admin: marked for Global Exercises (same pattern as OGP News groups → Global News)
+  inGlobalNews          Boolean   @default(false)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items                 ExerciseOgpGroupItem[]
   likes                 ExerciseOgpGroupLike[]
@@ -623,6 +633,7 @@ model ExerciseOgpGroup {
   @@index([userId, category, topic])
   @@index([category])
   @@index([deletedAt])
+  @@index([inGlobalNews])
   @@map("exercise_ogp_groups")
 }
 

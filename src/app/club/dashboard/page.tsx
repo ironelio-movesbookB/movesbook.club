@@ -16,6 +16,7 @@ import ClubChatPanel from '@/components/club/ClubChatPanel';
 import ClubNewsArchivePanel from '@/components/club/ClubNewsArchivePanel';
 import ClubSharedNewsPanel from '@/components/club/ClubSharedNewsPanel';
 import ClubMovesbookNewsPanel from '@/components/club/ClubMovesbookNewsPanel';
+import ClubExerciseOgpLibraryPanel from '@/components/club/ClubExerciseOgpLibraryPanel';
 import NotificationByPromocodeDashboardView from '@/components/promocodes/NotificationByPromocodeDashboard';
 import {
   getClubMyPageDisplayName,
@@ -63,6 +64,8 @@ function ClubDashboardContent() {
     | 'club-global-news'
     | 'club-movesbook-news'
     | 'club-movesbook-archive-news'
+    | 'club-exercise-global-library'
+    | 'club-exercise-ogp-library'
     | 'mb-news'
   >('default');
   const [clubTopicId, setClubTopicId] = useState<string | null>(null);
@@ -212,6 +215,24 @@ function ClubDashboardContent() {
       setClubAddSongsOgpOpen(false);
       setClubAddSongsOgpExpanded(false);
       setClubMainPanel('club-movesbook-archive-news');
+      router.replace('/club/dashboard', { scroll: false });
+    }
+    if (panel === 'club-exercise-global-library') {
+      writeClubWorkspaceTab('my-entity');
+      setMyPageNewsPanel(null);
+      setShowWorkoutSection(false);
+      setClubAddSongsOgpOpen(false);
+      setClubAddSongsOgpExpanded(false);
+      setClubMainPanel('club-exercise-global-library');
+      router.replace('/club/dashboard', { scroll: false });
+    }
+    if (panel === 'club-exercise-ogp-library') {
+      writeClubWorkspaceTab('my-entity');
+      setMyPageNewsPanel(null);
+      setShowWorkoutSection(false);
+      setClubAddSongsOgpOpen(false);
+      setClubAddSongsOgpExpanded(false);
+      setClubMainPanel('club-exercise-ogp-library');
       router.replace('/club/dashboard', { scroll: false });
     }
     if (panel === 'mb-news') {
@@ -476,6 +497,26 @@ function ClubDashboardContent() {
           <ClubMovesbookNewsPanel
             title="Movesbook Global News"
             clubId={selectedClubId ?? activeClub?.id ?? null}
+          />
+        </div>
+      ) : !clubAddSongsOgpOpen &&
+        !showWorkoutSection &&
+        clubMainPanel === 'club-exercise-global-library' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ClubExerciseOgpLibraryPanel
+            mode="global-library"
+            title="My Global library of exercises"
+            onClose={() => setClubMainPanel('default')}
+          />
+        </div>
+      ) : !clubAddSongsOgpOpen &&
+        !showWorkoutSection &&
+        clubMainPanel === 'club-exercise-ogp-library' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ClubExerciseOgpLibraryPanel
+            mode="mine"
+            title="My library of OGP Exercises"
+            onClose={() => setClubMainPanel('default')}
           />
         </div>
       ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'mb-news' ? (

@@ -81,7 +81,6 @@ import {
   Check,
   RefreshCw,
   FileText,
-  Timer,
   Hourglass,
   Award,
   ArrowUpRight,
@@ -146,6 +145,7 @@ import {
 import SidebarClubMyEntityTop from '@/components/SidebarClubMyEntityTop';
 import ClubMyClubInfoSubmenu from '@/components/club/ClubMyClubInfoSubmenu';
 import ClubSocialSubmenu from '@/components/club/ClubSocialSubmenu';
+import ClubTrainingSubmenu from '@/components/club/ClubTrainingSubmenu';
 import ClubMembersDashboardSection from '@/components/club/ClubMembersDashboardSection';
 import PersonalMyTopicsSidebarBlock from '@/components/club/PersonalMyTopicsSidebarBlock';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
@@ -326,6 +326,10 @@ interface DarkSidebarProps {
   onClubOgpNewsSectionClick?: () => void;
   /** My Club → Club News → Club Global News (all shared) */
   onClubGlobalNewsSectionClick?: () => void;
+  /** My Club → Section Training → My Global library of exercises */
+  onClubGlobalExerciseLibraryClick?: () => void;
+  /** My Club → Section Training → My library of OGP Exercises */
+  onClubOgpExerciseLibraryClick?: () => void;
   /** My Page → News → Movesbook Global News (superadmin Global News feed) */
   onMyPageMovesbookNewsClick?: () => void;
   /** My Page → News → News (same as top-nav MB News / news-by-movesbook) */
@@ -391,6 +395,8 @@ export default function DarkSidebar({
   onClubMovesbookNewsSectionClick,
   onClubOgpNewsSectionClick,
   onClubGlobalNewsSectionClick,
+  onClubGlobalExerciseLibraryClick,
+  onClubOgpExerciseLibraryClick,
   onMyPageMovesbookNewsClick,
   onMyPageNewsClick,
   onMyPageOgpNewsClick,
@@ -3592,7 +3598,10 @@ export default function DarkSidebar({
                 {officialClubMyClub ? (
                   <>
                     <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
-                    <ClubOfficialSectionRow icon={Timer} label="Section Training" />
+                    <ClubTrainingSubmenu
+                      onGlobalLibraryClick={onClubGlobalExerciseLibraryClick}
+                      onOgpLibraryClick={onClubOgpExerciseLibraryClick}
+                    />
                     <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
                     <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
                   </>

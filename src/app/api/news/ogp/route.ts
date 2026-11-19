@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthForNews(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId, userType } = auth;
+  const { userId, userType, isSuperAdmin } = auth;
 
   try {
     const body = await request.json();
@@ -383,6 +383,7 @@ export async function POST(request: NextRequest) {
       languageCode: created.languageCode ?? null,
       savedAt: created.savedAt.toISOString(),
       sharedClubIds,
+      createdBySuperAdmin: isSuperAdmin,
       ...(clubIdToShare ? { clubAudienceMode: shareAudienceMode } : {}),
     });
   } catch (e) {

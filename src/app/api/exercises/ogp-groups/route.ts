@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { requireAuthWithUser, requireAuthForNews, getOrCreateUserForSuperAdmin } from '../auth';
+import {
+  requireAuthWithUser,
+  requireAuthForNews,
+  getOrCreateUserForSuperAdmin,
+  getSuperAdminCreatorIds,
+} from '../auth';
 import { requireCategory } from '../category';
 
 function mapGroupResponse(
@@ -15,6 +21,7 @@ function mapGroupResponse(
     savedAt: Date;
     expiresAt: Date | null;
     deletedAt: Date | null;
+    inGlobalNews?: boolean;
     visibilityUserTypes: string | null;
     visibilityCountries: string | null;
     visibilityLanguages: string | null;
@@ -43,7 +50,8 @@ function mapGroupResponse(
     }>;
   },
   currentUserId: string,
-  superAdminEffectiveUserId: string | null
+  superAdminEffectiveUserId: string | null,
+  createdBySuperAdmin = false
 ) {
   const sortedItems = [...g.items].sort((a, b) => a.sortOrder - b.sortOrder || a.addedAt.getTime() - b.addedAt.getTime());
   const first = sortedItems[0]?.exerciseOgpArticle ?? null;
@@ -79,9 +87,11 @@ function mapGroupResponse(
     creatorName,
     creatorCountry: g.user?.country ?? null,
     createdByCurrentUser,
+    createdBySuperAdmin,
     customDescription: g.customDescription ?? first?.customDescription ?? null,
     coverImage: g.coverImage ?? null,
     deletedAt: g.deletedAt?.toISOString() ?? null,
+    inGlobalNews: g.inGlobalNews === true,
     visibilityUserTypes: parseVis(g.visibilityUserTypes),
     visibilityCountries: parseVis(g.visibilityCountries),
     visibilityLanguages: parseVis(g.visibilityLanguages),
@@ -137,8 +147,32 @@ export async function GET(request: NextRequest) {
       include: groupInclude,
     });
 
+    // Enrich with inGlobalNews (column may exist before Prisma client is regenerated).
+    let globalFlags: Array<{ id: string; inGlobalNews: number | boolean }> = [];
+    if (groups.length > 0) {
+      try {
+        globalFlags = await prisma.$queryRaw<Array<{ id: string; inGlobalNews: number | boolean }>>`
+          SELECT id, inGlobalNews FROM exercise_ogp_groups
+          WHERE id IN (${Prisma.join(groups.map((g) => g.id))})
+        `;
+      } catch (e) {
+        console.warn('GET /api/exercises/ogp-groups: inGlobalNews column read failed', e);
+      }
+    }
+    const globalById = new Map(
+      globalFlags.map((r) => [r.id, r.inGlobalNews === true || r.inGlobalNews === 1]),
+    );
+    const superAdminCreatorIds = await getSuperAdminCreatorIds();
+
     return NextResponse.json(
-      groups.map((g) => mapGroupResponse(g, currentUserId, superAdminEffectiveUserId))
+      groups.map((g) =>
+        mapGroupResponse(
+          { ...g, inGlobalNews: globalById.get(g.id) === true },
+          currentUserId,
+          superAdminEffectiveUserId,
+          superAdminCreatorIds.includes(g.userId),
+        ),
+      ),
     );
   } catch (e) {
     console.error('GET /api/exercises/ogp-groups', e);
@@ -155,6 +189,13 @@ export async function POST(request: NextRequest) {
   // requireAuthForNews already resolves SuperAdmin → users_new id.
   const auth = await requireAuthForNews(request);
   if (auth instanceof NextResponse) return auth;
+
+  if ((auth.userType ?? '').toUpperCase() === 'ATHLETE') {
+    return NextResponse.json(
+      { error: 'Athletes cannot create OGP exercises' },
+      { status: 403 }
+    );
+  }
 
   const userId = auth.userId;
 
@@ -204,7 +245,7 @@ export async function POST(request: NextRequest) {
         {
           exists: true,
           message: `A group named "${name}" already exists. Confirm to add the selected OGP Exercises to it, or change the name.`,
-          group: mapGroupResponse(existing, userId, null),
+          group: mapGroupResponse(existing, userId, null, auth.isSuperAdmin),
         },
         { status: 409 }
       );
@@ -245,7 +286,11 @@ export async function POST(request: NextRequest) {
         where: { id: existing.id },
         include: groupInclude,
       });
-      return NextResponse.json({ ok: true, merged: true, group: mapGroupResponse(updated, userId, null) });
+      return NextResponse.json({
+        ok: true,
+        merged: true,
+        group: mapGroupResponse(updated, userId, null, auth.isSuperAdmin),
+      });
     }
 
     const created = await prisma.exerciseOgpGroup.create({
@@ -268,7 +313,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { ok: true, merged: false, group: mapGroupResponse(created, userId, null) },
+      {
+        ok: true,
+        merged: false,
+        group: mapGroupResponse(created, userId, null, auth.isSuperAdmin),
+      },
       { status: 201 }
     );
   } catch (e) {
