@@ -15,7 +15,7 @@ import { createMemberOnlinePayment, type MemberOnlineProvider } from '@/lib/club
 import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
 import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
 import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
-import { normalizePaymentTypeValue, payModeLabel } from '@/lib/procedures/payModes';
+import { normalizePaymentTypeValue, payModeLabel, RECURRING_ONLY_PAY_MODES } from '@/lib/procedures/payModes';
 import { ensurePaymentVerificationColumn, setPaymentToBeVerified } from '@/lib/procedures/paymentVerification';
 import { sendIonosEmail } from '@/lib/ionosEmail';
 
@@ -1396,6 +1396,9 @@ ${money(order.discount) > 0 ? `<p>Discount: -${euro(order.discount)}</p>` : ''}
 export async function payOrderInFull(workspace: ShopWorkspace, orderId: string, paymentMethod: string) {
   const payMode = normalizePaymentTypeValue(paymentMethod.replace(/-/g, '_'));
   if (!payMode) throw new Error('Select the payment method used before paying.');
+  if (RECURRING_ONLY_PAY_MODES.includes(payMode)) {
+    throw new Error(`${payModeLabel(payMode)} cannot be used to pay a purchase of products.`);
+  }
   const order = (await loadSales(workspace)).find((sale) => sale.id === orderId);
   if (!order) throw new Error('This order could not be found.');
   if (order.status === 'CANCELLED') throw new Error('A cancelled order cannot be paid.');

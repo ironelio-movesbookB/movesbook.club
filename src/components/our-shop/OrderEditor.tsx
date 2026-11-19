@@ -6,7 +6,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopHeader } from '@/components/our-shop/pageChrome';
-import { normalizePaymentTypeValue, PAYMENT_TYPE_OPTIONS } from '@/lib/procedures/payModes';
+import {
+  normalizePaymentTypeValue,
+  PAYMENT_TYPE_OPTIONS,
+  RECURRING_ONLY_PAY_MODES,
+} from '@/lib/procedures/payModes';
 import {
   ArrowLeft,
   Save,
@@ -619,11 +623,19 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                 >
                   <option value="">Select payment method</option>
                   <option value="pickup">Collect and pay on site</option>
-                  {PAYMENT_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
+                  {PAYMENT_TYPE_OPTIONS.map((option) => {
+                    const blocked = RECURRING_ONLY_PAY_MODES.includes(option.value);
+                    return (
+                      <option
+                        key={option.value}
+                        value={option.value}
+                        disabled={blocked}
+                        className={blocked ? 'text-gray-400' : undefined}
+                      >
+                        {option.label}
+                      </option>
+                    );
+                  })}
                   {paymentMethod &&
                   paymentMethod !== 'pickup' &&
                   !PAYMENT_TYPE_OPTIONS.some((option) => option.value === paymentMethod) ? (

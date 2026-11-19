@@ -29,6 +29,7 @@ import AdminPasswordConfirmModal from "@/components/club/AdminPasswordConfirmMod
 import PaymentModeSelect from "@/components/club/PaymentModeSelect";
 import ShareModal from "@/components/ShareModal";
 import {
+  blockedPayModesFor,
   isShareOnlinePayMode,
   PAYMENT_TYPE_OPTIONS,
   SHARE_ONLINE_PAY_MODES,
@@ -268,6 +269,13 @@ export default function ServicePaymentForm({
   );
   const amountPaidTouchedRef = useRef(false);
   const [payMode, setPayMode] = useState(defaultPayMode || "cash");
+  const blockedPayModes = useMemo(
+    () => blockedPayModesFor([procedureType, ...allPurchases.map((p) => p.typology)]),
+    [procedureType, allPurchases],
+  );
+  useEffect(() => {
+    if (blockedPayModes.includes(payMode)) setPayMode("cash");
+  }, [blockedPayModes, payMode]);
   const [linkNotice, setLinkNotice] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1422,6 +1430,7 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowedMethods={enabledMethods}
+                disabledMethods={blockedPayModes}
                 extraOptions={[
                   ...SHARE_PAY_EXTRA_OPTIONS,
                   ...(stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []),
