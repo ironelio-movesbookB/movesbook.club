@@ -6,6 +6,7 @@ import { listCompanies } from '@/lib/club/archives/clubArchiveService';
 import type { ClubAuthContext } from './types';
 import { isHardwareProductSector, shopSector } from '@/lib/shop/sectors';
 import { nextSellingNumber } from '@/lib/shop/nextSellingNumber';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { PROCEDURE_TYPE_CODES } from './types';
 
 const PRODUCT_TABLE_CANDIDATES = ['products', 'product'];
@@ -25,11 +26,12 @@ export type ProductSaleFormProduct = {
   cost: number;
   sector: string;
   allowMultipleUnits: boolean;
+  imageUrl?: string | null;
 };
 
 export type ProductSaleFormOptions = {
   products: ProductSaleFormProduct[];
-  members: { id: string; name: string }[];
+  members: { id: string; name: string; image?: string | null }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   currentOperatorId: string | null;
@@ -53,6 +55,7 @@ export async function fetchProductSaleFormOptions(
       cost: num(row.price),
       sector: shopSector(row.sector),
       allowMultipleUnits: row.allowMultipleUnits,
+      imageUrl: row.imageUrl,
     });
   }
 
@@ -85,7 +88,7 @@ export async function fetchProductSaleFormOptions(
   ]);
   return {
     products,
-    members,
+    members: members.map((member) => ({ ...member, image: resolvePublicImageUrl(member.image) })),
     operators,
     companies,
     currentOperatorId: ctx.userId,
