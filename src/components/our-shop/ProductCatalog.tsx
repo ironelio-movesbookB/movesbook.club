@@ -362,6 +362,13 @@ export default function ProductsPage() {
         >
           <button
             type="button"
+            onClick={() => router.push('/ArchiveSeles/product_sale_list')}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-teal-700 bg-white px-4 text-sm font-semibold text-teal-800 transition hover:bg-teal-50"
+          >
+            All sellings
+          </button>
+          <button
+            type="button"
             onClick={() => {
               if (!selectedProduct) {
                 window.alert('Select a product in the list first.');

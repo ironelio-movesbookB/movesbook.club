@@ -138,7 +138,15 @@ function ProductSaleListPageInner() {
 
   return (
     <div className="p-4 space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {productId ? (
+          <Link
+            href={def.routes.records}
+            className="px-4 py-2 rounded border border-teal-700 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+          >
+            All sellings
+          </Link>
+        ) : null}
         <Link
           href={def.routes.form}
           className="px-4 py-2 bg-teal-700 text-white rounded text-sm hover:bg-teal-800"
