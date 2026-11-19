@@ -18,6 +18,7 @@ import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMetho
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { SELLING_SECTORS, shopSector } from '@/lib/shop/sectors';
+import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 type CatalogProduct = {
   id: string;
@@ -208,6 +209,13 @@ function ProductPurchaseFormInner() {
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
         <ProcedureFormSection title="Movement data">
           <ProcedureFormGrid>
+            <ProcedureFormCell label="Selling No.">
+              <input
+                className={`${procedureReadonlyInputClass} font-semibold`}
+                value={displaySellingNumber(options?.nextSellingNumber) || '-'}
+                readOnly
+              />
+            </ProcedureFormCell>
             <ProcedureFormCell label="User Selected">
               <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
                 <option value="">Select user</option>

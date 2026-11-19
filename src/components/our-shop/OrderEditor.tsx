@@ -95,6 +95,9 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
   const linesLocked = savedStatus === 'completed' || savedStatus === 'cancelled';
   const cancelled = savedStatus === 'cancelled';
   const [opening, setOpening] = useState(false);
+  const [restAmount, setRestAmount] = useState(0);
+  const [payingAll, setPayingAll] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     shopFetch('/api/club/shop/products')
@@ -126,6 +129,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
         setOrderStatus(order.status);
         setSavedStatus(order.status);
         setPaid(Boolean(order.paid));
+        setRestAmount(Number(order.restAmount) || 0);
         setProcedureRecordId(order.procedureRecordId || '');
         setSaleClubId(order.clubId || '');
         setPaymentMethod(order.paymentMethod || 'pickup');
@@ -148,7 +152,7 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
         setPostalCode(party?.postalCode || '');
       })
       .catch(() => setError('Could not load the order.'));
-  }, [orderId]);
+  }, [orderId, reloadKey]);
 
   async function saveOrder() {
     if (await persistOrder()) router.push('/clubs/shop/orders');
@@ -165,6 +169,39 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
     const payMode = payModeOf(paymentMethod);
     if (payMode) params.set('payMode', payMode);
     router.push(`/clubs/payment_detail/${encodeURIComponent(procedureRecordId)}?${params.toString()}`);
+  }
+
+  async function payAll() {
+    if (!payModeOf(paymentMethod)) {
+      setError('Select the payment method used, then press Pay ALL now.');
+      return;
+    }
+    if (!window.confirm(`Pay the whole rest of ${formatPrice(restAmount)} now?`)) return;
+    setPayingAll(true);
+    try {
+      if (!(await persistOrder())) return;
+      const response = await shopFetch(`/api/club/shop/orders/${encodeURIComponent(orderId)}/pay-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMethod }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || 'Could not pay this order.');
+        return;
+      }
+      const paidText = `Paid ${formatPrice(Number(data.paid) || 0)}.`;
+      setMessage(
+        data.invoice === 'on_confirm'
+          ? `${paidText} The payment is "To be verified": the invoice is emailed once it is confirmed in the Archive of Payments.`
+          : data.emailedTo
+            ? `${paidText} Invoice ${data.invoiceNumber} emailed to ${data.emailedTo}.`
+            : `${paidText} Invoice ${data.invoiceNumber ?? ''} created, but it was not emailed: this order has no email address.`,
+      );
+      setReloadKey((key) => key + 1);
+    } finally {
+      setPayingAll(false);
+    }
   }
 
   async function persistOrder() {
@@ -555,7 +592,18 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                   >
                     {opening ? 'Saving...' : 'Open payment form'}
                   </button>
-                ) : (
+                ) : null}
+                {procedureRecordId && !cancelled && restAmount > 0 ? (
+                  <button
+                    type="button"
+                    disabled={payingAll}
+                    onClick={() => void payAll()}
+                    className="ml-2 inline-flex items-center gap-2 rounded-lg bg-green-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {payingAll ? 'Paying...' : `Pay ALL now (${formatPrice(restAmount)})`}
+                  </button>
+                ) : null}
+                {procedureRecordId ? null : (
                   <p className="text-sm text-gray-500">This selling has no deadline yet.</p>
                 )}
               </div>
@@ -587,7 +635,9 @@ export default function OrderEditor({ orderId }: { orderId: string }) {
                 </select>
               </Field>
               <p className="mt-2 text-xs leading-5 text-gray-500">
-                Open payment form starts with this method as the Pay Mode.
+                Open payment form starts with this method as the Pay Mode. Pay ALL now pays the whole rest with it:
+                Cash, Card and Cheque email the invoice at once, any other method emails it once the payment is
+                confirmed.
               </p>
             </div>
           </div>

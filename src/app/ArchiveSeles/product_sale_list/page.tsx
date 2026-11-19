@@ -100,6 +100,7 @@ function ProductSaleListPageInner() {
   const productName = searchParams?.get('productName')?.trim() || 'selected product';
   const [refreshKey, setRefreshKey] = useState(0);
   const columns: Column[] = [
+    { key: 'category', header: 'No.' },
     { key: 'insertDate', header: 'Date' },
     { key: 'description', header: 'Performed by' },
     { key: 'casual', header: 'Sector' },

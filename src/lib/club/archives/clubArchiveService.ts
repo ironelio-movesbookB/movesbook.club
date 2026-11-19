@@ -34,6 +34,7 @@ import {
 
 import { loadClubMemberTypeNames, memberTypeIdFromProfileJson } from '@/lib/club/clubMemberTypes';
 import { listCoachAthleteLinks } from '@/lib/club/coachMemberLists';
+import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 export type { ArchiveQueryParams, PaginatedArchive };
 
@@ -898,7 +899,7 @@ export async function listUnifiedProductSales(
         rest: row.balanceAmount,
         number: productCount,
         purchaseLines,
-        category: text(meta.sellingNumber) || '-',
+        category: displaySellingNumber(meta.sellingNumber) || '-',
         service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
         operator: online ? '-' : row.operatorName || '-',
         status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',

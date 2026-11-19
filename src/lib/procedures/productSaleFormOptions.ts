@@ -5,7 +5,7 @@ import { fetchClubOperatorOptions } from './clubOperators';
 import { listCompanies } from '@/lib/club/archives/clubArchiveService';
 import type { ClubAuthContext } from './types';
 import { isHardwareProductSector, shopSector } from '@/lib/shop/sectors';
-import { formatSellingNumber } from '@/lib/shop/sellingNumber';
+import { nextSellingNumber } from '@/lib/shop/nextSellingNumber';
 import { PROCEDURE_TYPE_CODES } from './types';
 
 const PRODUCT_TABLE_CANDIDATES = ['products', 'product'];
@@ -83,18 +83,12 @@ export async function fetchProductSaleFormOptions(
       select: { id: true },
     }),
   ]);
-  const existingCount = procedureType
-    ? await prisma.procedureRecord.count({
-        where: { procedureTypeId: procedureType.id, clubId: ctx.club.id },
-      })
-    : 0;
-
   return {
     products,
     members,
     operators,
     companies,
     currentOperatorId: ctx.userId,
-    nextSellingNumber: formatSellingNumber(existingCount + 1),
+    nextSellingNumber: await nextSellingNumber(ctx.club.id, procedureType?.id),
   };
 }
