@@ -75,6 +75,7 @@ import PersonalSettingsPanel from '@/components/settings/PersonalSettingsPanel';
 import NewsOGPPanel from '@/components/news/NewsOGPPanel';
 import MyMusicPanel from '@/components/music/MyMusicPanel';
 import MusicOGPPanel from '@/components/music/MusicOGPPanel';
+import MoodMusicPanel from '@/components/music/MoodMusicPanel';
 import PostsPanel from '@/components/posts/PostsPanel';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import ClubNewsArchivePanel from '@/components/club/ClubNewsArchivePanel';
@@ -104,7 +105,8 @@ type AthleteClubMainPanel =
   | 'club-news-ogp'
   | 'club-global-news'
   | 'club-movesbook-news'
-  | 'club-movesbook-archive-news';
+  | 'club-movesbook-archive-news'
+  | 'mood-music';
 
 function heroBannerStripBgUrl(p: AthleteLegacyBannerProfile | null): string {
   return getHeroBannerDisplayUrl(p);
@@ -980,6 +982,7 @@ function AthleteDashboardContent() {
                   setActiveSection('music');
                   setMusicExpanded(false);
                 }}
+                onClubMoodMusicClick={() => openClubNewsPanel('mood-music')}
                 onClubMovesbookArchiveNewsSectionClick={() =>
                   openClubNewsPanel('club-movesbook-archive-news')
                 }
@@ -1220,6 +1223,10 @@ function AthleteDashboardContent() {
                     title="Movesbook Global News"
                     clubId={selectedClubId ?? myClubs[0]?.id ?? null}
                   />
+                </div>
+              ) : clubMainPanel === 'mood-music' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <MoodMusicPanel onClose={() => setClubMainPanel('default')} />
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border p-8 pt-12 flex-1 flex items-start justify-center">

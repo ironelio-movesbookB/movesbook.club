@@ -744,6 +744,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         | 'club-movesbook-archive-news'
         | 'club-exercise-global-library'
         | 'club-exercise-ogp-library'
+        | 'mood-music'
     ) => {
       if (!hasFormClub) return;
       const clubId = selectedClubId ?? formClubs[0]?.id ?? null;
@@ -892,6 +893,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 }
                 onClubAddSongsPlaylistsClick={() => router.push('/add-songs')}
                 onClubMusicPanelClick={() => router.push('/music-panel')}
+                onClubMoodMusicClick={() => goToDashboardPanel('mood-music')}
                 onIdentificationDevicesClick={() => goToDashboardPanel('identification-devices')}
                 onAccessOutcomeSettingsClick={() => goToDashboardPanel('outcome-settings')}
                 onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}

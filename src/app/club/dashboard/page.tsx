@@ -17,6 +17,7 @@ import ClubNewsArchivePanel from '@/components/club/ClubNewsArchivePanel';
 import ClubSharedNewsPanel from '@/components/club/ClubSharedNewsPanel';
 import ClubMovesbookNewsPanel from '@/components/club/ClubMovesbookNewsPanel';
 import ClubExerciseOgpLibraryPanel from '@/components/club/ClubExerciseOgpLibraryPanel';
+import MoodMusicPanel from '@/components/music/MoodMusicPanel';
 import NotificationByPromocodeDashboardView from '@/components/promocodes/NotificationByPromocodeDashboard';
 import {
   getClubMyPageDisplayName,
@@ -67,6 +68,7 @@ function ClubDashboardContent() {
     | 'club-exercise-global-library'
     | 'club-exercise-ogp-library'
     | 'mb-news'
+    | 'mood-music'
   >('default');
   const [clubTopicId, setClubTopicId] = useState<string | null>(null);
 
@@ -242,6 +244,15 @@ function ClubDashboardContent() {
       setClubAddSongsOgpOpen(false);
       setClubAddSongsOgpExpanded(false);
       setClubMainPanel('mb-news');
+      router.replace('/club/dashboard', { scroll: false });
+    }
+    if (panel === 'mood-music') {
+      writeClubWorkspaceTab('my-entity');
+      setMyPageNewsPanel(null);
+      setShowWorkoutSection(false);
+      setClubAddSongsOgpOpen(false);
+      setClubAddSongsOgpExpanded(false);
+      setClubMainPanel('mood-music');
       router.replace('/club/dashboard', { scroll: false });
     }
     if (panel === 'bacheca') {
@@ -525,6 +536,10 @@ function ClubDashboardContent() {
             title="My News"
             onClose={() => setClubMainPanel('default')}
           />
+        </div>
+      ) : !clubAddSongsOgpOpen && !showWorkoutSection && clubMainPanel === 'mood-music' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MoodMusicPanel onClose={() => setClubMainPanel('default')} />
         </div>
       ) : !clubAddSongsOgpOpen && !showWorkoutSection ? (
         <div className="bg-white rounded-lg shadow-sm border p-6 flex-1 flex flex-col">

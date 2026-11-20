@@ -308,6 +308,8 @@ interface DarkSidebarProps {
   onClubAddSongsPlaylistsClick?: () => void;
   /** My Club → Music for the club → Music Panel (same as navbar "Music Panel") */
   onClubMusicPanelClick?: () => void;
+  /** My Club → Music for the club → Mood Music (legacy clubs/mood_music) */
+  onClubMoodMusicClick?: () => void;
   /** General settings → Identification devices (card readers list in dashboard) */
   onIdentificationDevicesClick?: () => void;
   /** General settings → Access of outcome settings (dashboard panel) */
@@ -386,6 +388,7 @@ export default function DarkSidebar({
   onOrgFeedbacksClick,
   onClubAddSongsPlaylistsClick,
   onClubMusicPanelClick,
+  onClubMoodMusicClick,
   onIdentificationDevicesClick,
   onAccessOutcomeSettingsClick,
   onSuggestMovesbookClick,
@@ -3034,6 +3037,7 @@ export default function DarkSidebar({
                       </button>
                       <button
                         type="button"
+                        onClick={() => onClubMoodMusicClick?.()}
                         className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                       >
                         <Users className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
