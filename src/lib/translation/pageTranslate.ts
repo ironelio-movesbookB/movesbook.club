@@ -1,9 +1,17 @@
 /**
- * Machine-translates visible text in a DOM subtree (admin "Translate page").
+ * Machine-translates visible text in a DOM subtree ("Translate page").
  * Only text-node values and a few attributes are changed so React can keep reconciling.
  */
 
 import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
+
+/** Prefer admin panel token; fall back to regular user JWT (athlete/club/team/…). */
+function getPageTranslateBearerToken(): string | null {
+  const admin = getAdminBearerToken();
+  if (admin) return admin;
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token')?.trim() || null;
+}
 
 const ATTRIBUTES = ['placeholder', 'title', 'aria-label'] as const;
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE', 'PRE', 'NOSCRIPT', 'SVG']);
@@ -68,8 +76,8 @@ async function fetchTranslations(
   targetLanguage: string,
   sourceLanguage: string,
 ): Promise<Record<string, string>> {
-  const token = getAdminBearerToken();
-  if (!token) throw new Error('Admin session not found. Please log in again.');
+  const token = getPageTranslateBearerToken();
+  if (!token) throw new Error('Session not found. Please log in again.');
 
   const out: Record<string, string> = {};
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {

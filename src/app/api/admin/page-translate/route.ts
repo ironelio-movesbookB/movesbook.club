@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/adminAuth';
+import { verifyToken } from '@/lib/auth';
+import { getBearerToken } from '@/lib/adminAuth';
 import { translateTexts } from '@/lib/translation/translateBatch';
 
 export const dynamic = 'force-dynamic';
@@ -8,8 +9,21 @@ export const maxDuration = 120;
 const MAX_TEXTS = 120;
 const MAX_TEXT_LENGTH = 2000;
 
+/** Any logged-in session (super-admin, staff, athlete, club, team, …). */
+function requireLoggedIn(request: NextRequest): { ok: true } | { ok: false; status: number; error: string } {
+  const token = getBearerToken(request);
+  if (!token) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+  const decoded = verifyToken(token);
+  if (!decoded?.userId) {
+    return { ok: false, status: 401, error: 'Invalid token' };
+  }
+  return { ok: true };
+}
+
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request);
+  const auth = requireLoggedIn(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
