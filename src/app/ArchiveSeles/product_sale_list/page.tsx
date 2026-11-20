@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ClubArchivePage from '@/components/club/archives/ClubArchivePage';
 import type { Column, Member } from '@/types/clubTable';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { shopFetch } from '@/lib/shop/browser';
@@ -16,6 +17,20 @@ function money(value: unknown) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '-';
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR' }).format(amount);
+}
+
+function MemberPicture({ name, src }: { name: string; src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-teal-100 text-sm font-semibold text-teal-800">
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        name.trim().charAt(0).toUpperCase() || '?'
+      )}
+    </span>
+  );
 }
 
 function ProductImage({ src }: { src: string }) {
@@ -105,6 +120,7 @@ function ProductSaleListPageInner() {
   const productId = searchParams?.get('productId') || '';
   const productName = searchParams?.get('productName')?.trim() || 'selected product';
   const [refreshKey, setRefreshKey] = useState(0);
+  const [photoMode, setPhotoMode] = useState<'with' | 'without'>('with');
   const columns: Column[] = [
     { key: 'category', header: 'No.' },
     {
@@ -115,7 +131,21 @@ function ProductSaleListPageInner() {
     },
     { key: 'course', header: 'Product' },
     { key: 'insertDate', header: 'Date selling' },
-    { key: 'name', header: 'Member' },
+    {
+      key: 'name',
+      header: 'Member',
+      render: (value, row) => (
+        <span className="inline-flex items-center gap-2">
+          {photoMode === 'with' ? (
+            <MemberPicture
+              name={String(value ?? '')}
+              src={resolvePublicImageUrl(typeof row.image === 'string' ? row.image : null)}
+            />
+          ) : null}
+          <span>{String(value ?? '-')}</span>
+        </span>
+      ),
+    },
     { key: 'typology', header: 'Typology' },
     { key: 'casual', header: 'Sector' },
     {
@@ -161,6 +191,8 @@ function ProductSaleListPageInner() {
         columns={columns}
         refreshKey={refreshKey}
         getRowClassName={saleRowClass}
+        photoMode={photoMode}
+        onPhotoModeChange={setPhotoMode}
         footerHint={
           productId
             ? `Only sellings that include ${productName}.`

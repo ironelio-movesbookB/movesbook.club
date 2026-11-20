@@ -32,6 +32,9 @@ type Props = {
   /** Bump to force a reload (e.g. after adding a member). */
   refreshKey?: number;
   getRowClassName?: (row: Member) => string;
+  /** Enables the with-photo / without-photo buttons in the archive toolbar. */
+  photoMode?: 'with' | 'without';
+  onPhotoModeChange?: (mode: 'with' | 'without') => void;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
   bordered?: boolean;
@@ -53,6 +56,8 @@ function ClubArchivePageInner({
   headerAction,
   refreshKey = 0,
   getRowClassName,
+  photoMode,
+  onPhotoModeChange,
   onEditItem,
   onDeleteItem,
   bordered = false,
@@ -198,6 +203,8 @@ function ClubArchivePageInner({
         dateRangeError={filters.dateRangeError}
         hideFilters={!showFilters}
         pagination={pagination}
+        photoMode={photoMode}
+        onPhotoModeChange={onPhotoModeChange}
         selectedCount={onDeleteItem ? selectedIds.size : undefined}
         onDeleteSelected={onDeleteItem ? handleDeleteSelected : undefined}
       />

@@ -36,6 +36,8 @@ type Props = {
   orderFirst?: boolean;
   selectedCount?: number;
   onDeleteSelected?: () => void;
+  photoMode?: 'with' | 'without';
+  onPhotoModeChange?: (mode: 'with' | 'without') => void;
   /** Hide filter form (actions + pagination only). */
   hideFilters?: boolean;
 };
@@ -57,6 +59,8 @@ export default function ArchiveListToolbar({
   orderFirst = false,
   selectedCount,
   onDeleteSelected,
+  photoMode,
+  onPhotoModeChange,
   hideFilters = false,
 }: Props) {
   const orderControl = (
@@ -147,6 +151,8 @@ export default function ArchiveListToolbar({
         paginationTrailing={paginationTrailing}
         selectedCount={selectedCount}
         onDeleteSelected={onDeleteSelected}
+        photoMode={photoMode}
+        onPhotoModeChange={onPhotoModeChange}
       />
     </div>
   );
