@@ -18,6 +18,7 @@ export type ArchiveType =
   | 'subscriptions'
   | 'product-sales'
   | 'product-sales-unified'
+  | 'product-sale-lines'
   | 'credits'
   | 'cash-movements'
   | 'deadlines'
@@ -46,6 +47,8 @@ export type ArchiveFetchParams = {
   expandDeadlines?: boolean;
   /** Scope to a single member (e.g. "Member selected" vs "All members" toggle). */
   memberId?: string;
+  /** Archive of sellings: keep only rows that include this shop product. */
+  productId?: string;
   /** Club to load; required for correct Archive of Members when admin owns several clubs. */
   clubId?: string;
   /** Team workspace id (Team Admin Archive of Users). */
@@ -81,6 +84,7 @@ export async function fetchClubArchive(
   if (params?.includePaid) qs.set('includePaid', '1');
   if (params?.expandDeadlines) qs.set('expandDeadlines', '1');
   if (params?.memberId) qs.set('memberId', params.memberId);
+  if (params?.productId) qs.set('productId', params.productId);
   if (params?.clubId) qs.set('clubId', params.clubId);
   if (params?.teamId) qs.set('teamId', params.teamId);
   if (params?.recordId) qs.set('recordId', params.recordId);

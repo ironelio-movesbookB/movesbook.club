@@ -167,7 +167,7 @@ export default function EventSubscriptionPaymentDetailPage() {
             error={error}
             success={success}
             onSubmit={handleSubmit}
-            onCancel={() => router.push('/clubs/archive_deadlines?procedureType=event_subscription')}
+            onCancel={() => router.push('/clubs/events/deadlines')}
             operatorPassStatus={operatorPassStatus}
           />
         )}

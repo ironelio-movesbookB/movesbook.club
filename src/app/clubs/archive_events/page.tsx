@@ -136,7 +136,7 @@ export default function EventsArchivePage() {
             Manage Events
           </Link>
           <Link
-            href="/clubs/archive_deadlines?procedureType=event_subscription"
+            href="/clubs/events/deadlines"
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
           >
             Deadlines of events

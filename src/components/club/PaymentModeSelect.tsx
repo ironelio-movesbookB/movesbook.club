@@ -29,6 +29,8 @@ type Props = {
    */
   allowedMethods?: string[] | null;
   extraOptions?: { value: string; label: string }[];
+  /** Shown greyed out and not selectable. */
+  disabledMethods?: string[];
 };
 
 /**
@@ -44,7 +46,12 @@ export default function PaymentModeSelect({
   allowEmpty = true,
   allowedMethods,
   extraOptions = [],
+  disabledMethods = [],
 }: Props) {
+  const optionProps = (method: string) =>
+    disabledMethods.includes(method)
+      ? { disabled: true, style: { color: '#9ca3af' } }
+      : { style: toneStyle(method) };
   const locked = Array.isArray(allowedMethods);
   const normalizedValue = locked ? value : normalizePaymentTypeValue(value) || value;
   const lockedOptions = useMemo(() => {
@@ -102,14 +109,14 @@ export default function PaymentModeSelect({
       {allowEmpty ? <option value="" style={toneStyle('')}>select</option> : null}
       {locked
         ? lockedOptions.map((m) => (
-            <option key={m.value} value={m.value} style={toneStyle(m.value)}>
+            <option key={m.value} value={m.value} {...optionProps(m.value)}>
               {m.label}
             </option>
           ))
         : null}
       {!locked
         ? defaults.map((m) => (
-            <option key={m.value} value={m.value} style={toneStyle(m.value)}>
+            <option key={m.value} value={m.value} {...optionProps(m.value)}>
               {m.label}
             </option>
           ))
@@ -121,7 +128,7 @@ export default function PaymentModeSelect({
       ) : null}
       {!locked && showOthers
         ? others.map((m) => (
-            <option key={`other-${m.value}`} value={m.value} style={toneStyle(m.value)}>
+            <option key={`other-${m.value}`} value={m.value} {...optionProps(m.value)}>
               {m.label}
             </option>
           ))

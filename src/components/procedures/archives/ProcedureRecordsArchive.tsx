@@ -25,6 +25,7 @@ import {
   type ProcedureArchiveTabId,
 } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES, type ProcedureTypeCode } from '@/lib/procedures/types';
+import { EXPENSE_STATISTICS_BASE_PATH } from '@/lib/club/expenseStatisticsShared';
 import type { Member } from '@/types/clubTable';
 
 type Props = {
@@ -194,6 +195,11 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
+        statisticsHref={
+          procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
+            ? `${EXPENSE_STATISTICS_BASE_PATH}/a`
+            : undefined
+        }
         pagination={
           <ProcedurePagination
             page={page}

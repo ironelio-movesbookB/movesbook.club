@@ -45,6 +45,7 @@ import {
 } from '@/lib/club/monitoring/dashboardSettings';
 import type { MonthPoint, PreviewRow } from '@/lib/club/monitoring/dashboardSummary';
 import DashboardSettingsModal from '@/components/club/monitoring/DashboardSettingsModal';
+import DashboardMemberDirectory from '@/components/club/monitoring/DashboardMemberDirectory';
 
 type Snapshot = {
   counts: Record<SummaryTileId, number>;
@@ -282,6 +283,14 @@ export default function ClubMonitoringDashboard({
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>
+            ) : detail.id === 'total-members' || detail.id === 'birthdays' || detail.id === 'name-days' ? (
+              <DashboardMemberDirectory
+                rows={detail.items}
+                mode={
+                  detail.id === 'birthdays' ? 'birthdays' : detail.id === 'name-days' ? 'name-days' : 'members'
+                }
+                clubId={clubId}
+              />
             ) : (
               <PreviewTable
                 rows={detail.items}

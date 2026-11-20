@@ -21,6 +21,7 @@ import { createProcedureClient, type ProcedureRecordView } from '@/lib/club/proc
 import {
   getProcedureDefinition,
   getProcedureTabs,
+  withPaymentIds,
   type ProcedureArchiveTabId,
 } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES, type ProcedureTypeCode } from '@/lib/procedures/types';
@@ -157,12 +158,11 @@ export default function ProcedureDeadlinesArchive({ procedureCode, activeTab }: 
     const code = deadline?.procedureType as ProcedureTypeCode | undefined;
     const routeDef = code ? getProcedureDefinition(code) : def;
 
-    const base = routeDef?.routes.paymentDetail(primary) ?? def.routes.paymentDetail(primary);
-    const href =
-      rest.length > 0
-        ? `${base}?ids=${encodeURIComponent(ids.join(','))}`
-        : base;
-    router.push(href);
+    const base =
+      code === PROCEDURE_TYPE_CODES.PRODUCT_SALE && ids.length > 1
+        ? `/clubs/payment_detail/${encodeURIComponent(primary)}?type=product_sale`
+        : routeDef?.routes.paymentDetail(primary) ?? def.routes.paymentDetail(primary);
+    router.push(withPaymentIds(base, ids));
   }
 
   function handleDoubleClick(row: Member) {

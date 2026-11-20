@@ -4577,6 +4577,16 @@ model LegacyUnits {
   @@ignore
 }
 
+/// src/lib/club/paymentFrequentSettingsStore.ts
+model ClubPaymentFrequentSettings {
+  clubId       String    @id @map("club_id") @db.VarChar(191)
+  settingsJson String    @map("settings_json") @db.LongText
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.DateTime(0)
+
+  @@map("club_payment_frequent_settings")
+  @@ignore
+}
+
 /// src/lib/club/memberPaymentMethodsStore.ts
 model ClubMemberPaymentMethodsRow {
   entityId     String   @id @map("entity_id") @db.VarChar(191)
@@ -4610,6 +4620,54 @@ model ClubMemberOnlinePaymentRow {
   @@index([memberUserId], map: "idx_club_member_online_member")
   @@map("club_member_online_payments")
   @@ignore
+}
+
+/// Club and team product catalog. Orders, customers, and payments stay on the existing procedure archives.
+model ShopSettings {
+  id                   String   @id @default(cuid())
+  workspaceKind        String   @db.VarChar(16)
+  workspaceId          String   @db.VarChar(191)
+  slug                 String   @unique @db.VarChar(80)
+  displayName          String   @default("") @db.VarChar(120)
+  shopDescription      String   @db.Text
+  shopActive         Boolean  @default(true)
+  orderEmailsEnabled Boolean  @default(true)
+  /// "logo" or "banner": what the public shop page shows at the top.
+  headerMode         String   @default("logo") @db.VarChar(16)
+  onsitePaymentEnabled Boolean @default(true)
+  bankTransferEnabled  Boolean @default(false)
+  bankTransferDetails  String? @db.Text
+  /// Paid through the club's own Stripe / PayPal account (Payment methods for members).
+  onlinePaymentEnabled Boolean @default(false)
+  shopAlert            String? @db.Text
+  afterSalesInfo       String? @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([workspaceKind, workspaceId])
+  @@map("shop_settings")
+}
+
+model ShopProduct {
+  id                 String   @id @default(cuid())
+  workspaceKind      String   @db.VarChar(16)
+  workspaceId        String   @db.VarChar(191)
+  name               String   @db.VarChar(160)
+  description        String   @db.Text
+  price              Decimal  @db.Decimal(10, 2)
+  vatRate            Decimal  @default(0) @db.Decimal(5, 2)
+  quantity           Int      @default(0)
+  imageUrl           String?  @db.VarChar(500)
+  isVisible          Boolean  @default(true)
+  hideFromShop       Boolean  @default(false)
+  allowMultipleUnits Boolean  @default(true)
+  allowNonMembers    Boolean  @default(false)
+  sector             String   @default("Shop") @db.VarChar(32)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([workspaceKind, workspaceId])
+  @@map("shop_products")
 }
 
 /// src/lib/procedures/receiptShares.ts — public read-only receipt links

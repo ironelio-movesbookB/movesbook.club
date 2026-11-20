@@ -125,7 +125,7 @@ const EXPENSE: ProcedureDefinition = {
 const PRODUCT_SALE: ProcedureDefinition = {
   code: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
   name: 'Product Sale',
-  typologyLabel: 'SELLINGS',
+  typologyLabel: 'PURCHASE PRODUCTS',
   pageSize: 25,
   metadataKeys: { primary: 'productName', secondary: 'sectorName' },
   columnHeaders: { primary: 'Product', secondary: 'Sector' },
@@ -138,7 +138,7 @@ const PRODUCT_SALE: ProcedureDefinition = {
     paymentDetail: (id) => `/ArchiveSeles/payment_detail/${id}`,
   },
   archiveTitles: {
-    records: 'Archive of Product Sales',
+    records: 'Archive of sellings',
     deadlines: 'Product Deadlines',
     payments: 'Product Payments',
     receipts: 'Product Receipts',
@@ -278,7 +278,7 @@ const EVENT_SUBSCRIPTION: ProcedureDefinition = {
   routes: {
     form: '/clubs/events',
     records: '/clubs/archive_events',
-    deadlines: '/clubs/archive_deadlines?procedureType=event_subscription',
+    deadlines: '/clubs/events/deadlines',
     payments: '/clubs/movement_cash_details/IN',
     receipts: '/clubs/archive_receipts',
     paymentDetail: (id) => `/clubs/events/payment_detail/${id}`,
@@ -297,10 +297,7 @@ const EVENT_SUBSCRIPTION: ProcedureDefinition = {
   },
 };
 
-export const PROCEDURE_DEFINITIONS: Record<
-  ProcedureTypeCode,
-  ProcedureDefinition
-> = {
+export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinition> = {
   [PROCEDURE_TYPE_CODES.SERVICE_SALE]: SERVICE_SALE,
   [PROCEDURE_TYPE_CODES.EXPENSE]: EXPENSE,
   [PROCEDURE_TYPE_CODES.PRODUCT_SALE]: PRODUCT_SALE,
@@ -320,6 +317,23 @@ export function getProcedureDefinition(
     return PROCEDURE_DEFINITIONS[code as ProcedureTypeCode];
   }
   return null;
+}
+
+/** Append extra query values to a payment URL that may already have ?type=. */
+export function withPaymentIds(paymentPath: string, ids?: string[]): string {
+  if (!ids || ids.length <= 1) return paymentPath;
+  const sep = paymentPath.includes('?') ? '&' : '?';
+  return `${paymentPath}${sep}ids=${encodeURIComponent(ids.join(','))}`;
+}
+
+export function procedurePaymentHref(
+  code: string,
+  recordId: string,
+  ids?: string[],
+): string | null {
+  const def = getProcedureDefinition(code);
+  if (!def) return null;
+  return withPaymentIds(def.routes.paymentDetail(recordId), ids);
 }
 
 export function getProcedureTypology(code: string): string {

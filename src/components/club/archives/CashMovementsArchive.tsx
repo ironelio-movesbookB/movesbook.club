@@ -14,16 +14,16 @@ import {
   DeleteRowButton,
   EditRowButton,
   usePasswordGate,
-} from '@/components/procedures/ArchiveRowActions';
-import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
-import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
-import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
-import { createProcedureClient } from '@/lib/club/procedureClient';
-import { parseCashMovementId } from '@/lib/club/cashMovementClient';
-import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
-import type { ProcedureTypeCode } from '@/lib/procedures/types';
-import { payModeTone } from '@/lib/procedures/payModes';
-import type { Column, Member } from '@/types/clubTable';
+} from "@/components/procedures/ArchiveRowActions";
+import ArchiveListToolbar from "@/components/procedures/ArchiveListToolbar";
+import { useArchiveListFilters } from "@/components/procedures/useArchiveListFilters";
+import { fetchClubArchive } from "@/lib/club/archives/clubArchiveClient";
+import { createProcedureClient } from "@/lib/club/procedureClient";
+import { parseCashMovementId } from "@/lib/club/cashMovementClient";
+import { formatDate, formatEuro } from "@/lib/club/servicePurchasesClient";
+import type { ProcedureTypeCode } from "@/lib/procedures/types";
+import { payModeTone } from "@/lib/procedures/payModes";
+import type { Column, Member } from "@/types/clubTable";
 
 type ViewMode = 'historical' | 'details_deadline' | 'totals_payments';
 
@@ -402,13 +402,13 @@ export default function CashMovementsArchive({
   const tableLoading = showingHistorical ? loading : detailLoading;
   const getDirectionRowClassName = (row: Member) => {
     const rowDirection = row.direction ?? direction;
-    if (rowDirection === 'IN') {
-      return payModeTone(String(row.payMod ?? '')) === 'external'
-        ? 'text-blue-700 font-semibold'
-        : 'text-[#0b5d3c] font-semibold';
+    if (rowDirection === "IN") {
+      return payModeTone(String(row.payMod ?? "")) === "external"
+        ? "text-blue-700 font-semibold"
+        : "text-[#0b5d3c] font-semibold";
     }
-    if (rowDirection === 'OUT') return "text-red-700 font-semibold";
-    return '';
+    if (rowDirection === "OUT") return "text-red-700 font-semibold";
+    return "";
   };
 
   const tabActions = (

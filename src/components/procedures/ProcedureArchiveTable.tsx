@@ -209,53 +209,47 @@ export default function ProcedureArchiveTable({
               const expenseDirection = row.expenseDirection ?? row.direction;
               const isRecurringExpense =
                 isExpense && (row.isRecurrent || row.isRecurringOccurrence);
-              const isNonRecurringExpense =
-                isExpense &&
-                !isRecurringExpense &&
-                expenseDirection !== 'IN';
               const isOutgoingExpense =
                 isExpense && expenseDirection !== 'IN';
               const isIncomingExpense =
                 isExpense && expenseDirection === 'IN';
-              // Pinned cells need the row's own background, hover included, or the scrolled
-              // columns show through them.
-              const rowBg = isOutgoingExpense
-                ? 'bg-red-50'
-                  : isRecurringExpense
-                ? "bg-gray-100"
-                : isNonRecurringExpense || row.isDuplicate
-                  ? 'bg-red-100'
-                  : isChecked
-                    ? 'bg-amber-50'
-                    : isSelected
-                      ? 'bg-amber-100'
-                      : 'bg-white';
-              const rowHover = isOutgoingExpense
-                ? 'hover:bg-red-100'
-                  : isRecurringExpense
-                ? "hover:bg-gray-200"
-                : isNonRecurringExpense || row.isDuplicate
-                  ? 'hover:bg-red-200'
-                  : 'hover:bg-teal-50';
-              const actionHover = isOutgoingExpense
-                ? 'group-hover:bg-red-100'
-                  : isRecurringExpense
-                ? "group-hover:bg-gray-200"
-                : isNonRecurringExpense || row.isDuplicate
-                  ? 'group-hover:bg-red-200'
-                  : isChecked
-                    ? 'group-hover:bg-amber-100'
-                    : 'group-hover:bg-teal-50';
+              const rowBg = isRecurringExpense
+                ? 'bg-gray-100'
+                : isOutgoingExpense
+                  ? 'bg-red-50'
+                  : row.isDuplicate
+                    ? 'bg-red-100'
+                    : isChecked
+                      ? 'bg-amber-50'
+                      : isSelected
+                        ? 'bg-amber-100'
+                        : 'bg-white';
+              const rowHover = isRecurringExpense
+                ? 'hover:bg-gray-200'
+                : isOutgoingExpense
+                  ? 'hover:bg-red-100'
+                  : row.isDuplicate
+                    ? 'hover:bg-red-200'
+                    : 'hover:bg-teal-50';
+              const actionHover = isRecurringExpense
+                ? 'group-hover:bg-gray-200'
+                : isOutgoingExpense
+                  ? 'group-hover:bg-red-100'
+                  : row.isDuplicate
+                    ? 'group-hover:bg-red-200'
+                    : isChecked
+                      ? 'group-hover:bg-amber-100'
+                      : 'group-hover:bg-teal-50';
               const statusClass = getRowClassName?.(row) ?? '';
               const cellTextClass = isIncomingExpense
                 ? 'text-[#0b5d3c] font-semibold'
                 : isOutgoingExpense
                   ? 'text-red-800'
                   : isRecurringExpense
-                ? "text-gray-500"
-                : isNonRecurringExpense
-                  ? 'text-red-800'
-                  : statusClass || 'text-gray-800';
+                  ? 'text-gray-500'
+                  : row.isDuplicate
+                    ? 'text-red-800'
+                    : statusClass || 'text-gray-800';
               return (
                 <tr
                   key={row.id ?? `${row.name}-${row.insertDate}`}
@@ -265,8 +259,8 @@ export default function ProcedureArchiveTable({
                       : isOutgoingExpense
                         ? 'text-red-800'
                         : isRecurringExpense
-                      ? "text-gray-500"
-                      : isNonRecurringExpense || row.isDuplicate
+                          ? 'text-gray-500'
+                          : row.isDuplicate
                         ? 'text-red-800'
                         : ''
                   } ${statusClass}`}

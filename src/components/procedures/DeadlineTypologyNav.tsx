@@ -1,50 +1,20 @@
 'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 import Link from 'next/link';
 
 const INCOMING = [
-  {
-    id: 'memberships',
-    label: 'Memberships',
-    href: '/clubs/memberships/deadlines',
-    procedureType: 'membership',
-  },
-  {
-    id: 'subscriptions',
-    label: 'Subscriptions',
-    href: '/clubs/courses/deadlines',
-    procedureType: 'course_subscription',
-  },
+  { id: 'memberships', label: 'Memberships', href: '/clubs/memberships/deadlines', procedureType: 'membership' },
+  { id: 'subscriptions', label: 'Subscriptions', href: '/clubs/courses/deadlines', procedureType: 'course_subscription' },
   { id: 'services', label: 'Services', href: '/clubs/dead_line', procedureType: 'service_sale' },
   { id: 'sellings', label: 'Sellings', href: '/ArchiveSeles/product_deadline', procedureType: 'product_sale' },
-  {
-    id: 'member_debts',
-    label: 'Member debts',
-    href: '/clubs/member_debt_dead_line',
-    procedureType: 'member_debt',
-  },
-  {
-    id: 'events',
-    label: 'Sellings of events',
-    href: '/clubs/archive_deadlines?procedureType=event_subscription',
-    procedureType: 'event_subscription',
-  },
+  { id: 'member_debts', label: 'Member debts', href: '/clubs/member_debt_dead_line', procedureType: 'member_debt' },
+  { id: 'events', label: 'Sellings of events', href: '/clubs/events/deadlines', procedureType: 'event_subscription' },
 ] as const;
 
 const OUTGOING = [
-  {
-    id: 'member_credits',
-    label: 'Member credits',
-    href: '/clubs/member_credit_dead_line',
-    procedureType: 'member_credit',
-  },
-  {
-    id: 'employ_to_pay',
-    label: 'Employ to pay',
-    href: '/clubs/member_credit_dead_line',
-    procedureType: 'member_credit',
-  },
+  { id: 'member_credits', label: 'Member credits', href: '/clubs/member_credit_dead_line', procedureType: 'member_credit' },
+  { id: 'employ_to_pay', label: 'Employ to pay', href: '/clubs/member_credit_dead_line', procedureType: 'member_credit' },
 ] as const;
 
 type Props = {
@@ -77,7 +47,6 @@ function TypologyPill({
     direction === "in"
       ? "bg-[#064e3b] hover:bg-[#043b2d]"
       : "bg-[#b91c1c] hover:bg-[#991b1b]";
-
   const className = `rounded px-3 py-1 text-[13px] font-bold text-white shadow-sm ${directionClass} ${active ? "ring-2 ring-yellow-400" : ""}`;
 
   if (onSelectProcedureType) {
@@ -150,6 +119,16 @@ export default function DeadlineTypologyNav({
               </button>
             )}
           </>
+        )}
+        {onSelectDirection && (
+          <button
+            type="button"
+            onClick={() => onSelectDirection('IN')}
+            aria-pressed={selectedDirection === 'IN'}
+            className={`rounded border border-green-800 px-3 py-1 text-[13px] font-semibold text-green-900 hover:bg-green-50 ${selectedDirection === 'IN' ? 'ring-2 ring-yellow-400' : ''}`}
+          >
+            All expenses IN
+          </button>
         )}
         <label className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-[#064e3b]">
           <input

@@ -542,7 +542,15 @@ export default function ClubTablesListOfExpensesPage() {
                         title={`Chart color ${group.color ?? 'default'}`}
                         aria-hidden="true"
                       />
-                      <span className="truncate font-semibold text-gray-950">{group.name}</span>
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                        style={{ backgroundColor: group.color ?? '#0f766e' }}
+                        title={`Chart color ${group.color ?? 'default'}`}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate font-semibold text-gray-950">
+                        {group.name}
+                      </span>
                       {group.children.length > 0 && (
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                           {group.children.length}
@@ -577,7 +585,15 @@ export default function ClubTablesListOfExpensesPage() {
                               title={`Chart color ${child.color ?? 'default'}`}
                               aria-hidden="true"
                             />
-                            <span className="truncate text-sm font-medium text-gray-900">{child.name}</span>
+                            <span
+                              className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                              style={{ backgroundColor: child.color ?? '#0f766e' }}
+                              title={`Chart color ${child.color ?? 'default'}`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate text-sm font-medium text-gray-900">
+                              {child.name}
+                            </span>
                           </div>
                           <span className="text-sm text-gray-600">{formatDate(child.modified || child.created)}</span>
                           <div className="flex justify-end gap-2">

@@ -32,11 +32,21 @@ import PaymentLinkChannelModal, {
   type PaymentLinkChannel,
   type PaymentLinkResult,
 } from "@/components/club/PaymentLinkChannelModal";
-import { PAY_LINK_METHODS } from "@/lib/procedures/payModes";
+import {
+  blockedPayModesFor,
+  PAY_LINK_METHODS,
+  PAYMENT_TYPE_OPTIONS,
+  SHARE_ONLINE_PAY_MODES,
+} from "@/lib/procedures/payModes";
 import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 import { useClubEnabledPaymentMethods } from "@/lib/club/useClubEnabledPaymentMethods";
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
 import { SIGNED_RECEIPT_DOCUMENT_TYPE } from "@/lib/procedures/taxDocumentDefaults";
+
+const SHARE_PAY_EXTRA_OPTIONS = SHARE_ONLINE_PAY_MODES.map((value) => ({
+  value,
+  label: PAYMENT_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value,
+}));
 
 export type PaymentDistribution = {
   installmentId: string;
@@ -91,6 +101,8 @@ type Props = {
   onSelectedRecordIdsChange?: (recordIds: string[]) => void;
   onUploadExpenseInvoice?: (file: File) => Promise<void>;
   onRemoveExpenseInvoice?: () => Promise<void>;
+  /** Pay Mode preselected when the form opens (e.g. the shop order's payment method). */
+  defaultPayMode?: string;
 };
 
 function formatDisplayDate(iso: string | null | undefined): string {
@@ -229,6 +241,7 @@ export default function ServicePaymentForm({
   onSelectedRecordIdsChange,
   onUploadExpenseInvoice,
   onRemoveExpenseInvoice,
+  defaultPayMode,
 }: Props) {
   const isMemberCreditPayment = procedureType === "member_credit";
   const isExpensePayment = procedureType === "expense";
@@ -259,7 +272,14 @@ export default function ServicePaymentForm({
     procedureType === "member_credit" ? "0.0" : "0",
   );
   const amountPaidTouchedRef = useRef(false);
-  const [payMode, setPayMode] = useState("cash");
+  const [payMode, setPayMode] = useState(defaultPayMode || "cash");
+  const blockedPayModes = useMemo(
+    () => blockedPayModesFor([procedureType, ...allPurchases.map((p) => p.typology)]),
+    [procedureType, allPurchases],
+  );
+  useEffect(() => {
+    if (blockedPayModes.includes(payMode)) setPayMode("cash");
+  }, [blockedPayModes, payMode]);
   const [linkRequest, setLinkRequest] = useState<{
     amountEur: number;
     lines: { recordId: string; amount: number }[];
@@ -402,6 +422,20 @@ export default function ServicePaymentForm({
         disabled: false,
         recordId: purchase.id,
       }));
+    } else if (purchase.rest > 0) {
+      // Without installment rows the record is one deadline; its payments are not extra deadlines.
+      rows = [
+        {
+          id: "current",
+          balance: purchase.rest,
+          paymentDate: purchase.paydate,
+          expireDate: purchase.paydate,
+          createdAt: purchase.createdAt ?? null,
+          paid: purchase.pay,
+          disabled: false,
+          recordId: purchase.id,
+        },
+      ];
     } else {
       rows = payments.map((p) => ({
         id: p.id,
@@ -413,18 +447,6 @@ export default function ServicePaymentForm({
         disabled: true,
         recordId: purchase.id,
       }));
-      if (purchase.rest > 0) {
-        rows.unshift({
-          id: "current",
-          balance: purchase.rest,
-          paymentDate: purchase.paydate,
-          expireDate: purchase.paydate,
-          createdAt: purchase.createdAt ?? null,
-          paid: purchase.pay,
-          disabled: false,
-          recordId: purchase.id,
-        });
-      }
     }
     // Client: list chronologically — oldest deadline at the top (date, then time).
     return [...rows].sort(compareDeadlinesOldestFirst);
@@ -906,13 +928,16 @@ export default function ServicePaymentForm({
     const onlinePay =
       procedureType !== "expense" && PAY_LINK_METHODS.includes(payMode);
     if (onlinePay) {
+      if (!purchase.userId) {
+        setInstallmentError(
+          "This selling has no member. Pick a member before sharing a payment link.",
+        );
+        return;
+      }
       const totals = new Map<string, number>();
       for (const row of distributions) {
         const recordId = row.recordId || purchase.id;
-        totals.set(
-          recordId,
-          Math.round(((totals.get(recordId) ?? 0) + row.amount) * 100) / 100,
-        );
+        totals.set(recordId, Math.round(((totals.get(recordId) ?? 0) + row.amount) * 100) / 100);
       }
       setLinkRequest({
         amountEur: paidAmount,
@@ -1374,9 +1399,11 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowedMethods={enabledMethods}
-                extraOptions={
-                  stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []
-                }
+                disabledMethods={blockedPayModes}
+                extraOptions={[
+                  ...SHARE_PAY_EXTRA_OPTIONS,
+                  ...(stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []),
+                ]}
               />
               {isExpensePayment ? (
                 <div className="min-w-0 space-y-2 lg:col-span-2">

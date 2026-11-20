@@ -403,9 +403,7 @@ export default function PlannedExpensePaymentsPage() {
           (record) => (record.expenseDirection ?? 'OUT') === 'OUT',
         ),
       ),
-      in: sumRows(
-        selectedRecords.filter((record) => record.expenseDirection === 'IN'),
-      ),
+      in: sumRows(selectedRecords.filter((record) => record.expenseDirection === 'IN')),
     };
   }, [selectedRecords, today]);
   const totalRest = visibleRecords.reduce(
@@ -515,6 +513,48 @@ export default function PlannedExpensePaymentsPage() {
     setSelectedCategoryId(null);
     setPaymentTarget(null);
     setError('');
+  }
+
+  async function toggleExpenseLock() {
+    if (isUnlocked) {
+      setIsUnlocked(false);
+      setPaymentTarget(null);
+      setEditTarget(null);
+      return;
+    }
+    if (!operatorId) {
+      setUnlockError('Select an operator first.');
+      return;
+    }
+    if (!operatorPassword.trim()) {
+      setUnlockError("Enter the selected operator's password.");
+      return;
+    }
+
+    setUnlocking(true);
+    setUnlockError('');
+    try {
+      const result = await clubApiFetch<{ valid: boolean }>(
+        '/api/club/procedures/expense/verify-operator-password',
+        {
+          method: 'POST',
+          body: JSON.stringify({ operatorId, password: operatorPassword }),
+        },
+      );
+      if (!result.valid) {
+        setIsUnlocked(false);
+        setUnlockError('Incorrect operator password.');
+        return;
+      }
+      setIsUnlocked(true);
+    } catch (err) {
+      setIsUnlocked(false);
+      setUnlockError(
+        err instanceof Error ? err.message : 'Unable to verify password.',
+      );
+    } finally {
+      setUnlocking(false);
+    }
   }
 
   function openExpenseEdit(record: CategorizedRecord) {

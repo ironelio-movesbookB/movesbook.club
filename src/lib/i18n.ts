@@ -1553,7 +1553,7 @@ export interface LanguageStrings {
         'dashboard_socials': 'Redes Sociales',
         'dashboard_my_desk': 'Mi Escritorio',
         'nav_search_in': 'En',
-        'nav_search_scope_single_user': 'Usuario',
+        'nav_search_scope_single_user': 'Atleta',
         'nav_search_scope_coach': 'Entrenador',
         'nav_search_scope_team': 'Equipo',
         'nav_search_scope_club': 'Club',

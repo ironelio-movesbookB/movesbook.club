@@ -38,6 +38,12 @@ export default function DisplayOptionsToolbar({
           />
 
           <ToggleOption
+            checked={showLeftSidebar}
+            label="Left side bar"
+            onChange={onToggleLeftSidebar}
+          />
+
+          <ToggleOption
             checked={showAdBanner}
             label="Advertising banner"
             onChange={onToggleAdBanner}

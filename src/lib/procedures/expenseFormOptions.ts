@@ -11,7 +11,7 @@ function text(value: unknown): string {
   return String(value ?? '').trim();
 }
 
-async function getLegacyUserId(userId: string): Promise<string | null> {
+export async function getLegacyUserId(userId: string): Promise<string | null> {
   const fromId = userId.match(/^legacy_(\d+)(?:_|$)/);
   if (fromId?.[1]) return fromId[1];
 

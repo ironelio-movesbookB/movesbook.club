@@ -4,7 +4,6 @@ import { findExistingTable } from "@/lib/club/legacyTableLookup";
 import {
   getProcedureDefinition,
   getProcedureDirection,
-  getProcedureTypology,
   procedureTypologyFor,
 } from "./registry";
 import { procedureSubscriber } from "./subscriberOverride";
@@ -104,7 +103,7 @@ function buildPaymentCreateData(data: {
   amount: number;
   balanceAfter: number;
   paymentDate: Date;
-  operatorId: string;
+  operatorId: string | null;
   payMode: string | null;
   notes: string | null;
 }): Prisma.ProcedurePaymentUncheckedCreateInput {
@@ -214,6 +213,8 @@ function receiptMemberName(
   metadata: Record<string, unknown> | null | undefined,
   nameById: Map<string, string>,
 ): string {
+  const shopCustomerName = metaString(metadata, "shopCustomerName");
+  if (shopCustomerName) return shopCustomerName;
   const taxDocument = metadata?.taxDocument;
   if (
     taxDocument &&
@@ -359,17 +360,20 @@ async function assertOperatorPassword(
     procedureTypeCode === PROCEDURE_TYPE_CODES.SERVICE_SALE ||
     procedureTypeCode === PROCEDURE_TYPE_CODES.PRODUCT_SALE ||
     procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE;
-  if (!requiresPassword) return;
+  let passwordRequired = requiresPassword;
   if (clubId) {
     const setting = await getOtherSetting(
       clubId,
       "operator_pass_status",
       userId,
     );
-    if (!setting || !isPasswordEnabledSetting(setting)) return;
+    passwordRequired = isPasswordEnabledSetting(setting ?? "");
   }
   const trimmed = password?.trim();
-  if (!trimmed) throw new Error("Operator password is required");
+  if (!trimmed) {
+    if (passwordRequired) throw new Error("Operator password is required");
+    return;
+  }
   if (!operatorId) throw new Error("Operator is required");
   const ok = await verifyOperatorPassword(operatorId, trimmed);
   if (!ok) throw new Error("Operator password is incorrect");
@@ -1553,7 +1557,9 @@ export class ProcedureService {
       clubId: ctx.club.id,
       procedureTypeId: procedureType.id,
       procedureType: { code: procedureTypeCode },
-      status: ProcedureRecordStatus.ACTIVE,
+      status: query.includeDeleted
+        ? { in: [ProcedureRecordStatus.ACTIVE, ProcedureRecordStatus.DELETED] }
+        : ProcedureRecordStatus.ACTIVE,
       ...(query.memberId ? { memberId: query.memberId } : {}),
       ...(query.recordIds && query.recordIds.length > 0
         ? { id: { in: query.recordIds } }
@@ -1595,9 +1601,9 @@ export class ProcedureService {
       memberName:
         procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE
           ? ctx.club.name
-          : (procedureSubscriber(row.metadata)?.name ??
-            profileById.get(row.memberId)?.name ??
-            row.memberId),
+          : procedureSubscriber(row.metadata)?.name ||
+            metaString(row.metadata as Record<string, unknown> | null, "shopCustomerName") ||
+            (profileById.get(row.memberId)?.name ?? row.memberId),
       memberImage: profileById.get(row.memberId)?.image ?? null,
       operatorId: row.operatorId,
       operatorName: row.operatorId
@@ -1611,6 +1617,7 @@ export class ProcedureService {
       createdAt: row.createdAt.toISOString(),
       notes: row.notes,
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+      recordStatus: row.status,
       lastPaymentDate:
         row.payments[0]?.paymentDate.toISOString().slice(0, 10) ?? null,
     }));
@@ -1716,9 +1723,10 @@ export class ProcedureService {
         reversalOfId: row.reversalOfId,
         memberId: row.procedureRecord.memberId,
         memberName:
-          procedureSubscriber(metadata)?.name ??
-          nameById.get(row.procedureRecord.memberId) ??
-          row.procedureRecord.memberId,
+          procedureSubscriber(metadata)?.name ||
+          metaString(metadata, "shopCustomerName") ||
+          (nameById.get(row.procedureRecord.memberId) ??
+            row.procedureRecord.memberId),
         amount: decimalToNumber(row.amount),
         paymentDate: row.paymentDate.toISOString().slice(0, 10),
         operatorId: row.operatorId,

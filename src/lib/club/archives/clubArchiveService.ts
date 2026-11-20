@@ -6,10 +6,7 @@ import {
   projectInstallmentsOnBalance,
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
-import {
-  getProcedureDirection,
-  procedureTypologyFor,
-} from '@/lib/procedures/registry';
+import { getProcedureDirection, procedureTypologyFor } from '@/lib/procedures/registry';
 import { procedureSubscriber } from '@/lib/procedures/subscriberOverride';
 import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
@@ -41,6 +38,7 @@ import {
   memberTypeIdFromProfileJson,
 } from '@/lib/club/clubMemberTypes';
 import { listCoachAthleteLinks } from '@/lib/club/coachMemberLists';
+import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 export type { ArchiveQueryParams, PaginatedArchive };
 
@@ -50,6 +48,16 @@ async function clubMemberUserIds(clubId: string): Promise<string[]> {
     select: { memberId: true },
   });
   return rows.map((r) => r.memberId);
+}
+
+function metadataHasProduct(meta: Record<string, unknown>, productId: string): boolean {
+  if (!productId) return true;
+  if (text(meta.productId) === productId) return true;
+  const products = Array.isArray(meta.products) ? meta.products : [];
+  return products.some((line) => {
+    if (!line || typeof line !== 'object') return false;
+    return text((line as Record<string, unknown>).productId) === productId;
+  });
 }
 
 function formatArchiveDate(value: Date | null | undefined): string {
@@ -888,30 +896,70 @@ export async function listUnifiedProductSales(
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const items = await loadLegacyProductSaleItems(ctx);
+  const productId = text(params.productId);
+  const items: Record<string, unknown>[] = productId ? [] : await loadLegacyProductSaleItems(ctx);
 
   try {
-    const procedure = await procedureService.listRecords(
-      ctx,
-      PROCEDURE_TYPE_CODES.PRODUCT_SALE,
-      {
-        page: 1,
-        pageSize: 500,
-        memberId: params.memberId,
-      },
-    );
+    const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
+      page: 1,
+      pageSize: 500,
+      memberId: params.memberId,
+    });
+    const recordIds = procedure.items.map((row) => row.id);
+    const receipts = recordIds.length
+      ? await prisma.procedureReceipt.findMany({
+          where: { procedureRecordId: { in: recordIds } },
+          select: { procedureRecordId: true, documentNumber: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const invoiceByRecord = new Map<string, string>();
+    for (const receipt of receipts) {
+      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
+        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
+      }
+    }
+
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      if (productId && !metadataHasProduct(meta, productId)) continue;
+      const products = Array.isArray(meta.products) ? meta.products : [];
+      const purchaseLines = products
+        .map((line) => {
+          if (!line || typeof line !== 'object') return null;
+          const item = line as Record<string, unknown>;
+          const name = text(item.name);
+          const quantity = num(item.quantity);
+          if (!name) return null;
+          return {
+            name,
+            quantity: quantity > 0 ? quantity : 1,
+            productId: text(item.productId) || undefined,
+          };
+        })
+        .filter((line): line is { name: string; quantity: number; productId?: string } => Boolean(line));
+      const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
+      const online = text(meta.source).toLowerCase() === 'online';
       items.push({
         id: `proc-${row.id}`,
+        procedureRecordId: row.id,
         memberId: row.memberId,
         userId: row.memberId,
         name: row.memberName,
-        image: null,
+        image: row.memberImage,
         insertDate: row.recordDate,
-        typology: 'Sellings',
-        casual: text(meta.sector) || text(meta.productName) || row.notes || '-',
+        typology: 'PURCHASE PRODUCTS',
+        casual: online ? 'Shop online' : text(meta.sector) || text(meta.sectorName) || 'Shop',
+        description: online ? 'Member' : 'Operator',
+        course: purchaseLines[0]?.name || text(meta.productName) || '-',
         value: row.totalAmount,
+        paid: row.paidAmount,
+        rest: row.balanceAmount,
+        number: productCount,
+        purchaseLines,
+        category: displaySellingNumber(meta.sellingNumber) || '-',
+        service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
+        operator: online ? '-' : row.operatorName || '-',
         status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
         source: 'procedure',
       });
@@ -923,6 +971,144 @@ export async function listUnifiedProductSales(
   items.sort((a, b) =>
     String(b.insertDate).localeCompare(String(a.insertDate)),
   );
+  return paginate(applyFilters(items, params), page, pageSize);
+}
+
+function sellingListStatus(record: {
+  recordStatus?: string;
+  balanceAmount: number;
+  paidAmount: number;
+  metadata: Record<string, unknown> | null;
+}) {
+  if (record.recordStatus === 'DELETED') return 'Cancelled';
+  const marked = text(record.metadata?.orderStatus).toLowerCase() === 'completed';
+  const settled = record.balanceAmount <= 0 && record.paidAmount > 0;
+  return marked || settled ? 'Completed' : 'Pending';
+}
+
+function soldProductSector(sector: string | null | undefined) {
+  const parts = String(sector ?? '')
+    .split(/[,|/]/)
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part === 'shop' || part === 'bar' || part === 'restaurant');
+  if (parts.length === 0) return 'OTHER';
+  return ['shop', 'bar', 'restaurant']
+    .filter((name) => parts.includes(name))
+    .map((name) => name.toUpperCase())
+    .join(', ');
+}
+
+export async function listProductSaleLines(
+  ctx: ClubAuthContext,
+  params: ArchiveQueryParams = {}
+): Promise<PaginatedArchive<Record<string, unknown>>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  const productId = text(params.productId);
+  const items: Record<string, unknown>[] = productId
+    ? []
+    : (await loadLegacyProductSaleItems(ctx)).map((item) => ({
+        ...item,
+        course: '-',
+        description: '',
+        typology: 'Selling',
+        casual: soldProductSector(text(item.casual)),
+        paid: item.value,
+        rest: item.status === 'Paid' ? 0 : item.value,
+        status: item.status === 'Paid' ? 'Completed' : 'Pending',
+        service: '-',
+        operator: '-',
+      }));
+
+  try {
+    const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
+      page: 1,
+      pageSize: 500,
+      memberId: params.memberId,
+      includeDeleted: true,
+    });
+    const recordIds = procedure.items.map((row) => row.id);
+    const receipts = recordIds.length
+      ? await prisma.procedureReceipt.findMany({
+          where: { procedureRecordId: { in: recordIds } },
+          select: { procedureRecordId: true, documentNumber: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const invoiceByRecord = new Map<string, string>();
+    for (const receipt of receipts) {
+      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
+        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
+      }
+    }
+
+    const productIds = new Set<string>();
+    for (const row of procedure.items) {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      for (const line of Array.isArray(meta.products) ? meta.products : []) {
+        const id = line && typeof line === 'object' ? text((line as Record<string, unknown>).productId) : '';
+        if (id) productIds.add(id);
+      }
+    }
+    const shopProducts = productIds.size
+      ? await prisma.shopProduct.findMany({
+          where: { id: { in: [...productIds] } },
+          select: { id: true, imageUrl: true, sector: true },
+        })
+      : [];
+    const productById = new Map(shopProducts.map((product) => [product.id, product]));
+
+    for (const row of procedure.items) {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      if (productId && !metadataHasProduct(meta, productId)) continue;
+      const online = text(meta.source).toLowerCase() === 'online';
+      const lines = (Array.isArray(meta.products) ? meta.products : [])
+        .filter((line): line is Record<string, unknown> => Boolean(line) && typeof line === 'object')
+        .map((line) => ({
+          productId: text(line.productId),
+          name: text(line.name) || '-',
+          quantity: num(line.quantity) > 0 ? num(line.quantity) : 1,
+          price: num(line.price),
+        }));
+      if (lines.length === 0) {
+        lines.push({ productId: text(meta.productId), name: text(meta.productName) || '-', quantity: 1, price: row.totalAmount });
+      }
+      const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+      const paidRatio = subtotal > 0 ? row.totalAmount / subtotal : 1;
+      const saleSector = text(meta.sector) || text(meta.sectorName);
+
+      lines.forEach((line, index) => {
+        if (productId && line.productId !== productId) return;
+        const product = productById.get(line.productId);
+        const value = Math.round(line.price * line.quantity * 100) / 100;
+        items.push({
+          id: `proc-${row.id}-${index}`,
+          procedureRecordId: row.id,
+          memberId: row.memberId,
+          userId: row.memberId,
+          name: row.memberName,
+          image: row.memberImage,
+          description: product?.imageUrl || '',
+          course: line.quantity > 1 ? `${line.name} × ${line.quantity}` : line.name,
+          insertDate: row.recordDate,
+          typology: 'Selling',
+          casual: soldProductSector(product?.sector || (saleSector.includes(' - ') ? '' : saleSector) || 'Shop'),
+          value,
+          paid: Math.round(value * paidRatio * 100) / 100,
+          category: displaySellingNumber(meta.sellingNumber) || '-',
+          service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
+          operator: online ? 'Online shop' : row.operatorName || '-',
+          rest: row.balanceAmount,
+          status: sellingListStatus(row),
+          source: 'procedure',
+        });
+      });
+    }
+  } catch {
+    // product_sale procedure type may not be seeded yet
+  }
+
+  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
@@ -1460,20 +1646,14 @@ function deadlineRecordRow(
   const meta = r.metadata ?? {};
   const primary =
     String(
-      meta.serviceName ??
-        meta.productName ??
-        meta.expenseName ??
-        meta.debtLabel ??
-        meta.eventName ??
-        '',
+      meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? meta.eventName ?? ''
     ).trim() || '-';
   const subscriber = procedureSubscriber(meta);
-  const secondary =
-    String(meta.sectorName ?? meta.typologyName ?? '').trim() || '';
+  const secondary = String(meta.sectorName ?? meta.typologyName ?? '').trim() || '';
   const recurrence = meta.expenseRecurrence;
   const isScheduledExpense =
     recurrence !== null &&
-    typeof recurrence === "object" &&
+    typeof recurrence === 'object' &&
     !Array.isArray(recurrence) &&
     (recurrence as Record<string, unknown>).enabled === true &&
     meta.recurrentActivated !== true;

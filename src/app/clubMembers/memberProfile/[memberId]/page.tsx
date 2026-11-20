@@ -32,6 +32,7 @@ const CLUB_TABS: TabMeta[] = [
   { id: 'settings', label: 'Settings', clubScoped: true },
   { id: 'messages-staff', label: 'Alert posted', clubScoped: true },
   { id: 'notes-coach', label: 'Coach notes', clubScoped: true },
+  { id: 'administration', label: 'Administration', clubScoped: true },
   { id: 'presences', label: 'Presences', clubScoped: true },
   { id: 'stats', label: 'Stats', clubScoped: true },
 ];
@@ -55,6 +56,9 @@ function tabVisibleForViewer(tab: TabMeta, data: MemberProfileBundle): boolean {
       if (data.viewer.isClubAdmin) return true;
       return Boolean(v.parents);
     }
+    case 'administration':
+      // Club/Team Admin page: archives + current subscription (admin-only).
+      return Boolean(data.viewer.isClubAdmin);
     case 'settings':
       return Boolean(v.settings);
     case 'messages-staff':
@@ -365,24 +369,26 @@ function ClubMemberProfilePageContent() {
               </ScrollArrowsRow>
             </nav>
 
-            <div className="p-4 md:p-6">
-              <div
-                className={`mb-4 px-3 py-2 font-semibold text-white ${
-                  activeMeta?.id === 'pay-for' ? 'text-lg' : 'text-sm'
-                } ${activeMeta?.clubScoped ? 'bg-sky-700' : 'bg-[#2f6fb5]'}`}
-              >
-                {activeMeta?.label ? st(activeMeta.label) : null}
-                {activeMeta?.clubScoped ? (
-                  <>
-                    {' · '}
-                    <span className={activeMeta?.id === 'pay-for' ? 'text-xl' : 'text-base'}>
-                      {data.clubName}
-                    </span>
-                  </>
-                ) : (
-                  ` · ${st('shared profile')}`
-                )}
-              </div>
+            <div className={activeTab === 'administration' ? 'p-0 md:p-0' : 'p-4 md:p-6'}>
+              {activeTab === 'administration' ? null : (
+                <div
+                  className={`mb-4 px-3 py-2 font-semibold text-white ${
+                    activeMeta?.id === 'pay-for' ? 'text-lg' : 'text-sm'
+                  } ${activeMeta?.clubScoped ? 'bg-sky-700' : 'bg-[#2f6fb5]'}`}
+                >
+                  {activeMeta?.label ? st(activeMeta.label) : null}
+                  {activeMeta?.clubScoped ? (
+                    <>
+                      {' · '}
+                      <span className={activeMeta?.id === 'pay-for' ? 'text-xl' : 'text-base'}>
+                        {data.clubName}
+                      </span>
+                    </>
+                  ) : (
+                    ` · ${st('shared profile')}`
+                  )}
+                </div>
+              )}
 
               <ClubMemberProfileEditor
                 data={data}
