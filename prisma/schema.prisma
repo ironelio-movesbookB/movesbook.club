@@ -4440,6 +4440,10 @@ model OrgClubEventRow {
   sibling_parent_name   String   @default("") @db.VarChar(191)
   sibling_fiscal_code   String   @default("") @db.VarChar(32)
   sibling_percent       Decimal  @default(0) @db.Decimal(5, 2)
+  /// Legacy column still present in DB — keep so db push does not drop data.
+  payment_modality      String   @default("D") @db.VarChar(1)
+  /// Legacy column still present in DB — keep so db push does not drop data.
+  sibling_non_members   Boolean  @default(false)
   public_token          String   @unique(map: "org_club_events_token") @db.VarChar(64)
   created_at            DateTime @default(now()) @db.DateTime(3)
   updated_at            DateTime @default(now()) @db.DateTime(3)
@@ -4459,6 +4463,8 @@ model OrgClubEventSubeventRow {
   seats            Int      @default(0)
   external_to_main Boolean  @default(false)
   sort_order       Int      @default(0)
+  /// Legacy column still present in DB — keep so db push does not drop data.
+  text_color       String   @default("") @db.VarChar(20)
 
   @@index([event_id], map: "org_club_event_subevents_event")
   @@map("org_club_event_subevents")
@@ -4484,6 +4490,9 @@ model OrgClubEventTextRow {
   mandatory  Boolean @default(false)
   enabled    Boolean @default(true)
   sort_order Int     @default(0)
+  /// Legacy columns still present in DB — keep so db push does not drop data.
+  file_upload_enabled Boolean @default(false)
+  file_upload_label   String  @default("") @db.VarChar(191)
 
   @@index([event_id], map: "org_club_event_texts_event")
   @@map("org_club_event_texts")
@@ -4521,6 +4530,17 @@ model OrgClubEventRegistrationRow {
   status                 String   @default("confirmed") @db.VarChar(20)
   receipt_number         String?  @db.VarChar(64)
   created_at             DateTime @default(now()) @db.DateTime(3)
+  /// Legacy columns still present in DB — keep so db push does not drop data.
+  first_name             String   @default("") @db.VarChar(120)
+  last_name              String   @default("") @db.VarChar(120)
+  sex                    String   @default("") @db.VarChar(1)
+  birth_country          String   @default("") @db.VarChar(80)
+  birth_locality         String   @default("") @db.VarChar(120)
+  foreign_id_code        String   @default("") @db.VarChar(64)
+  language               String   @default("en") @db.VarChar(10)
+  currency               String   @default("EUR") @db.VarChar(10)
+  relative_name          String   @default("") @db.VarChar(191)
+  relative_fiscal_code   String   @default("") @db.VarChar(32)
 
   @@index([event_id], map: "org_club_event_regs_event")
   @@map("org_club_event_registrations")
@@ -4532,6 +4552,9 @@ model OrgClubEventSettingsRow {
   workspace_id                 String   @db.VarChar(191)
   disable_subscription_emails  Boolean  @default(false)
   updated_at                   DateTime @default(now()) @db.DateTime(3)
+  /// Legacy columns still present in DB — keep so db push does not drop data.
+  auto_remove_expired          Boolean  @default(false)
+  require_confirmation         Boolean  @default(true)
 
   @@id([workspace_kind, workspace_id])
   @@map("org_club_event_settings")
@@ -4587,6 +4610,8 @@ model ClubMemberOnlinePaymentRow {
   settlementJson  String?   @map("settlement_json") @db.LongText
   createdAt       DateTime? @default(now()) @map("created_at")
   paidAt          DateTime? @map("paid_at")
+  /// Legacy column still present in DB — keep so db push does not drop data.
+  currency        String    @default("EUR") @db.VarChar(10)
 
   @@index([entityId], map: "idx_club_member_online_entity")
   @@index([memberUserId], map: "idx_club_member_online_member")
