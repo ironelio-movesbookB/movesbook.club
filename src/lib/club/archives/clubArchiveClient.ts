@@ -18,6 +18,7 @@ export type ArchiveType =
   | 'subscriptions'
   | 'product-sales'
   | 'product-sales-unified'
+  | 'product-sale-lines'
   | 'credits'
   | 'cash-movements'
   | 'deadlines'

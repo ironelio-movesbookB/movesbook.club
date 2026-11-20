@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Package } from 'lucide-react';
 import ProcedureFormSection, {
   ProcedureFormCell,
   ProcedureFormGrid,
@@ -24,7 +24,8 @@ import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import { PAY_LINK_METHODS } from '@/lib/procedures/payModes';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-import { SELLING_SECTORS, shopSector } from '@/lib/shop/sectors';
+import { SELLING_SECTORS, productInSector, productSectorLabel, productSectors } from '@/lib/shop/sectors';
+import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 type CatalogProduct = {
   id: string;
@@ -32,11 +33,12 @@ type CatalogProduct = {
   cost: number;
   sector: string;
   allowMultipleUnits: boolean;
+  imageUrl?: string | null;
 };
 
 type ProductFormOptions = {
   products: CatalogProduct[];
-  members: { id: string; name: string }[];
+  members: { id: string; name: string; image?: string | null }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   currentOperatorId: string | null;
@@ -50,7 +52,23 @@ type TaggedLine = {
   price: number;
   allowMultipleUnits: boolean;
   sector: string;
+  imageUrl?: string | null;
 };
+
+function Picture({ src, fallback, className }: { src?: string | null; fallback: React.ReactNode; className: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return (
+    <span className={`flex shrink-0 items-center justify-center overflow-hidden bg-gray-100 text-gray-500 ${className}`}>
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        fallback
+      )}
+    </span>
+  );
+}
 
 function ProductPurchaseFormInner() {
   const router = useRouter();
@@ -108,7 +126,7 @@ function ProductPurchaseFormInner() {
   const visibleProducts = useMemo(() => {
     const catalog = options?.products ?? [];
     if (!sectorFilter) return catalog;
-    return catalog.filter((product) => shopSector(product.sector) === sectorFilter);
+    return catalog.filter((product) => productInSector(product.sector, sectorFilter));
   }, [options, sectorFilter]);
 
   const taggedTotal = useMemo(
@@ -123,7 +141,7 @@ function ProductPurchaseFormInner() {
   const total = Number(value) || 0;
   const paid = pay === '' ? 0 : Number(pay);
   const rest = Math.max(0, total - paid);
-  const sectorName = [...new Set(lines.map((line) => shopSector(line.sector)))].join(' - ') || 'Shop';
+  const sectorName = [...new Set(lines.flatMap((line) => productSectors(line.sector)))].join(' - ') || 'Shop';
   const productNames = lines.map((line) => line.name).join(', ');
 
   function tagProduct(product: CatalogProduct) {
@@ -143,7 +161,8 @@ function ProductPurchaseFormInner() {
           quantity: 1,
           price: product.cost,
           allowMultipleUnits: product.allowMultipleUnits,
-          sector: shopSector(product.sector),
+          sector: sectorFilter || productSectors(product.sector).join(' - '),
+          imageUrl: product.imageUrl,
         },
       ];
     });
@@ -259,13 +278,27 @@ function ProductPurchaseFormInner() {
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
         <ProcedureFormSection title="Movement data">
           <ProcedureFormGrid>
+            <ProcedureFormCell label="Selling No.">
+              <input
+                className={`${procedureReadonlyInputClass} font-semibold`}
+                value={displaySellingNumber(options?.nextSellingNumber) || '-'}
+                readOnly
+              />
+            </ProcedureFormCell>
             <ProcedureFormCell label="User Selected">
-              <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-                <option value="">Select user</option>
-                {options?.members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <Picture
+                  src={selectedMember?.image}
+                  fallback={<span className="text-sm font-semibold">{selectedMember?.name.charAt(0).toUpperCase() || '?'}</span>}
+                  className="h-10 w-10 rounded-full"
+                />
+                <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+                  <option value="">Select user</option>
+                  {options?.members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
             </ProcedureFormCell>
             <ProcedureFormCell label="Date">
               <input type="date" className={procedureInputClass} value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
@@ -308,8 +341,9 @@ function ProductPurchaseFormInner() {
                           else tagProduct(product);
                         }}
                       />
+                      <Picture src={product.imageUrl} fallback={<Package size={14} />} className="h-8 w-8 rounded" />
                       <span className="min-w-0 flex-1 truncate">{product.name}</span>
-                      <span className="shrink-0 text-xs text-gray-500">{product.sector}</span>
+                      <span className="shrink-0 text-xs text-gray-500">{productSectorLabel(product.sector)}</span>
                       <span className="shrink-0 font-medium">€{product.cost.toFixed(2)}</span>
                     </label>
                   );
@@ -359,7 +393,12 @@ function ProductPurchaseFormInner() {
                 <tbody>
                   {lines.map((line) => (
                     <tr key={line.productId} className="border-t border-gray-100">
-                      <td className="px-3 py-2">{line.name}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Picture src={line.imageUrl} fallback={<Package size={16} />} className="h-12 w-12 rounded-lg" />
+                          <span>{line.name}</span>
+                        </div>
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           type="number"

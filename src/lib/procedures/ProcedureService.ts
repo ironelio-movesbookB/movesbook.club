@@ -1252,7 +1252,9 @@ export class ProcedureService {
       clubId: ctx.club.id,
       procedureTypeId: procedureType.id,
       procedureType: { code: procedureTypeCode },
-      status: ProcedureRecordStatus.ACTIVE,
+      status: query.includeDeleted
+        ? { in: [ProcedureRecordStatus.ACTIVE, ProcedureRecordStatus.DELETED] }
+        : ProcedureRecordStatus.ACTIVE,
       ...(query.memberId ? { memberId: query.memberId } : {}),
       ...(query.recordIds && query.recordIds.length > 0
         ? { id: { in: query.recordIds } }
@@ -1309,6 +1311,7 @@ export class ProcedureService {
       createdAt: row.createdAt.toISOString(),
       notes: row.notes,
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+      recordStatus: row.status,
       lastPaymentDate:
         row.payments[0]?.paymentDate.toISOString().slice(0, 10) ?? null,
     }));

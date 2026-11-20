@@ -5,6 +5,7 @@ import {
   loadToBeVerifiedPaymentIds,
   setPaymentToBeVerified,
 } from '@/lib/procedures/paymentVerification';
+import { sendShopInvoiceForConfirmedPayment } from '@/lib/shop/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
     }
 
     await setPaymentToBeVerified(payment.id, false);
+    await sendShopInvoiceForConfirmedPayment(payment.id).catch((error) => {
+      console.error('Payment confirmed, but the shop invoice email failed:', error);
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('POST payment verification:', error);

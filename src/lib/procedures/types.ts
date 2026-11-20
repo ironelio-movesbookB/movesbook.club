@@ -58,6 +58,8 @@ export type ProcedureRecordDto = {
   notes: string | null;
   metadata: Record<string, unknown> | null;
   lastPaymentDate: string | null;
+  /** ACTIVE or DELETED. Present when the list includes cancelled records. */
+  recordStatus?: string;
 };
 
 export type ProcedurePaymentDto = {
@@ -180,6 +182,8 @@ export type ListQuery = {
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';
+  /** Include cancelled (deleted) records. Archive lists hide them unless this is set. */
+  includeDeleted?: boolean;
 };
 
 export function decimalToNumber(value: Decimal | number | string): number {

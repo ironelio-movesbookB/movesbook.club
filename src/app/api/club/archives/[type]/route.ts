@@ -18,6 +18,7 @@ import {
   listInsertCredits,
   listMarketingContactsArchive,
   listPollsArchive,
+  listProductSaleLines,
   listReservationsArchive,
   listStaffQueriesArchive,
   listUnifiedDeadlines,
@@ -127,6 +128,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         break;
       case 'product-sales-unified':
         result = await listUnifiedProductSales(auth.ctx, archiveParams);
+        break;
+      case 'product-sale-lines':
+        result = await listProductSaleLines(auth.ctx, archiveParams);
         break;
       case 'deadlines':
         result = await listUnifiedDeadlines(auth.ctx, archiveParams);

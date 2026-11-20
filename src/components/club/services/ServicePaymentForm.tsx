@@ -33,6 +33,7 @@ import PaymentLinkChannelModal, {
   type PaymentLinkResult,
 } from "@/components/club/PaymentLinkChannelModal";
 import {
+  blockedPayModesFor,
   PAY_LINK_METHODS,
   PAYMENT_TYPE_OPTIONS,
   SHARE_ONLINE_PAY_MODES,
@@ -100,6 +101,8 @@ type Props = {
   onSelectedRecordIdsChange?: (recordIds: string[]) => void;
   onUploadExpenseInvoice?: (file: File) => Promise<void>;
   onRemoveExpenseInvoice?: () => Promise<void>;
+  /** Pay Mode preselected when the form opens (e.g. the shop order's payment method). */
+  defaultPayMode?: string;
 };
 
 function formatDisplayDate(iso: string | null | undefined): string {
@@ -238,6 +241,7 @@ export default function ServicePaymentForm({
   onSelectedRecordIdsChange,
   onUploadExpenseInvoice,
   onRemoveExpenseInvoice,
+  defaultPayMode,
 }: Props) {
   const isMemberCreditPayment = procedureType === "member_credit";
   const isExpensePayment = procedureType === "expense";
@@ -268,7 +272,14 @@ export default function ServicePaymentForm({
     procedureType === "member_credit" ? "0.0" : "0",
   );
   const amountPaidTouchedRef = useRef(false);
-  const [payMode, setPayMode] = useState("cash");
+  const [payMode, setPayMode] = useState(defaultPayMode || "cash");
+  const blockedPayModes = useMemo(
+    () => blockedPayModesFor([procedureType, ...allPurchases.map((p) => p.typology)]),
+    [procedureType, allPurchases],
+  );
+  useEffect(() => {
+    if (blockedPayModes.includes(payMode)) setPayMode("cash");
+  }, [blockedPayModes, payMode]);
   const [linkRequest, setLinkRequest] = useState<{
     amountEur: number;
     lines: { recordId: string; amount: number }[];
@@ -408,6 +419,20 @@ export default function ServicePaymentForm({
         disabled: false,
         recordId: purchase.id,
       }));
+    } else if (purchase.rest > 0) {
+      // Without installment rows the record is one deadline; its payments are not extra deadlines.
+      rows = [
+        {
+          id: "current",
+          balance: purchase.rest,
+          paymentDate: purchase.paydate,
+          expireDate: purchase.paydate,
+          createdAt: purchase.createdAt ?? null,
+          paid: purchase.pay,
+          disabled: false,
+          recordId: purchase.id,
+        },
+      ];
     } else {
       rows = payments.map((p) => ({
         id: p.id,
@@ -419,18 +444,6 @@ export default function ServicePaymentForm({
         disabled: true,
         recordId: purchase.id,
       }));
-      if (purchase.rest > 0) {
-        rows.unshift({
-          id: "current",
-          balance: purchase.rest,
-          paymentDate: purchase.paydate,
-          expireDate: purchase.paydate,
-          createdAt: purchase.createdAt ?? null,
-          paid: purchase.pay,
-          disabled: false,
-          recordId: purchase.id,
-        });
-      }
     }
     // Client: list chronologically — oldest deadline at the top (date, then time).
     return [...rows].sort(compareDeadlinesOldestFirst);
@@ -1426,6 +1439,7 @@ export default function ServicePaymentForm({
                 onChange={setPayMode}
                 defaultPaymentMethods={defaultPaymentMethods}
                 allowedMethods={enabledMethods}
+                disabledMethods={blockedPayModes}
                 extraOptions={[
                   ...SHARE_PAY_EXTRA_OPTIONS,
                   ...(stripeEnabled ? [{ value: "stripe", label: "Stripe" }] : []),

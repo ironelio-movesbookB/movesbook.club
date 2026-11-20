@@ -353,6 +353,28 @@ export async function settleMemberOnlinePayment(payment: MemberOnlinePayment): P
   }
 }
 
+/** False once a linked deadline was paid another way or deleted: collecting the link would overcharge. */
+export async function memberOnlinePaymentStillDue(paymentId: string): Promise<boolean> {
+  await ensureTable();
+  const rows = await prisma.$queryRawUnsafe<Array<{ settlement_json: string | null }>>(
+    `SELECT settlement_json FROM \`${TABLE}\` WHERE id = ? LIMIT 1`,
+    paymentId,
+  );
+  const lines = parseSettlement(rows[0]?.settlement_json)?.lines ?? [];
+  const owed = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.recordId || !(Number(line.amount) > 0) || line.procedureType === 'expense') continue;
+    owed.set(line.recordId, (owed.get(line.recordId) ?? 0) + Number(line.amount));
+  }
+  if (owed.size === 0) return true;
+  const records = await prisma.procedureRecord.findMany({
+    where: { id: { in: [...owed.keys()] }, status: 'ACTIVE' },
+    select: { id: true, balanceAmount: true },
+  });
+  const balanceById = new Map(records.map((row) => [row.id, Number(row.balanceAmount)]));
+  return [...owed.entries()].every(([id, amount]) => (balanceById.get(id) ?? 0) + 0.001 >= amount);
+}
+
 /** Emails the pay link to the member's account address. Returns false when there is no email. */
 export async function emailMemberPayLink(input: {
   memberUserId: string;

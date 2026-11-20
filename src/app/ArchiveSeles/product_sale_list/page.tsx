@@ -2,9 +2,11 @@
 import { Suspense, useState } from 'react';
 
 import Link from 'next/link';
+import { Package } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ClubArchivePage from '@/components/club/archives/ClubArchivePage';
 import type { Column, Member } from '@/types/clubTable';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { shopFetch } from '@/lib/shop/browser';
@@ -17,36 +19,55 @@ function money(value: unknown) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR' }).format(amount);
 }
 
-function ProductCount({ row }: { row: Member }) {
-  const [open, setOpen] = useState(false);
-  const count = Number(row.number) || 0;
-  const lines = row.purchaseLines ?? [];
-  if (!count && lines.length === 0) return <span>-</span>;
+function MemberPicture({ name, src }: { name: string; src: string | null }) {
+  const [failed, setFailed] = useState(false);
   return (
-    <>
-      <button type="button" className="font-semibold text-teal-800 underline" onClick={() => setOpen(true)}>
-        {count || lines.reduce((sum, line) => sum + line.quantity, 0)}
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900">Products purchased</h3>
-              <button type="button" className="text-sm text-gray-500" onClick={() => setOpen(false)}>Close</button>
-            </div>
-            <ul className="space-y-2 text-sm text-gray-800">
-              {lines.map((line, index) => (
-                <li key={`${line.name}-${index}`} className="flex justify-between gap-3">
-                  <span>{line.name}</span>
-                  <span>× {line.quantity}</span>
-                </li>
-              ))}
-              {lines.length === 0 && <li>No product lines were stored for this selling.</li>}
-            </ul>
-          </div>
-        </div>
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-teal-100 text-sm font-semibold text-teal-800">
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        name.trim().charAt(0).toUpperCase() || '?'
       )}
-    </>
+    </span>
+  );
+}
+
+function ProductImage({ src }: { src: string }) {
+  return (
+    <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Package size={16} className="text-gray-400" />
+      )}
+    </span>
+  );
+}
+
+function RestAmount({ value }: { value: unknown }) {
+  const amount = Number(value);
+  const settled = !Number.isFinite(amount) || amount <= 0;
+  return <span className={`font-semibold ${settled ? 'text-green-900' : 'text-red-600'}`}>{money(value)}</span>;
+}
+
+function saleRowClass(row: Member) {
+  if (row.status === 'Cancelled') return '!bg-gray-100 text-gray-500';
+  if (row.status === 'Pending') return '!bg-blue-50 text-blue-800';
+  return 'text-black';
+}
+
+function ValuePaid({ value, paid }: { value: unknown; paid: unknown }) {
+  const discounted = Number(paid) < Number(value);
+  return (
+    <div className="text-xs leading-5">
+      <div>Value <span className="font-semibold">{money(value)}</span></div>
+      <div>
+        Cost paid <span className="font-semibold">{money(paid)}</span>
+        {discounted && <span className="ml-1 text-orange-600">(discount applied)</span>}
+      </div>
+    </div>
   );
 }
 
@@ -99,21 +120,43 @@ function ProductSaleListPageInner() {
   const productId = searchParams?.get('productId') || '';
   const productName = searchParams?.get('productName')?.trim() || 'selected product';
   const [refreshKey, setRefreshKey] = useState(0);
+  const [photoMode, setPhotoMode] = useState<'with' | 'without'>('with');
   const columns: Column[] = [
-    { key: 'insertDate', header: 'Date' },
-    { key: 'description', header: 'Performed by' },
-    { key: 'casual', header: 'Sector' },
-    { key: 'name', header: 'Member' },
+    { key: 'category', header: 'No.' },
     {
-      key: 'number',
-      header: 'No. of products',
-      render: (_value, row) => <ProductCount row={row} />,
+      key: 'description',
+      header: 'Image',
+      sortable: false,
+      render: (value) => <ProductImage src={typeof value === 'string' ? value : ''} />,
     },
-    { key: 'course', header: '1th product purchased' },
-    { key: 'value', header: 'Total cost', render: (value) => money(value) },
-    { key: 'paid', header: 'Paid', render: (value) => money(value) },
-    { key: 'rest', header: 'Rest', render: (value) => money(value) },
+    { key: 'course', header: 'Product' },
+    { key: 'insertDate', header: 'Date selling' },
+    {
+      key: 'name',
+      header: 'Member',
+      render: (value, row) => (
+        <span className="inline-flex items-center gap-2">
+          {photoMode === 'with' ? (
+            <MemberPicture
+              name={String(value ?? '')}
+              src={resolvePublicImageUrl(typeof row.image === 'string' ? row.image : null)}
+            />
+          ) : null}
+          <span>{String(value ?? '-')}</span>
+        </span>
+      ),
+    },
+    { key: 'typology', header: 'Typology' },
+    { key: 'casual', header: 'Sector' },
+    {
+      key: 'value',
+      header: 'Value / Cost paid',
+      render: (value, row) => <ValuePaid value={value} paid={row.paid} />,
+    },
+    { key: 'rest', header: 'Rest', render: (value) => <RestAmount value={value} /> },
+    { key: 'status', header: 'Status' },
     { key: 'operator', header: 'Operator' },
+    { key: 'service', header: 'Receipt' },
     {
       key: 'options',
       header: 'Options',
@@ -126,7 +169,15 @@ function ProductSaleListPageInner() {
 
   return (
     <div className="p-4 space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {productId ? (
+          <Link
+            href={def.routes.records}
+            className="px-4 py-2 rounded border border-teal-700 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+          >
+            All sellings
+          </Link>
+        ) : null}
         <Link
           href={def.routes.form}
           className="px-4 py-2 bg-teal-700 text-white rounded text-sm hover:bg-teal-800"
@@ -136,13 +187,16 @@ function ProductSaleListPageInner() {
       </div>
       <ClubArchivePage
         title={productId ? `${def.archiveTitles.records} · ${productName}` : def.archiveTitles.records}
-        archiveType="product-sales-unified"
+        archiveType="product-sale-lines"
         columns={columns}
         refreshKey={refreshKey}
+        getRowClassName={saleRowClass}
+        photoMode={photoMode}
+        onPhotoModeChange={setPhotoMode}
         footerHint={
           productId
             ? `Only sellings that include ${productName}.`
-            : 'Sellings performed by the operator or by the member online.'
+            : 'One row per product sold. Products bought in the same selling share the same No. and Receipt.'
         }
         emptyMessage={
           productId

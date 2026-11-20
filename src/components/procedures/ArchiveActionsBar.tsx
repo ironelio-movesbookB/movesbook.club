@@ -31,6 +31,9 @@ type Props = {
   /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
   onSendData?: () => void;
   sendDataTitle?: string;
+  /** When set, the two view buttons switch the member-photo layout. */
+  photoMode?: 'with' | 'without';
+  onPhotoModeChange?: (mode: 'with' | 'without') => void;
 };
 
 const inactiveBtn =
@@ -71,6 +74,8 @@ export default function ArchiveActionsBar({
   onStatisticsClick,
   onSendData,
   sendDataTitle,
+  photoMode,
+  onPhotoModeChange,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
   const statisticsEnabled = Boolean(statisticsHref || onStatisticsClick);
@@ -164,19 +169,37 @@ export default function ArchiveActionsBar({
           >
             Print
           </button>
-          <div className="flex items-center gap-1" title="Photo layout (not available yet)">
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              disabled
-              className="rounded border-2 border-yellow-400 bg-white p-1.5 text-gray-400 cursor-not-allowed"
+              disabled={!onPhotoModeChange}
+              aria-pressed={photoMode === 'with'}
+              title={onPhotoModeChange ? 'Show the member picture on every row' : 'Photo layout (not available yet)'}
+              onClick={() => onPhotoModeChange?.('with')}
+              className={`rounded p-1.5 ${
+                !onPhotoModeChange
+                  ? 'cursor-not-allowed border-2 border-yellow-400 bg-white text-gray-400'
+                  : photoMode === 'with'
+                    ? 'border-2 border-yellow-400 bg-white text-gray-900'
+                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
               aria-label="With photo"
             >
               <PanelLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
-              disabled
-              className="rounded border border-gray-300 bg-white p-1.5 text-gray-400 cursor-not-allowed"
+              disabled={!onPhotoModeChange}
+              aria-pressed={photoMode === 'without'}
+              title={onPhotoModeChange ? 'Hide the member picture' : 'Photo layout (not available yet)'}
+              onClick={() => onPhotoModeChange?.('without')}
+              className={`rounded p-1.5 ${
+                !onPhotoModeChange
+                  ? 'cursor-not-allowed border border-gray-300 bg-white text-gray-400'
+                  : photoMode === 'without'
+                    ? 'border-2 border-yellow-400 bg-white text-gray-900'
+                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
               aria-label="Without photo"
             >
               <LayoutList className="h-4 w-4" />

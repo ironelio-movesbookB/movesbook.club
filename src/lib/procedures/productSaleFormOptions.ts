@@ -4,8 +4,9 @@ import { fetchProcedureCustomerOptions } from './clubMembers';
 import { fetchClubOperatorOptions } from './clubOperators';
 import { listCompanies } from '@/lib/club/archives/clubArchiveService';
 import type { ClubAuthContext } from './types';
-import { isHardwareProductSector, shopSector } from '@/lib/shop/sectors';
-import { formatSellingNumber } from '@/lib/shop/sellingNumber';
+import { formatProductSectors, isHardwareProductSector } from '@/lib/shop/sectors';
+import { nextSellingNumber } from '@/lib/shop/nextSellingNumber';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { PROCEDURE_TYPE_CODES } from './types';
 
 const PRODUCT_TABLE_CANDIDATES = ['products', 'product'];
@@ -25,11 +26,12 @@ export type ProductSaleFormProduct = {
   cost: number;
   sector: string;
   allowMultipleUnits: boolean;
+  imageUrl?: string | null;
 };
 
 export type ProductSaleFormOptions = {
   products: ProductSaleFormProduct[];
-  members: { id: string; name: string }[];
+  members: { id: string; name: string; image?: string | null }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   currentOperatorId: string | null;
@@ -51,8 +53,9 @@ export async function fetchProductSaleFormOptions(
       id: row.id,
       name: text(row.name) || `Product ${row.id}`,
       cost: num(row.price),
-      sector: shopSector(row.sector),
+      sector: formatProductSectors(row.sector),
       allowMultipleUnits: row.allowMultipleUnits,
+      imageUrl: row.imageUrl,
     });
   }
 
@@ -83,18 +86,12 @@ export async function fetchProductSaleFormOptions(
       select: { id: true },
     }),
   ]);
-  const existingCount = procedureType
-    ? await prisma.procedureRecord.count({
-        where: { procedureTypeId: procedureType.id, clubId: ctx.club.id },
-      })
-    : 0;
-
   return {
     products,
-    members,
+    members: members.map((member) => ({ ...member, image: resolvePublicImageUrl(member.image) })),
     operators,
     companies,
     currentOperatorId: ctx.userId,
-    nextSellingNumber: formatSellingNumber(existingCount + 1),
+    nextSellingNumber: await nextSellingNumber(ctx.club.id, procedureType?.id),
   };
 }

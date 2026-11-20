@@ -4629,6 +4629,15 @@ model ShopSettings {
   shopDescription      String   @db.Text
   shopActive         Boolean  @default(true)
   orderEmailsEnabled Boolean  @default(true)
+  /// "logo" or "banner": what the public shop page shows at the top.
+  headerMode         String   @default("logo") @db.VarChar(16)
+  onsitePaymentEnabled Boolean @default(true)
+  bankTransferEnabled  Boolean @default(false)
+  bankTransferDetails  String? @db.Text
+  /// Paid through the club's own Stripe / PayPal account (Payment methods for members).
+  onlinePaymentEnabled Boolean @default(false)
+  shopAlert            String? @db.Text
+  afterSalesInfo       String? @db.Text
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

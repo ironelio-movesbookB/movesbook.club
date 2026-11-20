@@ -1,8 +1,8 @@
 import { verifySuperAdminPassword } from '@/lib/messages/verifySuperAdminPassword';
-import { shopSector } from './sectors';
+import { isHardwareProductSector } from './sectors';
 
 export function isHardwareSector(value: string | null | undefined) {
-  return shopSector(value) === 'Hardware';
+  return isHardwareProductSector(value);
 }
 
 export async function verifyHardwareSuperAdminPassword(password: unknown) {

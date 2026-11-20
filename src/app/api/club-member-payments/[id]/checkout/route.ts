@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   credentialsForMemberPayment,
   getMemberOnlinePayment,
+  memberOnlinePaymentStillDue,
   setMemberOnlineCheckout,
 } from '@/lib/club/memberOnlinePayments';
 import { createPaypalOrder } from '@/lib/payments/paypalRest';
@@ -22,6 +23,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json(
         { error: 'This payment link was replaced by a newer one. Use the latest link you received.' },
         { status: 410 },
+      );
+    }
+    if (!(await memberOnlinePaymentStillDue(payment.id))) {
+      return NextResponse.json(
+        { error: 'This deadline is already paid. This payment link can no longer be used.' },
+        { status: 409 },
       );
     }
 
