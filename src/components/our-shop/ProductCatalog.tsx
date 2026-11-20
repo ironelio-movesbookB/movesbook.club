@@ -11,9 +11,16 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react';
+import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { shopFetch } from '@/lib/shop/browser';
-import { SHOP_SECTOR_TITLE, isHardwareProductSector, shopSector, shopSectorFromPath } from '@/lib/shop/sectors';
+import {
+  SHOP_SECTOR_TITLE,
+  isHardwareProductSector,
+  shopProductListPath,
+  shopSector,
+  shopSectorFromPath,
+} from '@/lib/shop/sectors';
 
 type Product = {
   id: string;
@@ -284,12 +291,17 @@ export default function ProductsPage() {
   const [shopUrl, setShopUrl] = useState('');
   const [shopLinkFailed, setShopLinkFailed] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const listed = products.filter((product) => {
     const productSector = shopSector(product.sector);
     if (sector === 'All') return !isHardwareProductSector(productSector);
     return productSector === sector;
   });
   const addSector = sector === 'All' ? 'Shop' : sector;
+  const pageCount = Math.max(1, Math.ceil(listed.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleProducts = listed.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedProduct = listed.find((product) => product.id === selectedProductId) ?? null;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
@@ -345,6 +357,10 @@ export default function ProductsPage() {
       })
       .catch(() => setShopLinkFailed(true));
   }, [loadProducts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sector, pageSize]);
 
   return (
     <ShopFrame>
@@ -436,7 +452,48 @@ export default function ProductsPage() {
                 Loading your products...
               </p>
             </div>
-          ) : listed.length === 0 ? (
+          ) : null}
+
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            {sector === 'Hardware' ? (
+              <div />
+            ) : (
+            <div className="flex flex-wrap gap-2">
+              {(['Shop', 'Bar', 'Restaurant'] as const).map((name) => {
+                const active = sector === name;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => router.push(shopProductListPath(name))}
+                    className={`h-9 rounded-lg px-4 text-sm font-semibold ${
+                      active
+                        ? 'bg-teal-700 text-white'
+                        : 'border border-teal-700 bg-white text-teal-800 hover:bg-teal-50'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            )}
+            {listed.length > 0 ? (
+              <ProcedurePagination
+                page={safePage}
+                pageSize={pageSize}
+                total={listed.length}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
+            ) : null}
+          </div>
+
+          {loading ? null : listed.length === 0 ? (
             <div className="flex flex-col items-center rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 text-purple-700">
                 <Package size={27} />
@@ -457,7 +514,7 @@ export default function ProductsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {listed.map((product) => (
+              {visibleProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}

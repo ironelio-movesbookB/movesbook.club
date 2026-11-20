@@ -4228,6 +4228,13 @@ export default function DarkSidebar({
                                     <div className="border-t border-gray-700/80 bg-[#263238]">
                                       <button
                                         type="button"
+                                        onClick={() => {
+                                          if (isClubAccountUserType(userType)) {
+                                            writeClubWorkspaceTab('my-entity');
+                                            setCurrentTab('my-entity');
+                                          }
+                                          router.push('/clubs/shop/products/hardware');
+                                        }}
                                         className="flex w-full items-center gap-2 border-b border-gray-700/80 py-2 pl-5 pr-2 text-left text-[11px] text-white hover:bg-[#2e3c43]"
                                       >
                                         <ShoppingCart className="h-3.5 w-3.5 shrink-0 opacity-95" />
@@ -4566,7 +4573,6 @@ export default function DarkSidebar({
                                   [
                                     { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard, disabled: true },
                                     { label: 'Products', path: '/clubs/shop/products/shop', Icon: Shirt },
-                                    { label: 'List of hardware purchasable', path: '/clubs/shop/products/hardware', Icon: Monitor },
                                     { label: 'Orders', path: '/clubs/shop/orders', Icon: ListOrdered },
                                     { label: 'Settings', path: '/clubs/shop/settings', Icon: Settings },
                                   ] as const
@@ -4740,12 +4746,6 @@ export default function DarkSidebar({
                                       Icon: ShoppingCart,
                                       label: 'Product of the Shop',
                                       path: '/clubs/shop/products/shop',
-                                      nested: true as const,
-                                    },
-                                    {
-                                      Icon: Monitor,
-                                      label: 'List of hardware purchasable',
-                                      path: '/clubs/shop/products/hardware',
                                       nested: true as const,
                                     },
                                     {
