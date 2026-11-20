@@ -15,6 +15,7 @@ import {
   Eye,
   ArrowRight,
   Package,
+  Search,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
@@ -42,9 +43,13 @@ type ShopData = {
     slug: string;
     name: string;
     description: string;
+    logoUrl?: string | null;
+    bannerUrl?: string | null;
+    headerMode?: 'logo' | 'banner';
   };
   shopActive: boolean;
   viewer?: { isMember: boolean };
+  alert?: string;
   products: Product[];
 };
 
@@ -72,6 +77,7 @@ const [cart, setCart] = useState<CartItem[]>([]);
 const [cartReady, setCartReady] = useState(false);
 const [cartOpen, setCartOpen] = useState(false);
 
+  const [productSearch, setProductSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [cartNotice, setCartNotice] = useState('');
@@ -378,12 +384,40 @@ const [cartOpen, setCartOpen] = useState(false);
   const availableProducts = shop.products.filter(
     (product) => product.isVisible,
   );
+  const searchTerm = productSearch.trim().toLowerCase();
+  const shownProducts = searchTerm
+    ? availableProducts.filter((product) =>
+        `${product.name} ${product.description ?? ''}`.toLowerCase().includes(searchTerm),
+      )
+    : availableProducts;
+  const heroBanner =
+    shop.club.headerMode === 'banner' && shop.club.bannerUrl ? shop.club.bannerUrl : '';
+  const heroLogo = !heroBanner && shop.club.logoUrl ? shop.club.logoUrl : '';
 
   return (
     <main className="min-h-screen bg-[#f7f7fb] text-gray-900">
       {/* Black hero section */}
-      <section className="relative flex justify-content-center min-h-[340px] bg-[#111111] px-5 pb-28 pt-12 text-white sm:min-h-[390px] sm:px-8 sm:pt-16 lg:min-h-[420px]">
+      <section
+        className="relative flex justify-content-center min-h-[340px] bg-[#111111] px-5 pb-28 pt-12 text-white sm:min-h-[390px] sm:px-8 sm:pt-16 lg:min-h-[420px]"
+        style={
+          heroBanner
+            ? {
+                backgroundImage: `linear-gradient(rgba(15,23,42,.55), rgba(15,23,42,.8)), url(${heroBanner})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
         <div className="mx-auto max-w-7xl">
+          {heroLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroLogo}
+              alt=""
+              className="absolute left-5 top-5 h-14 w-14 rounded-full bg-white object-contain p-1 shadow-lg sm:left-8 sm:top-8 sm:h-16 sm:w-16"
+            />
+          ) : null}
           <div className="mt-10 max-w-4xl sm:mt-12 text-center">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-purple-300 sm:text-sm">
               Official merchandise
@@ -391,7 +425,7 @@ const [cartOpen, setCartOpen] = useState(false);
             <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
               {shop.club.name}
             </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-7 text-gray-300 sm:text-base">
+            <p className="mt-5 max-w-2xl whitespace-pre-line text-sm leading-7 text-gray-300 sm:text-base">
               {shop.club.description ||
                 'Explore our official collection and find your favourites.'}
             </p>
@@ -414,6 +448,12 @@ const [cartOpen, setCartOpen] = useState(false);
       {/* One large panel overlapping the hero */}
       <div className="relative mx-auto -mt-16 max-w-7xl px-4 pb-12 sm:-mt-20 sm:px-8">
         <section className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-[0_20px_70px_rgba(20,20,40,0.10)]">
+          {shop.alert ? (
+            <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-900 sm:px-8">
+              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+              <p className="whitespace-pre-line">{shop.alert}</p>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-8 sm:py-7">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-purple-600">
@@ -427,14 +467,49 @@ const [cartOpen, setCartOpen] = useState(false);
               </p>
             </div>
 
-            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm font-medium text-gray-600 ring-1 ring-gray-100">
-              <Package size={17} className="text-purple-600" />
-              {availableProducts.length}{' '}
-              {availableProducts.length === 1 ? 'product' : 'products'}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {availableProducts.length > 0 ? (
+                <label className="relative block w-full sm:w-72">
+                  <span className="sr-only">Search products</span>
+                  <Search
+                    size={17}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="search"
+                    value={productSearch}
+                    onChange={(event) => setProductSearch(event.target.value)}
+                    placeholder="Search products"
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                </label>
+              ) : null}
+
+              <div className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm font-medium text-gray-600 ring-1 ring-gray-100">
+                <Package size={17} className="text-purple-600" />
+                {shownProducts.length}{' '}
+                {shownProducts.length === 1 ? 'product' : 'products'}
+              </div>
             </div>
           </div>
 
-          {availableProducts.length === 0 ? (
+          {availableProducts.length > 0 && shownProducts.length === 0 ? (
+            <div className="px-5 py-16 text-center sm:px-8">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
+                <Search size={28} />
+              </div>
+              <h3 className="mt-4 text-lg font-bold text-gray-900">
+                No products match &quot;{productSearch.trim()}&quot;
+              </h3>
+              <button
+                type="button"
+                onClick={() => setProductSearch('')}
+                className="mt-3 text-sm font-semibold text-purple-600 hover:text-purple-800"
+              >
+                Clear search
+              </button>
+            </div>
+          ) : availableProducts.length === 0 ? (
             <div className="px-5 py-20 text-center sm:px-8">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
                 <ShoppingBag size={30} />
@@ -448,7 +523,7 @@ const [cartOpen, setCartOpen] = useState(false);
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 sm:gap-4 sm:p-5 lg:grid-cols-4 lg:gap-4 lg:p-6">
-              {availableProducts.map((product) => {
+              {shownProducts.map((product) => {
                 const cartItem = cart.find(
                   (item) => item.product.id === product.id,
                 );

@@ -11,9 +11,17 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react';
+import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { shopFetch } from '@/lib/shop/browser';
-import { SHOP_SECTOR_TITLE, isHardwareProductSector, shopSector, shopSectorFromPath } from '@/lib/shop/sectors';
+import {
+  SHOP_SECTOR_TITLE,
+  isHardwareProductSector,
+  productInSector,
+  productSectorLabel,
+  shopProductListPath,
+  shopSectorFromPath,
+} from '@/lib/shop/sectors';
 
 type Product = {
   id: string;
@@ -79,8 +87,10 @@ function ProductImage({ product }: { product: Product }) {
 
 function ShopShareCard({
   shopUrl,
+  linkFailed,
 }: {
   shopUrl: string;
+  linkFailed: boolean;
 }) {
   const handleShare = async () => {
     try {
@@ -153,12 +163,18 @@ function ShopShareCard({
 
         <div className="flex shrink-0 items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-col sm:gap-2">
           <div className="flex h-[104px] w-[104px] items-center justify-center rounded-lg bg-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrUrl}
-              alt="QR code for your online shop"
-              className="h-[100px] w-[100px]"
-            />
+            {qrUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qrUrl}
+                alt="QR code for your online shop"
+                className="h-[100px] w-[100px]"
+              />
+            ) : (
+              <span className="px-2 text-center text-[11px] leading-4 text-gray-400">
+                {linkFailed ? 'QR unavailable' : 'Loading QR...'}
+              </span>
+            )}
           </div>
 
           <div className="sm:text-center">
@@ -222,7 +238,7 @@ function ProductCard({
               ) : null}
             </div>
             {showSector ? (
-              <p className="mt-0.5 text-xs text-gray-400">{shopSector(product.sector)}</p>
+              <p className="mt-0.5 text-xs text-gray-400">{productSectorLabel(product.sector)}</p>
             ) : null}
           </div>
 
@@ -274,13 +290,18 @@ export default function ProductsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [shopUrl, setShopUrl] = useState('');
+  const [shopLinkFailed, setShopLinkFailed] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const listed = products.filter((product) => {
-    const productSector = shopSector(product.sector);
-    if (sector === 'All') return !isHardwareProductSector(productSector);
-    return productSector === sector;
+    if (sector === 'All') return !isHardwareProductSector(product.sector);
+    return productInSector(product.sector, sector);
   });
   const addSector = sector === 'All' ? 'Shop' : sector;
+  const pageCount = Math.max(1, Math.ceil(listed.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleProducts = listed.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedProduct = listed.find((product) => product.id === selectedProductId) ?? null;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
@@ -296,7 +317,10 @@ export default function ProductsPage() {
       const response = await shopFetch('/api/club/shop/products');
 
       if (!response.ok) {
-        throw new Error('Unable to load products.');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.error === 'string' && body.error ? body.error : 'Unable to load products.',
+        );
       }
 
       const data = await response.json();
@@ -324,14 +348,19 @@ export default function ProductsPage() {
     void loadProducts();
     shopFetch('/api/club/shop/settings')
       .then(async (response) => {
-        if (!response.ok) return;
-        const data = await response.json();
-        if (typeof data.publicPath === 'string') {
+        const data = response.ok ? await response.json() : null;
+        if (typeof data?.publicPath === 'string' && data.publicPath) {
           setShopUrl(`${window.location.origin}${data.publicPath}`);
+        } else {
+          setShopLinkFailed(true);
         }
       })
-      .catch(() => undefined);
+      .catch(() => setShopLinkFailed(true));
   }, [loadProducts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sector, pageSize]);
 
   return (
     <ShopFrame>
@@ -347,6 +376,13 @@ export default function ProductsPage() {
                 : `${listed.length} ${listed.length === 1 ? 'product' : 'products'} · Insert and edit products`
           }
         >
+          <button
+            type="button"
+            onClick={() => router.push('/ArchiveSeles/product_sale_list')}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-teal-700 bg-white px-4 text-sm font-semibold text-teal-800 transition hover:bg-teal-50"
+          >
+            All sellings
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -387,7 +423,7 @@ export default function ProductsPage() {
           </Link>
         </ShopHeader>
 
-        <ShopShareCard shopUrl={shopUrl} />
+        <ShopShareCard shopUrl={shopUrl} linkFailed={shopLinkFailed} />
 
           {error && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -416,7 +452,48 @@ export default function ProductsPage() {
                 Loading your products...
               </p>
             </div>
-          ) : listed.length === 0 ? (
+          ) : null}
+
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            {sector === 'Hardware' ? (
+              <div />
+            ) : (
+            <div className="flex flex-wrap gap-2">
+              {(['Shop', 'Bar', 'Restaurant'] as const).map((name) => {
+                const active = sector === name;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => router.push(shopProductListPath(name))}
+                    className={`h-9 rounded-lg px-4 text-sm font-semibold ${
+                      active
+                        ? 'bg-teal-700 text-white'
+                        : 'border border-teal-700 bg-white text-teal-800 hover:bg-teal-50'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            )}
+            {listed.length > 0 ? (
+              <ProcedurePagination
+                page={safePage}
+                pageSize={pageSize}
+                total={listed.length}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
+            ) : null}
+          </div>
+
+          {loading ? null : listed.length === 0 ? (
             <div className="flex flex-col items-center rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 text-purple-700">
                 <Package size={27} />
@@ -437,7 +514,7 @@ export default function ProductsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {listed.map((product) => (
+              {visibleProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}

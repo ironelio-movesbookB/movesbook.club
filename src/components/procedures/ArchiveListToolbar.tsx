@@ -36,6 +36,8 @@ type Props = {
   orderFirst?: boolean;
   selectedCount?: number;
   onDeleteSelected?: () => void;
+  photoMode?: 'with' | 'without';
+  onPhotoModeChange?: (mode: 'with' | 'without') => void;
   /** Hide filter form (actions + pagination only). */
   hideFilters?: boolean;
   /** Tighter single-row filter chrome (Administration). */
@@ -66,6 +68,8 @@ export default function ArchiveListToolbar({
   orderFirst = false,
   selectedCount,
   onDeleteSelected,
+  photoMode,
+  onPhotoModeChange,
   hideFilters = false,
   compact = false,
   statisticsHref,
@@ -179,6 +183,8 @@ export default function ArchiveListToolbar({
         sendDataTitle={sendDataTitle}
         onShare={onShare}
         shareButtonTitle={shareButtonTitle}
+        photoMode={photoMode}
+        onPhotoModeChange={onPhotoModeChange}
       />
     </div>
   );

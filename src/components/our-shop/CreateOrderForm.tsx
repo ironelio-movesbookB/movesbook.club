@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import {
   SELLING_SECTORS,
   isHardwareProductSector,
-  shopSector,
+  productInSector,
+  productSectorLabel,
 } from '@/lib/shop/sectors';
 
 const inputClass =
@@ -21,9 +22,23 @@ type CatalogProduct = {
   price: number;
   quantity: number;
   sector?: string;
+  imageUrl?: string;
 };
 
-type Line = { id: string; name: string; unitPrice: number; quantity: number };
+type Line = { id: string; name: string; unitPrice: number; quantity: number; imageUrl?: string };
+
+function ProductThumb({ src, size = 'h-9 w-9' }: { src?: string; size?: string }) {
+  return (
+    <span className={`flex ${size} shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100`}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Package size={16} className="text-gray-400" />
+      )}
+    </span>
+  );
+}
 
 type Buyer = {
   id: string;
@@ -88,7 +103,7 @@ export default function CreateOrderForm() {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     return sellable.filter((product) => {
-      if (sectorFilter && shopSector(product.sector) !== sectorFilter) return false;
+      if (sectorFilter && !productInSector(product.sector, sectorFilter)) return false;
       if (!q) return true;
       return product.name.toLowerCase().includes(q);
     });
@@ -125,7 +140,10 @@ export default function CreateOrderForm() {
           line.id === product.id ? { ...line, quantity: line.quantity + 1 } : line,
         );
       }
-      return [...current, { id: product.id, name: product.name, unitPrice: product.price, quantity: 1 }];
+      return [
+        ...current,
+        { id: product.id, name: product.name, unitPrice: product.price, quantity: 1, imageUrl: product.imageUrl },
+      ];
     });
     setQuery('');
   }
@@ -250,11 +268,14 @@ export default function CreateOrderForm() {
                 key={product.id}
                 type="button"
                 onClick={() => addProduct(product)}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50"
               >
-                <span className="min-w-0 truncate">{product.name}</span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <ProductThumb src={product.imageUrl} />
+                  <span className="min-w-0 truncate">{product.name}</span>
+                </span>
                 <span className="shrink-0 text-gray-500">
-                  {shopSector(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
+                  {productSectorLabel(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
                 </span>
               </button>
             ))
@@ -263,6 +284,7 @@ export default function CreateOrderForm() {
         <div className="mt-4 space-y-3">
           {lines.map((line) => (
             <div key={line.id} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+              <ProductThumb src={line.imageUrl} size="h-11 w-11" />
               <input
                 type="number"
                 min={1}
@@ -278,11 +300,15 @@ export default function CreateOrderForm() {
                 }
                 className="w-20 rounded-lg border border-gray-200 px-2 py-2 text-center text-sm"
               />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{line.name}</p>
-                <p className="text-xs text-gray-500">{formatPrice(line.unitPrice)} per unit</p>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">{line.name}</p>
+              <div className="w-24 shrink-0 text-right">
+                <p className="text-xs text-gray-500">Unit price</p>
+                <p className="text-sm tabular-nums text-gray-700">{formatPrice(line.unitPrice)}</p>
               </div>
-              <p className="text-sm font-semibold">{formatPrice(line.unitPrice * line.quantity)}</p>
+              <div className="w-24 shrink-0 text-right">
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="text-sm font-semibold tabular-nums">{formatPrice(line.unitPrice * line.quantity)}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))}

@@ -7,8 +7,48 @@ import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { fetchProcedureCustomerOptions, fetchSingleUserOptions } from '@/lib/procedures/clubMembers';
 import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
-import { sellingArchiveSector, sellingPerformedBy, shopSector } from './sectors';
-import { formatSellingNumber } from './sellingNumber';
+import { formatProductSectors, productSectors, sellingArchiveSector, sellingPerformedBy } from './sectors';
+import { nextSellingNumber } from './nextSellingNumber';
+import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
+import { createMemberOnlinePayment, type MemberOnlineProvider } from '@/lib/club/memberOnlinePayments';
+import { memberGatewayReady } from '@/lib/club/memberPaymentMethods';
+import { loadStoredMemberPaymentMethods } from '@/lib/club/memberPaymentMethodsStore';
+import { getMemberPaymentMode } from '@/lib/payments/paymentSettings';
+import { normalizePaymentTypeValue, payModeLabel, RECURRING_ONLY_PAY_MODES } from '@/lib/procedures/payModes';
+import { ensurePaymentVerificationColumn, setPaymentToBeVerified } from '@/lib/procedures/paymentVerification';
+import { sendIonosEmail } from '@/lib/ionosEmail';
+
+export type ShopHeaderMode = 'logo' | 'banner';
+
+export function shopHeaderMode(value: unknown): ShopHeaderMode {
+  return value === 'banner' ? 'banner' : 'logo';
+}
+
+export type ShopPaymentMethod = 'onsite' | 'bank_transfer' | 'online';
+
+/** The club's own card or PayPal account, when one is connected for the current site mode. */
+async function shopOnlineProvider(workspaceId: string): Promise<MemberOnlineProvider | null> {
+  const stored = await loadStoredMemberPaymentMethods(workspaceId);
+  const siteMode = await getMemberPaymentMode();
+  if (memberGatewayReady(stored, 'stripe', siteMode)) return 'stripe';
+  if (memberGatewayReady(stored, 'paypal', siteMode)) return 'paypal';
+  return null;
+}
+
+export async function shopOnlinePaymentReady(workspaceId: string): Promise<boolean> {
+  return Boolean(await shopOnlineProvider(workspaceId).catch(() => null));
+}
+
+/** Without any method switched on the shop would take no orders, so paying on site stays available. */
+function shopPaymentMethods(
+  settings: { onsitePaymentEnabled: boolean; bankTransferEnabled: boolean; onlinePaymentEnabled: boolean },
+  onlineReady: boolean,
+) {
+  const online = settings.onlinePaymentEnabled && onlineReady;
+  const bankTransfer = settings.bankTransferEnabled;
+  return { onsite: settings.onsitePaymentEnabled || (!online && !bankTransfer), bankTransfer, online };
+}
 
 export type ShopLineInput = { productId: string; quantity: number };
 
@@ -246,7 +286,13 @@ export function settingsDto(
     shopDescription: row.shopDescription ?? '',
     shopActive: row.shopActive,
     orderEmailsEnabled: row.orderEmailsEnabled,
-    onlinePaymentEnabled: false,
+    headerMode: shopHeaderMode(row.headerMode),
+    onsitePaymentEnabled: row.onsitePaymentEnabled,
+    bankTransferEnabled: row.bankTransferEnabled,
+    bankTransferDetails: row.bankTransferDetails ?? '',
+    onlinePaymentEnabled: row.onlinePaymentEnabled,
+    shopAlert: row.shopAlert ?? '',
+    afterSalesInfo: row.afterSalesInfo ?? '',
     slug: row.slug,
     publicPath: `/our-shop/shop/${row.slug}`,
     updatedAt: row.updatedAt.toISOString(),
@@ -296,7 +342,7 @@ export async function saveProduct(
     isVisible: !hideFromShop,
     allowMultipleUnits: input.allowMultipleUnits ?? true,
     allowNonMembers: input.allowNonMembers ?? true,
-    sector: shopSector(input.sector),
+    sector: formatProductSectors(input.sector),
   };
   if (!data.name) throw new Error('Enter a product name.');
 
@@ -350,12 +396,7 @@ export async function deleteProduct(workspace: ShopWorkspace, id: string) {
 
 async function nextOrderNumber(workspace: ShopWorkspace) {
   const procedureType = await procedureService.getProcedureTypeByCode(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
-  const count = procedureType
-    ? await prisma.procedureRecord.count({
-        where: { procedureTypeId: procedureType.id, clubId: workspace.id },
-      })
-    : 0;
-  return formatSellingNumber(count + 1);
+  return nextSellingNumber(workspace.id, procedureType?.id);
 }
 
 function extractTaxCodes(raw: string | null | undefined) {
@@ -387,6 +428,17 @@ function normalizeTaxCode(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '');
 }
 
+async function ownerTaxCodesByUser(userIds: string[]) {
+  if (!userIds.length) return new Map<string, string[]>();
+  const extras = await prisma.userProfileExtras.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, ownerJson: true },
+  });
+  return new Map(
+    extras.map((row) => [row.userId, extractTaxCodes(row.ownerJson).map(normalizeTaxCode)]),
+  );
+}
+
 export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: string) {
   const needle = normalizeTaxCode(taxCode);
   if (!needle) return null;
@@ -402,8 +454,12 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
       },
       take: 2000,
     });
+    const ownerCodes = await ownerTaxCodesByUser(members.map((row) => row.member.id));
     for (const row of members) {
-      const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+      const codes = [
+        ...extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode),
+        ...(ownerCodes.get(row.member.id) ?? []),
+      ];
       if (codes.includes(needle)) {
         return {
           userId: row.member.id,
@@ -425,8 +481,12 @@ export async function findMemberByTaxCode(workspace: ShopWorkspace, taxCode: str
     },
     take: 2000,
   });
+  const ownerCodes = await ownerTaxCodesByUser(members.map((row) => row.athlete.id));
   for (const row of members) {
-    const codes = extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode);
+    const codes = [
+      ...extractTaxCodes(row.profile?.profileJson).map(normalizeTaxCode),
+      ...(ownerCodes.get(row.athlete.id) ?? []),
+    ];
     if (codes.includes(needle)) {
       return {
         userId: row.athlete.id,
@@ -450,7 +510,11 @@ async function assertWorkspaceMember(workspace: ShopWorkspace, userId: string) {
       where: { clubId: workspace.id, memberId: userId },
       select: { id: true },
     });
-    if (!row) throw new Error('The selected member is not in this club.');
+    if (row) return;
+    const options = await fetchProcedureCustomerOptions(workspace.id);
+    if (!options.some((option) => option.id === userId)) {
+      throw new Error('The selected member is not in this club.');
+    }
     return;
   }
   const row = await prisma.teamMember.findFirst({
@@ -530,8 +594,7 @@ async function writeDeadline(
 ) {
   const memberId = memberUserId || workspace.adminId;
   const productName = lines.map((line) => line.product.name).join(', ').slice(0, 180) || 'Shop';
-  const sectors = [...new Set(lines.map((line) => shopSector(line.product.sector)))];
-  const sectorName = sectors.join(' - ') || 'Shop';
+  const sectorName = [...new Set(lines.flatMap((line) => productSectors(line.product.sector)))].join(' - ') || 'Shop';
   const id = randomUUID();
   const metadata = {
     productName,
@@ -654,7 +717,7 @@ async function createOneOrder(
     restAmount: total,
     paymentMethod: options.paymentMethod,
     source: options.source,
-    sector: [...new Set(lines.map((line) => shopSector(line.product.sector)))].join(' - ') || 'Shop',
+    sector: [...new Set(lines.flatMap((line) => productSectors(line.product.sector)))].join(' - ') || 'Shop',
     operatorName: '-',
     subtotal,
     discount,
@@ -726,12 +789,26 @@ export async function createPublicOrder(
       dateOfBirth?: string;
     };
     items: ShopLineInput[];
+    paymentMethod?: ShopPaymentMethod;
   },
 ) {
   const settings = await prisma.shopSettings.findUnique({ where: { slug } });
   if (!settings || !settings.shopActive) throw new Error('This shop is currently closed.');
   const org = await loadOrg(settings.workspaceKind, settings.workspaceId);
   if (!org) throw new Error('This shop could not be found.');
+  const paymentMethod = input.paymentMethod ?? 'onsite';
+  const onlineProvider =
+    paymentMethod === 'online' && settings.onlinePaymentEnabled
+      ? await shopOnlineProvider(org.id).catch(() => null)
+      : null;
+  const allowed = shopPaymentMethods(settings, Boolean(onlineProvider));
+  if (
+    (paymentMethod === 'onsite' && !allowed.onsite) ||
+    (paymentMethod === 'bank_transfer' && !allowed.bankTransfer) ||
+    (paymentMethod === 'online' && !allowed.online)
+  ) {
+    throw new Error('This payment method is not available in this shop.');
+  }
   const workspace: ShopWorkspace = {
     userId: org.adminId,
     userType: settings.workspaceKind === 'team' ? 'TEAM' : 'CLUB',
@@ -763,9 +840,42 @@ export async function createPublicOrder(
   const order = await createOneOrder(workspace, lines, buyer, {
     paid: false,
     source: 'online',
-    paymentMethod: 'pickup',
+    paymentMethod: paymentMethod === 'onsite' ? 'pickup' : paymentMethod,
   });
-  return orderDto(order, { slug: settings.slug, name: settings.displayName || org.name });
+  const shopName = settings.displayName || org.name;
+  const total = money(order.subtotal - order.discount);
+
+  let onlinePaymentId: string | null = null;
+  if (onlineProvider && order.procedureRecordId && total > 0) {
+    const description = `${shopName} order ${order.orderNumber}`.slice(0, 255);
+    const link = await createMemberOnlinePayment({
+      entityId: org.id,
+      entityName: shopName,
+      memberUserId: buyer.memberUserId || workspace.adminId,
+      memberName: buyer.name,
+      createdByUserId: workspace.adminId,
+      provider: onlineProvider,
+      amountEur: total,
+      description,
+      settlement: [
+        {
+          procedureType: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
+          recordId: order.procedureRecordId,
+          amount: total,
+          payMode: onlineProvider === 'paypal' ? 'paypal' : 'credit_card',
+          operatorId: workspace.adminId,
+          paymentDate: todayIso(),
+          description,
+        },
+      ],
+    });
+    onlinePaymentId = link.id;
+  }
+
+  return {
+    order: orderDto(order, { slug: settings.slug, name: shopName }),
+    onlinePaymentId,
+  };
 }
 
 async function loadOrg(kind: string, id: string) {
@@ -824,13 +934,25 @@ export async function getPublicShop(slug: string, viewerUserId?: string | null) 
     },
     orderBy: { name: 'asc' },
   });
+  const publicOrg = await findPublicOrg(org.id);
+  const card = publicOrg ? publicOrgCard(publicOrg) : null;
   return {
     club: {
       id: org.id,
       slug: settings.slug,
       name: settings.displayName?.trim() || org.name,
       description: settings.shopDescription ?? '',
+      logoUrl: card?.logoUrl ?? null,
+      bannerUrl: card?.bannerUrl ?? null,
+      headerMode: shopHeaderMode(settings.headerMode),
     },
+    alert: settings.shopAlert ?? '',
+    afterSalesInfo: settings.afterSalesInfo ?? '',
+    bankTransferDetails: settings.bankTransferEnabled ? settings.bankTransferDetails ?? '' : '',
+    paymentMethods: shopPaymentMethods(
+      settings,
+      settings.onlinePaymentEnabled && Boolean(await shopOnlineProvider(org.id).catch(() => null)),
+    ),
     shopActive: settings.shopActive,
     viewer: { isMember },
     products: products.map(productDto),
@@ -883,7 +1005,7 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
   const [users, receipts] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: peopleIds } },
-      select: { id: true, email: true, name: true, firstName: true, surname: true },
+      select: { id: true, email: true, name: true, firstName: true, surname: true, image: true },
     }),
     prisma.procedureReceipt.findMany({
       where: { procedureRecordId: { in: records.map((record) => record.id) } },
@@ -916,6 +1038,7 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
     const fallbackName = guestName || (user ? personName(user) : 'Customer');
     const fallbackEmail = textOf(meta.customerEmail) || user?.email || '';
     const party = partyOf(meta, fallbackName, fallbackEmail);
+    if (!party.photoUrl && ownMember) party.photoUrl = resolvePublicImageUrl(user.image) || '';
     const editedName = meta.customer
       ? [party.surname, party.firstName].filter(Boolean).join(' ').trim()
       : '';
@@ -929,7 +1052,12 @@ async function loadSales(workspace: ShopWorkspace): Promise<SaleRow[]> {
       memberUserId: ownMember ? user.id : null,
       customerName: editedName || fallbackName,
       customerEmail: party.email || fallbackEmail,
-      status: record.status === 'DELETED' ? 'CANCELLED' : settled ? 'COMPLETED' : 'PENDING',
+      status:
+        record.status === 'DELETED'
+          ? 'CANCELLED'
+          : settled || textOf(meta.orderStatus) === 'completed'
+            ? 'COMPLETED'
+            : 'PENDING',
       paid: settled,
       paidAmount: money(record.paidAmount),
       restAmount: money(record.balanceAmount),
@@ -986,6 +1114,9 @@ export async function updateOrder(
 
   const locked = existing.status === 'COMPLETED' || existing.status === 'CANCELLED';
   const status = input.status ? statusIn(input.status) : existing.status;
+  if (existing.status === 'COMPLETED' && status !== 'COMPLETED') {
+    throw new Error('A completed order can only change the email and the payment method.');
+  }
   const discount = locked || input.discount == null ? money(existing.discount) : money(input.discount);
   let items = existing.items;
 
@@ -1007,16 +1138,22 @@ export async function updateOrder(
       data: { status: 'DELETED' },
     });
   } else if (existing.status !== 'CANCELLED') {
-    const customerName = input.customer
-      ? [input.customer.surname, input.customer.firstName].filter(Boolean).join(' ').trim()
-      : existing.customerName;
+    const customer =
+      locked && input.customer
+        ? { ...existing.customer, email: input.customer.email ?? existing.customer.email }
+        : input.customer;
+    const customerName =
+      customer && !locked
+        ? [customer.surname, customer.firstName].filter(Boolean).join(' ').trim()
+        : existing.customerName;
     await saveSaleDetails(workspace, existing, {
       items: locked ? existing.items : items,
       discount,
       customerName,
-      customerEmail: input.customer?.email?.trim() ?? existing.customerEmail,
+      customerEmail: customer?.email?.trim() ?? existing.customerEmail,
       paymentMethod: input.paymentMethod || existing.paymentMethod,
-      customer: input.customer,
+      customer,
+      orderStatus: status === 'COMPLETED' ? 'completed' : 'pending',
     });
   }
 
@@ -1046,6 +1183,7 @@ async function saveSaleDetails(
       postalCode?: string;
       dateOfBirth?: string;
     };
+    orderStatus: 'pending' | 'completed';
   },
 ) {
   const record = await prisma.procedureRecord.findFirst({
@@ -1093,6 +1231,7 @@ async function saveSaleDetails(
         customerName,
         customerEmail: party?.email || patch.customerEmail,
         paymentMethod: patch.paymentMethod,
+        orderStatus: patch.orderStatus,
         ...(party ? { customer: party } : {}),
         ...(existing.memberUserId ? {} : { shopCustomerName: customerName }),
       } as Prisma.InputJsonValue,
@@ -1187,6 +1326,161 @@ export async function issueOrderDocument(
 
   const data = kind === 'invoice' ? { invoiceNumber: number } : { receiptNumber: number };
   return { documentNumber: number, documentType: kind };
+}
+
+/** Money taken at the desk: the invoice can go out at once. Other methods wait for confirmation. */
+const INSTANT_INVOICE_PAY_MODES = ['cash', 'credit_card', 'debit_card', 'prepaid_card', 'cheque'];
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function orderRecipientEmail(order: SaleRow) {
+  if (order.customerEmail.trim()) return order.customerEmail.trim();
+  if (!order.memberUserId) return '';
+  const user = await prisma.user.findUnique({ where: { id: order.memberUserId }, select: { email: true } });
+  return user?.email?.trim() || '';
+}
+
+/** Creates the order invoice (once) and emails it. Returns the address used, or '' when there is none. */
+async function sendOrderInvoice(workspace: ShopWorkspace, orderId: string, payMode: string) {
+  const { documentNumber } = await issueOrderDocument(workspace, orderId, 'invoice');
+  const order = (await loadSales(workspace)).find((sale) => sale.id === orderId);
+  if (!order) return { invoiceNumber: documentNumber, emailedTo: '' };
+  const to = await orderRecipientEmail(order);
+  if (!to) return { invoiceNumber: documentNumber, emailedTo: '' };
+
+  const settings = await ensureShopSettings(workspace);
+  const seller = settings.displayName || workspace.name;
+  const total = money(order.subtotal) - money(order.discount);
+  const euro = (value: number) => `€${money(value).toFixed(2)}`;
+  const rows = order.items
+    .map(
+      (item) =>
+        `<tr><td>${escapeHtml(item.name)}</td><td align="center">${item.quantity}</td><td align="right">${euro(item.unitPrice)}</td><td align="right">${euro(item.unitPrice * item.quantity)}</td></tr>`,
+    )
+    .join('');
+  await sendIonosEmail({
+    to,
+    subject: `Invoice ${documentNumber} from ${seller}`,
+    text: [
+      `Invoice ${documentNumber} - ${seller}`,
+      `Order ${order.orderNumber}, ${todayIso()}`,
+      ...order.items.map((item) => `${item.name} x ${item.quantity}: ${euro(item.unitPrice * item.quantity)}`),
+      money(order.discount) > 0 ? `Discount: -${euro(order.discount)}` : '',
+      `Total paid: ${euro(total)} (${payModeLabel(payMode)})`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    html: `<h2>Invoice ${escapeHtml(documentNumber)}</h2>
+<p><strong>${escapeHtml(seller)}</strong><br>Order ${escapeHtml(order.orderNumber)} · ${todayIso()}<br>Customer: ${escapeHtml(order.customerName)}</p>
+<table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse">
+<tr><th align="left">Product</th><th>Qty</th><th align="right">Unit price</th><th align="right">Total</th></tr>
+${rows}
+</table>
+${money(order.discount) > 0 ? `<p>Discount: -${euro(order.discount)}</p>` : ''}
+<p><strong>Total paid: ${euro(total)}</strong> (${escapeHtml(payModeLabel(payMode))})</p>`,
+  });
+  return { invoiceNumber: documentNumber, emailedTo: to };
+}
+
+/**
+ * Pays the whole rest of the order with its payment method. Cash, card and cheque get the
+ * invoice by mail now; any other method is stored "To be verified" and invoiced on confirmation.
+ */
+export async function payOrderInFull(workspace: ShopWorkspace, orderId: string, paymentMethod: string) {
+  const payMode = normalizePaymentTypeValue(paymentMethod.replace(/-/g, '_'));
+  if (!payMode) throw new Error('Select the payment method used before paying.');
+  if (RECURRING_ONLY_PAY_MODES.includes(payMode)) {
+    throw new Error(`${payModeLabel(payMode)} cannot be used to pay a purchase of products.`);
+  }
+  const order = (await loadSales(workspace)).find((sale) => sale.id === orderId);
+  if (!order) throw new Error('This order could not be found.');
+  if (order.status === 'CANCELLED') throw new Error('A cancelled order cannot be paid.');
+  if (!order.procedureRecordId) throw new Error('This selling has no deadline to pay.');
+  const rest = money(order.restAmount);
+  if (rest <= 0) throw new Error('Nothing is left to pay on this order.');
+
+  const instant = INSTANT_INVOICE_PAY_MODES.includes(payMode);
+  if (!instant) await ensurePaymentVerificationColumn();
+  const { paymentId } = await procedureService.addPayment(
+    { userId: workspace.userId, club: { id: workspace.id, name: workspace.name } },
+    PROCEDURE_TYPE_CODES.PRODUCT_SALE,
+    order.procedureRecordId,
+    {
+      amount: rest,
+      paymentDate: todayIso(),
+      payMode,
+      operatorId: workspace.userId,
+      notes: `Shop order ${order.orderNumber}`,
+      skipOperatorPassword: true,
+    },
+  );
+
+  const record = await prisma.procedureRecord.findUnique({ where: { id: order.procedureRecordId } });
+  if (record) {
+    await prisma.procedureRecord.update({
+      where: { id: record.id },
+      data: {
+        metadata: {
+          ...metaOf(record.metadata),
+          paymentMethod: payMode,
+          invoiceOnConfirmPaymentId: instant ? null : paymentId,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  if (!instant) {
+    await setPaymentToBeVerified(paymentId, true);
+    return { paid: rest, payMode, invoice: 'on_confirm' as const, invoiceNumber: null, emailedTo: '' };
+  }
+  const sent = await sendOrderInvoice(workspace, orderId, payMode).catch((error) => {
+    console.error('Shop order paid, but the invoice email failed:', error);
+    return { invoiceNumber: null, emailedTo: '' };
+  });
+  return { paid: rest, payMode, invoice: 'sent' as const, ...sent };
+}
+
+/** After a "To be verified" payment is confirmed: invoice and mail the shop order it paid, once. */
+export async function sendShopInvoiceForConfirmedPayment(paymentId: string) {
+  const payment = await prisma.procedurePayment.findUnique({
+    where: { id: paymentId },
+    select: { procedureRecordId: true, payMode: true },
+  });
+  if (!payment) return;
+  const record = await prisma.procedureRecord.findUnique({ where: { id: payment.procedureRecordId } });
+  if (!record) return;
+  const meta = metaOf(record.metadata);
+  if (textOf(meta.invoiceOnConfirmPaymentId) !== paymentId) return;
+
+  const club = await prisma.club.findUnique({
+    where: { id: record.clubId },
+    select: { id: true, name: true, adminId: true },
+  });
+  const team = club
+    ? null
+    : await prisma.team.findUnique({ where: { id: record.clubId }, select: { id: true, name: true, adminId: true } });
+  const owner = club ?? team;
+  if (!owner) return;
+  const workspace: ShopWorkspace = {
+    userId: owner.adminId,
+    userType: '',
+    kind: club ? 'club' : 'team',
+    id: owner.id,
+    name: owner.name,
+    adminId: owner.adminId,
+    canManage: true,
+  };
+  await sendOrderInvoice(workspace, record.id, payment.payMode || textOf(meta.paymentMethod));
+  await prisma.procedureRecord.update({
+    where: { id: record.id },
+    data: { metadata: { ...meta, invoiceOnConfirmPaymentId: null } as Prisma.InputJsonValue },
+  });
 }
 
 export async function listCustomers(workspace: ShopWorkspace) {

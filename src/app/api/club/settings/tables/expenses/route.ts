@@ -19,6 +19,8 @@ type ExpensePayload = {
   parentId: string;
   icon: string | null;
   iconProvided: boolean;
+  color: string | null;
+  colorProvided: boolean;
   removeImage: boolean;
   image: File | null;
 };
@@ -29,6 +31,7 @@ type ExpenseRow = {
   name?: string | null;
   parent_id?: string | number | bigint | null;
   icon?: string | null;
+  color?: string | null;
   image_url?: string | null;
   created?: string | Date | null;
   modified?: string | Date | null;
@@ -42,6 +45,7 @@ const EXPENSE_COLUMN_DEFINITIONS: Record<string, string> = {
   name: 'VARCHAR(250) NOT NULL',
   parent_id: 'BIGINT NOT NULL DEFAULT 0',
   icon: 'VARCHAR(50) NULL',
+  color: 'VARCHAR(7) NULL',
   image_url: 'VARCHAR(255) NULL',
   created: 'DATETIME DEFAULT CURRENT_TIMESTAMP',
   modified: 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
@@ -268,6 +272,7 @@ function parsePayload(body: unknown): ExpensePayload {
   const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
   const formData = body instanceof FormData ? body : null;
   const iconValue = formData ? formData.get('icon') : data.icon;
+  const colorValue = formData ? formData.get('color') : data.color;
   const removeImageValue = formData ? formData.get('removeImage') : data.removeImage;
   const imageValue = formData ? formData.get('image') : data.image;
   return {
@@ -275,6 +280,8 @@ function parsePayload(body: unknown): ExpensePayload {
     parentId: normalizeParentId(formData ? formData.get('parentId') : data.parentId),
     icon: iconValue == null || text(iconValue) === '' ? null : text(iconValue),
     iconProvided: formData ? formData.has('icon') : Object.prototype.hasOwnProperty.call(data, 'icon'),
+    color: colorValue == null || text(colorValue) === '' ? null : text(colorValue),
+    colorProvided: formData ? formData.has('color') : Object.prototype.hasOwnProperty.call(data, 'color'),
     removeImage: removeImageValue === '1' || removeImageValue === 'true' || removeImageValue === true || removeImageValue === 1,
     image: imageValue instanceof File && imageValue.size > 0 ? imageValue : null
   };
@@ -291,6 +298,9 @@ function validatePayload(payload: ExpensePayload): Record<string, string> {
   if (payload.icon && !ALLOWED_ICONS.has(payload.icon)) {
     fieldErrors.icon = 'Please choose a valid expense icon.';
   }
+  if (payload.color && !/^#[0-9a-f]{6}$/i.test(payload.color)) {
+    fieldErrors.color = 'Please choose a valid color.';
+  }
   if (payload.image && (!normalizeImageExtension(payload.image.name) || payload.image.size > MAX_IMAGE_BYTES)) {
     fieldErrors.image = 'Only PNG, JPG, GIF, or WEBP images up to 5MB are allowed.';
   }
@@ -305,6 +315,7 @@ function normalizeExpense(row: ExpenseRow) {
     name: text(row.name),
     parentId,
     icon: ALLOWED_ICONS.has(text(row.icon)) ? text(row.icon) : null,
+    color: /^#[0-9a-f]{6}$/i.test(text(row.color)) ? text(row.color) : null,
     imageUrl: normalizeExpenseImagePath(row.image_url),
     created: toIsoDate(row.created),
     modified: toIsoDate(row.modified)
@@ -368,7 +379,7 @@ async function assertOwnedExpense(
 ): Promise<ReturnType<typeof normalizeExpense> | null> {
   const userPlaceholders = context.userIds.map(() => '?').join(',');
   const rows = await prisma.$queryRawUnsafe<ExpenseRow[]>(
-    `SELECT id, user_id, name, parent_id, icon, image_url, created, modified
+    `SELECT id, user_id, name, parent_id, icon, color, image_url, created, modified
      FROM \`${tableName}\`
      WHERE id = ?
        AND user_id IN (${userPlaceholders})
@@ -410,7 +421,7 @@ export async function GET(request: NextRequest) {
     const tableName = await ensureExpensesTable();
     const userPlaceholders = context.userIds.map(() => '?').join(',');
     const rows = await prisma.$queryRawUnsafe<ExpenseRow[]>(
-      `SELECT id, user_id, name, parent_id, icon, image_url, created, modified
+      `SELECT id, user_id, name, parent_id, icon, color, image_url, created, modified
        FROM \`${tableName}\`
        WHERE user_id IN (${userPlaceholders})
        ORDER BY parent_id ASC, id DESC`,
@@ -470,12 +481,13 @@ export async function POST(request: NextRequest) {
     const imageUrl = uploaded && 'path' in uploaded ? uploaded.path : null;
 
     await prisma.$executeRawUnsafe(
-      `INSERT INTO \`${tableName}\` (user_id, name, parent_id, icon, image_url)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO \`${tableName}\` (user_id, name, parent_id, icon, color, image_url)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       storageUserId,
       payload.name,
       parentIdValue,
       payload.icon,
+      payload.color,
       imageUrl
     );
 
@@ -550,6 +562,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: uploaded.error, fieldErrors: { image: uploaded.error } }, { status: 400 });
     }
     const nextIcon = payload.iconProvided ? payload.icon : (existing.icon ?? null);
+    const nextColor = payload.colorProvided ? payload.color : (existing.color ?? null);
     const nextImageUrl = uploaded && 'path' in uploaded
       ? uploaded.path
       : payload.removeImage ? null : existing.imageUrl;
@@ -558,11 +571,13 @@ export async function PUT(request: NextRequest) {
       `UPDATE \`${tableName}\`
        SET name = ?,
            icon = ?,
+           color = ?,
            image_url = ?,
            modified = CURRENT_TIMESTAMP
        WHERE id = ?`,
       payload.name,
       nextIcon,
+      nextColor,
       nextImageUrl,
       id
     );
@@ -570,7 +585,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      item: { id, name: payload.name, parentId: payload.parentId, icon: nextIcon, imageUrl: normalizeExpenseImagePath(nextImageUrl) }
+      item: { id, name: payload.name, parentId: payload.parentId, icon: nextIcon, color: nextColor, imageUrl: normalizeExpenseImagePath(nextImageUrl) }
     });
   } catch (error) {
     console.error('PUT /api/club/settings/tables/expenses:', error);

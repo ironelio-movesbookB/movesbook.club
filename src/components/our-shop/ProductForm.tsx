@@ -13,7 +13,14 @@ import { useRouter } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import { useSuperAdminPassword } from '@/components/admin/SuperAdminPasswordModal';
-import { SHOP_SECTORS, shopProductListPath, shopSector } from '@/lib/shop/sectors';
+import {
+  SHOP_SECTORS,
+  formatProductSectors,
+  isHardwareProductSector,
+  productSectorLabel,
+  productSectors,
+  shopProductListPath,
+} from '@/lib/shop/sectors';
 import {
   ArrowLeft,
   ChevronDown,
@@ -134,6 +141,91 @@ function ConfigCheckbox({
   );
 }
 
+function SectorSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = productSectors(value);
+  const hardware = selected.includes('Hardware');
+  const sellingSectors = SHOP_SECTORS.filter((option) => option !== 'Hardware');
+
+  function toggle(option: (typeof sellingSectors)[number]) {
+    const current = hardware ? [] : selected.filter((item) => item !== 'Hardware');
+    const next = current.includes(option)
+      ? current.filter((item) => item !== option)
+      : [...current, option];
+    if (next.length === 0) return;
+    onChange(formatProductSectors(next));
+  }
+
+  return (
+    <div className="relative mb-5">
+      <span className="mb-2 block text-sm font-medium text-gray-700">
+        Sector
+        <span className="ml-1 text-red-500">*</span>
+      </span>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+        className={`${inputClass} flex items-center justify-between gap-3 text-left`}
+      >
+        <span>{hardware ? 'Hardware' : productSectorLabel(value)}</span>
+        <ChevronDown size={16} className="shrink-0 text-gray-400" />
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close sector list"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+            {sellingSectors.map((option) => {
+              const checked = !hardware && selected.includes(option);
+              return (
+                <label
+                  key={option}
+                  className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 text-sm text-gray-800 hover:bg-purple-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(option)}
+                    className="h-4 w-4 accent-purple-600"
+                  />
+                  {option}
+                </label>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                onChange('Hardware');
+                setOpen(false);
+              }}
+              className={`flex w-full items-center px-3.5 py-2.5 text-left text-sm hover:bg-purple-50 ${
+                hardware ? 'bg-purple-50 font-semibold text-purple-800' : 'text-gray-800'
+              }`}
+            >
+              Hardware
+            </button>
+          </div>
+        </>
+      ) : null}
+      <p className="mt-2 text-xs text-gray-500">
+        Shop, Restaurant and Bar can be combined. Hardware is chosen on its own.
+      </p>
+    </div>
+  );
+}
+
 function ErrorMessage({ children }: { children: ReactNode }) {
   return (
     <div
@@ -158,7 +250,7 @@ export default function ProductForm({ productId }: Props) {
   useEffect(() => {
     if (productId) return;
     const requested = new URLSearchParams(window.location.search).get('sector');
-    if (requested) setSector(shopSector(requested));
+    if (requested) setSector(formatProductSectors(requested));
   }, [productId]);
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('0.00');
@@ -215,8 +307,8 @@ export default function ProductForm({ productId }: Props) {
         if (cancelled) return;
 
         setName(product.name ?? '');
-        setSector(product.sector || 'Shop');
-        setSavedSector(product.sector || 'Shop');
+        setSector(formatProductSectors(product.sector));
+        setSavedSector(formatProductSectors(product.sector));
         setDescription(product.description ?? '');
         setPrice(String(product.price ?? 0));
         setVatRate(String(product.vatRate ?? 21));
@@ -304,7 +396,7 @@ export default function ProductForm({ productId }: Props) {
   }
 
   async function hardwarePasswordIfNeeded() {
-    if (shopSector(sector) !== 'Hardware' && shopSector(savedSector) !== 'Hardware') {
+    if (!isHardwareProductSector(sector) && !isHardwareProductSector(savedSector)) {
       return '';
     }
     const password = await requestPassword({
@@ -398,7 +490,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not save the product.');
       }
 
-      router.push(shopProductListPath(sector));
+      router.push(shopProductListPath(productSectors(sector)[0]));
       router.refresh();
     } catch (err) {
       setError(
@@ -440,7 +532,7 @@ export default function ProductForm({ productId }: Props) {
         throw new Error(data.error || 'Could not delete the product.');
       }
 
-      router.push(shopProductListPath(sector));
+      router.push(shopProductListPath(productSectors(sector)[0]));
       router.refresh();
     } catch (err) {
       setError(
@@ -554,7 +646,7 @@ export default function ProductForm({ productId }: Props) {
       </ShopHeader>
 
       <Link
-        href={shopProductListPath(sector)}
+        href={shopProductListPath(productSectors(sector)[0])}
         className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700"
       >
         <ArrowLeft size={16} />
@@ -567,21 +659,23 @@ export default function ProductForm({ productId }: Props) {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
         <div className="pt-1">
           <h2 className={sectionTitleClass}>Main data</h2>
+          {previewUrl ? (
+            <div className="mt-4 flex h-80 w-full items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt={name ? `${name} product picture` : 'Product picture'}
+                className="h-full w-full object-contain"
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="min-w-0 lg:col-span-2">
           <div className="space-y-6 rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-7">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
               <div className="sm:col-span-3">
-                <Field label="Sector" required>
-                  <select className={inputClass} value={sector} onChange={(event) => setSector(event.target.value)}>
-                    {SHOP_SECTORS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <SectorSelect value={sector} onChange={setSector} />
                 <Field label="Name" required>
                   <input
                     value={name}

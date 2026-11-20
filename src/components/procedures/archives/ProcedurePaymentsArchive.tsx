@@ -59,7 +59,7 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
   const client = useMemo(() => createProcedureClient(procedureCode), [procedureCode]);
   const columns = useMemo(() => buildProcedureColumns(def), [def]);
   const scope = useArchiveScope();
-  const filters = useArchiveListFilters(def.metadataKeys.direction === 'OUT' ? 'recent' : 'old');
+  const filters = useArchiveListFilters('recent');
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
   const isOut = def.metadataKeys.direction === 'OUT';
 

@@ -154,10 +154,13 @@ export default function ExpensePaymentDetailPage() {
     setPurchase((current) => current ? { ...current, expenseInvoice: result.invoice } : current);
   }
 
-  async function handleAddToRecordTotal(additionalAmount: number): Promise<void> {
+  async function handleAddToRecordTotal(
+    additionalAmount: number,
+    adminPassword: string,
+  ): Promise<void> {
     if (!purchase) return;
     const newTotal = purchase.value + additionalAmount;
-    await client.updateRecord(id, { totalAmount: newTotal });
+    await client.updateRecord(id, { totalAmount: newTotal, adminPassword });
     setPurchase((prev) =>
       prev ? { ...prev, value: newTotal, rest: prev.rest + additionalAmount } : prev
     );

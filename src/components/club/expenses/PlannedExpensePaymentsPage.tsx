@@ -2,6 +2,19 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from 'next/link';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   CalendarDays,
   Check,
@@ -25,12 +38,14 @@ type ExpenseCategory = {
   name: string;
   parentId: string;
   icon?: string | null;
+  color?: string | null;
   children: ExpenseCategory[];
 };
 
 type ExpenseFormOptions = {
   operators: { id: string; name: string; image?: string | null }[];
   currentOperatorId: string | null;
+  clubMemberId: string;
 };
 
 type DateRange = {
@@ -43,6 +58,16 @@ type CategorizedRecord = ProcedureRecordView & {
 };
 
 const PAGE_SIZE = 100;
+const EXPENSE_CHART_COLORS = [
+  '#0f766e',
+  '#b45309',
+  '#2563eb',
+  '#be123c',
+  '#4d7c0f',
+  '#7c3aed',
+  '#0e7490',
+  '#a16207',
+];
 const procedureClient = createProcedureClient(PROCEDURE_TYPE_CODES.EXPENSE);
 
 function toDateInput(value: Date): string {
@@ -146,22 +171,40 @@ export default function PlannedExpensePaymentsPage() {
   const [operators, setOperators] = useState<ExpenseFormOptions["operators"]>(
     [],
   );
-  const [operatorId, setOperatorId] = useState("");
-  const [operatorPassword, setOperatorPassword] = useState("");
+  const [options, setOptions] = useState<ExpenseFormOptions | null>(null);
+  const [operatorId, setOperatorId] = useState('');
+  const [operatorPassword, setOperatorPassword] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [showExpiredPending, setShowExpiredPending] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
+  const [chartBranchId, setChartBranchId] = useState('all');
+  const [chartSubBranchId, setChartSubBranchId] = useState('all');
   const [editTarget, setEditTarget] = useState<CategorizedRecord | null>(null);
-  const [amountToDo, setAmountToDo] = useState("");
-  const [expirationDate, setExpirationDate] = useState("");
-  const [editNotes, setEditNotes] = useState("");
+  const [amountToDo, setAmountToDo] = useState('');
+  const [expenseExpirationDate, setExpenseExpirationDate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [newExpenseOpen, setNewExpenseOpen] = useState(false);
+  const [newExpenseCategoryId, setNewExpenseCategoryId] = useState('');
+  const [newExpenseDirection, setNewExpenseDirection] = useState<'IN' | 'OUT'>(
+    'OUT',
+  );
+  const [newExpenseAmount, setNewExpenseAmount] = useState('');
+  const [newExpenseExpirationDate, setNewExpenseExpirationDate] = useState('');
+  const [newExpenseNote, setNewExpenseNote] = useState('');
+  const [newExpenseError, setNewExpenseError] = useState('');
   const [paymentTarget, setPaymentTarget] = useState<CategorizedRecord | null>(
     null,
   );
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentMode, setPaymentMode] = useState('cash');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -194,6 +237,7 @@ export default function PlannedExpensePaymentsPage() {
         }));
 
         setCategories(nextCategories);
+        setOptions(formOptions);
         setOperators(formOptions.operators ?? []);
         setOperatorId(
           (current) =>
@@ -232,6 +276,10 @@ export default function PlannedExpensePaymentsPage() {
     () => flattenCategories(categories).map((category) => category.id),
     [categories],
   );
+  const expenseCategories = useMemo(
+    () => flattenCategories(categories),
+    [categories],
+  );
   const selectedCategory = useMemo(
     () =>
       flattenCategories(categories).find(
@@ -249,6 +297,7 @@ export default function PlannedExpensePaymentsPage() {
       ),
     [categories],
   );
+  const today = toDateInput(new Date());
   const visibleRecords = useMemo(
     () =>
       records.filter((record) => {
@@ -256,20 +305,77 @@ export default function PlannedExpensePaymentsPage() {
           (!appliedRange.fromDate ||
             record.recordDate >= appliedRange.fromDate) &&
           (!appliedRange.toDate || record.recordDate <= appliedRange.toDate);
-        return inRange && (showAll ? record.rest >= 0 : record.rest > 0);
+        const isPending = record.rest > 0;
+        const isExpired = Boolean(record.expireDate && record.expireDate <= today);
+        return (
+          inRange &&
+          (showExpiredPending
+            ? isPending && isExpired
+            : showAll
+              ? record.rest >= 0
+              : isPending)
+        );
       }),
-    [records, appliedRange, showAll],
+    [records, appliedRange, showAll, showExpiredPending, today],
   );
   const selectedRecords = useMemo(
     () =>
       selectedCategory
         ? visibleRecords.filter(
-            (record) => record.categoryId === selectedCategory.id,
+            (record) => recordMatchesCategory(record, selectedCategory),
           )
         : [],
     [visibleRecords, selectedCategory],
   );
-  const today = toDateInput(new Date());
+  const chartBranch = useMemo(
+    () => categories.find((category) => category.id === chartBranchId) ?? null,
+    [categories, chartBranchId],
+  );
+  const chartSubBranches = chartBranch?.children ?? [];
+  const expenseChartData = useMemo(() => {
+    const subBranch = chartSubBranches.find(
+      (category) => category.id === chartSubBranchId,
+    );
+    let chartCategories: ExpenseCategory[];
+    if (subBranch) {
+      chartCategories = [subBranch];
+    } else if (chartBranch) {
+      if (chartBranch.children.length === 0) {
+        chartCategories = [chartBranch];
+      } else {
+        const hasDirectExpenses = visibleRecords.some(
+          (record) => record.categoryId === chartBranch.id,
+        );
+        chartCategories = [
+          ...(hasDirectExpenses ? [chartBranch] : []),
+          ...chartBranch.children,
+        ];
+      }
+    } else {
+      chartCategories = categories;
+    }
+
+    return chartCategories.flatMap((category, index) => {
+      const isDirectParentSlice =
+        chartBranch !== null &&
+        chartSubBranchId === 'all' &&
+        category.id === chartBranch.id &&
+        category.children.length > 0;
+      const rows = visibleRecords.filter((record) =>
+        isDirectParentSlice
+          ? record.categoryId === category.id
+          : recordMatchesCategory(record, category),
+      );
+      if (rows.length === 0) return [];
+      return [{
+        id: category.id,
+        name: category.name,
+        icon: category.icon ?? null,
+        color: category.color || EXPENSE_CHART_COLORS[index % EXPENSE_CHART_COLORS.length],
+        cost: rows.reduce((total, record) => total + Number(record.value || 0), 0),
+      }];
+    });
+  }, [categories, visibleRecords, chartBranch, chartSubBranches, chartSubBranchId]);
   const selectedTotals = useMemo(() => {
     const sumRows = (rows: CategorizedRecord[]) =>
       rows.reduce(
@@ -287,10 +393,12 @@ export default function PlannedExpensePaymentsPage() {
       );
 
     return {
-      out: sumRows(selectedRecords.filter((record) => record.rest > 0)),
-      in: sumRows(
-        selectedRecords.filter((record) => record.pay >= record.value),
+      out: sumRows(
+        selectedRecords.filter(
+          (record) => (record.expenseDirection ?? 'OUT') === 'OUT',
+        ),
       ),
+      in: sumRows(selectedRecords.filter((record) => record.expenseDirection === 'IN')),
     };
   }, [selectedRecords, today]);
   const totalRest = visibleRecords.reduce(
@@ -308,25 +416,62 @@ export default function PlannedExpensePaymentsPage() {
     if (!selectedCategory) return null;
     const rows = selectedRecords;
     if (rows.length === 0) return null;
+    const outgoingRows = rows.filter(
+      (row) => (row.expenseDirection ?? 'OUT') === 'OUT',
+    );
+    const incomingRows = rows.filter(
+      (row) => row.expenseDirection === 'IN',
+    );
 
-    const totalCost = rows.reduce(
+    const totalCost = outgoingRows.reduce(
       (sum, row) => sum + Number(row.value || 0),
       0,
     );
-    const totalPaid = rows.reduce((sum, row) => sum + Number(row.pay || 0), 0);
-    const totalRestValue = rows.reduce(
+    const totalPaid = outgoingRows.reduce(
+      (sum, row) => sum + Number(row.pay || 0),
+      0,
+    );
+    const totalRestValue = outgoingRows.reduce(
       (sum, row) => sum + Math.max(0, Number(row.rest || 0)),
       0,
     );
-    const lastRow = rows[rows.length - 1];
+    const lastPaymentDate = outgoingRows.reduce(
+      (latest, row) =>
+        row.lastPaymentDate && row.lastPaymentDate > latest
+          ? row.lastPaymentDate
+          : latest,
+      '',
+    );
+    const incomingSummary = incomingRows.length
+      ? {
+          totalCost: incomingRows.reduce(
+            (sum, row) => sum + Number(row.value || 0),
+            0,
+          ),
+          totalPaid: incomingRows.reduce(
+            (sum, row) => sum + Number(row.pay || 0),
+            0,
+          ),
+          totalRestValue: incomingRows.reduce(
+            (sum, row) => sum + Math.max(0, Number(row.rest || 0)),
+            0,
+          ),
+          lastPaymentDate: incomingRows.reduce(
+            (latest, row) =>
+              row.lastPaymentDate && row.lastPaymentDate > latest
+                ? row.lastPaymentDate
+                : latest,
+            '',
+          ),
+        }
+      : null;
 
     return {
       totalCost,
       totalPaid,
       totalRestValue,
-      lastDate: lastRow?.expireDate || lastRow?.recordDate || "",
-      lastLabel: lastRow?.primaryLabel || "",
-      lastCasual: lastRow?.lastPaymentDate || lastRow?.operatorName || "",
+      lastPaymentDate,
+      incoming: incomingSummary,
     };
   }, [selectedCategory, selectedRecords]);
 
@@ -364,21 +509,160 @@ export default function PlannedExpensePaymentsPage() {
     setError("");
   }
 
+  async function toggleExpenseLock() {
+    if (isUnlocked) {
+      setIsUnlocked(false);
+      setPaymentTarget(null);
+      setEditTarget(null);
+      return;
+    }
+    if (!operatorId) {
+      setUnlockError('Select an operator first.');
+      return;
+    }
+    if (!operatorPassword.trim()) {
+      setUnlockError("Enter the selected operator's password.");
+      return;
+    }
+
+    setUnlocking(true);
+    setUnlockError('');
+    try {
+      const result = await clubApiFetch<{ valid: boolean }>(
+        '/api/club/procedures/expense/verify-operator-password',
+        {
+          method: 'POST',
+          body: JSON.stringify({ operatorId, password: operatorPassword }),
+        },
+      );
+      if (!result.valid) {
+        setIsUnlocked(false);
+        setUnlockError('Incorrect operator password.');
+        return;
+      }
+      setIsUnlocked(true);
+    } catch (err) {
+      setIsUnlocked(false);
+      setUnlockError(
+        err instanceof Error ? err.message : 'Unable to verify password.',
+      );
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   function openExpenseEdit(record: CategorizedRecord) {
+    if (!isUnlocked) return;
     setEditTarget(record);
     setAmountToDo(record.value.toFixed(2));
-    setExpirationDate(record.expireDate || "");
+    setAdminPassword('');
+    setExpenseExpirationDate(record.expenseExpirationDate || '');
     setEditNotes(record.notes);
-    setEditError("");
+    setEditError('');
+  }
+
+  function openAddExpense() {
+    if (!isUnlocked) {
+      setUnlockError("Unlock expenses before adding an expense.");
+      return;
+    }
+    setNewExpenseCategoryId(
+      selectedCategoryId ?? expenseCategories[0]?.id ?? '',
+    );
+    setNewExpenseDirection('OUT');
+    setNewExpenseAmount('');
+    setNewExpenseExpirationDate(today);
+    setNewExpenseNote('');
+    setNewExpenseError('');
+    setNewExpenseOpen(true);
+  }
+
+  async function saveNewExpense(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isUnlocked)
+      return setNewExpenseError("Unlock expenses before adding an expense.");
+    const category = expenseCategories.find(
+      (item) => item.id === newExpenseCategoryId,
+    );
+    if (!category) return setNewExpenseError("Select an expense sector.");
+    const amount = Number(newExpenseAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return setNewExpenseError("Enter an amount greater than zero.");
+    }
+    if (!newExpenseExpirationDate) {
+      return setNewExpenseError(
+        newExpenseDirection === 'IN'
+          ? 'Select a date of incoming.'
+          : 'Select an expiration date.',
+      );
+    }
+    if (!options?.clubMemberId) {
+      return setNewExpenseError("The club account could not be identified.");
+    }
+    if (!operatorPassword.trim()) {
+      return setNewExpenseError('Enter the operator password.');
+    }
+
+    setSaving(true);
+    setNewExpenseError('');
+    try {
+      await procedureClient.createRecord({
+        memberId: options.clubMemberId,
+        totalAmount: amount,
+        initialPayment: 0,
+        recordDate: today,
+        paymentDate: today,
+        dueDate: newExpenseExpirationDate,
+        notes: newExpenseNote.trim() || null,
+        causal: newExpenseNote.trim() || null,
+        expenseId: category.id,
+        expenseName: category.name,
+        expenseDirection: newExpenseDirection,
+        operatorId,
+        operatorPassword,
+      });
+
+      const nextRange = {
+        fromDate:
+          !appliedRange.fromDate || today < appliedRange.fromDate
+            ? today
+            : appliedRange.fromDate,
+        toDate:
+          !appliedRange.toDate || today > appliedRange.toDate
+            ? today
+            : appliedRange.toDate,
+      };
+      setRangeDraft(nextRange);
+      setAppliedRange(nextRange);
+      setSelectedCategoryId(category.id);
+      if (category.parentId !== '0') {
+        setExpandedIds((current) => new Set(current).add(category.parentId));
+      }
+      setNewExpenseOpen(false);
+      await loadRecords(nextRange, showAll);
+    } catch (err) {
+      setNewExpenseError(
+        err instanceof Error ? err.message : "Unable to save the new expense.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveExpenseEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editTarget) return;
+    if (!isUnlocked) return setEditError("Unlock expenses before editing.");
+    const amount = Number(amountToDo);
+    const amountChanged = amount !== editTarget.value;
+    const expenseExpirationChanged =
+      expenseExpirationDate !== (editTarget.expenseExpirationDate || '');
+    const protectedFieldsChanged = amountChanged || expenseExpirationChanged;
+    if (protectedFieldsChanged && !adminPassword.trim())
+      return setEditError('Enter the Club Admin password to edit the amount or expiration date.');
     if (editTarget.rest <= 0)
       return setEditError("A fully paid expense cannot be edited.");
-    const amount = Number(amountToDo);
-    if (!operatorId) return setEditError("Select an operator.");
+    if (!operatorId) return setEditError('Select an operator.');
     if (!Number.isFinite(amount) || amount < editTarget.pay) {
       return setEditError(
         `Payment to do cannot be less than already paid (${formatAmount(editTarget.pay)}).`,
@@ -389,8 +673,11 @@ export default function PlannedExpensePaymentsPage() {
     setEditError("");
     try {
       await procedureClient.updateRecord(editTarget.id, {
-        totalAmount: amount,
-        dueDate: expirationDate || null,
+        ...(amountChanged ? { totalAmount: amount } : {}),
+        ...(expenseExpirationChanged
+          ? { expenseExpirationDate: expenseExpirationDate || null }
+          : {}),
+        ...(protectedFieldsChanged ? { adminPassword } : {}),
         notes: editNotes,
         operatorId,
       });
@@ -507,12 +794,21 @@ export default function PlannedExpensePaymentsPage() {
 
     return (
       <div key={category.id} className="bg-white">
-        <div className="grid grid-cols-[1fr_5rem] items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-teal-900">
-          <div className="flex min-w-0 items-center gap-2">
+        <div
+          onClick={() => {
+            setSelectedCategoryId(category.id);
+            setPaymentTarget(null);
+          }}
+          className={`grid cursor-pointer grid-cols-[1fr_5rem] items-center gap-2 border-b border-gray-200 border-l-4 px-3 py-2 text-teal-900 ${isSelected ? "border-l-teal-800 bg-teal-200" : "border-l-transparent bg-gray-50"}`}
+        >
+          <div className="grid min-w-0 grid-cols-[1.5rem_1.25rem_minmax(0,1fr)] items-center gap-2">
             {children.length > 0 ? (
               <button
                 type="button"
-                onClick={() => toggleCategory(category.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleCategory(category.id);
+                }}
                 aria-label={
                   expanded
                     ? `Collapse ${category.name}`
@@ -523,28 +819,29 @@ export default function PlannedExpensePaymentsPage() {
                 {expanded ? "−" : "+"}
               </button>
             ) : (
-              <span className="w-5 shrink-0" />
+              <span />
             )}
-            {children.length === 0 && (
-              <input
-                type="radio"
-                name="expense-category"
-                checked={isSelected}
-                onChange={() => {
-                  setSelectedCategoryId(category.id);
-                  setPaymentTarget(null);
-                }}
-                aria-label={`Select ${category.name}`}
-              />
-            )}
-            <ExpenseCategoryIcon
-              name={category.icon}
-              className="h-4 w-4 shrink-0 text-teal-700"
+            <input
+              type="radio"
+              className="justify-self-center"
+              name="expense-category"
+              checked={isSelected}
+              onChange={() => {
+                setSelectedCategoryId(category.id);
+                setPaymentTarget(null);
+              }}
+              aria-label={`Select ${category.name}`}
             />
-            <span
-              className={`truncate text-[15px] font-semibold ${isSelected ? "text-red-700" : "text-[#1b1b1b]"}`}
-            >
-              {category.name}
+            <span className="flex min-w-0 items-center gap-2">
+              <ExpenseCategoryIcon
+                name={category.icon}
+                className="h-4 w-4 shrink-0 text-teal-700"
+              />
+              <span
+                className={`truncate text-[15px] font-semibold ${isSelected ? "text-red-700" : "text-[#1b1b1b]"}`}
+              >
+                {category.name}
+              </span>
             </span>
           </div>
           <span className="text-right text-[14px] font-semibold text-[#1b1b1b]">
@@ -558,22 +855,24 @@ export default function PlannedExpensePaymentsPage() {
           children.map((child) => (
             <label
               key={child.id}
-              className={`grid cursor-pointer grid-cols-[1fr_5rem] items-center gap-2 border-l-2 px-3 py-2 text-sm ${
+              className={`grid cursor-pointer grid-cols-[1.5rem_1.25rem_minmax(0,1fr)_5rem] items-center gap-2 border-l-4 px-3 py-2 text-sm ${
                 selectedCategoryId === child.id
                   ? "border-l-teal-800 bg-teal-50"
                   : "border-l-transparent bg-white hover:bg-teal-50"
               }`}
             >
-              <span className="flex min-w-0 items-center gap-2 pl-5">
-                <input
-                  type="radio"
-                  name="expense-category"
-                  checked={selectedCategoryId === child.id}
-                  onChange={() => {
-                    setSelectedCategoryId(child.id);
-                    setPaymentTarget(null);
-                  }}
-                />
+              <span />
+              <input
+                type="radio"
+                className="justify-self-center"
+                name="expense-category"
+                checked={selectedCategoryId === child.id}
+                onChange={() => {
+                  setSelectedCategoryId(child.id);
+                  setPaymentTarget(null);
+                }}
+              />
+              <span className="flex min-w-0 items-center gap-2">
                 <ExpenseCategoryIcon
                   name={child.icon}
                   className="h-4 w-4 shrink-0 text-teal-700"
@@ -599,8 +898,14 @@ export default function PlannedExpensePaymentsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <section className="mx-auto w-full overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <h1 className="flex min-h-[52px] items-center bg-teal-800 px-4 py-3 text-lg font-semibold text-white">
+        <h1 className="flex min-h-[52px] items-center justify-between gap-3 bg-teal-800 px-4 py-3 text-lg font-semibold text-white">
           Insert a new movement about expenses
+          <Link
+            href="/clubs/archive_expense_list"
+            className="shrink-0 rounded border border-white/80 px-3 py-1 text-[13px] font-semibold text-white hover:bg-white/10"
+          >
+            Archive Expenses
+          </Link>
         </h1>
 
         <div className="space-y-4 p-4">
@@ -652,10 +957,18 @@ export default function PlannedExpensePaymentsPage() {
 
             <button
               type="button"
-              className="mt-5 h-9 rounded border border-teal-900 bg-teal-800 px-4 text-[13px] font-semibold text-white hover:bg-teal-900"
+              onClick={() => void toggleExpenseLock()}
+              disabled={unlocking}
+              aria-pressed={isUnlocked}
+              className={`mt-5 h-9 rounded px-4 text-[13px] font-semibold text-white disabled:opacity-60 ${isUnlocked ? 'border border-teal-900 bg-teal-800 hover:bg-teal-900' : 'border border-red-800 bg-red-700 hover:bg-red-800'}`}
             >
-              Unlock
+              {unlocking ? 'Checking...' : isUnlocked ? 'Unlocked' : 'Locked'}
             </button>
+            {unlockError && (
+              <p role="alert" className="mt-5 text-xs font-medium text-red-700">
+                {unlockError}
+              </p>
+            )}
           </div>
 
           <form
@@ -897,11 +1210,19 @@ export default function PlannedExpensePaymentsPage() {
                             {formatAmount(record.rest)}
                           </td>
                           <td className="px-3 py-2">
-                            <span
-                              className={`inline-flex min-w-[42px] justify-center rounded-sm px-2 py-1 text-[11px] font-bold uppercase ${record.pay >= record.value ? "bg-[#3fa64f] text-white" : "bg-[#db4e4e] text-white"}`}
-                            >
-                              {record.pay >= record.value ? "IN" : "OUT"}
-                            </span>
+                            {record.rest <= 0 ? (
+                              <span className="inline-flex min-w-[54px] justify-center rounded-sm bg-[#3fa64f] px-2 py-1 text-[11px] font-bold uppercase text-white">
+                                {(record.expenseDirection ?? 'OUT') === 'IN'
+                                  ? 'RECEIVED'
+                                  : 'PAID'}
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex min-w-[42px] justify-center rounded-sm px-2 py-1 text-[11px] font-bold uppercase ${(record.expenseDirection ?? 'OUT') === 'IN' ? 'bg-[#3fa64f] text-white' : 'bg-[#db4e4e] text-white'}`}
+                              >
+                                {record.expenseDirection ?? 'OUT'}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             {record.lastPaymentDate ||
@@ -1043,18 +1364,186 @@ export default function PlannedExpensePaymentsPage() {
       </section>
 
       {selectedSummary && (
-        <div className="mx-auto mt-4 rounded-md border border-teal-800/20 bg-[#eef6f5] px-5 py-4 text-center">
-          <div className="text-lg font-bold text-teal-950">
-            Payment of the expenses selected
+        <>
+          <div className="mx-auto mt-4 rounded-md border border-teal-800/20 bg-[#eef6f5] px-5 py-4 text-center">
+            <div className="text-lg font-bold text-teal-950">
+              Summary of expenses selected
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-gray-800 md:grid-cols-4">
+              <div className="rounded border border-teal-800/20 bg-white px-3 py-2">
+                A = Total cost{" "}
+                <strong>{formatAmount(selectedSummary.totalCost)}</strong>
+              </div>
+              <div className="rounded border border-teal-800/20 bg-white px-3 py-2">
+                B = Total paid{" "}
+                <strong>{formatAmount(selectedSummary.totalPaid)}</strong>
+              </div>
+              <div className="rounded border border-teal-800/20 bg-white px-3 py-2">
+                C = Rest{" "}
+                <strong className="text-red-700">
+                  {formatAmount(selectedSummary.totalRestValue)}
+                </strong>
+              </div>
+              <div className="rounded border border-teal-800/20 bg-white px-3 py-2">
+                D = Date last payment{" "}
+                <strong>{selectedSummary.lastPaymentDate || "—"}</strong>
+              </div>
+            </div>
           </div>
-          <div className="mt-2 text-sm text-gray-700">
-            {selectedSummary.lastDate} {selectedSummary.lastLabel}{" "}
-            {formatAmount(selectedSummary.totalCost)}{" "}
-            {formatAmount(selectedSummary.totalPaid)}{" "}
-            {formatAmount(selectedSummary.totalRestValue)}{" "}
-            {selectedSummary.lastCasual}
+          {selectedSummary.incoming && (
+            <div className="mx-auto mt-3 rounded-md border border-green-800/20 bg-green-50 px-5 py-4 text-center">
+              <div className="text-lg font-bold text-green-900">
+                Summary of incoming expenses selected
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-gray-800 md:grid-cols-4">
+                <div className="rounded border border-green-800/20 bg-white px-3 py-2">
+                  A = Total incoming{" "}
+                  <strong>{formatAmount(selectedSummary.incoming.totalCost)}</strong>
+                </div>
+                <div className="rounded border border-green-800/20 bg-white px-3 py-2">
+                  B = Total received{" "}
+                  <strong>{formatAmount(selectedSummary.incoming.totalPaid)}</strong>
+                </div>
+                <div className="rounded border border-green-800/20 bg-white px-3 py-2">
+                  C = Incoming rest{" "}
+                  <strong className="text-green-900">
+                    {formatAmount(selectedSummary.incoming.totalRestValue)}
+                  </strong>
+                </div>
+                <div className="rounded border border-green-800/20 bg-white px-3 py-2">
+                  D = Date last received{" "}
+                  <strong>{selectedSummary.incoming.lastPaymentDate || "—"}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {categories.length > 0 && (
+        <section className="mx-auto mt-4 w-full overflow-hidden rounded-md border border-gray-200 bg-white">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-teal-800/20 bg-[#eef6f5] px-4 py-3">
+            <h2 className="text-lg font-bold text-teal-950">Expense charts</h2>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1 text-xs font-semibold text-gray-700">
+                <span>Branch</span>
+                <select
+                  value={chartBranchId}
+                  onChange={(event) => {
+                    setChartBranchId(event.target.value);
+                    setChartSubBranchId('all');
+                  }}
+                  className="h-9 min-w-44 rounded border border-gray-300 bg-white px-2 text-sm font-normal"
+                >
+                  <option value="all">All branches</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-gray-700">
+                <span>Sub-branch</span>
+                <select
+                  value={chartSubBranchId}
+                  onChange={(event) => setChartSubBranchId(event.target.value)}
+                  disabled={!chartBranch || chartSubBranches.length === 0}
+                  className="h-9 min-w-44 rounded border border-gray-300 bg-white px-2 text-sm font-normal disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="all">All sub-branches</option>
+                  {chartSubBranches.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
-        </div>
+          {expenseChartData.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-gray-500">
+              No expenses in the selected date range.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-4 p-4 lg:grid-cols-2">
+                <div className="min-w-0 border border-gray-200 p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-800">
+                    Cost by branch
+                  </h3>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart
+                      data={expenseChartData}
+                      margin={{ top: 8, right: 12, bottom: 8, left: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        formatter={(value) => formatAmount(Number(value))}
+                        labelFormatter={(label) => String(label)}
+                      />
+                      <Bar dataKey="cost" name="Cost" radius={[3, 3, 0, 0]}>
+                        {expenseChartData.map((item) => (
+                          <Cell key={item.id} fill={item.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="min-w-0 border border-gray-200 p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-800">
+                    Cost share by branch
+                  </h3>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={expenseChartData}
+                        dataKey="cost"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="38%"
+                        outerRadius="78%"
+                        paddingAngle={1}
+                      >
+                        {expenseChartData.map((item) => (
+                          <Cell key={item.id} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => formatAmount(Number(value))}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <ul className="grid gap-x-4 gap-y-2 border-t border-gray-200 px-4 py-3 sm:grid-cols-2 lg:grid-cols-3">
+                {expenseChartData.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex min-w-0 items-center gap-2 text-sm text-gray-800"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-sm border border-black/15"
+                      style={{ backgroundColor: item.color }}
+                      aria-hidden="true"
+                    />
+                    <ExpenseCategoryIcon
+                      name={item.icon}
+                      className="h-4 w-4 shrink-0 text-gray-600"
+                    />
+                    <span className="min-w-0 flex-1 truncate" title={item.name}>
+                      {item.name}
+                    </span>
+                    <strong className="shrink-0">{formatAmount(item.cost)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
       )}
 
       {editTarget && (
@@ -1088,7 +1577,21 @@ export default function PlannedExpensePaymentsPage() {
             </div>
             <div className="space-y-4 px-4 py-4">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium">Payment to do</span>
+                <span className="mb-1 block font-medium">Club Admin password</span>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(event) => setAdminPassword(event.target.value)}
+                  autoComplete="current-password"
+                  className="h-9 w-full rounded border border-gray-300 px-3"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  {editTarget.expenseDirection === 'IN'
+                    ? 'Value in incoming'
+                    : 'Payment to do'}
+                </span>
                 <input
                   type="number"
                   min={editTarget.pay}
@@ -1096,6 +1599,7 @@ export default function PlannedExpensePaymentsPage() {
                   required
                   value={amountToDo}
                   onChange={(event) => setAmountToDo(event.target.value)}
+                  disabled={saving || !adminPassword.trim()}
                   className="h-9 w-full rounded border border-gray-300 px-3"
                 />
                 <span className="mt-1 block text-xs text-gray-500">
@@ -1103,12 +1607,39 @@ export default function PlannedExpensePaymentsPage() {
                 </span>
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium">Date payment</span>
+                <span className="mb-1 block font-medium">Rest after</span>
+                <input
+                  type="text"
+                  readOnly
+                  value={formatAmount(
+                    Math.max(0, (Number(amountToDo) || 0) - editTarget.pay),
+                  )}
+                  className="h-9 w-full rounded border border-gray-300 bg-gray-50 px-3"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Date of last payment</span>
+                <input
+                  type="text"
+                  value={editTarget.lastPaymentDate || '—'}
+                  readOnly
+                  className="h-9 w-full rounded border border-gray-300 bg-gray-50 px-3"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  {editTarget.expenseDirection === 'IN'
+                    ? 'Date of incoming'
+                    : 'Expiration date'}
+                </span>
                 <input
                   type="date"
-                  value={expirationDate}
-                  onChange={(event) => setExpirationDate(event.target.value)}
-                  className="h-9 w-full rounded border border-gray-300 px-3"
+                  value={expenseExpirationDate}
+                  onChange={(event) =>
+                    setExpenseExpirationDate(event.target.value)
+                  }
+                  disabled={saving || !adminPassword.trim()}
+                  className="h-9 w-full rounded border border-gray-300 px-3 disabled:bg-gray-100 disabled:text-gray-500"
                 />
               </label>
               <label className="block text-sm">
@@ -1145,6 +1676,126 @@ export default function PlannedExpensePaymentsPage() {
                   <Check className="h-4 w-4" />
                 )}
                 Save changes
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {newExpenseOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="planned-expense-create-title"
+        >
+          <form
+            onSubmit={saveNewExpense}
+            className="w-full max-w-lg overflow-hidden rounded-lg bg-white shadow-xl"
+          >
+            <div className="border-b border-gray-200 bg-teal-800 px-4 py-3 text-white">
+              <h2 id="planned-expense-create-title" className="font-semibold">
+                Add planned expense
+              </h2>
+            </div>
+            <div className="space-y-4 px-4 py-4">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Expense sector</span>
+                <select
+                  required
+                  value={newExpenseCategoryId}
+                  onChange={(event) =>
+                    setNewExpenseCategoryId(event.target.value)
+                  }
+                  className="h-9 w-full rounded border border-gray-300 bg-white px-3"
+                >
+                  <option value="">Select a sector</option>
+                  {expenseCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Expense type</span>
+                <select
+                  value={newExpenseDirection}
+                  onChange={(event) =>
+                    setNewExpenseDirection(event.target.value as 'IN' | 'OUT')
+                  }
+                  className="h-9 w-full rounded border border-gray-300 bg-white px-3"
+                >
+                  <option value="OUT">Outgoing (OUT)</option>
+                  <option value="IN">Incoming (IN)</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  {newExpenseDirection === 'IN'
+                    ? 'Value in incoming'
+                    : 'Value to pay'}
+                </span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  value={newExpenseAmount}
+                  onChange={(event) => setNewExpenseAmount(event.target.value)}
+                  className="h-9 w-full rounded border border-gray-300 px-3"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  {newExpenseDirection === 'IN'
+                    ? 'Date of incoming'
+                    : 'Expiration date'}
+                </span>
+                <input
+                  type="date"
+                  required
+                  value={newExpenseExpirationDate}
+                  onChange={(event) =>
+                    setNewExpenseExpirationDate(event.target.value)
+                  }
+                  className="h-9 w-full rounded border border-gray-300 px-3"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Note</span>
+                <input
+                  type="text"
+                  value={newExpenseNote}
+                  onChange={(event) => setNewExpenseNote(event.target.value)}
+                  className="h-9 w-full rounded border border-gray-300 px-3"
+                />
+              </label>
+              {newExpenseError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {newExpenseError}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setNewExpenseOpen(false)}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded border border-teal-900 bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Save expense
               </button>
             </div>
           </form>

@@ -36,6 +36,11 @@ import {
   athleteSportProfile,
 } from "@/lib/sport/athleteSportProfiles";
 import {
+  decodeMultiSportValues,
+  encodeMultiSportValues,
+} from "@/lib/sport/sportProfileTypes";
+import { renewMembershipDates } from "@/lib/club/memberMembershipDates";
+import {
   formatDate,
   getAuthHeaders,
   withSelectedClubId,
@@ -103,6 +108,8 @@ type Props = {
    * `subscription` — Administration page: visibility + Current subscription / Payments only.
    */
   variant?: "full" | "subscription";
+  /** Member profile language (Other references → Language) for Info popups. */
+  memberLanguage?: string | null;
 };
 
 type InstallmentKey = MemberSettingsInstallmentKey;
@@ -136,16 +143,70 @@ export default function MemberProfileSettingsTab({
   message,
   onSave,
   variant = "full",
+  memberLanguage,
 }: Props) {
   const subscriptionOnly = variant === "subscription";
   const clubEnabledPayments = useClubEnabledPaymentMethods();
   const { currentLanguage } = useLanguage();
   const lang = (currentLanguage || "en").toLowerCase().split("-")[0] || "en";
   const s = club.settings;
+  const od = club.otherDetails;
   const ac = s.accessControl;
   const ss = s.secondaryScreen;
+  const [membershipBusy, setMembershipBusy] = useState(false);
+  const [membershipHint, setMembershipHint] = useState("");
   const [sportDropdownCatalog, setSportDropdownCatalog] =
     useState<SportDropdownCatalog>(emptySportDropdownCatalog());
+
+  const loadMembershipFromArchive = async () => {
+    if (!clubId || !memberUserId) {
+      setMembershipHint("Select a club member first.");
+      return;
+    }
+    setMembershipBusy(true);
+    setMembershipHint("");
+    try {
+      const res = await fetch(
+        withSelectedClubId(
+          `/api/clubs/${encodeURIComponent(clubId)}/members/${encodeURIComponent(memberUserId)}/profile/membership-dates`,
+        ),
+        { headers: getAuthHeaders() },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Failed to load membership dates");
+      const dates = json.dates as { from?: string; to?: string } | null;
+      if (!dates) {
+        setMembershipHint("No membership archive record found.");
+        return;
+      }
+      setClub((c) => ({
+        ...c,
+        otherDetails: {
+          ...c.otherDetails,
+          membershipFrom: dates.from || c.otherDetails.membershipFrom,
+          membershipTo: dates.to || c.otherDetails.membershipTo,
+        },
+      }));
+      setMembershipHint("Loaded from archive. Click Save to persist.");
+    } catch (e: unknown) {
+      setMembershipHint(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
+  const renewMembership = () => {
+    const next = renewMembershipDates(od.membershipFrom, od.membershipTo);
+    setClub((c) => ({
+      ...c,
+      otherDetails: {
+        ...c.otherDetails,
+        membershipFrom: next.from,
+        membershipTo: next.to,
+      },
+    }));
+    setMembershipHint("Membership renewed (+1 year). Click Save to persist.");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -736,6 +797,65 @@ export default function MemberProfileSettingsTab({
 
       {!subscriptionOnly ? (
       <>
+      <SectionCard title="Type of payments — method default" tone="red">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <p className="text-xs text-gray-600">
+            Tag up to {MAX_DEFAULT_PAYMENT_METHODS} payment types shown first on
+            payment forms. Operators can choose <strong>Others</strong> to see
+            the remaining types.
+          </p>
+          <button
+            type="button"
+            onClick={() => setPaymentInfoOpen(true)}
+            className="shrink-0 text-sm font-semibold text-red-600 hover:text-red-800 hover:underline"
+          >
+            Info
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {(clubEnabledPayments
+            ? PAYMENT_TYPE_OPTIONS.filter((method) => clubEnabledPayments.includes(method.value))
+            : PAYMENT_TYPE_OPTIONS
+          ).map((method) => {
+            const checked = defaultPaymentMethods.includes(method.value);
+            const disableNew =
+              !checked &&
+              defaultPaymentMethods.length >= MAX_DEFAULT_PAYMENT_METHODS;
+            return (
+              <label
+                key={method.value}
+                className={`inline-flex items-center gap-2 text-sm ${
+                  disableNew ? "text-gray-400" : "text-gray-800"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={
+                    !canEditPaymentDefaults || readOnlyClub || disableNew
+                  }
+                  checked={checked}
+                  onChange={() => toggleDefaultPaymentMethod(method.value)}
+                />
+                <span>{method.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        {defaultsMessage ? (
+          <p className="mt-2 text-xs text-red-600">{defaultsMessage}</p>
+        ) : (
+          <p className="mt-2 text-xs text-gray-500">
+            Selected: {defaultPaymentMethods.length}/
+            {MAX_DEFAULT_PAYMENT_METHODS}
+          </p>
+        )}
+      </SectionCard>
+      <PaymentInfoModal
+        open={paymentInfoOpen}
+        onClose={() => setPaymentInfoOpen(false)}
+        memberLanguage={memberLanguage}
+      />
+
       <SectionCard title="Other settings">
         <Row2>
           <Field label="Heart rate">
@@ -832,17 +952,61 @@ export default function MemberProfileSettingsTab({
             </TextSelect>
           </Field>
         </Row2>
-        <CheckRow
-          label="Information and updates"
-          disabled={readOnlyClub}
-          checked={s.informationUpdates}
-          onChange={(v) =>
-            patchSettings((prev) => ({ ...prev, informationUpdates: v }))
-          }
-        />
+        <div className="mt-3 flex flex-wrap gap-4">
+          <CheckRow
+            label="Information and updates"
+            disabled={readOnlyClub}
+            checked={s.informationUpdates}
+            onChange={(v) =>
+              patchSettings((prev) => ({ ...prev, informationUpdates: v }))
+            }
+          />
+          <CheckRow
+            label="Receipt issued"
+            disabled={readOnlyClub}
+            checked={s.football.receiptIssued}
+            onChange={(v) =>
+              patchSettings((prev) => ({
+                ...prev,
+                football: { ...prev.football, receiptIssued: v },
+              }))
+            }
+          />
+          <CheckRow
+            label="Image release"
+            disabled={readOnlyClub}
+            checked={s.football.imageRelease}
+            onChange={(v) =>
+              patchSettings((prev) => ({
+                ...prev,
+                football: { ...prev.football, imageRelease: v },
+              }))
+            }
+          />
+          <CheckRow
+            label="Travel authorization"
+            disabled={readOnlyClub}
+            checked={s.football.travelAuthorization}
+            onChange={(v) =>
+              patchSettings((prev) => ({
+                ...prev,
+                football: { ...prev.football, travelAuthorization: v },
+              }))
+            }
+          />
+        </div>
       </SectionCard>
 
-      <SectionCard title="These settings if the member…" tone="red">
+      <SectionCard title="Label Settings" tone="red">
+        <div className="mb-2 flex items-start justify-end">
+          <button
+            type="button"
+            onClick={() => setPaymentInfoOpen(true)}
+            className="shrink-0 text-sm font-semibold text-red-600 hover:text-red-800 hover:underline"
+          >
+            Info
+          </button>
+        </div>
         <div className="space-y-3 text-sm text-gray-800">
           <label className="flex items-start gap-2">
             <input
@@ -862,7 +1026,8 @@ export default function MemberProfileSettingsTab({
               className="mt-1"
             />
             <span>
-              These settings if the member is member of a <strong>Club</strong>
+              These settings if the member is member of a{" "}
+              <strong>CLUB-GYM</strong>
             </span>
           </label>
 
@@ -918,8 +1083,585 @@ export default function MemberProfileSettingsTab({
         </div>
       </SectionCard>
 
+      {memberSettingKind === "team" ? (
+        <SectionCard title="Team and roles">
+          <Row2 className="md:items-end">
+            {athleteProfile.currentTeam !== false ? (
+              <Field
+                label={st(
+                  athleteProfile.currentTeam ||
+                    (workspaceKind === "team" ? "Team names" : "Club names"),
+                )}
+                labelClassName="text-lg"
+              >
+                <TextInput
+                  className="h-9"
+                  disabled={readOnlyClub}
+                  value={s.football.teamNames}
+                  onChange={(e) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: { ...prev.football, teamNames: e.target.value },
+                    }))
+                  }
+                />
+              </Field>
+            ) : null}
+            <Field label="Previous club">
+              <TextInput
+                className="h-9"
+                disabled={readOnlyClub}
+                value={s.football.previousClub}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      previousClub: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Release date">
+              <TextInput
+                className="h-9"
+                type="date"
+                disabled={readOnlyClub}
+                value={s.football.releaseDate}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, releaseDate: e.target.value },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Player registration">
+              <TextSelect
+                className="h-9"
+                disabled={readOnlyClub}
+                value={s.football.playerRegistration}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      playerRegistration: e.target.value,
+                    },
+                  }))
+                }
+              >
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </TextSelect>
+            </Field>
+            {sportFields?.registrationType ? (
+              <Field label="Registration type">
+                <TextSelect
+                  className="h-9"
+                  disabled={readOnlyClub}
+                  value={s.football.registrationType}
+                  onChange={(e) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: {
+                        ...prev.football,
+                        registrationType: e.target.value,
+                      },
+                    }))
+                  }
+                >
+                  <option value="">—</option>
+                  {registrationTypeOptions.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                  {s.football.registrationType &&
+                  !registrationTypeOptions.includes(
+                    s.football.registrationType,
+                  ) ? (
+                    <option value={s.football.registrationType}>
+                      {s.football.registrationType}
+                    </option>
+                  ) : null}
+                </TextSelect>
+              </Field>
+            ) : null}
+            <Field label="Sports season">
+              <TextInput
+                className="h-9"
+                disabled={readOnlyClub}
+                value={s.football.sportsSeason}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      sportsSeason: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </Row2>
+
+          <Row2>
+            <Field label={`${sportFields?.labels.category ?? categoryLabel} **`}>
+              <TextSelect
+                disabled={readOnlyClub || categoryOptions.length === 0}
+                value={s.football.category}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, category: e.target.value },
+                  }))
+                }
+              >
+                <option value="">—</option>
+                {categoryOptions.map((o) => (
+                  <option key={o.id} value={o.label}>
+                    {o.label}
+                  </option>
+                ))}
+                {s.football.category &&
+                !categoryOptions.some(
+                  (o) => o.label === s.football.category,
+                ) ? (
+                  <option value={s.football.category}>
+                    {s.football.category}
+                  </option>
+                ) : null}
+              </TextSelect>
+              {categoryOptions.length === 0 ? (
+                <p className="mt-1 text-xs text-gray-500">
+                  Options from Super Admin → Sport settings → Tools Settings →
+                  Dropdown parameters for sport ({teamSportKey}).
+                </p>
+              ) : null}
+            </Field>
+            {roleLabel ? (
+              <SportChoiceField
+                label={`${roleLabel} **`}
+                value={s.football.position}
+                choices={roleChoices}
+                disabled={readOnlyClub}
+                hint={roleChoices?.length ? null : catalogHint}
+                onChange={(value) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, position: value },
+                  }))
+                }
+              />
+            ) : null}
+            {subRoleLabel ? (
+              <SportChoiceField
+                label={`${subRoleLabel} **`}
+                value={s.football.specialty}
+                choices={subRoleChoices}
+                disabled={readOnlyClub}
+                hint={subRoleChoices?.length ? null : catalogHint}
+                onChange={(value) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, specialty: value },
+                  }))
+                }
+              />
+            ) : null}
+          </Row2>
+        </SectionCard>
+      ) : null}
+
+      {memberSettingKind === "team" && athleteExtraFields.length > 0 ? (
+        <SectionCard title="Details about sport selected">
+          <div
+            className="rounded border border-gray-200 bg-gray-50 p-3"
+            data-testid="athlete-sport-fields"
+          >
+            <p className="mb-2 text-sm font-semibold text-gray-800">
+              {st(selectedTeamSport)} {st("fields")}
+            </p>
+            <Row2>
+              {athleteExtraFields.map((def) => {
+                if (def.multi && def.options && def.options.length > 0) {
+                  const selected = decodeMultiSportValues(
+                    athleteSportValues[def.key] ?? "",
+                  );
+                  return (
+                    <div
+                      key={def.key}
+                      className="col-span-full flex flex-col justify-end sm:col-span-2"
+                    >
+                      <Field label={`${st(def.label)} (multicheck)`}>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded border border-gray-200 bg-white px-3 py-2">
+                          {def.options.map((choice) => {
+                            const checked = selected.includes(choice);
+                            return (
+                              <CheckRow
+                                key={choice}
+                                label={st(choice)}
+                                disabled={readOnlyClub}
+                                checked={checked}
+                                onChange={(on) => {
+                                  const next = on
+                                    ? [...selected, choice]
+                                    : selected.filter((v) => v !== choice);
+                                  setAthleteSportValue(
+                                    def.key,
+                                    encodeMultiSportValues(next),
+                                  );
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </Field>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={def.key} className="flex flex-col justify-end">
+                    <SportChoiceField
+                      label={def.label}
+                      value={athleteSportValues[def.key] ?? ""}
+                      choices={def.options}
+                      disabled={readOnlyClub}
+                      onChange={(value) => setAthleteSportValue(def.key, value)}
+                    />
+                  </div>
+                );
+              })}
+            </Row2>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {memberSettingKind === "team" ? (
+        <SectionCard title="Physical parameters">
+          <Row2>
+            {athleteProfile.footHand !== false ? (
+              <SportChoiceField
+                label={
+                  athleteProfile.footHand ??
+                  sportFields?.labels.footHand ??
+                  "Foot/Hand"
+                }
+                value={s.football.footHand}
+                choices={
+                  athleteProfile.footHandOptions ?? [
+                    "Right",
+                    "Left",
+                    "Ambidextrous",
+                  ]
+                }
+                disabled={readOnlyClub}
+                onChange={(value) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, footHand: value },
+                  }))
+                }
+              />
+            ) : null}
+            {athleteProfile.jersey !== false ? (
+              <Field label={st(athleteProfile.jersey || "Jersey number")}>
+                <TextInput
+                  disabled={readOnlyClub}
+                  value={s.football.jerseyNumber}
+                  onChange={(e) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: {
+                        ...prev.football,
+                        jerseyNumber: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+            ) : null}
+            <Field label="Jersey size (alphanumeric, max 5)">
+              <TextInput
+                disabled={readOnlyClub}
+                maxLength={5}
+                inputMode="text"
+                autoComplete="off"
+                value={s.football.jerseySize}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      jerseySize: e.target.value
+                        .replace(/[^a-zA-Z0-9]/g, "")
+                        .slice(0, 5),
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Shorts size (alphanumeric, max 5)">
+              <TextInput
+                disabled={readOnlyClub}
+                maxLength={5}
+                inputMode="text"
+                autoComplete="off"
+                value={s.football.shortsSize}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      shortsSize: e.target.value
+                        .replace(/[^a-zA-Z0-9]/g, "")
+                        .slice(0, 5),
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Shoe size (00.0)">
+              <TextInput
+                disabled={readOnlyClub}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="00.0"
+                value={s.football.shoeSize}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/[^\d.]/g, "");
+                  const parts = cleaned.split(".");
+                  const whole = (parts[0] || "").slice(0, 2);
+                  const frac = (parts[1] || "").slice(0, 1);
+                  const shoeSize =
+                    parts.length > 1 ? `${whole}.${frac}` : whole;
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, shoeSize },
+                  }));
+                }}
+              />
+            </Field>
+          </Row2>
+
+          <Row2>
+            <Field label="Shoes number">
+              <TextSelect
+                disabled={readOnlyClub}
+                value={s.football.shoesNumber}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, shoesNumber: e.target.value },
+                  }))
+                }
+              >
+                <option value="">—</option>
+                {Array.from({ length: 21 }, (_, i) => String(30 + i)).map(
+                  (n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ),
+                )}
+              </TextSelect>
+            </Field>
+            <div />
+          </Row2>
+
+          <Row4>
+            <Field label="Weight">
+              <TextInput
+                disabled={readOnlyClub}
+                value={s.football.weight}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, weight: e.target.value },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Height">
+              <TextInput
+                disabled={readOnlyClub}
+                value={s.football.height}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, height: e.target.value },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Reaction time">
+              <TextInput
+                disabled={readOnlyClub}
+                value={s.football.reactionTime}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      reactionTime: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label={st(athleteProfile.verticalJumpLabel ?? "Vertical jump")}>
+              <TextInput
+                disabled={readOnlyClub}
+                value={s.football.verticalJump}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      verticalJump: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </Row4>
+        </SectionCard>
+      ) : null}
+
+      {memberSettingKind === "team" ? (
+        <SectionCard title="Sport played and current coach">
+          <Field label="Sports played">
+            <div className="flex flex-wrap gap-3">
+              {MAIN_SPORTS.map((sp) => (
+                <CheckRow
+                  key={sp}
+                  label={sp}
+                  disabled={readOnlyClub}
+                  checked={s.football.sportsPlayed.includes(sp)}
+                  onChange={(v) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: {
+                        ...prev.football,
+                        sportsPlayed: v
+                          ? [...prev.football.sportsPlayed, sp]
+                          : prev.football.sportsPlayed.filter((x) => x !== sp),
+                      },
+                    }))
+                  }
+                />
+              ))}
+            </div>
+          </Field>
+          <Row2>
+            <Field label="Coach">
+              <TextInput
+                disabled={readOnlyClub}
+                value={s.football.coach}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: { ...prev.football, coach: e.target.value },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Start date with this team">
+              <TextInput
+                type="date"
+                disabled={readOnlyClub}
+                value={s.football.startDateWithTeam}
+                onChange={(e) =>
+                  patchSettings((prev) => ({
+                    ...prev,
+                    football: {
+                      ...prev.football,
+                      startDateWithTeam: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </Row2>
+        </SectionCard>
+      ) : null}
+
       {memberSettingKind === "club" ? (
         <>
+          <SectionCard title="Last Membership to the Club (managed by the Club Admin)">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm text-blue-800">
+              <span>Edit dates below</span>
+              <div className="flex flex-wrap gap-2">
+                {!readOnlyClub ? (
+                  <button
+                    type="button"
+                    disabled={saving || membershipBusy}
+                    onClick={() => void loadMembershipFromArchive()}
+                    className="rounded border border-blue-700 px-2 py-1 text-xs font-semibold hover:bg-blue-50"
+                  >
+                    Load from archive
+                  </button>
+                ) : null}
+                {!readOnlyClub ? (
+                  <button
+                    type="button"
+                    disabled={saving || membershipBusy}
+                    onClick={renewMembership}
+                    className="rounded bg-blue-800 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-900"
+                  >
+                    Renew (+1 year)
+                  </button>
+                ) : (
+                  <span>Renew</span>
+                )}
+              </div>
+            </div>
+            <Row2>
+              <Field label="Membership from">
+                <TextInput
+                  type="date"
+                  disabled={readOnlyClub}
+                  value={od.membershipFrom}
+                  onChange={(e) =>
+                    setClub((c) => ({
+                      ...c,
+                      otherDetails: {
+                        ...c.otherDetails,
+                        membershipFrom: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Membership to (expiration)">
+                <TextInput
+                  type="date"
+                  disabled={readOnlyClub}
+                  value={od.membershipTo}
+                  onChange={(e) =>
+                    setClub((c) => ({
+                      ...c,
+                      otherDetails: {
+                        ...c.otherDetails,
+                        membershipTo: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+            </Row2>
+            <p className="mt-2 text-xs text-red-700">
+              Last membership can also be loaded from the Archive of Memberships.
+              Editing these dates may update membership archive data. Renew updates
+              these dates.
+            </p>
+            {membershipHint ? (
+              <p className="mt-2 text-xs font-medium text-gray-700">{membershipHint}</p>
+            ) : null}
+          </SectionCard>
+
           <SectionCard title="Preferences">
             <p className="mb-3 text-sm font-semibold text-gray-800">
               Default assigned
@@ -1267,74 +2009,11 @@ export default function MemberProfileSettingsTab({
         </>
       ) : null}
 
-      <SectionCard title="Type of payments — method default" tone="red">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <p className="text-xs text-gray-600">
-            Tag up to {MAX_DEFAULT_PAYMENT_METHODS} payment types shown first on
-            payment forms. Operators can choose <strong>Others</strong> to see
-            the remaining types.
-          </p>
-          <button
-            type="button"
-            onClick={() => setPaymentInfoOpen(true)}
-            className="shrink-0 text-sm font-semibold text-red-600 hover:text-red-800 hover:underline"
-          >
-            Info
-          </button>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {(clubEnabledPayments
-            ? PAYMENT_TYPE_OPTIONS.filter((method) => clubEnabledPayments.includes(method.value))
-            : PAYMENT_TYPE_OPTIONS
-          ).map((method) => {
-            const checked = defaultPaymentMethods.includes(method.value);
-            const disableNew =
-              !checked &&
-              defaultPaymentMethods.length >= MAX_DEFAULT_PAYMENT_METHODS;
-            return (
-              <label
-                key={method.value}
-                className={`inline-flex items-center gap-2 text-sm ${
-                  disableNew ? "text-gray-400" : "text-gray-800"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  disabled={
-                    !canEditPaymentDefaults || readOnlyClub || disableNew
-                  }
-                  checked={checked}
-                  onChange={() => toggleDefaultPaymentMethod(method.value)}
-                />
-                <span>{method.label}</span>
-              </label>
-            );
-          })}
-        </div>
-        {defaultsMessage ? (
-          <p className="mt-2 text-xs text-red-600">{defaultsMessage}</p>
-        ) : (
-          <p className="mt-2 text-xs text-gray-500">
-            Selected: {defaultPaymentMethods.length}/
-            {MAX_DEFAULT_PAYMENT_METHODS}
-          </p>
-        )}
-      </SectionCard>
-      <PaymentInfoModal
-        open={paymentInfoOpen}
-        onClose={() => setPaymentInfoOpen(false)}
-      />
       </>
       ) : null}
 
-      {sportFields || subscriptionOnly ? (
-        <SectionCard
-          title={
-            subscriptionOnly
-              ? "Current subscription"
-              : `TEAM fields — ${selectedTeamSport}`
-          }
-        >
+      {subscriptionOnly ? (
+        <SectionCard title="Current subscription">
           <Field label={sportFields?.labels.athleteStatus ?? "Athlete status"}>
             <div className="flex flex-wrap gap-4">
               {TEAM_ATHLETE_STATUS_OPTIONS.map((status) => (
@@ -1418,55 +2097,134 @@ export default function MemberProfileSettingsTab({
             </div>
           ) : null}
 
-          <Row2>
-            <Field label={sportFields?.labels.membershipNumber ?? "Membership number"}>
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.membershipNumber}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      membershipNumber: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field label={sportFields?.labels.expiringDate ?? "Expiring date"}>
-              <TextInput
-                type="date"
-                disabled={readOnlyClub}
-                value={s.football.expiringDate}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      expiringDate: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-          </Row2>
+          {/* Settings: Administration frame (like Payments), from Membership Registration → fee.
+              Administration tab (subscriptionOnly) keeps a flat Current-subscription layout. */}
+          {!subscriptionOnly ? (
+            <div
+              className="mt-3 space-y-3 rounded border border-slate-300 bg-slate-50 p-3"
+              data-testid="administration-frame"
+            >
+              <p className="text-sm font-semibold text-gray-800">Administration</p>
 
-          <Field label="Annual membership fee">
-            <TextInput
-              disabled={readOnlyClub}
-              value={s.football.annualMembershipFee}
-              onChange={(e) =>
-                patchSettings((prev) => ({
-                  ...prev,
-                  football: {
-                    ...prev.football,
-                    annualMembershipFee: e.target.value,
-                  },
-                }))
-              }
-            />
-          </Field>
+              <Field label="Membership Registration to">
+                <TextInput
+                  disabled={readOnlyClub}
+                  placeholder="Registered at.."
+                  value={club.otherDetails.membershipRegistrationTo}
+                  onChange={(e) =>
+                    setClub((c) => ({
+                      ...c,
+                      otherDetails: {
+                        ...c.otherDetails,
+                        membershipRegistrationTo: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+
+              <Row2>
+                <Field label={sportFields?.labels.membershipNumber ?? "Membership number"}>
+                  <TextInput
+                    disabled={readOnlyClub}
+                    value={s.football.membershipNumber}
+                    onChange={(e) =>
+                      patchSettings((prev) => ({
+                        ...prev,
+                        football: {
+                          ...prev.football,
+                          membershipNumber: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label={sportFields?.labels.expiringDate ?? "Expiring date"}>
+                  <TextInput
+                    type="date"
+                    disabled={readOnlyClub}
+                    value={s.football.expiringDate}
+                    onChange={(e) =>
+                      patchSettings((prev) => ({
+                        ...prev,
+                        football: {
+                          ...prev.football,
+                          expiringDate: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+              </Row2>
+
+              <Field label="Annual membership fee">
+                <TextInput
+                  disabled={readOnlyClub}
+                  value={s.football.annualMembershipFee}
+                  onChange={(e) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: {
+                        ...prev.football,
+                        annualMembershipFee: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+          ) : (
+            <>
+              <Row2>
+                <Field label={sportFields?.labels.membershipNumber ?? "Membership number"}>
+                  <TextInput
+                    disabled={readOnlyClub}
+                    value={s.football.membershipNumber}
+                    onChange={(e) =>
+                      patchSettings((prev) => ({
+                        ...prev,
+                        football: {
+                          ...prev.football,
+                          membershipNumber: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label={sportFields?.labels.expiringDate ?? "Expiring date"}>
+                  <TextInput
+                    type="date"
+                    disabled={readOnlyClub}
+                    value={s.football.expiringDate}
+                    onChange={(e) =>
+                      patchSettings((prev) => ({
+                        ...prev,
+                        football: {
+                          ...prev.football,
+                          expiringDate: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+              </Row2>
+              <Field label="Annual membership fee">
+                <TextInput
+                  disabled={readOnlyClub}
+                  value={s.football.annualMembershipFee}
+                  onChange={(e) =>
+                    patchSettings((prev) => ({
+                      ...prev,
+                      football: {
+                        ...prev.football,
+                        annualMembershipFee: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+            </>
+          )}
 
           <div
             className="mt-3 space-y-3 rounded border border-emerald-200 bg-[#E2FFF2] p-3"
@@ -1735,497 +2493,6 @@ export default function MemberProfileSettingsTab({
             ) : null}
           </div>
 
-          {!subscriptionOnly ? (
-          <>
-          <Row2 className="md:items-end">
-            {athleteProfile.currentTeam !== false ? (
-              <Field
-                label={st(
-                  athleteProfile.currentTeam ||
-                    (workspaceKind === "team" ? "Team names" : "Club names"),
-                )}
-                labelClassName="text-lg"
-              >
-                <TextInput
-                  className="h-9"
-                  disabled={readOnlyClub}
-                  value={s.football.teamNames}
-                  onChange={(e) =>
-                    patchSettings((prev) => ({
-                      ...prev,
-                      football: { ...prev.football, teamNames: e.target.value },
-                    }))
-                  }
-                />
-              </Field>
-            ) : null}
-            <Field label="Previous club">
-              <TextInput
-                className="h-9"
-                disabled={readOnlyClub}
-                value={s.football.previousClub}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      previousClub: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Release date">
-              <TextInput
-                className="h-9"
-                type="date"
-                disabled={readOnlyClub}
-                value={s.football.releaseDate}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, releaseDate: e.target.value },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Player registration">
-              <TextSelect
-                className="h-9"
-                disabled={readOnlyClub}
-                value={s.football.playerRegistration}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      playerRegistration: e.target.value,
-                    },
-                  }))
-                }
-              >
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </TextSelect>
-            </Field>
-            {sportFields?.registrationType ? (
-              <Field label="Registration type">
-                <TextSelect
-                  className="h-9"
-                  disabled={readOnlyClub}
-                  value={s.football.registrationType}
-                  onChange={(e) =>
-                    patchSettings((prev) => ({
-                      ...prev,
-                      football: {
-                        ...prev.football,
-                        registrationType: e.target.value,
-                      },
-                    }))
-                  }
-                >
-                  <option value="">—</option>
-                  {registrationTypeOptions.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                  {s.football.registrationType &&
-                  !registrationTypeOptions.includes(
-                    s.football.registrationType,
-                  ) ? (
-                    <option value={s.football.registrationType}>
-                      {s.football.registrationType}
-                    </option>
-                  ) : null}
-                </TextSelect>
-              </Field>
-            ) : null}
-            <Field label="Sports season">
-              <TextInput
-                className="h-9"
-                disabled={readOnlyClub}
-                value={s.football.sportsSeason}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      sportsSeason: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-          </Row2>
-
-          <Row2>
-            <Field label={`${sportFields?.labels.category ?? categoryLabel} **`}>
-              <TextSelect
-                disabled={readOnlyClub || categoryOptions.length === 0}
-                value={s.football.category}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, category: e.target.value },
-                  }))
-                }
-              >
-                <option value="">—</option>
-                {categoryOptions.map((o) => (
-                  <option key={o.id} value={o.label}>
-                    {o.label}
-                  </option>
-                ))}
-                {s.football.category &&
-                !categoryOptions.some(
-                  (o) => o.label === s.football.category,
-                ) ? (
-                  <option value={s.football.category}>
-                    {s.football.category}
-                  </option>
-                ) : null}
-              </TextSelect>
-              {categoryOptions.length === 0 ? (
-                <p className="mt-1 text-xs text-gray-500">
-                  Options from Super Admin → Sport settings → Tools Settings →
-                  Dropdown parameters for sport ({teamSportKey}).
-                </p>
-              ) : null}
-            </Field>
-            {roleLabel ? (
-              <SportChoiceField
-                label={`${roleLabel} **`}
-                value={s.football.position}
-                choices={roleChoices}
-                disabled={readOnlyClub}
-                hint={roleChoices?.length ? null : catalogHint}
-                onChange={(value) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, position: value },
-                  }))
-                }
-              />
-            ) : null}
-            {subRoleLabel ? (
-              <SportChoiceField
-                label={`${subRoleLabel} **`}
-                value={s.football.specialty}
-                choices={subRoleChoices}
-                disabled={readOnlyClub}
-                hint={subRoleChoices?.length ? null : catalogHint}
-                onChange={(value) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, specialty: value },
-                  }))
-                }
-              />
-            ) : null}
-          </Row2>
-
-          {athleteExtraFields.length > 0 ? (
-            <div
-              className="mt-3 rounded border border-gray-200 bg-gray-50 p-3"
-              data-testid="athlete-sport-fields"
-            >
-              <p className="mb-2 text-sm font-semibold text-gray-800">
-                {st(selectedTeamSport)} {st("fields")}
-              </p>
-              <Row2>
-                {athleteExtraFields.map((def) => (
-                  <div key={def.key} className="flex flex-col justify-end">
-                    <SportChoiceField
-                      label={def.label}
-                      value={athleteSportValues[def.key] ?? ""}
-                      choices={def.options}
-                      disabled={readOnlyClub}
-                      onChange={(value) => setAthleteSportValue(def.key, value)}
-                    />
-                  </div>
-                ))}
-              </Row2>
-            </div>
-          ) : null}
-
-          <Row2>
-            {athleteProfile.footHand !== false ? (
-              <SportChoiceField
-                label={
-                  athleteProfile.footHand ??
-                  sportFields?.labels.footHand ??
-                  "Foot/Hand"
-                }
-                value={s.football.footHand}
-                choices={
-                  athleteProfile.footHandOptions ?? [
-                    "Right",
-                    "Left",
-                    "Ambidextrous",
-                  ]
-                }
-                disabled={readOnlyClub}
-                onChange={(value) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, footHand: value },
-                  }))
-                }
-              />
-            ) : null}
-            {athleteProfile.jersey !== false ? (
-              <Field label={st(athleteProfile.jersey || "Jersey number")}>
-                <TextInput
-                  disabled={readOnlyClub}
-                  value={s.football.jerseyNumber}
-                  onChange={(e) =>
-                    patchSettings((prev) => ({
-                      ...prev,
-                      football: {
-                        ...prev.football,
-                        jerseyNumber: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </Field>
-            ) : null}
-            <Field label="Jersey size (alphanumeric, max 5)">
-              <TextInput
-                disabled={readOnlyClub}
-                maxLength={5}
-                inputMode="text"
-                autoComplete="off"
-                value={s.football.jerseySize}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      jerseySize: e.target.value
-                        .replace(/[^a-zA-Z0-9]/g, "")
-                        .slice(0, 5),
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Shorts size (alphanumeric, max 5)">
-              <TextInput
-                disabled={readOnlyClub}
-                maxLength={5}
-                inputMode="text"
-                autoComplete="off"
-                value={s.football.shortsSize}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      shortsSize: e.target.value
-                        .replace(/[^a-zA-Z0-9]/g, "")
-                        .slice(0, 5),
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Shoe size (00.0)">
-              <TextInput
-                disabled={readOnlyClub}
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder="00.0"
-                value={s.football.shoeSize}
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[^\d.]/g, "");
-                  const parts = cleaned.split(".");
-                  const whole = (parts[0] || "").slice(0, 2);
-                  const frac = (parts[1] || "").slice(0, 1);
-                  const shoeSize =
-                    parts.length > 1 ? `${whole}.${frac}` : whole;
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, shoeSize },
-                  }));
-                }}
-              />
-            </Field>
-          </Row2>
-
-          <Row2>
-            <Field label="Shoes number">
-              <TextSelect
-                disabled={readOnlyClub}
-                value={s.football.shoesNumber}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, shoesNumber: e.target.value },
-                  }))
-                }
-              >
-                <option value="">—</option>
-                {Array.from({ length: 21 }, (_, i) => String(30 + i)).map(
-                  (n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ),
-                )}
-              </TextSelect>
-            </Field>
-            <div />
-          </Row2>
-
-          <Row4>
-            <Field label="Weight">
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.weight}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, weight: e.target.value },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Height">
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.height}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, height: e.target.value },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Reaction time">
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.reactionTime}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      reactionTime: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field label={st(athleteProfile.verticalJumpLabel ?? "Vertical jump")}>
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.verticalJump}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      verticalJump: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-          </Row4>
-
-          <Row2>
-            <Field label="Coach">
-              <TextInput
-                disabled={readOnlyClub}
-                value={s.football.coach}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: { ...prev.football, coach: e.target.value },
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Start date with this team">
-              <TextInput
-                type="date"
-                disabled={readOnlyClub}
-                value={s.football.startDateWithTeam}
-                onChange={(e) =>
-                  patchSettings((prev) => ({
-                    ...prev,
-                    football: {
-                      ...prev.football,
-                      startDateWithTeam: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-          </Row2>
-          <div className="mt-3 flex flex-wrap gap-4">
-            <CheckRow
-              label="Receipt issued"
-              disabled={readOnlyClub}
-              checked={s.football.receiptIssued}
-              onChange={(v) =>
-                patchSettings((prev) => ({
-                  ...prev,
-                  football: { ...prev.football, receiptIssued: v },
-                }))
-              }
-            />
-            <CheckRow
-              label="Image release"
-              disabled={readOnlyClub}
-              checked={s.football.imageRelease}
-              onChange={(v) =>
-                patchSettings((prev) => ({
-                  ...prev,
-                  football: { ...prev.football, imageRelease: v },
-                }))
-              }
-            />
-            <CheckRow
-              label="Travel authorization"
-              disabled={readOnlyClub}
-              checked={s.football.travelAuthorization}
-              onChange={(v) =>
-                patchSettings((prev) => ({
-                  ...prev,
-                  football: { ...prev.football, travelAuthorization: v },
-                }))
-              }
-            />
-          </div>
-          <Field label="Sports played">
-            <div className="flex flex-wrap gap-3">
-              {MAIN_SPORTS.map((sp) => (
-                <CheckRow
-                  key={sp}
-                  label={sp}
-                  disabled={readOnlyClub}
-                  checked={s.football.sportsPlayed.includes(sp)}
-                  onChange={(v) =>
-                    patchSettings((prev) => ({
-                      ...prev,
-                      football: {
-                        ...prev.football,
-                        sportsPlayed: v
-                          ? [...prev.football.sportsPlayed, sp]
-                          : prev.football.sportsPlayed.filter((x) => x !== sp),
-                      },
-                    }))
-                  }
-                />
-              ))}
-            </div>
-          </Field>
-          </>
-          ) : null}
         </SectionCard>
       ) : null}
 

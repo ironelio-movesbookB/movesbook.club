@@ -115,6 +115,25 @@ export function payLinkProviderForMethod(method: string | null | undefined): 'st
   return null;
 }
 
+/** Greyed out when any checked deadline belongs to a procedure in NO_RECURRING_PAY_MODE_PROCEDURES. */
+export const RECURRING_ONLY_PAY_MODES: readonly PaymentTypeValue[] = ['sepa', 'cbill', 'mav'];
+
+/** Purchases of services and products, and debts (procedure code and archive typology label). */
+export const NO_RECURRING_PAY_MODE_PROCEDURES = [
+  'service_sale',
+  'product_sale',
+  'member_debt',
+  'SERVICES',
+  'PURCHASE PRODUCTS',
+  'MEMBER DEBTS',
+];
+
+export function blockedPayModesFor(kinds: (string | null | undefined)[]): string[] {
+  return kinds.some((kind) => NO_RECURRING_PAY_MODE_PROCEDURES.includes(String(kind ?? '')))
+    ? [...RECURRING_ONLY_PAY_MODES]
+    : [];
+}
+
 /** Only these methods allow marking the first deadline as Paid on the member Settings. */
 export const PAID_AT_FIRST_DEADLINE_METHODS: readonly PaymentTypeValue[] = [
   'cash',

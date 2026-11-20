@@ -4,6 +4,7 @@ import {
   credentialsForMemberPayment,
   getMemberOnlinePayment,
   markMemberOnlinePaymentPaid,
+  memberOnlinePaymentStillDue,
   settleMemberOnlinePayment,
 } from '@/lib/club/memberOnlinePayments';
 import { currencyMinorUnits, retrieveStripeCheckoutSession } from '@/lib/payments/stripeRest';
@@ -61,6 +62,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     } else {
       const orderId = (body.orderId || payment.providerRef || '').trim();
       if (!orderId) return NextResponse.json({ error: 'The PayPal payment is missing' }, { status: 400 });
+      // PayPal only takes the money at capture, so a deadline paid meanwhile is never charged twice.
+      if (!(await memberOnlinePaymentStillDue(payment.id))) {
+        return NextResponse.json(
+          { paid: false, error: 'This deadline is already paid. Nothing was charged.' },
+          { status: 409 },
+        );
+      }
       const capture = await capturePaypalOrder(credentials as ActivePaypalCredentials, orderId, payment.id);
       const valid =
         capture.completed &&

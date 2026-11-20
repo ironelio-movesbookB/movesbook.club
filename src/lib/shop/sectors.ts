@@ -26,6 +26,33 @@ export function shopSector(value: string | null | undefined): ShopSector {
   return found ?? 'Shop';
 }
 
+/** Shop, Bar and Restaurant can be combined. Hardware is always stored alone. */
+export function productSectors(value: string | null | undefined): ShopSector[] {
+  const parts = String(value ?? '')
+    .split(/\s*(?:,|\||;|\s-\s)\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const found = SHOP_SECTORS.filter((sector) =>
+    parts.some((part) => part.toLowerCase() === sector.toLowerCase()),
+  );
+  if (found.includes('Hardware')) return ['Hardware'];
+  if (found.length === 0) return ['Shop'];
+  return found;
+}
+
+export function formatProductSectors(value: string | readonly string[] | null | undefined) {
+  const raw = Array.isArray(value) ? value.join(',') : value;
+  return productSectors(raw).join(',');
+}
+
+export function productSectorLabel(value: string | null | undefined) {
+  return productSectors(value).join(', ');
+}
+
+export function productInSector(value: string | null | undefined, sector: string) {
+  return productSectors(value).includes(shopSector(sector));
+}
+
 export function shopSectorFromPath(pathname: string): ProductListScope {
   if (pathname.includes('/products/hardware')) return 'Hardware';
   if (pathname.includes('/products/restaurant')) return 'Restaurant';
@@ -40,7 +67,7 @@ export function shopProductListPath(sector: string) {
 }
 
 export function isHardwareProductSector(value: string | null | undefined) {
-  return shopSector(value) === 'Hardware';
+  return productSectors(value).includes('Hardware');
 }
 
 export function sellingPerformedBy(source: string | null | undefined) {

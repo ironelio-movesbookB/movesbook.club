@@ -15,6 +15,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import ProductCountPopup from '@/components/club/products/ProductCountPopup';
+import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 
 type OrderStatus = 'pending' | 'completed' | 'cancelled';
 type PaymentStatus = 'paid' | 'unpaid';
@@ -36,6 +37,7 @@ type Order = {
   clubName?: string;
   customerName: string;
   customerEmail: string;
+  customer?: { photoUrl?: string | null } | null;
   items: OrderItem[];
   subtotal: number;
   total?: number;
@@ -70,6 +72,26 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? 'Unknown date' : dateFormatter.format(date);
 }
 
+function MemberAvatar({ src, name }: { src?: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        onError={() => setFailed(true)}
+        className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+      />
+    );
+  }
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100 text-xs font-semibold uppercase text-purple-700">
+      {(name || '?').trim().charAt(0) || '?'}
+    </span>
+  );
+}
+
 function getPaymentStatus(order: Order): PaymentStatus {
   if (typeof order.paid === 'boolean') return order.paid ? 'paid' : 'unpaid';
   if (order.paymentStatus === 'paid' || order.paymentStatus === 'unpaid') return order.paymentStatus;
@@ -95,6 +117,8 @@ function OrdersPage() {
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadOrders = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -149,6 +173,14 @@ function OrdersPage() {
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [orders, search, paymentFilter, statusFilter, productId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, paymentFilter, statusFilter, productId]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleOrders = filteredOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   async function changeStatus(order: Order, status: OrderStatus) {
     if (order.status === status) return;
@@ -303,6 +335,18 @@ function OrdersPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex justify-end border-b border-slate-100 px-3 py-3">
+            <ProcedurePagination
+              page={safePage}
+              pageSize={pageSize}
+              total={filteredOrders.length}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          </div>
           <table className="min-w-[1100px] w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -311,6 +355,7 @@ function OrdersPage() {
                 <th className="px-3 py-3 font-semibold">Sector</th>
                 <th className="px-3 py-3 font-semibold">Member</th>
                 <th className="px-3 py-3 font-semibold">No. of products</th>
+                <th className="px-3 py-3 font-semibold">Status</th>
                 <th className="px-3 py-3 font-semibold">1th product purchased</th>
                 <th className="px-3 py-3 font-semibold">Total cost</th>
                 <th className="px-3 py-3 font-semibold">Paid</th>
@@ -320,7 +365,7 @@ function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredOrders.map((order) => {
+              {visibleOrders.map((order) => {
                 const busy = updatingOrderId === order.id;
                 const productCount =
                   order.productCount ?? order.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -329,20 +374,43 @@ function OrdersPage() {
                 const paidAmount = order.paidAmount ?? (getPaymentStatus(order) === 'paid' ? total : 0);
                 const restAmount = order.restAmount ?? Math.max(0, total - paidAmount);
                 return (
-                  <tr key={order.id} className="hover:bg-slate-50">
+                  <tr
+                    key={order.id}
+                    className={
+                      order.status === 'cancelled'
+                        ? 'bg-slate-100 opacity-60 grayscale'
+                        : 'hover:bg-slate-50'
+                    }
+                  >
                     <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatDate(order.createdAt)}</td>
                     <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-800">
                       {order.performedBy || 'Operator'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-slate-700">{order.sector || 'Shop'}</td>
-                    <td className="max-w-[160px] truncate px-3 py-3 font-medium text-slate-900">
-                      {order.customerName || '-'}
+                    <td className="max-w-[200px] px-3 py-3 font-medium text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <MemberAvatar src={order.customer?.photoUrl} name={order.customerName} />
+                        <span className="truncate">{order.customerName || '-'}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       <ProductCountPopup
                         count={productCount}
                         lines={order.items.map((item) => ({ name: item.name, quantity: item.quantity }))}
                       />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          order.status === 'completed'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : order.status === 'cancelled'
+                              ? 'bg-slate-200 text-slate-600'
+                              : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {getStatusLabel(order.status)}
+                      </span>
                     </td>
                     <td className="max-w-[180px] truncate px-3 py-3 text-slate-700">{firstProduct}</td>
                     <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
@@ -381,7 +449,7 @@ function OrdersPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={busy || order.status === 'cancelled'}
+                          disabled={busy || order.status !== 'pending'}
                           title="Delete"
                           onClick={() => void changeStatus(order, 'cancelled')}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -399,9 +467,12 @@ function OrdersPage() {
         </div>
       )}
 
-      <div className="pb-2 text-xs text-slate-400">
-        Showing {filteredOrders.length} of {orders.length} orders
-      </div>
+      {!loading && (
+        <div className="pb-2 text-xs text-slate-400">
+          Showing {filteredOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1}
+          –{Math.min(safePage * pageSize, filteredOrders.length)} of {filteredOrders.length} orders
+        </div>
+      )}
     </div>
   );
 }

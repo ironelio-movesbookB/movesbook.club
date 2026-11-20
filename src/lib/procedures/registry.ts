@@ -129,7 +129,7 @@ const PRODUCT_SALE: ProcedureDefinition = {
     deadlines: '/ArchiveSeles/product_deadline',
     payments: '/ArchiveSeles/product_payments',
     receipts: '/ArchiveSeles/product_receipts',
-    paymentDetail: (id) => `/clubs/payment_detail/${id}?type=product_sale`,
+    paymentDetail: (id) => `/ArchiveSeles/payment_detail/${id}`,
   },
   archiveTitles: {
     records: 'Archive of sellings',

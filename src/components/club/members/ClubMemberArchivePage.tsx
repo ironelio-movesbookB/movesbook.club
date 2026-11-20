@@ -837,14 +837,25 @@ export default function ClubMemberArchivePage({
     }
   }
 
+  const sectionLabel =
+    membershipStatusFilter === 'archived'
+      ? 'Members Archived'
+      : membershipStatusFilter === 'pending'
+        ? 'Members in pending'
+        : membershipStatusFilter === 'not_member'
+          ? 'Not members'
+          : membershipStatusFilter === 'member'
+            ? 'Members'
+            : 'Users';
+
   const title =
     viewMode === 'groups'
-      ? 'Archive — Users — Groups'
+      ? `Archive — ${sectionLabel} — Groups`
       : viewMode === 'favourites'
-        ? 'Archive — Users — Favourites'
+        ? `Archive — ${sectionLabel} — Favourites`
         : viewMode === 'group-members' && selectedGroupName
-          ? `Archive — Users — ${selectedGroupName}`
-          : 'Archive — Users';
+          ? `Archive — ${sectionLabel} — ${selectedGroupName}`
+          : `Archive — ${sectionLabel}`;
 
   const showMemberFilters = viewMode === 'all' || viewMode === 'favourites' || viewMode === 'group-members';
   const showBulkActions = viewMode === 'all';

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicOrder } from '@/lib/shop/service';
 import { publicOrderClientKey, takePublicOrderSlot } from '@/lib/shop/publicOrderRateLimit';
+import { registrationOrigin } from '@/lib/registration/registrationFlow';
 
 export async function POST(
   request: NextRequest,
@@ -21,12 +22,16 @@ export async function POST(
   try {
     const body = await request.json();
     const userType = body.userType === 'affiliated' ? 'affiliated' : 'non-affiliated';
-    const order = await createPublicOrder(slug, {
+    const paymentMethod =
+      body.paymentMethod === 'bank_transfer' || body.paymentMethod === 'online' ? body.paymentMethod : 'onsite';
+    const { order, onlinePaymentId } = await createPublicOrder(slug, {
       userType,
       customerDetails: body.customerDetails ?? {},
       items: Array.isArray(body.items) ? body.items : [],
+      paymentMethod,
     });
-    return NextResponse.json({ orderNumber: order.orderNumber, order });
+    const payUrl = onlinePaymentId ? `${registrationOrigin(request)}/pay/club/${onlinePaymentId}` : null;
+    return NextResponse.json({ orderNumber: order.orderNumber, order, payUrl });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not place your order.';
     const status = /closed|not be found|matches/i.test(message) ? 400 : 400;

@@ -256,6 +256,8 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       input: {
         recordDate?: string;
         dueDate?: string | null;
+        expenseExpirationDate?: string | null;
+        adminPassword?: string;
         notes?: string;
         operatorId?: string;
         totalAmount?: number;

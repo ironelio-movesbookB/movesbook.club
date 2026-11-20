@@ -194,26 +194,64 @@ export default function ProcedureArchiveTable({
               const isSelected = selectedId && row.id === selectedId;
               const isChecked = Boolean(row.id && selectedIds?.has(row.id));
               const canCheck = rowIsCheckable(row);
-              // Pinned cells need an opaque row background (incl. hover) or scrolled cols show through.
-              const rowBg = row.isDuplicate
-                ? 'bg-red-100'
-                : isChecked
-                  ? 'bg-amber-50'
-                  : isSelected
-                    ? 'bg-amber-100'
-                    : 'bg-white';
-              const rowHover = row.isDuplicate ? 'hover:bg-red-200' : 'hover:bg-teal-50';
-              const actionHover = row.isDuplicate
-                ? 'group-hover:bg-red-200'
-                : isChecked
-                  ? 'group-hover:bg-amber-100'
-                  : 'group-hover:bg-teal-50';
+              const isExpense = row.procedureType === "expense";
+              const expenseDirection = row.expenseDirection ?? row.direction;
+              const isRecurringExpense =
+                isExpense && (row.isRecurrent || row.isRecurringOccurrence);
+              const isOutgoingExpense =
+                isExpense && expenseDirection !== 'IN';
+              const isIncomingExpense =
+                isExpense && expenseDirection === 'IN';
+              const rowBg = isRecurringExpense
+                ? 'bg-gray-100'
+                : isOutgoingExpense
+                  ? 'bg-red-50'
+                  : row.isDuplicate
+                    ? 'bg-red-100'
+                    : isChecked
+                      ? 'bg-amber-50'
+                      : isSelected
+                        ? 'bg-amber-100'
+                        : 'bg-white';
+              const rowHover = isRecurringExpense
+                ? 'hover:bg-gray-200'
+                : isOutgoingExpense
+                  ? 'hover:bg-red-100'
+                  : row.isDuplicate
+                    ? 'hover:bg-red-200'
+                    : 'hover:bg-teal-50';
+              const actionHover = isRecurringExpense
+                ? 'group-hover:bg-gray-200'
+                : isOutgoingExpense
+                  ? 'group-hover:bg-red-100'
+                  : row.isDuplicate
+                    ? 'group-hover:bg-red-200'
+                    : isChecked
+                      ? 'group-hover:bg-amber-100'
+                      : 'group-hover:bg-teal-50';
               const statusClass = getRowClassName?.(row) ?? '';
+              const cellTextClass = isIncomingExpense
+                ? 'text-[#0b5d3c] font-semibold'
+                : isOutgoingExpense
+                  ? 'text-red-800'
+                  : isRecurringExpense
+                  ? 'text-gray-500'
+                  : row.isDuplicate
+                    ? 'text-red-800'
+                    : statusClass || 'text-gray-800';
               return (
                 <tr
                   key={row.id ?? `${row.name}-${row.insertDate}`}
                   className={`group ${bordered ? '' : 'border-t'} cursor-pointer ${rowBg} ${rowHover} ${
-                    row.isDuplicate ? 'text-red-800' : ''
+                    isIncomingExpense
+                      ? 'text-[#0b5d3c] font-semibold'
+                      : isOutgoingExpense
+                        ? 'text-red-800'
+                        : isRecurringExpense
+                          ? 'text-gray-500'
+                          : row.isDuplicate
+                        ? 'text-red-800'
+                        : ''
                   } ${statusClass}`}
                   onClick={() => onRowClick?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
@@ -232,7 +270,7 @@ export default function ProcedureArchiveTable({
                   {dataColumns.map((col) => (
                     <td
                       key={String(col.key)}
-                      className={`px-3 py-2 whitespace-nowrap ${cellBorder} ${statusClass || 'text-gray-800'}`}
+                      className={`px-3 py-2 whitespace-nowrap ${cellBorder} ${cellTextClass}`}
                     >
                       {col.render
                         ? col.render(row[col.key], row)
@@ -241,7 +279,7 @@ export default function ProcedureArchiveTable({
                   ))}
                   {pinActions && (
                     <td
-                      className={`${stickyCellBase} px-3 py-2 text-gray-800 whitespace-nowrap ${
+                      className={`${stickyCellBase} px-3 py-2 whitespace-nowrap ${cellTextClass} ${
                         bordered ? cellBorder : 'border-l border-gray-200'
                       } ${rowBg} ${actionHover}`}
                       style={{ position: 'sticky', right: 0 }}

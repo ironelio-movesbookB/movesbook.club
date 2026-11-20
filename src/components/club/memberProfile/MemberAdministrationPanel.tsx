@@ -177,6 +177,7 @@ export default function MemberAdministrationPanel({
           message={message}
           onSave={() => void saveClubSettings()}
           variant="subscription"
+          memberLanguage={data.owner?.otherReferences?.language}
         />
       </div>
     </div>

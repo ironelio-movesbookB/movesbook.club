@@ -14,6 +14,10 @@ export type ArchiveQueryParams = {
   productId?: string;
   /** Scope to the single record selected in the archive we came from ("Record selected"). */
   recordId?: string;
+  /** Restrict unified deadline archive to one procedure type. */
+  procedureType?: string;
+  /** Restrict unified deadline rows by their IN / OUT payment direction. */
+  direction?: 'all' | 'IN' | 'OUT';
   /** Filter athletes by main sport. */
   sport?: string;
   /** Filter athletes by group of training / team name. */
@@ -75,6 +79,11 @@ function applyFilters(
       const d = String(row.insertDate ?? row.dateStart ?? row.paydate ?? '');
       return !d || d <= params.toDate!;
     });
+  }
+  if (params.direction && params.direction !== 'all') {
+    result = result.filter(
+      (row) => String(row.direction ?? '').toUpperCase() === params.direction,
+    );
   }
   if (params.sport && params.sport !== 'all') {
     const sport = params.sport.toLowerCase();
