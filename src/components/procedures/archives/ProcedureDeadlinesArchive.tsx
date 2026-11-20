@@ -50,6 +50,7 @@ function toDeadlineRow(
     image: record.memberImage ?? undefined,
     typology: record.typology,
     procedureType: record.procedureType,
+    expenseDirection: record.expenseDirection,
     service: record.primaryLabel,
     course: record.secondaryLabel || undefined,
     insertDate: record.recordDate ?? undefined,

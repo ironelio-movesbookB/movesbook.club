@@ -91,7 +91,7 @@ type Props = {
   success?: string;
   onSubmit: (values: ServicePaymentSubmitValues) => Promise<void | boolean>;
   onCancel?: () => void;
-  onAddToRecordTotal?: (amount: number) => Promise<void>;
+  onAddToRecordTotal?: (amount: number, adminPassword: string) => Promise<void>;
   operatorPassStatus?: string;
   notEnterCustData?: boolean;
   /** When true, hide the receipt/tax document UI and never create receipts. */
@@ -709,7 +709,7 @@ export default function ServicePaymentForm({
         }
       } else if (onAddToRecordTotal) {
         // Add new: no value limit — bump record total/rest by the new deadline amount.
-        await onAddToRecordTotal(deadlineValue);
+        await onAddToRecordTotal(deadlineValue, verifiedAdminPassword);
       }
       await createInstallment(procedureType, purchase.id, {
         balance: deadlineValue,
@@ -853,7 +853,7 @@ export default function ServicePaymentForm({
     try {
       // Keep the parent record total in sync when a deadline is edited upward or downward.
       if (onAddToRecordTotal && Math.abs(delta) > 0.005) {
-        await onAddToRecordTotal(delta);
+        await onAddToRecordTotal(delta, verifiedAdminPassword);
       } else if (delta > 0.001 && !onAddToRecordTotal) {
         setModifyError(
           `Total of all deadlines (€${newGrandTotal.toFixed(2)}) would exceed original cost (€${purchase.value.toFixed(2)}).`,

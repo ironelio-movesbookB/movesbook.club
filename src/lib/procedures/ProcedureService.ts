@@ -766,6 +766,7 @@ export class ProcedureService {
     input: {
       recordDate?: string;
       dueDate?: string | null;
+      expenseExpirationDate?: string | null;
       notes?: string;
       operatorId?: string;
       totalAmount?: number;
@@ -794,6 +795,21 @@ export class ProcedureService {
     if (input.recordDate) data.recordDate = toDateOnly(input.recordDate);
     if (input.dueDate !== undefined)
       data.dueDate = input.dueDate ? toDateOnly(input.dueDate) : null;
+    if (
+      procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE &&
+      input.expenseExpirationDate !== undefined
+    ) {
+      const metadata =
+        record.metadata &&
+        typeof record.metadata === 'object' &&
+        !Array.isArray(record.metadata)
+          ? (record.metadata as Record<string, Prisma.JsonValue>)
+          : {};
+      data.metadata = {
+        ...metadata,
+        expenseExpirationDate: input.expenseExpirationDate || null,
+      } as Prisma.InputJsonValue;
+    }
     if (input.notes !== undefined) data.notes = input.notes;
     if (input.operatorId) data.operatorId = input.operatorId;
     if (input.totalAmount !== undefined) {

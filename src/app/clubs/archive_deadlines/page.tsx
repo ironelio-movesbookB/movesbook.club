@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
 import ProcedureArchiveTabs from '@/components/procedures/ProcedureArchiveTabs';
 import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable';
@@ -142,6 +142,16 @@ export default function ArchiveDeadlinesPage() {
 
 function ArchiveDeadlinesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [procedureType, setProcedureType] = useState<string | undefined>(
+    () => searchParams?.get('procedureType') ?? undefined,
+  );
+  const [selectedDirection, setSelectedDirection] = useState<'IN' | 'OUT' | null>(
+    () => {
+      const direction = searchParams?.get('direction');
+      return direction === 'IN' || direction === 'OUT' ? direction : null;
+    },
+  );
   const scope = useArchiveScope();
   const filters = useArchiveListFilters();
   const [data, setData] = useState<Member[]>([]);
@@ -200,6 +210,8 @@ function ArchiveDeadlinesPageInner() {
         expandDeadlines: displayEveryDeadline,
         ...scope.filters,
         ...filters.applied,
+        procedureType,
+        direction: selectedDirection ?? undefined,
       });
       setTotal(res.total);
       setData(
@@ -225,6 +237,8 @@ function ArchiveDeadlinesPageInner() {
     displayEveryDeadline,
     scope.filters,
     filters.applied,
+    procedureType,
+    selectedDirection,
     requestPassword,
     openEdit,
     performDelete,
@@ -236,7 +250,10 @@ function ArchiveDeadlinesPageInner() {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied, scope.filters]);
+    setSelectedId(null);
+    setSelectedRows(new Map());
+    setSelectionError('');
+  }, [filters.applied, scope.filters, procedureType, selectedDirection]);
 
   const checkedIds = useMemo(() => new Set(selectedRows.keys()), [selectedRows]);
   const checkedRows = useMemo(() => Array.from(selectedRows.values()), [selectedRows]);
@@ -255,6 +272,30 @@ function ArchiveDeadlinesPageInner() {
   function clearSelection() {
     setSelectedRows(new Map());
     setSelectionError('');
+  }
+
+  function selectProcedureType(nextProcedureType: string | null) {
+    setProcedureType(nextProcedureType ?? undefined);
+    setSelectedDirection(null);
+    setPage(1);
+    setSelectedId(null);
+    clearSelection();
+  }
+
+  function selectDirection(direction: 'IN' | 'OUT') {
+    setProcedureType(undefined);
+    setSelectedDirection(direction);
+    setPage(1);
+    setSelectedId(null);
+    clearSelection();
+  }
+
+  function showWholeDeadlines() {
+    setProcedureType(undefined);
+    setSelectedDirection(null);
+    setPage(1);
+    setSelectedId(null);
+    clearSelection();
   }
 
   function toggleSelect(row: Member) {
@@ -284,6 +325,8 @@ function ArchiveDeadlinesPageInner() {
         expandDeadlines: displayEveryDeadline,
         ...scope.filters,
         ...filters.applied,
+        procedureType,
+        direction: selectedDirection ?? undefined,
       });
       setSelectedRows(
         new Map(
@@ -358,9 +401,24 @@ function ArchiveDeadlinesPageInner() {
       title="Archive of Deadlines"
       activeTab="deadlines"
       tabs={tabs}
+      headerAction={
+        <button
+          type="button"
+          onClick={showWholeDeadlines}
+          className="rounded border border-white/80 px-3 py-1 text-sm font-semibold text-white hover:bg-white/10"
+        >
+          Whole deadlines
+        </button>
+      }
       tabActions={
         <div className="w-full">
-          <DeadlineTypologyNav />
+          <DeadlineTypologyNav
+            expensesActive={procedureType === 'expense'}
+            selectedProcedureType={procedureType ?? null}
+            onSelectProcedureType={selectProcedureType}
+            selectedDirection={selectedDirection}
+            onSelectDirection={selectDirection}
+          />
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
             <ProcedureArchiveTabs tabs={tabs} activeTab="deadlines" />
             <div className="flex items-center gap-4 pb-2 shrink-0">

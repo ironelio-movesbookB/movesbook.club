@@ -43,6 +43,10 @@ function parseArchiveParams(
     fromDate: sp.get('fromDate') ?? undefined,
     toDate: sp.get('toDate') ?? undefined,
     orderBy: (sp.get('orderBy') as 'recent' | 'old') ?? undefined,
+    direction: (() => {
+      const direction = sp.get('direction');
+      return direction === 'IN' || direction === 'OUT' ? direction : undefined;
+    })(),
     memberId: sp.get('memberId') ?? undefined,
     productId: sp.get('productId') ?? undefined,
     recordId: sp.get('recordId') ?? undefined,

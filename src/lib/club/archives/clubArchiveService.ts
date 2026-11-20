@@ -1361,6 +1361,11 @@ const UNIFIED_PROCEDURE_TYPES = [
   PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION,
 ] as const;
 
+const UNIFIED_DEADLINE_PROCEDURE_TYPES = [
+  ...UNIFIED_PROCEDURE_TYPES,
+  PROCEDURE_TYPE_CODES.MEMBER_CREDIT,
+] as const;
+
 type UnifiedDeadlineRecord = Awaited<
   ReturnType<typeof procedureService.listRecords>
 >['items'][number];
@@ -1375,6 +1380,13 @@ function deadlineRecordRow(
     String(meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? '').trim() ||
     '-';
   const secondary = String(meta.sectorName ?? meta.typologyName ?? '').trim() || '';
+  const recurrence = meta.expenseRecurrence;
+  const isScheduledExpense =
+    recurrence !== null &&
+    typeof recurrence === 'object' &&
+    !Array.isArray(recurrence) &&
+    (recurrence as Record<string, unknown>).enabled === true &&
+    meta.recurrentActivated !== true;
   return {
     id: r.id,
     userId: r.memberId,
@@ -1383,6 +1395,25 @@ function deadlineRecordRow(
     image: r.memberImage,
     typology: getProcedureTypology(procedureType),
     procedureType,
+    direction:
+      procedureType === PROCEDURE_TYPE_CODES.EXPENSE
+        ? String(meta.expenseDirection ?? '').trim().toUpperCase() === 'IN'
+          ? 'IN'
+          : 'OUT'
+        : getProcedureDirection(procedureType),
+    expenseDirection:
+      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
+      String(meta.expenseDirection ?? '').trim().toUpperCase() === 'IN'
+        ? 'IN'
+        : procedureType === PROCEDURE_TYPE_CODES.EXPENSE
+          ? 'OUT'
+          : undefined,
+    isRecurringOccurrence:
+      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
+      meta.isRecurringOccurrence === true,
+    isRecurrent:
+      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
+      (meta.isRecurringOccurrence === true || isScheduledExpense),
     procedureRecordId: r.id,
     service: primary,
     course: secondary || undefined,
@@ -1454,7 +1485,13 @@ export async function listUnifiedDeadlines(
   const pageSize = params.pageSize ?? 25;
   const records: { procedureType: string; record: UnifiedDeadlineRecord }[] = [];
 
-  for (const procedureType of UNIFIED_PROCEDURE_TYPES) {
+  const procedureTypes = params.procedureType
+    ? UNIFIED_DEADLINE_PROCEDURE_TYPES.filter(
+        (type) => type === params.procedureType,
+      )
+    : UNIFIED_DEADLINE_PROCEDURE_TYPES;
+
+  for (const procedureType of procedureTypes) {
     const res = await procedureService
       .listRecords(
         ctx,

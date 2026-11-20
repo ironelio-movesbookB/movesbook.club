@@ -65,6 +65,10 @@ export type Member = {
   operator?: string;
   /** Operator id behind `operator` — needed to preselect the operator when editing a row. */
   operatorId?: string;
+  /** Direction of an expense record in the expense archive. */
+  expenseDirection?: 'IN' | 'OUT';
+  /** Payment direction for cash-movement rows. */
+  direction?: 'IN' | 'OUT';
   /** Club staff type when row comes from club_staff (coadmin/operator/collaborator). */
   staffType?: string | null;
   /** Club staff employment area / role when row comes from club_staff. */
