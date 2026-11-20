@@ -100,7 +100,7 @@ export default function DashboardStyleBanners({
   return (
     <>
       {showAdBanner ? (
-        <div className="flex-shrink-0 px-4">
+        <div className="mb-4 flex-shrink-0 px-4">
           <AdvertisementCarousel />
         </div>
       ) : null}

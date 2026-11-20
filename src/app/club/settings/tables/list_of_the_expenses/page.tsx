@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -9,19 +9,131 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ChevronUp,
+  AlarmClock,
+  BarChart3,
+  Bell,
+  Book,
+  Bookmark,
+  Briefcase,
+  Camera,
+  CircleDollarSign,
+  ClipboardList,
+  Clock3,
+  Cloud,
+  Contact,
+  Copy,
+  CreditCard,
+  Eye,
+  File,
+  Filter,
+  Globe2,
+  GraduationCap,
+  Hand,
+  HeartHandshake,
+  HelpCircle,
+  Hourglass,
+  Info,
+  Landmark,
+  Laptop,
+  LayoutGrid,
+  Lightbulb,
+  Link,
   Loader2,
+  MapPin,
+  Medal,
+  Megaphone,
+  Monitor,
+  MoonStar,
+  MousePointer2,
   Pencil,
+  Paperclip,
+  PlaySquare,
   Plus,
+  Printer,
+  Receipt,
   Search,
+  ScanFace,
+  Send,
+  Settings,
+  ShoppingCart,
+  SlidersHorizontal,
+  Smartphone,
+  Sparkles,
+  Store,
+  Sun,
+  Tag,
+  Ticket,
   Trash2,
-  X,
-} from "lucide-react";
-import TablesTabs from "@/components/club-settings/TablesTabs";
-import {
-  EXPENSE_ICON_OPTIONS,
-  ExpenseCategoryIcon,
-  type ExpenseIconName,
-} from "@/components/club/expenses/ExpenseCategoryIcon";
+  Trophy,
+  User,
+  UserPlus,
+  Users,
+  WalletCards,
+  Wand2,
+  X
+} from 'lucide-react';
+import TablesTabs from '@/components/club-settings/TablesTabs';
+
+const EXPENSE_ICON_OPTIONS = [
+  { value: 'sliders', label: 'Controls', Icon: SlidersHorizontal },
+  { value: 'eye', label: 'View', Icon: Eye },
+  { value: 'bell', label: 'Notifications', Icon: Bell },
+  { value: 'alarm', label: 'Alarm', Icon: AlarmClock },
+  { value: 'heartHandshake', label: 'Handshake', Icon: HeartHandshake },
+  { value: 'wand', label: 'Magic wand', Icon: Wand2 },
+  { value: 'sparkles', label: 'Sparkles', Icon: Sparkles },
+  { value: 'trophy', label: 'Trophy', Icon: Trophy },
+  { value: 'settings', label: 'Settings', Icon: Settings },
+  { value: 'printer', label: 'Printer', Icon: Printer },
+  { value: 'cloud', label: 'Cloud', Icon: Cloud },
+  { value: 'send', label: 'Send', Icon: Send },
+  { value: 'tag', label: 'Tag', Icon: Tag },
+  { value: 'pin', label: 'Pin', Icon: MapPin },
+  { value: 'file', label: 'File', Icon: File },
+  { value: 'copy', label: 'Copy', Icon: Copy },
+  { value: 'bookmark', label: 'Bookmark', Icon: Bookmark },
+  { value: 'grid', label: 'Grid', Icon: LayoutGrid },
+  { value: 'contact', label: 'Contact', Icon: Contact },
+  { value: 'scanFace', label: 'Face scan', Icon: ScanFace },
+  { value: 'user', label: 'User', Icon: User },
+  { value: 'users', label: 'Users', Icon: Users },
+  { value: 'userPlus', label: 'Add user', Icon: UserPlus },
+  { value: 'clock', label: 'Clock', Icon: Clock3 },
+  { value: 'globe', label: 'Globe', Icon: Globe2 },
+  { value: 'shoppingCart', label: 'Shopping cart', Icon: ShoppingCart },
+  { value: 'info', label: 'Information', Icon: Info },
+  { value: 'help', label: 'Help', Icon: HelpCircle },
+  { value: 'chart', label: 'Chart', Icon: BarChart3 },
+  { value: 'megaphone', label: 'Megaphone', Icon: Megaphone },
+  { value: 'link', label: 'Link', Icon: Link },
+  { value: 'paperclip', label: 'Attachment', Icon: Paperclip },
+  { value: 'hourglass', label: 'Hourglass', Icon: Hourglass },
+  { value: 'play', label: 'Video', Icon: PlaySquare },
+  { value: 'store', label: 'Store', Icon: Store },
+  { value: 'walletCards', label: 'Wallet', Icon: WalletCards },
+  { value: 'hand', label: 'Hand', Icon: Hand },
+  { value: 'pointer', label: 'Pointer', Icon: MousePointer2 },
+  { value: 'filter', label: 'Filter', Icon: Filter },
+  { value: 'lightbulb', label: 'Lightbulb', Icon: Lightbulb },
+  { value: 'landmark', label: 'Landmark', Icon: Landmark },
+  { value: 'card', label: 'Card', Icon: CreditCard },
+  { value: 'briefcase', label: 'Briefcase', Icon: Briefcase },
+  { value: 'graduation', label: 'Graduation', Icon: GraduationCap },
+  { value: 'dollar', label: 'Money', Icon: CircleDollarSign },
+  { value: 'receipt', label: 'Receipt', Icon: Receipt },
+  { value: 'ticket', label: 'Ticket', Icon: Ticket },
+  { value: 'medal', label: 'Medal', Icon: Medal },
+  { value: 'smartphone', label: 'Phone', Icon: Smartphone },
+  { value: 'monitor', label: 'Monitor', Icon: Monitor },
+  { value: 'laptop', label: 'Laptop', Icon: Laptop },
+  { value: 'camera', label: 'Camera', Icon: Camera },
+  { value: 'moon', label: 'Night', Icon: MoonStar },
+  { value: 'sun', label: 'Day', Icon: Sun },
+  { value: 'book', label: 'Book', Icon: Book },
+  { value: 'clipboard', label: 'Clipboard', Icon: ClipboardList }
+] as const;
+
+type ExpenseIconName = (typeof EXPENSE_ICON_OPTIONS)[number]['value'];
 
 type ExpenseChild = {
   id: string;
@@ -53,66 +165,47 @@ type ExpenseDraft = {
   color: string | null;
 };
 
-type FieldErrors = Partial<Record<"name" | "parentId" | "icon" | "color", string>>;
-type PageItem = number | "ellipsis-left" | "ellipsis-right";
-type SortKey = "name" | "modified";
-type SortDirection = "asc" | "desc";
+type FieldErrors = Partial<Record<'name' | 'parentId' | 'icon' | 'color', string>>;
+type PageItem = number | 'ellipsis-left' | 'ellipsis-right';
+type SortKey = 'name' | 'modified';
+type SortDirection = 'asc' | 'desc';
 
-const API_PATH = "/api/club/settings/tables/expenses";
+const API_PATH = '/api/club/settings/tables/expenses';
 const PAGE_SIZE_OPTIONS = [5, 10, 15, 20] as const;
 
-function getSmartPageItems(
-  currentPage: number,
-  totalPages: number,
-): PageItem[] {
+function getSmartPageItems(currentPage: number, totalPages: number): PageItem[] {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
   }
 
   if (currentPage <= 4) {
-    return [1, 2, 3, 4, 5, "ellipsis-right", totalPages];
+    return [1, 2, 3, 4, 5, 'ellipsis-right', totalPages];
   }
 
   if (currentPage >= totalPages - 3) {
-    return [
-      1,
-      "ellipsis-left",
-      totalPages - 4,
-      totalPages - 3,
-      totalPages - 2,
-      totalPages - 1,
-      totalPages,
-    ];
+    return [1, 'ellipsis-left', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
   }
 
-  return [
-    1,
-    "ellipsis-left",
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-    "ellipsis-right",
-    totalPages,
-  ];
+  return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages];
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return "-";
+  if (!value) return '-';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit'
   }).format(date);
 }
 
 function validateDraft(draft: ExpenseDraft): FieldErrors {
   const errors: FieldErrors = {};
   if (!draft.name.trim()) {
-    errors.name = "Please enter expense name.";
+    errors.name = 'Please enter expense name.';
   } else if (draft.name.trim().length > 250) {
-    errors.name = "Expense name must be 250 characters or fewer.";
+    errors.name = 'Expense name must be 250 characters or fewer.';
   }
   return errors;
 }
@@ -124,41 +217,37 @@ export default function ClubTablesListOfExpensesPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [pageSize, setPageSize] = useState(5);
   const [page, setPage] = useState(1);
-  const [sortKey, setSortKey] = useState<SortKey>("modified");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>('modified');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [expandAll, setExpandAll] = useState(false);
   const [draft, setDraft] = useState<ExpenseDraft | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: string;
-    name: string;
-    isSubExpense: boolean;
-  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; isSubExpense: boolean } | null>(null);
 
   const loadItems = async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem('token');
       const response = await fetch(API_PATH, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        signal,
+        signal
       });
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.error || "Unable to load expenses.");
+        throw new Error(data?.error || 'Unable to load expenses.');
       }
 
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Unable to load expenses.");
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : 'Unable to load expenses.');
     } finally {
       setLoading(false);
     }
@@ -173,38 +262,29 @@ export default function ClubTablesListOfExpensesPage() {
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
     const filtered = term
-      ? items.filter(
-          (group) =>
-            group.name.toLowerCase().includes(term) ||
-            group.children.some((child) =>
-              child.name.toLowerCase().includes(term),
-            ),
-        )
+      ? items.filter((group) =>
+        group.name.toLowerCase().includes(term)
+        || group.children.some((child) => child.name.toLowerCase().includes(term))
+      )
       : items;
 
     return [...filtered].sort((a, b) => {
-      if (sortKey === "name") {
-        const result = a.name.localeCompare(b.name, undefined, {
-          sensitivity: "base",
-        });
-        return sortDirection === "asc" ? result : -result;
+      if (sortKey === 'name') {
+        const result = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        return sortDirection === 'asc' ? result : -result;
       }
 
       const aTime = new Date(a.modified || a.created || 0).getTime();
       const bTime = new Date(b.modified || b.created || 0).getTime();
       const result = aTime - bTime;
-      return sortDirection === "asc" ? result : -result;
+      return sortDirection === 'asc' ? result : -result;
     });
   }, [items, search, sortDirection, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pageItems = filteredItems.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
-  const visibleStart =
-    filteredItems.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageItems = filteredItems.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visibleStart = filteredItems.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const visibleEnd = Math.min(currentPage * pageSize, filteredItems.length);
 
   useEffect(() => {
@@ -213,12 +293,12 @@ export default function ClubTablesListOfExpensesPage() {
 
   const updateSort = (key: SortKey) => {
     if (sortKey === key) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      setSortDirection((current) => current === 'asc' ? 'desc' : 'asc');
       return;
     }
 
     setSortKey(key);
-    setSortDirection(key === "name" ? "asc" : "desc");
+    setSortDirection(key === 'name' ? 'asc' : 'desc');
   };
 
   const toggleExpanded = (id: string) => {
@@ -247,30 +327,27 @@ export default function ClubTablesListOfExpensesPage() {
   const isExpanded = (id: string) => expandAll || expandedIds.has(id);
 
   const openAddParentModal = () => {
-    setDraft({ name: "", parentId: "0", isSubExpense: false, icon: null, color: '#0f766e' });
+    setDraft({ name: '', parentId: '0', isSubExpense: false, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
   };
 
   const openAddSubModal = (parentId: string) => {
-    setDraft({ name: "", parentId, isSubExpense: true, icon: null, color: '#0f766e' });
+    setDraft({ name: '', parentId, isSubExpense: true, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
   };
 
-  const openEditModal = (
-    item: ExpenseGroup | ExpenseChild,
-    isSubExpense: boolean,
-  ) => {
+  const openEditModal = (item: ExpenseGroup | ExpenseChild, isSubExpense: boolean) => {
     setDraft({
       id: item.id,
       name: item.name,
       parentId: item.parentId,
       isSubExpense,
       icon: item.icon,
-      color: item.color,
+      color: item.color
     });
     setFieldErrors({});
     setError(null);
@@ -295,29 +372,29 @@ export default function ClubTablesListOfExpensesPage() {
       setError(null);
       setSuccess(null);
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem('token');
       const response = await fetch(API_PATH, {
-        method: draft.id ? "PUT" : "POST",
+        method: draft.id ? 'PUT' : 'POST',
         headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           id: draft.id,
           name: draft.name.trim(),
-          parentId: draft.isSubExpense ? draft.parentId : "0",
+          parentId: draft.isSubExpense ? draft.parentId : '0',
           icon: draft.icon,
-          color: draft.color,
-        }),
+          color: draft.color
+        })
       });
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (data?.fieldErrors && typeof data.fieldErrors === "object") {
+        if (data?.fieldErrors && typeof data.fieldErrors === 'object') {
           setFieldErrors(data.fieldErrors);
           return;
         }
-        throw new Error(data?.error || "Unable to save expense.");
+        throw new Error(data?.error || 'Unable to save expense.');
       }
 
       await loadItems();
@@ -325,13 +402,9 @@ export default function ClubTablesListOfExpensesPage() {
         setExpandedIds((current) => new Set(current).add(draft.parentId));
       }
       closeModal();
-      setSuccess(
-        draft.id
-          ? "Expense edited successfully."
-          : "Expense added successfully.",
-      );
+      setSuccess(draft.id ? 'Expense edited successfully.' : 'Expense added successfully.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save expense.");
+      setError(err instanceof Error ? err.message : 'Unable to save expense.');
     } finally {
       setSaving(false);
     }
@@ -345,27 +418,22 @@ export default function ClubTablesListOfExpensesPage() {
       setError(null);
       setSuccess(null);
 
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_PATH}?id=${encodeURIComponent(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        },
-      );
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_PATH}?id=${encodeURIComponent(deleteTarget.id)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.error || "Unable to delete expense.");
+        throw new Error(data?.error || 'Unable to delete expense.');
       }
 
       await loadItems();
       setDeleteTarget(null);
-      setSuccess("Expense deleted successfully.");
+      setSuccess('Expense deleted successfully.');
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to delete expense.",
-      );
+      setError(err instanceof Error ? err.message : 'Unable to delete expense.');
     } finally {
       setDeleting(false);
     }
@@ -378,9 +446,7 @@ export default function ClubTablesListOfExpensesPage() {
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h1 className="text-xl font-semibold text-gray-950">Tables</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Club&apos;s management / General settings / List of the expenses
-              </p>
+              <p className="mt-1 text-sm text-gray-500">Club&apos;s management / General settings / List of the expenses</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -394,15 +460,10 @@ export default function ClubTablesListOfExpensesPage() {
               </div>
               <ToolbarButton
                 icon={expandAll ? ChevronUp : ChevronDown}
-                label={expandAll ? "Collapse all" : "Expand all"}
+                label={expandAll ? 'Collapse all' : 'Expand all'}
                 onClick={toggleExpandAll}
               />
-              <ToolbarButton
-                icon={Plus}
-                label="Add expense"
-                onClick={openAddParentModal}
-                variant="dark"
-              />
+              <ToolbarButton icon={Plus} label="Add expense" onClick={openAddParentModal} variant="dark" />
             </div>
           </div>
 
@@ -415,39 +476,23 @@ export default function ClubTablesListOfExpensesPage() {
                 className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 outline-none focus:border-gray-500"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
+                  <option key={size} value={size}>{size}</option>
                 ))}
               </select>
               <span>per page</span>
               <span className="ml-1 text-gray-400">|</span>
               <span>
-                Showing{" "}
-                <strong className="font-semibold text-gray-900">
-                  {visibleStart}-{visibleEnd}
-                </strong>{" "}
-                of{" "}
-                <strong className="font-semibold text-gray-900">
-                  {filteredItems.length}
-                </strong>
+                Showing <strong className="font-semibold text-gray-900">{visibleStart}-{visibleEnd}</strong> of{' '}
+                <strong className="font-semibold text-gray-900">{filteredItems.length}</strong>
               </span>
             </div>
-            <SmartPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setPage}
-            />
+            <SmartPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
           </div>
 
           {(error || success) && (
-            <div
-              className={`mt-4 rounded-md border px-3 py-2 text-sm ${
-                error
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}
-            >
+            <div className={`mt-4 rounded-md border px-3 py-2 text-sm ${
+              error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
               {error || success}
             </div>
           )}
@@ -472,18 +517,8 @@ export default function ClubTablesListOfExpensesPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               <div className="grid grid-cols-[1fr_9rem_8rem] gap-2 border-b border-gray-200 bg-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">
-                <SortHeader
-                  label="Expenses name"
-                  active={sortKey === "name"}
-                  direction={sortDirection}
-                  onClick={() => updateSort("name")}
-                />
-                <SortHeader
-                  label="Modified"
-                  active={sortKey === "modified"}
-                  direction={sortDirection}
-                  onClick={() => updateSort("modified")}
-                />
+                <SortHeader label="Expenses name" active={sortKey === 'name'} direction={sortDirection} onClick={() => updateSort('name')} />
+                <SortHeader label="Modified" active={sortKey === 'modified'} direction={sortDirection} onClick={() => updateSort('modified')} />
                 <span className="text-right">Actions</span>
               </div>
 
@@ -495,22 +530,17 @@ export default function ClubTablesListOfExpensesPage() {
                         type="button"
                         onClick={() => toggleExpanded(group.id)}
                         className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
-                        aria-label={
-                          isExpanded(group.id)
-                            ? "Collapse sub-expenses"
-                            : "Expand sub-expenses"
-                        }
-                        title={isExpanded(group.id) ? "Collapse" : "Expand"}
+                        aria-label={isExpanded(group.id) ? 'Collapse sub-expenses' : 'Expand sub-expenses'}
+                        title={isExpanded(group.id) ? 'Collapse' : 'Expand'}
                       >
-                        {isExpanded(group.id) ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
+                        {isExpanded(group.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
-                      <ExpenseCategoryIcon
-                        name={group.icon}
-                        className="h-4 w-4 shrink-0 text-gray-500"
+                      <ExpenseIconView name={group.icon} className="h-4 w-4 shrink-0 text-gray-500" />
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                        style={{ backgroundColor: group.color ?? '#0f766e' }}
+                        title={`Chart color ${group.color ?? 'default'}`}
+                        aria-hidden="true"
                       />
                       <span
                         className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
@@ -527,29 +557,13 @@ export default function ClubTablesListOfExpensesPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-sm text-gray-600">
-                      {formatDate(group.modified || group.created)}
-                    </span>
+                    <span className="text-sm text-gray-600">{formatDate(group.modified || group.created)}</span>
                     <div className="flex justify-end gap-2">
-                      <IconButton
-                        label="Add sub-expense"
-                        onClick={() => openAddSubModal(group.id)}
-                        icon={<Plus className="h-4 w-4" />}
-                      />
-                      <IconButton
-                        label="Edit expense"
-                        onClick={() => openEditModal(group, false)}
-                        icon={<Pencil className="h-4 w-4" />}
-                      />
+                      <IconButton label="Add sub-expense" onClick={() => openAddSubModal(group.id)} icon={<Plus className="h-4 w-4" />} />
+                      <IconButton label="Edit expense" onClick={() => openEditModal(group, false)} icon={<Pencil className="h-4 w-4" />} />
                       <IconButton
                         label="Delete expense"
-                        onClick={() =>
-                          setDeleteTarget({
-                            id: group.id,
-                            name: group.name,
-                            isSubExpense: false,
-                          })
-                        }
+                        onClick={() => setDeleteTarget({ id: group.id, name: group.name, isSubExpense: false })}
                         icon={<Trash2 className="h-4 w-4" />}
                         danger
                       />
@@ -564,9 +578,12 @@ export default function ClubTablesListOfExpensesPage() {
                           className="grid grid-cols-[1fr_9rem_8rem] items-center gap-2 rounded-md border border-amber-200/80 bg-amber-50 px-3 py-3"
                         >
                           <div className="flex min-w-0 items-center gap-2">
-                            <ExpenseCategoryIcon
-                              name={child.icon}
-                              className="h-4 w-4 shrink-0 text-gray-500"
+                            <ExpenseIconView name={child.icon} className="h-4 w-4 shrink-0 text-gray-500" />
+                            <span
+                              className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                              style={{ backgroundColor: child.color ?? '#0f766e' }}
+                              title={`Chart color ${child.color ?? 'default'}`}
+                              aria-hidden="true"
                             />
                             <span
                               className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
@@ -578,24 +595,12 @@ export default function ClubTablesListOfExpensesPage() {
                               {child.name}
                             </span>
                           </div>
-                          <span className="text-sm text-gray-600">
-                            {formatDate(child.modified || child.created)}
-                          </span>
+                          <span className="text-sm text-gray-600">{formatDate(child.modified || child.created)}</span>
                           <div className="flex justify-end gap-2">
-                            <IconButton
-                              label="Edit sub-expense"
-                              onClick={() => openEditModal(child, true)}
-                              icon={<Pencil className="h-4 w-4" />}
-                            />
+                            <IconButton label="Edit sub-expense" onClick={() => openEditModal(child, true)} icon={<Pencil className="h-4 w-4" />} />
                             <IconButton
                               label="Delete sub-expense"
-                              onClick={() =>
-                                setDeleteTarget({
-                                  id: child.id,
-                                  name: child.name,
-                                  isSubExpense: true,
-                                })
-                              }
+                              onClick={() => setDeleteTarget({ id: child.id, name: child.name, isSubExpense: true })}
                               icon={<Trash2 className="h-4 w-4" />}
                               danger
                             />
@@ -612,68 +617,38 @@ export default function ClubTablesListOfExpensesPage() {
       </section>
 
       {draft && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6"
-          role="dialog"
-          aria-modal="true"
-        >
-          <form
-            onSubmit={saveDraft}
-            className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-md bg-white shadow-xl"
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" role="dialog" aria-modal="true">
+          <form onSubmit={saveDraft} className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-md bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-950">
                 {draft.id
-                  ? draft.isSubExpense
-                    ? "Edit sub-expense"
-                    : "Edit expense"
-                  : draft.isSubExpense
-                    ? "Add sub-expense"
-                    : "Add expense"}
+                  ? draft.isSubExpense ? 'Edit sub-expense' : 'Edit expense'
+                  : draft.isSubExpense ? 'Add sub-expense' : 'Add expense'}
               </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                aria-label="Close"
-              >
+              <button type="button" onClick={closeModal} className="rounded p-1 text-gray-500 hover:bg-gray-100" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="space-y-5 px-5 py-5">
               <Field
-                label={draft.isSubExpense ? "Sub category" : "Name"}
+                label={draft.isSubExpense ? 'Sub category' : 'Name'}
                 value={draft.name}
                 error={fieldErrors.name}
-                placeholder={
-                  draft.isSubExpense ? "Sub expense name" : "Expense name"
-                }
+                placeholder={draft.isSubExpense ? 'Sub expense name' : 'Expense name'}
                 onChange={(value) => {
                   setDraft({ ...draft, name: value });
-                  setFieldErrors((current) => ({
-                    ...current,
-                    name: undefined,
-                  }));
+                  setFieldErrors((current) => ({ ...current, name: undefined }));
                 }}
               />
               <ExpenseIconPicker
                 selectedIcon={draft.icon}
                 error={fieldErrors.icon}
                 onSelect={(icon) => {
-                  setDraft((current) =>
-                    current ? { ...current, icon } : current,
-                  );
-                  setFieldErrors((current) => ({
-                    ...current,
-                    icon: undefined,
-                  }));
+                  setDraft((current) => current ? { ...current, icon } : current);
+                  setFieldErrors((current) => ({ ...current, icon: undefined }));
                 }}
-                onClear={() =>
-                  setDraft((current) =>
-                    current ? { ...current, icon: null } : current,
-                  )
-                }
+                onClear={() => setDraft((current) => current ? { ...current, icon: null } : current)}
               />
               <div className="space-y-2">
                 <label htmlFor="expense-chart-color" className="text-xs font-semibold uppercase tracking-wide text-gray-600">
@@ -706,23 +681,11 @@ export default function ClubTablesListOfExpensesPage() {
             </div>
 
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
+              <button type="button" onClick={closeModal} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Save
               </button>
             </div>
@@ -731,44 +694,25 @@ export default function ClubTablesListOfExpensesPage() {
       )}
 
       {deleteTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6"
-          role="dialog"
-          aria-modal="true"
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" role="dialog" aria-modal="true">
           <div className="w-full max-w-lg rounded-md bg-white shadow-xl">
             <div className="border-b border-gray-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-gray-950">
-                Delete expense
-              </h2>
+              <h2 className="text-lg font-semibold text-gray-950">Delete expense</h2>
             </div>
             <div className="space-y-3 px-5 py-5 text-sm text-gray-700">
               <p className="font-medium text-gray-950">{deleteTarget.name}</p>
               <p>
                 {deleteTarget.isSubExpense
-                  ? "This sub-expense will be removed from the list."
-                  : "This expense will be removed. Sub-expenses linked to it may remain in the database."}
+                  ? 'This sub-expense will be removed from the list.'
+                  : 'This expense will be removed. Sub-expenses linked to it may remain in the database.'}
               </p>
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
+              <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                disabled={deleting}
-                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
+              <button type="button" onClick={confirmDelete} disabled={deleting} className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Delete
               </button>
             </div>
@@ -779,26 +723,29 @@ export default function ClubTablesListOfExpensesPage() {
   );
 }
 
+function ExpenseIconView({ name, className }: { name: ExpenseIconName | null; className: string }) {
+  const option = EXPENSE_ICON_OPTIONS.find((item) => item.value === name);
+  if (!option) return null;
+  const Icon = option.Icon;
+  return <Icon aria-hidden="true" className={className} />;
+}
+
 function ExpenseIconPicker({
   selectedIcon,
   error,
   onSelect,
-  onClear,
+  onClear
 }: {
   selectedIcon: ExpenseIconName | null;
   error?: string;
   onSelect: (icon: ExpenseIconName) => void;
   onClear: () => void;
 }) {
-  const selectedOption = EXPENSE_ICON_OPTIONS.find(
-    (item) => item.value === selectedIcon,
-  );
+  const selectedOption = EXPENSE_ICON_OPTIONS.find((item) => item.value === selectedIcon);
 
   return (
     <fieldset className="space-y-2">
-      <legend className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-        Expense icon
-      </legend>
+      <legend className="text-xs font-semibold uppercase tracking-wide text-gray-600">Expense icon</legend>
       <div className="grid grid-cols-8 gap-2">
         {EXPENSE_ICON_OPTIONS.map(({ value, label, Icon }) => {
           const selected = selectedIcon === value;
@@ -812,8 +759,8 @@ function ExpenseIconPicker({
               title={label}
               className={`flex aspect-square min-w-0 items-center justify-center rounded-md border transition ${
                 selected
-                  ? "border-gray-900 bg-gray-900 text-white"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
               }`}
             >
               <Icon aria-hidden="true" className="h-5 w-5" />
@@ -823,23 +770,15 @@ function ExpenseIconPicker({
       </div>
       <div className="flex min-h-5 items-center justify-between gap-3">
         <span className="text-xs text-gray-500">
-          {selectedOption
-            ? `${selectedOption.label} selected`
-            : "No icon selected"}
+          {selectedOption ? `${selectedOption.label} selected` : 'No icon selected'}
         </span>
         {selectedIcon && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-xs font-semibold text-gray-600 hover:text-gray-950"
-          >
+          <button type="button" onClick={onClear} className="text-xs font-semibold text-gray-600 hover:text-gray-950">
             Clear
           </button>
         )}
       </div>
-      {error && (
-        <span className="block text-xs font-medium text-red-600">{error}</span>
-      )}
+      {error && <span className="block text-xs font-medium text-red-600">{error}</span>}
     </fieldset>
   );
 }
@@ -848,21 +787,21 @@ function ToolbarButton({
   icon: Icon,
   label,
   onClick,
-  variant = "default",
+  variant = 'default'
 }: {
   icon: typeof Plus;
   label: string;
   onClick: () => void;
-  variant?: "default" | "dark";
+  variant?: 'default' | 'dark';
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
-        variant === "dark"
-          ? "border-gray-800 bg-gray-900 text-white hover:bg-gray-800"
-          : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"
+        variant === 'dark'
+          ? 'border-gray-800 bg-gray-900 text-white hover:bg-gray-800'
+          : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -875,7 +814,7 @@ function IconButton({
   label,
   icon,
   onClick,
-  danger = false,
+  danger = false
 }: {
   label: string;
   icon: ReactNode;
@@ -888,8 +827,8 @@ function IconButton({
       onClick={onClick}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
         danger
-          ? "border-red-200 text-red-600 hover:bg-red-50"
-          : "border-gray-300 text-gray-700 hover:bg-gray-100"
+          ? 'border-red-200 text-red-600 hover:bg-red-50'
+          : 'border-gray-300 text-gray-700 hover:bg-gray-100'
       }`}
       title={label}
       aria-label={label}
@@ -903,7 +842,7 @@ function SortHeader({
   label,
   active,
   direction,
-  onClick,
+  onClick
 }: {
   label: string;
   active: boolean;
@@ -917,10 +856,8 @@ function SortHeader({
       className="inline-flex items-center gap-1 text-left font-semibold uppercase tracking-wide text-gray-600 transition hover:text-gray-950"
     >
       <span>{label}</span>
-      <span
-        className={`text-[10px] ${active ? "text-gray-950" : "text-gray-300"}`}
-      >
-        {active ? (direction === "asc" ? "▲" : "▼") : "↕"}
+      <span className={`text-[10px] ${active ? 'text-gray-950' : 'text-gray-300'}`}>
+        {active ? direction === 'asc' ? '▲' : '▼' : '↕'}
       </span>
     </button>
   );
@@ -931,7 +868,7 @@ function Field({
   value,
   onChange,
   error,
-  placeholder,
+  placeholder
 }: {
   label: string;
   value: string;
@@ -941,25 +878,17 @@ function Field({
 }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-        {label}
-      </span>
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</span>
       <input
         type="text"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         className={`h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-900 outline-none transition ${
-          error
-            ? "border-red-400 focus:border-red-500"
-            : "border-gray-300 focus:border-gray-500"
+          error ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
         }`}
       />
-      {error && (
-        <span className="mt-1 block text-xs font-medium text-red-600">
-          {error}
-        </span>
-      )}
+      {error && <span className="mt-1 block text-xs font-medium text-red-600">{error}</span>}
     </label>
   );
 }
@@ -967,7 +896,7 @@ function Field({
 function SmartPagination({
   currentPage,
   totalPages,
-  onPageChange,
+  onPageChange
 }: {
   currentPage: number;
   totalPages: number;
@@ -982,29 +911,13 @@ function SmartPagination({
   };
 
   return (
-    <nav
-      className="flex flex-wrap items-center gap-1"
-      aria-label="Expenses pagination"
-    >
-      <PaginationIconButton
-        label="First page"
-        disabled={!canGoBack}
-        onClick={() => goToPage(1)}
-        icon={<ChevronsLeft className="h-4 w-4" />}
-      />
-      <PaginationIconButton
-        label="Previous page"
-        disabled={!canGoBack}
-        onClick={() => goToPage(currentPage - 1)}
-        icon={<ChevronLeft className="h-4 w-4" />}
-      />
+    <nav className="flex flex-wrap items-center gap-1" aria-label="Expenses pagination">
+      <PaginationIconButton label="First page" disabled={!canGoBack} onClick={() => goToPage(1)} icon={<ChevronsLeft className="h-4 w-4" />} />
+      <PaginationIconButton label="Previous page" disabled={!canGoBack} onClick={() => goToPage(currentPage - 1)} icon={<ChevronLeft className="h-4 w-4" />} />
       {pageItems.map((item) => {
-        if (typeof item !== "number") {
+        if (typeof item !== 'number') {
           return (
-            <span
-              key={item}
-              className="flex h-9 w-9 items-center justify-center text-gray-400"
-            >
+            <span key={item} className="flex h-9 w-9 items-center justify-center text-gray-400">
               ...
             </span>
           );
@@ -1017,26 +930,16 @@ function SmartPagination({
             onClick={() => goToPage(item)}
             className={`h-9 min-w-9 rounded-md border px-3 text-sm font-semibold ${
               item === currentPage
-                ? "border-gray-900 bg-gray-900 text-white"
-                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                ? 'border-gray-900 bg-gray-900 text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
             {item}
           </button>
         );
       })}
-      <PaginationIconButton
-        label="Next page"
-        disabled={!canGoForward}
-        onClick={() => goToPage(currentPage + 1)}
-        icon={<ChevronRight className="h-4 w-4" />}
-      />
-      <PaginationIconButton
-        label="Last page"
-        disabled={!canGoForward}
-        onClick={() => goToPage(totalPages)}
-        icon={<ChevronsRight className="h-4 w-4" />}
-      />
+      <PaginationIconButton label="Next page" disabled={!canGoForward} onClick={() => goToPage(currentPage + 1)} icon={<ChevronRight className="h-4 w-4" />} />
+      <PaginationIconButton label="Last page" disabled={!canGoForward} onClick={() => goToPage(totalPages)} icon={<ChevronsRight className="h-4 w-4" />} />
     </nav>
   );
 }
@@ -1045,7 +948,7 @@ function PaginationIconButton({
   label,
   icon,
   onClick,
-  disabled,
+  disabled
 }: {
   label: string;
   icon: ReactNode;

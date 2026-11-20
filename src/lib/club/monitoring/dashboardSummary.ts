@@ -29,12 +29,7 @@ export type PreviewRow = {
   title: string;
   detail: string;
   date: string;
-  typology?: string;
-  paymentIn?: string;
-  paymentOut?: string;
-  paidTotal?: string;
-  rest?: string;
-  nr?: string;
+  fields: Record<string, string>;
   image?: string | null;
   surname?: string;
   firstName?: string;
@@ -46,6 +41,39 @@ export type PreviewRow = {
   /** yyyy-mm-dd, used to filter Birth Days and Day Names. */
   birthdate?: string;
 };
+
+function euro(value: unknown): string {
+  if (value == null || value === '') return '';
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '';
+  return `€${amount.toFixed(2)}`;
+}
+
+function cell(value: unknown): string {
+  if (value == null) return '';
+  return String(value);
+}
+
+function makePreviewRow(input: {
+  id: string;
+  title: string;
+  detail: string;
+  date: string;
+  fields?: Record<string, string>;
+}): PreviewRow {
+  return {
+    id: input.id,
+    title: input.title,
+    detail: input.detail,
+    date: input.date,
+    fields: {
+      name: input.title,
+      detail: input.detail,
+      date: input.date,
+      ...input.fields,
+    },
+  };
+}
 
 export type DashboardSnapshot = {
   counts: Record<SummaryTileId, number>;
@@ -396,28 +424,39 @@ function todayRange(): { fromDate: string; toDate: string } {
   return { fromDate: iso, toDate: iso };
 }
 
-function money(value: unknown): string {
-  if (value == null || value === '') return '';
-  const amount = Number(value);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '';
-}
-
 function mapArchiveRows(items: Record<string, unknown>[]): PreviewRow[] {
   return items.slice(0, PREVIEW_LIMIT).map((row, index) => {
-    const paid = money(row.paid ?? row.payed);
-    const total = money(row.value ?? row.originalDebt ?? row.debt);
-    return {
+    const title = cell(row.name ?? row.fullName) || '-';
+    const detail = cell(
+      row.service ?? row.typology ?? row.course ?? row.casual ?? row.outcome ?? row.status ?? '',
+    );
+    const date = cell(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate).slice(0, 10);
+    return makePreviewRow({
       id: String(row.id ?? index),
-      title: String(row.name ?? row.fullName ?? '-'),
-      typology: String(row.typology ?? row.memberType ?? ''),
-      detail: String(row.service ?? row.course ?? row.casual ?? row.outcome ?? row.status ?? ''),
-      date: String(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate ?? '').slice(0, 10),
-      paymentIn: paid,
-      paymentOut: money(row.cost),
-      paidTotal: paid || total ? `${paid || '0.00'} / ${total || '0.00'}` : '',
-      rest: money(row.rest ?? row.balanceAmount),
-      nr: String(row.deadlineNo ?? ''),
-    };
+      title,
+      detail,
+      date,
+      fields: {
+        typology: cell(row.typology),
+        service: cell(row.service) || detail,
+        course: cell(row.course),
+        paymentIn: euro(row.paymentIn),
+        payment: euro(row.paid ?? row.paymentOut ?? row.value),
+        cost: euro(row.value),
+        paid: euro(row.paid),
+        rest: euro(row.rest ?? row.residualDebt),
+        expiration: cell(row.expirationDate).slice(0, 10),
+        lastPayment: cell(row.dateEnd).slice(0, 10),
+        notes: cell(row.casual),
+        operator: cell(row.operator),
+        outcome: cell(row.outcome ?? row.status),
+        hour: cell(row.hour),
+        status: cell(row.status),
+        description: cell(row.casual ?? row.service),
+        valueIn: euro(row.value ?? row.paid),
+        residual: euro(row.rest ?? row.residualDebt),
+      },
+    });
   });
 }
 
@@ -431,14 +470,13 @@ function memberDirectoryRow(row: Record<string, unknown>, index: number): Previe
   const firstName = String(row.name ?? '').trim();
   const surname = String(row.surname ?? '').trim();
   const birthdate = displayDateToIso(row.dateOfBirth);
+  const title =
+    [firstName, surname].filter((part) => part && part !== '-').join(' ') || String(row.fullName ?? '-');
   return {
-    id: String(row.memberId ?? row.id ?? index),
+    ...makePreviewRow({ id: String(row.memberId ?? row.id ?? index), title, detail: '', date: birthdate }),
     memberId: String(row.memberId ?? row.id ?? ''),
-    title: [firstName, surname].filter((part) => part && part !== '-').join(' ') || String(row.fullName ?? '-'),
     firstName: firstName && firstName !== '-' ? firstName : '',
     surname: surname && surname !== '-' ? surname : '',
-    detail: '',
-    date: birthdate,
     birthdate,
     image: row.image ? String(row.image) : null,
     gender: String(row.gender ?? ''),
@@ -483,13 +521,18 @@ async function previewMembers(ctx: ClubAuthContext, activeOnly: boolean): Promis
       member: { select: { name: true, firstName: true, surname: true } },
     },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title:
-      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-',
-    detail: 'Active membership',
-    date: row.recordDate.toISOString().slice(0, 10),
-  }));
+  return rows.map((row) => {
+    const title =
+      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-';
+    const date = row.recordDate.toISOString().slice(0, 10);
+    return makePreviewRow({
+      id: row.id,
+      title,
+      detail: 'Active membership',
+      date,
+      fields: { typology: 'Membership' },
+    });
+  });
 }
 
 async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
@@ -512,18 +555,24 @@ async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
       procedureType: { select: { name: true } },
     },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title:
-      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-',
-    detail: `${row.procedureType.name}`,
-    date: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '',
-    typology: row.procedureType.name,
-    paymentIn: Number(row.paidAmount).toFixed(2),
-    paymentOut: Number(row.balanceAmount).toFixed(2),
-    rest: Number(row.balanceAmount).toFixed(2),
-    paidTotal: `${Number(row.paidAmount).toFixed(2)} / ${Number(row.balanceAmount).toFixed(2)}`,
-  }));
+  return rows.map((row) => {
+    const title =
+      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-';
+    const date = row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '';
+    return makePreviewRow({
+      id: row.id,
+      title,
+      detail: `${row.procedureType.name} · ${Number(row.balanceAmount).toFixed(2)}`,
+      date,
+      fields: {
+        typology: row.procedureType.name,
+        paymentIn: euro(row.paidAmount),
+        paymentOut: euro(row.balanceAmount),
+        paidTotal: `${euro(row.paidAmount)} / ${euro(row.balanceAmount)}`,
+        rest: euro(row.balanceAmount),
+      },
+    });
+  });
 }
 
 async function previewUnread(userId: string): Promise<PreviewRow[]> {
@@ -555,12 +604,14 @@ async function previewUnread(userId: string): Promise<PreviewRow[]> {
       const sender =
         [message.sender.firstName, message.sender.surname].filter(Boolean).join(' ') ||
         message.sender.name;
-      rows.push({
-        id: message.id,
-        title: sender,
-        detail: message.content.replace(/\s+/g, ' ').slice(0, 120),
-        date: message.createdAt.toISOString().slice(0, 10),
-      });
+      rows.push(
+        makePreviewRow({
+          id: message.id,
+          title: sender,
+          detail: message.content.replace(/\s+/g, ' ').slice(0, 120),
+          date: message.createdAt.toISOString().slice(0, 10),
+        }),
+      );
     }
   }
   return rows;
@@ -577,16 +628,22 @@ async function previewProcedure(
       String(meta.courseName ?? meta.serviceName ?? meta.productName ?? meta.debtLabel ?? '').trim() ||
       row.notes ||
       '';
-    return {
+    return makePreviewRow({
       id: row.id,
       title: row.memberName || '-',
       detail,
       date: row.recordDate,
-      typology: row.procedureTypeCode,
-      paymentIn: Number(row.paidAmount).toFixed(2),
-      paidTotal: `${Number(row.paidAmount).toFixed(2)} / ${Number(row.totalAmount).toFixed(2)}`,
-      rest: Number(row.balanceAmount).toFixed(2),
-    };
+      fields: {
+        typology: row.procedureTypeCode,
+        cost: euro(row.totalAmount),
+        paid: euro(row.paidAmount),
+        rest: euro(row.balanceAmount),
+        lastPayment: row.lastPaymentDate ?? '',
+        notes: row.notes ?? '',
+        operator: row.operatorName,
+        expiration: row.dueDate ?? '',
+      },
+    });
   });
 }
 
@@ -597,12 +654,14 @@ async function previewAudio(clubId: string): Promise<PreviewRow[]> {
     take: PREVIEW_LIMIT,
     select: { id: true, content: true, senderName: true, createdAt: true },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.senderName || 'Club',
-    detail: row.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120),
-    date: row.createdAt.toISOString().slice(0, 10),
-  }));
+  return rows.map((row) =>
+    makePreviewRow({
+      id: row.id,
+      title: row.senderName || 'Club',
+      detail: row.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120),
+      date: row.createdAt.toISOString().slice(0, 10),
+    }),
+  );
 }
 
 export async function getDashboardPreview(

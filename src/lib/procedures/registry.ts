@@ -14,7 +14,11 @@ import type { ProcedureTypeCode } from './types';
 import { PROCEDURE_TYPE_CODES } from './types';
 
 /** Standard archive tab ids — reuse for every procedure. */
-export type ProcedureArchiveTabId = 'records' | 'deadlines' | 'payments' | 'receipts';
+export type ProcedureArchiveTabId =
+  | 'records'
+  | 'deadlines'
+  | 'payments'
+  | 'receipts';
 
 export type ProcedureMetadataKeys = {
   /** Shown in the primary detail column (e.g. service name, expense name). */
@@ -82,7 +86,8 @@ const SERVICE_SALE: ProcedureDefinition = {
   },
   form: {
     title: 'Services for the customers',
-    subtitle: 'Register a service sale and optionally record a payment in the same form.',
+    subtitle:
+      'Register a service sale and optionally record a payment in the same form.',
   },
 };
 
@@ -112,7 +117,8 @@ const EXPENSE: ProcedureDefinition = {
   },
   form: {
     title: 'Member expenses',
-    subtitle: 'Insert an expense: pay it now, or plan it with a payment date and pay it later.',
+    subtitle:
+      'Insert an expense: pay it now, or plan it with a payment date and pay it later.',
   },
 };
 
@@ -170,7 +176,8 @@ const MEMBER_DEBT: ProcedureDefinition = {
   },
   form: {
     title: 'Add a credit',
-    subtitle: "How you can add a debt beside the 'classic' debts of subscription and purchasest",
+    subtitle:
+      "How you can add a debt beside the 'classic' debts of subscription and purchasest",
   },
 };
 
@@ -303,7 +310,9 @@ export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinitio
 
 export const ALL_PROCEDURE_CODES = Object.values(PROCEDURE_TYPE_CODES);
 
-export function getProcedureDefinition(code: string): ProcedureDefinition | null {
+export function getProcedureDefinition(
+  code: string,
+): ProcedureDefinition | null {
   if (code in PROCEDURE_DEFINITIONS) {
     return PROCEDURE_DEFINITIONS[code as ProcedureTypeCode];
   }
@@ -364,29 +373,30 @@ export function getProcedureTabs(
   active: ProcedureArchiveTabId,
   selectedRecordId?: string | null,
   /** Member of the selected row — scopes the Payments/Receipts tabs to "this member" by default. */
-  selectedMemberId?: string | null
+  selectedMemberId?: string | null,
 ): ProcedureTab[] {
   const def = PROCEDURE_DEFINITIONS[code];
   // For service sales, Deadlines always lists SERVICES deadlines (payment form is separate).
-  const deadlineHref =
-    selectedRecordId
-      ? def.routes.paymentDetail(selectedRecordId)
-      : def.routes.deadlines;
+  const deadlineHref = selectedRecordId
+    ? def.routes.paymentDetail(selectedRecordId)
+    : def.routes.deadlines;
   // Sibling archives open on the selected record and can widen to the member or the whole club.
   const scopeQuery = archiveScopeQuery(selectedRecordId, selectedMemberId);
   const paymentsHref = `${def.routes.payments}${scopeQuery}`;
   const receiptsHref = `${def.routes.receipts}${scopeQuery}`;
 
-  return (['records', 'deadlines', 'payments', 'receipts'] as const).map((tabId) => ({
-    id: tabId,
-    label: TAB_LABELS[tabId],
-    href:
-      tabId === 'records'
-        ? def.routes.records
-        : tabId === 'deadlines'
-          ? deadlineHref
-          : tabId === 'payments'
-            ? paymentsHref
-            : receiptsHref,
-  }));
+  return (['records', 'deadlines', 'payments', 'receipts'] as const).map(
+    (tabId) => ({
+      id: tabId,
+      label: TAB_LABELS[tabId],
+      href:
+        tabId === 'records'
+          ? def.routes.records
+          : tabId === 'deadlines'
+            ? deadlineHref
+            : tabId === 'payments'
+              ? paymentsHref
+              : receiptsHref,
+    }),
+  );
 }

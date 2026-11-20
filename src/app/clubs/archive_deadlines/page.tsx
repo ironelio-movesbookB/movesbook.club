@@ -9,7 +9,9 @@ import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
 import DeadlineTypologyNav from '@/components/procedures/DeadlineTypologyNav';
-import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
+import ArchiveScopeRadios, {
+  useArchiveScope,
+} from '@/components/procedures/ArchiveScopeRadios';
 import {
   DeleteRowButton,
   EditRowButton,
@@ -33,7 +35,10 @@ function recordIdOf(row: Member): string | undefined {
 }
 
 /** Expire date with the creation time, exactly as the payment form lists its deadlines. */
-function formatDeadlineWhen(value: Date | string | undefined, createdAt?: string): string {
+function formatDeadlineWhen(
+  value: Date | string | undefined,
+  createdAt?: string,
+): string {
   const day = formatDate(value);
   if (!createdAt || Number.isNaN(Date.parse(createdAt))) return day;
   const time = new Date(createdAt).toLocaleTimeString('en-GB', {
@@ -49,7 +54,11 @@ const recordColumns: Column[] = [
   { key: 'typology', header: 'Typology' },
   { key: 'service', header: 'Detail' },
   { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
-  { key: 'expirationDate', header: 'Expiration Date', render: (v) => formatDate(v) },
+  {
+    key: 'expirationDate',
+    header: 'Expiration Date',
+    render: (v) => formatDate(v),
+  },
   { key: 'value', header: 'Cost', render: (v) => formatEuro(v) },
   { key: 'paid', header: 'Paid', render: (v) => formatEuro(v) },
   { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
@@ -66,7 +75,8 @@ const everyDeadlineColumns: Column[] = [
   {
     key: 'service',
     header: 'Detail',
-    render: (v, row) => (row.course ? `${row.course}-${String(v ?? '')}` : String(v ?? '-')),
+    render: (v, row) =>
+      row.course ? `${row.course}-${String(v ?? '')}` : String(v ?? '-'),
   },
   { key: 'deadlineNo', header: 'Deadline' },
   { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
@@ -94,7 +104,9 @@ function sameMemberAndOpenRest(rows: Member[]): boolean {
 }
 
 /** Several checked deadlines can belong to one record; payment always happens per record. */
-function checkedRecords(rows: Member[]): { id: string; procedureType: string }[] {
+function checkedRecords(
+  rows: Member[],
+): { id: string; procedureType: string }[] {
   const byId = new Map<string, { id: string; procedureType: string }>();
   for (const row of rows) {
     const id = recordIdOf(row);
@@ -119,14 +131,16 @@ async function deleteRow(row: Member, adminPassword: string): Promise<void> {
 function paymentHref(
   procedureType: string | undefined,
   recordId: string | undefined,
-  ids?: string[]
+  ids?: string[],
 ): string | null {
   if (!procedureType || !recordId) return null;
   return procedurePaymentHref(procedureType, recordId, ids);
 }
 
 /** Multi-select payment across mixed typologies routes through the generic pay_deadlines page. */
-function multiTypePayHref(records: { id: string; procedureType: string }[]): string {
+function multiTypePayHref(
+  records: { id: string; procedureType: string }[],
+): string {
   const ids = records.map((r) => r.id).join(',');
   const types = records.map((r) => r.procedureType).join(',');
   return `/clubs/pay_deadlines?ids=${encodeURIComponent(ids)}&types=${encodeURIComponent(types)}`;
@@ -158,7 +172,9 @@ function ArchiveDeadlinesPageInner() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Keyed by row id and holding the row itself: a selection survives paging, so the rows it
   // refers to are no longer guaranteed to be on screen.
-  const [selectedRows, setSelectedRows] = useState<Map<string, Member>>(new Map());
+  const [selectedRows, setSelectedRows] = useState<Map<string, Member>>(
+    new Map(),
+  );
   const [selectionError, setSelectionError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -168,9 +184,10 @@ function ArchiveDeadlinesPageInner() {
   const [displayAlsoPaid, setDisplayAlsoPaid] = useState(false);
   const [displayEveryDeadline, setDisplayEveryDeadline] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [editTarget, setEditTarget] = useState<
-    { code: ProcedureTypeCode; record: ProcedureRecordView } | null
-  >(null);
+  const [editTarget, setEditTarget] = useState<{
+    code: ProcedureTypeCode;
+    record: ProcedureRecordView;
+  } | null>(null);
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -180,7 +197,8 @@ function ArchiveDeadlinesPageInner() {
     const recordId = recordIdOf(row);
     if (!code || !recordId) return;
     try {
-      const { record } = await createProcedureClient(code).fetchRecord(recordId);
+      const { record } =
+        await createProcedureClient(code).fetchRecord(recordId);
       setEditTarget({ code, record });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open this record');
@@ -196,7 +214,7 @@ function ArchiveDeadlinesPageInner() {
         setError(e instanceof Error ? e.message : 'Delete failed');
       }
     },
-    [reload]
+    [reload],
   );
 
   const load = useCallback(async () => {
@@ -217,13 +235,21 @@ function ArchiveDeadlinesPageInner() {
       setData(
         res.items.map((row) => ({
           ...row,
-          edit: <EditRowButton onClick={() => requestPassword(() => openEdit(row))} />,
-          delete: (
-            <DeleteRowButton
-              onClick={() => requestPassword((adminPassword) => performDelete(row, adminPassword))}
+          edit: (
+            <EditRowButton
+              onClick={() => requestPassword(() => openEdit(row))}
             />
           ),
-        }))
+          delete: (
+            <DeleteRowButton
+              onClick={() =>
+                requestPassword((adminPassword) =>
+                  performDelete(row, adminPassword),
+                )
+              }
+            />
+          ),
+        })),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -255,18 +281,25 @@ function ArchiveDeadlinesPageInner() {
     setSelectionError('');
   }, [filters.applied, scope.filters, procedureType, selectedDirection]);
 
-  const checkedIds = useMemo(() => new Set(selectedRows.keys()), [selectedRows]);
-  const checkedRows = useMemo(() => Array.from(selectedRows.values()), [selectedRows]);
+  const checkedIds = useMemo(
+    () => new Set(selectedRows.keys()),
+    [selectedRows],
+  );
+  const checkedRows = useMemo(
+    () => Array.from(selectedRows.values()),
+    [selectedRows],
+  );
 
-  const canPaySelected = checkedRows.length > 1 && sameMemberAndOpenRest(checkedRows);
+  const canPaySelected =
+    checkedRows.length > 1 && sameMemberAndOpenRest(checkedRows);
   // The selected row travels to the sibling archives, which open on that record by default.
   const selectedRow = useMemo(
-    () => (selectedId ? data.find((r) => r.id === selectedId) ?? null : null),
-    [data, selectedId]
+    () => (selectedId ? (data.find((r) => r.id === selectedId) ?? null) : null),
+    [data, selectedId],
   );
   const scopeQuery = archiveScopeQuery(
     selectedRow ? recordIdOf(selectedRow) : scope.recordId,
-    selectedRow?.userId ?? selectedRow?.memberId ?? scope.memberId
+    selectedRow?.userId ?? selectedRow?.memberId ?? scope.memberId,
   );
 
   function clearSelection() {
@@ -330,11 +363,15 @@ function ArchiveDeadlinesPageInner() {
       });
       setSelectedRows(
         new Map(
-          res.items.filter((r) => r.id && (r.rest ?? 0) > 0).map((r) => [r.id!, r] as const)
-        )
+          res.items
+            .filter((r) => r.id && (r.rest ?? 0) > 0)
+            .map((r) => [r.id!, r] as const),
+        ),
       );
     } catch (e) {
-      setSelectionError(e instanceof Error ? e.message : 'Could not select every deadline');
+      setSelectionError(
+        e instanceof Error ? e.message : 'Could not select every deadline',
+      );
     }
   }
 
@@ -343,7 +380,8 @@ function ArchiveDeadlinesPageInner() {
     const targets: Member[] = perDeadline
       ? checkedRows
       : checkedRecords(checkedRows).map(
-          (record) => ({ id: record.id, procedureType: record.procedureType }) as Member
+          (record) =>
+            ({ id: record.id, procedureType: record.procedureType }) as Member,
         );
     if (targets.length === 0) return;
     setSelectionError('');
@@ -360,7 +398,7 @@ function ArchiveDeadlinesPageInner() {
     if (failures.length > 0) {
       const reasons = Array.from(new Set(failures)).join(' ');
       setSelectionError(
-        `${failures.length} of ${targets.length} deadlines could not be deleted. ${reasons}`
+        `${failures.length} of ${targets.length} deadlines could not be deleted. ${reasons}`,
       );
     }
   }
@@ -372,22 +410,42 @@ function ArchiveDeadlinesPageInner() {
       return;
     }
     if (!sameMemberAndOpenRest(checkedRows)) {
-      setSelectionError('Checked deadlines must belong to the same member and all have Rest > 0.');
+      setSelectionError(
+        'Checked deadlines must belong to the same member and all have Rest > 0.',
+      );
       return;
     }
     const records = checkedRecords(checkedRows);
     if (records.length === 0) return;
-    const sameType = records.every((r) => r.procedureType === records[0]!.procedureType);
+    const sameType = records.every(
+      (r) => r.procedureType === records[0]!.procedureType,
+    );
     const href = sameType
-      ? paymentHref(records[0]!.procedureType, records[0]!.id, records.map((r) => r.id))
+      ? paymentHref(
+          records[0]!.procedureType,
+          records[0]!.id,
+          records.map((r) => r.id),
+        )
       : multiTypePayHref(records);
     if (href) router.push(href);
   }
 
   const tabs: ProcedureTab[] = [
-    { id: 'deadlines', label: 'Archive of Deadlines', href: `/clubs/archive_deadlines${scopeQuery}` },
-    { id: 'payments', label: 'Archive of Payments', href: `/clubs/archive_payments${scopeQuery}` },
-    { id: 'receipts', label: 'Archive of Receipts', href: `/clubs/archive_receipts${scopeQuery}` },
+    {
+      id: 'deadlines',
+      label: 'Archive of Deadlines',
+      href: `/clubs/archive_deadlines${scopeQuery}`,
+    },
+    {
+      id: 'payments',
+      label: 'Archive of Payments',
+      href: `/clubs/archive_payments${scopeQuery}`,
+    },
+    {
+      id: 'receipts',
+      label: 'Archive of Receipts',
+      href: `/clubs/archive_receipts${scopeQuery}`,
+    },
     {
       id: 'pay-selected',
       label: 'Pay more deadlines',
@@ -422,7 +480,11 @@ function ArchiveDeadlinesPageInner() {
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
             <ProcedureArchiveTabs tabs={tabs} activeTab="deadlines" />
             <div className="flex items-center gap-4 pb-2 shrink-0">
-              <ArchiveScopeRadios state={scope} name="deadlinesScope" onChange={() => setPage(1)} />
+              <ArchiveScopeRadios
+                state={scope}
+                name="deadlinesScope"
+                onChange={() => setPage(1)}
+              />
               <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -501,7 +563,9 @@ function ArchiveDeadlinesPageInner() {
         onRowClick={(row) => row.id && setSelectedId(row.id)}
         onRowDoubleClick={(row) => {
           if (!row.id || (row.rest ?? 0) <= 0) {
-            setSelectionError('Payment is not possible because this deadline is already paid.');
+            setSelectionError(
+              'Payment is not possible because this deadline is already paid.',
+            );
             return;
           }
           const href = paymentHref(row.procedureType, recordIdOf(row));

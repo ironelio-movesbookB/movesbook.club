@@ -161,9 +161,9 @@ export default function AthleteLegacyBanner({
     : '';
 
   return (
-    <div className="flex w-full flex-col sm:flex-row shadow-lg overflow-hidden bg-black min-h-[220px] max-h-[280px]">
+    <div className="flex w-full flex-col sm:flex-row shadow-lg overflow-hidden bg-black min-h-[340px] max-h-[420px]">
       {/* Main banner (legacy ns-left) */}
-      <div className="relative flex-1 min-h-[200px] sm:min-h-[220px]">
+      <div className="relative flex-1 min-h-[320px] sm:min-h-[340px]">
         {videoSrc ? (
           <video
             key={videoSrc}

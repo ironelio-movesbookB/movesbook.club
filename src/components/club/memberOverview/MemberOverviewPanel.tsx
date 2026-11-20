@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
+import { CLUB_ADMIN_ARCHIVE_GROUPS } from '@/lib/club/clubAdminMenus';
+import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   MEMBER_OVERVIEW_TOGGLE,
@@ -26,7 +28,7 @@ import ClubNotificationsPanel from '@/components/notifications/ClubNotifications
 import ClubAdminMenuDropdown from '@/components/club/topbar/ClubAdminMenuDropdown';
 import InlineMemberProfile from '@/components/club/memberOverview/InlineMemberProfile';
 
-type TopTab = 'member' | 'bookings' | 'insert';
+type TopTab = 'overview' | 'bookings' | 'archive' | 'insert';
 type Section =
   | 'home'
   | 'profile'
@@ -106,7 +108,7 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
     },
     [clubIdProp, workspace],
   );
-  const [topTab, setTopTab] = useState<TopTab>('member');
+  const [topTab, setTopTab] = useState<TopTab>('overview');
   const [section, setSection] = useState<Section>('home');
   const [overviewOpen, setOverviewOpen] = useState(true);
   const [mailOpen, setMailOpen] = useState(false);
@@ -175,7 +177,7 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
     const found = members.find((m) => m.memberId === memberId) || null;
     setSelectedMember(found);
     setSection('home');
-    setTopTab('member');
+    setTopTab('overview');
   };
 
   const showProfile = () => {
@@ -240,17 +242,23 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
 
   return (
     <div className="mt-3 mb-8 space-y-0">
+      {/* Top tabs */}
       <div className="flex flex-wrap gap-1">
         {(
           [
+            { id: 'overview' as const, label: 'Member Overview' },
             { id: 'bookings' as const, label: 'Bookings' },
+            { id: 'archive' as const, label: 'Archive data' },
             { id: 'insert' as const, label: 'Insert data' },
           ] as const
         ).map((tab) => (
           <button
             key={tab.id}
             type="button"
-            onClick={() => setTopTab((current) => (current === tab.id ? 'member' : tab.id))}
+            onClick={() => {
+              setTopTab(tab.id);
+              if (tab.id === 'overview') setSection('home');
+            }}
             className={`min-w-[120px] px-4 py-2 text-sm font-medium text-white ${
               topTab === tab.id ? 'bg-black' : 'bg-gray-500 hover:bg-gray-600'
             }`}
@@ -261,8 +269,55 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
       </div>
 
       {topTab === 'bookings' ? (
-        <div className="mt-3 min-h-[120px] rounded border border-gray-200 bg-white p-6 text-sm text-gray-500">
-          Bookings for the selected member stay on this page.
+        <div className="mt-3 min-h-[180px] rounded border border-gray-200 bg-white p-6 text-sm text-gray-500">
+          {/* Kept blank per client request */}
+        </div>
+      ) : null}
+
+      {topTab === 'archive' ? (
+        <div className="mt-3 rounded border border-gray-300 bg-[#2a2a2a] p-2">
+          <p className="mb-2 px-2 text-xs text-gray-300">Archive data — same links as the club Archives menu</p>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
+              <div key={gi} className={gi > 0 ? 'border-t border-gray-600/70' : ''}>
+                {group.map((item) => {
+                  if (item.kind === 'group') {
+                    const Icon = item.Icon;
+                    return (
+                      <div
+                        key={item.label}
+                        className="flex items-center gap-2 px-3 py-2 text-[13px] font-semibold text-white"
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </div>
+                    );
+                  }
+                  const path = 'path' in item ? item.path : undefined;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      disabled={!path}
+                      onClick={() => {
+                        if (!path) return;
+                        writeClubWorkspaceTab('my-entity');
+                        router.push(path);
+                      }}
+                      className={`flex w-full px-3 py-2 text-left text-[13px] text-white hover:bg-[#333] disabled:opacity-70 ${
+                        item.kind === 'child' ? 'pl-10' : ''
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2 px-2">
+            <ClubAdminMenuDropdown variant="archive" tone="light" />
+          </div>
         </div>
       ) : null}
 
@@ -280,8 +335,8 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
         </div>
       ) : null}
 
-      {overviewOpen ? (
-      <>
+      {topTab === 'overview' && overviewOpen ? (
+        <>
           {/* Select a member */}
           <div className="mt-0 flex flex-wrap items-center gap-3 border border-t-0 border-gray-300 bg-gray-100 px-3 py-2">
             <span className="text-sm font-medium text-gray-800">Select a member</span>
@@ -459,11 +514,11 @@ export default function MemberOverviewPanel({ clubId: clubIdProp }: Props) {
           )}
 
         </>
-      ) : (
+      ) : topTab === 'overview' ? (
         <div className="mt-3 rounded border border-gray-200 bg-white px-4 py-6 text-sm text-gray-500">
           Member Overview is hidden. Press Member Overview again to show it.
         </div>
-      )}
+      ) : null}
 
       {mailOpen && selectedMember ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

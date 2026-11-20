@@ -51,6 +51,7 @@ function parseArchiveParams(
     memberId: sp.get('memberId') ?? undefined,
     productId: sp.get('productId') ?? undefined,
     recordId: sp.get('recordId') ?? undefined,
+    procedureType: sp.get('procedureType') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
     memberGroupId: sp.get('memberGroupId') ?? undefined,

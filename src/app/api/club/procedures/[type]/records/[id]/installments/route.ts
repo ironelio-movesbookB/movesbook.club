@@ -78,12 +78,50 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     if (!(await recordBelongsToClub(params.id, auth.ctx.club.id))) return recordNotFound();
 
     const body = await request.json();
-    const installment = await updateInstallment(installmentId, params.id, {
-      ...(body.balance != null ? { balance: Number(body.balance) } : {}),
-      ...(body.paid != null ? { paid: Number(body.paid) } : {}),
-      ...(body.paymentDate ? { paymentDate: String(body.paymentDate) } : {}),
-      ...(body.expireDate !== undefined ? { expireDate: body.expireDate } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
+    if (
+      params.type === 'expense' &&
+      body.activateRecurrent === true &&
+      Number(body.balance) <= 0
+    ) {
+      return NextResponse.json(
+        { error: 'Deadline total must be greater than the amount already paid.' },
+        { status: 400 },
+      );
+    }
+
+    const installment = await prisma.$transaction(async (tx) => {
+      const updated = await updateInstallment(installmentId, params.id, {
+        ...(body.balance != null ? { balance: Number(body.balance) } : {}),
+        ...(body.paid != null ? { paid: Number(body.paid) } : {}),
+        ...(body.paymentDate ? { paymentDate: String(body.paymentDate) } : {}),
+        ...(body.expireDate !== undefined ? { expireDate: body.expireDate } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+      }, tx);
+
+      if (updated && params.type === 'expense' && body.activateRecurrent === true) {
+        const record = await tx.procedureRecord.findFirst({
+          where: { id: params.id, clubId: auth.ctx.club.id },
+          select: { metadata: true },
+        });
+        const metadata =
+          record?.metadata &&
+          typeof record.metadata === 'object' &&
+          !Array.isArray(record.metadata)
+            ? { ...record.metadata }
+            : {};
+        if (metadata.expenseRecurrence && typeof metadata.expenseRecurrence === 'object') {
+          metadata.recurrentActivated = true;
+        }
+        delete metadata.isRecurringOccurrence;
+        if (record) {
+          await tx.procedureRecord.update({
+            where: { id: params.id },
+            data: { metadata },
+          });
+        }
+      }
+
+      return updated;
     });
 
     if (!installment) {

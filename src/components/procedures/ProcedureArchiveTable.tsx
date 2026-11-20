@@ -64,13 +64,15 @@ export default function ProcedureArchiveTable({
   bordered = false,
 }: Props) {
   const cellBorder = bordered ? 'border border-gray-300' : '';
-  const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(null);
+  const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(
+    null,
+  );
   const sort = controlledSort !== undefined ? controlledSort : internalSort;
   const clientSort = !onSortChange;
 
   const displayRows = useMemo(
     () => (clientSort ? sortArchiveRows(rows, sort) : rows),
-    [clientSort, rows, sort]
+    [clientSort, rows, sort],
   );
 
   function handleSort(key: keyof Member) {
@@ -94,14 +96,19 @@ export default function ProcedureArchiveTable({
     if (!ACTION_KEYS.has(String(columns[i]!.key))) break;
     actionCount += 1;
   }
-  const dataColumns = actionCount > 0 ? columns.slice(0, columns.length - actionCount) : columns;
-  const actionColumns = actionCount > 0 ? columns.slice(columns.length - actionCount) : [];
+  const dataColumns =
+    actionCount > 0 ? columns.slice(0, columns.length - actionCount) : columns;
+  const actionColumns =
+    actionCount > 0 ? columns.slice(columns.length - actionCount) : [];
 
   const colSpan =
-    dataColumns.length + (actionColumns.length > 0 ? 1 : 0) + (selectable ? 1 : 0);
+    dataColumns.length +
+    (actionColumns.length > 0 ? 1 : 0) +
+    (selectable ? 1 : 0);
   const pinActions = actionColumns.length > 0;
   // border-collapse breaks position:sticky on th/td — always use separate borders when pinning.
-  const tableLayout = bordered || pinActions ? 'border-separate border-spacing-0' : '';
+  const tableLayout =
+    bordered || pinActions ? 'border-separate border-spacing-0' : '';
   // Keep Options (and other action cols) glued to the visible right edge while data cols scroll.
   const stickyHead =
     'sticky right-0 z-30 bg-teal-800 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.35)]';
@@ -116,7 +123,11 @@ export default function ProcedureArchiveTable({
     >
       <table
         className={`w-max min-w-full text-sm ${tableLayout}`}
-        style={pinActions ? { borderCollapse: 'separate', borderSpacing: 0 } : undefined}
+        style={
+          pinActions
+            ? { borderCollapse: 'separate', borderSpacing: 0 }
+            : undefined
+        }
       >
         <thead className="bg-teal-800 text-white">
           <tr>
@@ -257,12 +268,17 @@ export default function ProcedureArchiveTable({
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                 >
                   {selectable && (
-                    <td className={`px-2 py-2 ${cellBorder}`} onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className={`px-2 py-2 ${cellBorder}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={isChecked}
                         disabled={!canCheck}
-                        onChange={() => row.id && canCheck && onToggleSelect?.(row)}
+                        onChange={() =>
+                          row.id && canCheck && onToggleSelect?.(row)
+                        }
                         aria-label={`Select ${row.name ?? row.id}`}
                       />
                     </td>
@@ -274,7 +290,7 @@ export default function ProcedureArchiveTable({
                     >
                       {col.render
                         ? col.render(row[col.key], row)
-                        : (row[col.key] as React.ReactNode) ?? '-'}
+                        : ((row[col.key] as React.ReactNode) ?? '-')}
                     </td>
                   ))}
                   {pinActions && (
@@ -290,7 +306,7 @@ export default function ProcedureArchiveTable({
                           <span key={String(col.key)}>
                             {col.render
                               ? col.render(row[col.key], row)
-                              : (row[col.key] as React.ReactNode) ?? '-'}
+                              : ((row[col.key] as React.ReactNode) ?? '-')}
                           </span>
                         ))}
                       </span>

@@ -1257,7 +1257,7 @@ export default function HTMLHomepageLinkDisplayPage() {
           CKEDITOR CSS
       ==================================================== */}
 
-      <style>{`
+      <style jsx global>{`
 
         .ckeditor-wrapper {
           width: 100%;

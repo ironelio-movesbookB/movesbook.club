@@ -1,16 +1,16 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import { getClubAuthContext, procedureService } from "@/lib/procedures";
-import { parseAddPayment } from "@/lib/procedures/validators";
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getClubAuthContext, procedureService } from '@/lib/procedures';
+import { parseAddPayment } from '@/lib/procedures/validators';
 import { verifyOperatorPassword } from '@/lib/procedures/operatorAuth';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: { type: string; id: string } };
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const auth = await getClubAuthContext(request);
-    if ("error" in auth) return auth.error;
+    if ('error' in auth) return auth.error;
 
     const result = await procedureService.listRecords(auth.ctx, params.type, {
       recordId: params.id,
@@ -19,14 +19,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     });
 
     if (!result.items[0]) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     return NextResponse.json({ record: result.items[0] });
   } catch (error) {
-    console.error("GET procedure record:", error);
+    console.error('GET procedure record:', error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 },
     );
   }
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const auth = await getClubAuthContext(request);
-    if ("error" in auth) return auth.error;
+    if ('error' in auth) return auth.error;
 
     const body = (await request.json()) as {
       recordDate?: string;
@@ -45,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       notes?: string;
       operatorId?: string;
       totalAmount?: number;
+      activateRecurrent?: boolean;
     };
 
     const changesProtectedExpenseFields =
@@ -74,17 +75,17 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       notes: body.notes,
       operatorId: body.operatorId,
       totalAmount: body.totalAmount,
+      activateRecurrent: body.activateRecurrent,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Internal server error";
+      error instanceof Error ? error.message : 'Internal server error';
     const status =
-      message === "Record not found"
+      message === 'Record not found'
         ? 404
-        : message.includes("amount already paid") ||
-            message.includes("fully paid expense")
+        : message.includes('Cost cannot exceed')
           ? 400
           : 500;
     return NextResponse.json({ error: message }, { status });
@@ -94,7 +95,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const auth = await getClubAuthContext(request);
-    if ("error" in auth) return auth.error;
+    if ('error' in auth) return auth.error;
 
     const body = await request.json();
     const parsed = parseAddPayment(params.type, body);
@@ -117,13 +118,13 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Internal server error";
+      error instanceof Error ? error.message : 'Internal server error';
     const status =
-      message === "Record not found"
+      message === 'Record not found'
         ? 404
-        : message.includes("Payment") ||
-            message.includes("exceeds") ||
-            message.includes("password")
+        : message.includes('Payment') ||
+            message.includes('exceeds') ||
+            message.includes('password')
           ? 400
           : 500;
     return NextResponse.json({ error: message }, { status });

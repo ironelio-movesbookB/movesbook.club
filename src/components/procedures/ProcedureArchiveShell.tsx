@@ -1,7 +1,6 @@
 'use client';
 import Image from 'next/image';
 
-import Link from 'next/link';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import ProcedureArchiveTabs from './ProcedureArchiveTabs';
 import type { ProcedureArchiveShellProps } from './types';
@@ -48,15 +47,7 @@ export default function ProcedureArchiveShell({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {headerAction}
-          <Link
-            href="/clubs/monitoring/dashboard"
-            className="rounded bg-yellow-400 px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-yellow-300"
-          >
-            Back to Dashboard
-          </Link>
-        </div>
+        {headerAction}
       </div>
       <div className="bg-white border border-gray-200 rounded-b-lg p-4">
         {tabActions ? (

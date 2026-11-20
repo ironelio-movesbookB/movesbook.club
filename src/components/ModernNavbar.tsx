@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { 
   Home, 
   User, 
-  Users, 
   Phone,
   Mail,
   Facebook,
@@ -16,16 +15,10 @@ import {
   Twitter,
   Menu,
   X,
-  Globe,
-  Dumbbell,
   LogOut,
   User as UserIcon,
   Shield,
-  Trophy,
   Briefcase,
-  UserCircle,
-  Users2,
-  Building2,
   MessageCircle,
   Newspaper,
   ShoppingCart,
@@ -100,7 +93,7 @@ function networkSearchVisitorHref(
 export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNav = false }: ModernNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, isAuthenticated, requireAuth, login } = useAuth();
+  const { user, logout, isAuthenticated, login } = useAuth();
   const { showAlert } = usePcuAlert();
   const { currentLanguage, setLanguage, t, availableLanguages } = useLanguage();
   
@@ -926,7 +919,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
             {!hideContentNav && (
             <div className="hidden lg:flex min-w-0 flex-1 items-center gap-1.5 overflow-visible mx-1 lg:mx-2">
               <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto scrollbar-hide">
-                {menuItems.map((item, index) => {
+                {menuItems.map((item) => {
                   const isActive = pathname === item.href;
                   const isHome = item.href === '/';
                   const isPublicRoute =
@@ -982,14 +975,14 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                 <label htmlFor="navbar-network-search-scope" className="sr-only">
                   {t('nav_search_scope_label')}
                 </label>
-                <div className="flex h-8 min-w-[5.5rem] shrink-0 items-center rounded-md bg-white shadow-sm ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-cyan-400/70">
+                <div className="flex h-8 w-[5.75rem] shrink-0 items-center rounded-md bg-white shadow-sm ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-cyan-400/70">
                   <select
                     id="navbar-network-search-scope"
                     value={networkSearchScope}
                     onChange={(e) =>
                       setNetworkSearchScope(e.target.value as typeof networkSearchScope)
                     }
-                    className="h-8 w-full cursor-pointer border-0 bg-transparent py-0 pl-2 pr-1 text-[11px] font-medium leading-8 text-zinc-900 focus:outline-none focus:ring-0"
+                    className="h-8 w-full cursor-pointer border-0 bg-transparent px-1 py-0 text-center text-[11px] font-medium leading-8 text-zinc-900 focus:outline-none focus:ring-0"
                   >
                     <option value="single_user">{t('nav_search_scope_single_user')}</option>
                     <option value="coach">{t('nav_search_scope_coach')}</option>
@@ -1134,7 +1127,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                       }}
                       className="h-10 w-40 rounded-md border border-cyan-500 border-opacity-30 bg-white bg-opacity-10 px-3 text-sm text-white placeholder-cyan-200 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-400"
                       disabled={isLoggingIn}
-                      onKeyPress={(e) => e.key === 'Enter' && handleInlineLogin()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleInlineLogin()}
                     />
                   <button
                       type="submit"
@@ -1251,7 +1244,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                         onChange={(e) =>
                           setNetworkSearchScope(e.target.value as typeof networkSearchScope)
                         }
-                        className="h-10 w-full cursor-pointer border-0 bg-transparent py-0 pl-3 pr-1 text-sm font-medium leading-10 text-zinc-900 focus:outline-none focus:ring-0"
+                        className="h-10 w-full cursor-pointer border-0 bg-transparent px-3 py-0 text-center text-sm font-medium leading-10 text-zinc-900 focus:outline-none focus:ring-0"
                         aria-label={t('nav_search_scope_label')}
                       >
                         <option value="single_user">{t('nav_search_scope_single_user')}</option>
@@ -1584,7 +1577,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                   onChange={(e) => setForgotPasswordUsername(e.target.value)}
                   placeholder="Username or Email"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent mb-4"
-                  onKeyPress={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
                 />
                 <button
                   onClick={handleForgotPasswordSubmit}
@@ -1607,7 +1600,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                   onChange={(e) => setSecurityAnswer(e.target.value)}
                   placeholder="Your Answer"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent mb-4"
-                  onKeyPress={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
                 />
                 <div className="flex gap-2">
                   <button
@@ -1644,7 +1637,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm New Password"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent mb-4"
-                  onKeyPress={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleForgotPasswordSubmit()}
                 />
                 <button
                   onClick={handleForgotPasswordSubmit}

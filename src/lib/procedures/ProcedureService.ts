@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { findExistingTable } from "@/lib/club/legacyTableLookup";
 import {
   getProcedureDefinition,
+  getProcedureDirection,
   procedureTypologyFor,
 } from "./registry";
 import { procedureSubscriber } from "./subscriberOverride";
@@ -34,6 +35,7 @@ import type {
   ProcedurePaymentDto,
   ProcedureReceiptDto,
   ProcedureRecordDto,
+  ExpenseRecurrenceInterval,
 } from "./types";
 import { decimalToNumber } from "./types";
 
@@ -116,6 +118,86 @@ function readBalanceAfter(payment: unknown): number | null {
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function addExpenseRecurrenceDate(
+  anchorDate: string,
+  interval: ExpenseRecurrenceInterval,
+  occurrence: number,
+): string {
+  const date = toDateOnly(anchorDate);
+  if (interval.endsWith("d")) {
+    date.setUTCDate(
+      date.getUTCDate() + Number(interval.slice(0, -1)) * occurrence,
+    );
+    return date.toISOString().slice(0, 10);
+  }
+
+  const anchorDay = date.getUTCDate();
+  const months = Number(interval.slice(0, -1)) * occurrence;
+  const targetMonth = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
+  );
+  const lastDay = new Date(
+    Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  targetMonth.setUTCDate(Math.min(anchorDay, lastDay));
+  return targetMonth.toISOString().slice(0, 10);
+}
+
+function isJsonObject(
+  value: Prisma.JsonValue | undefined | null,
+): value is Prisma.JsonObject {
+  return (
+    value !== null &&
+    value !== undefined &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
+function readExpenseRecurrence(metadata: Prisma.JsonValue | null): {
+  enabled: boolean;
+  interval: ExpenseRecurrenceInterval;
+  remaining: number;
+  anchorDate: string;
+  nextOccurrenceDate: string;
+  nextOccurrenceNumber: number;
+} | null {
+  if (!isJsonObject(metadata)) return null;
+  const recurrence = metadata.expenseRecurrence;
+  if (!isJsonObject(recurrence)) return null;
+  const {
+    enabled,
+    interval,
+    remaining,
+    anchorDate,
+    nextOccurrenceDate,
+    nextOccurrenceNumber,
+  } = recurrence;
+  if (
+    enabled !== true ||
+    typeof interval !== "string" ||
+    !["7d", "14d", "15d", "1m", "2m", "3m"].includes(interval) ||
+    typeof remaining !== "number" ||
+    !Number.isInteger(remaining) ||
+    remaining < 1 ||
+    typeof anchorDate !== "string" ||
+    typeof nextOccurrenceDate !== "string" ||
+    typeof nextOccurrenceNumber !== "number" ||
+    !Number.isInteger(nextOccurrenceNumber) ||
+    nextOccurrenceNumber < 2
+  ) {
+    return null;
+  }
+  return {
+    enabled,
+    interval: interval as ExpenseRecurrenceInterval,
+    remaining,
+    anchorDate,
+    nextOccurrenceDate,
+    nextOccurrenceNumber,
+  };
 }
 
 function metaString(
@@ -377,11 +459,38 @@ export class ProcedureService {
           ? toDateOnly(input.dueDate)
           : null;
 
-    const metadata = mergeMetadata(input.metadata ?? null, {
+    const baseMetadata = mergeMetadata(input.metadata ?? null, {
       ...(input.paymentType ? { paymentType: input.paymentType } : {}),
       ...(input.taxDoc != null ? { taxDoc: input.taxDoc } : {}),
       ...(input.taxDocument ? { taxDocument: input.taxDocument } : {}),
     });
+    const recurrence = input.expenseRecurrence;
+    if (
+      recurrence &&
+      (procedureTypeCode !== PROCEDURE_TYPE_CODES.EXPENSE ||
+        !Number.isInteger(recurrence.repeatCount) ||
+        recurrence.repeatCount < 1 ||
+        recurrence.repeatCount > 1000 ||
+        !["7d", "14d", "15d", "1m", "2m", "3m"].includes(recurrence.interval))
+    ) {
+      throw new Error("Invalid expense recurrence settings");
+    }
+    const metadata = recurrence
+      ? mergeMetadata(baseMetadata, {
+          expenseRecurrence: {
+            enabled: true,
+            interval: recurrence.interval,
+            remaining: recurrence.repeatCount,
+            anchorDate: input.recordDate,
+            nextOccurrenceNumber: 2,
+            nextOccurrenceDate: addExpenseRecurrenceDate(
+              input.recordDate,
+              recurrence.interval,
+              1,
+            ),
+          },
+        })
+      : baseMetadata;
 
     const created = await prisma.$transaction(async (tx) => {
       const record = await tx.procedureRecord.create({
@@ -403,6 +512,7 @@ export class ProcedureService {
 
       let paymentId: string | null = null;
       if (initialPayment > 0) {
+        if (!operatorId) throw new Error("Operator is required");
         const payment = await tx.procedurePayment.create({
           data: buildPaymentCreateData({
             procedureRecordId: record.id,
@@ -559,7 +669,12 @@ export class ProcedureService {
       });
 
       // Keep deadline rows in sync with the record (oldest open installment first).
-      await applyPaymentToInstallments(record.id, amount, tx);
+      await applyPaymentToInstallments(
+        record.id,
+        amount,
+        tx,
+        input.installmentId,
+      );
 
       if (input.payMode === "card") {
         await applyCardCreditPayment(
@@ -779,6 +894,7 @@ export class ProcedureService {
       notes?: string;
       operatorId?: string;
       totalAmount?: number;
+      activateRecurrent?: boolean;
     },
   ) {
     const procedureType = await this.getProcedureTypeByCode(procedureTypeCode);
@@ -806,17 +922,27 @@ export class ProcedureService {
       data.dueDate = input.dueDate ? toDateOnly(input.dueDate) : null;
     if (
       procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE &&
-      input.expenseExpirationDate !== undefined
+      (input.expenseExpirationDate !== undefined || input.activateRecurrent)
     ) {
       const metadata =
         record.metadata &&
-        typeof record.metadata === 'object' &&
+        typeof record.metadata === "object" &&
         !Array.isArray(record.metadata)
           ? (record.metadata as Record<string, Prisma.JsonValue>)
           : {};
+      const nextMetadata = { ...metadata };
+      if (input.expenseExpirationDate !== undefined) {
+        nextMetadata.expenseExpirationDate =
+          input.expenseExpirationDate || null;
+      }
+      if (input.activateRecurrent) {
+        if (nextMetadata.expenseRecurrence !== undefined) {
+          nextMetadata.recurrentActivated = true;
+        }
+        delete nextMetadata.isRecurringOccurrence;
+      }
       data.metadata = {
-        ...metadata,
-        expenseExpirationDate: input.expenseExpirationDate || null,
+        ...nextMetadata,
       } as Prisma.InputJsonValue;
     }
     if (input.notes !== undefined) data.notes = input.notes;
@@ -1243,6 +1369,179 @@ export class ProcedureService {
     return { success: true };
   }
 
+  async getExpenseCategoryAverage(
+    ctx: ClubAuthContext,
+    expenseId: string,
+    beforeDate: string,
+  ) {
+    const procedureType = await this.getProcedureTypeByCode(
+      PROCEDURE_TYPE_CODES.EXPENSE,
+    );
+    if (!procedureType) throw new Error("Unknown procedure type");
+
+    const records = await prisma.procedureRecord.findMany({
+      where: {
+        clubId: ctx.club.id,
+        procedureTypeId: procedureType.id,
+        status: ProcedureRecordStatus.ACTIVE,
+        recordDate: { lte: toDateOnly(beforeDate) },
+        metadata: { path: "$.expenseId", equals: expenseId },
+      },
+      orderBy: [{ recordDate: "desc" }, { createdAt: "desc" }],
+      take: 12,
+      select: { totalAmount: true },
+    });
+    const average =
+      records.length > 0
+        ? roundMoney(
+            records.reduce(
+              (sum, record) => sum + decimalToNumber(record.totalAmount),
+              0,
+            ) / records.length,
+          )
+        : null;
+
+    return { average, count: records.length };
+  }
+
+  async processDueExpenseRecurrences(now = new Date()) {
+    const procedureType = await this.getProcedureTypeByCode(
+      PROCEDURE_TYPE_CODES.EXPENSE,
+    );
+    if (!procedureType) throw new Error("Unknown procedure type");
+
+    const candidates = await prisma.procedureRecord.findMany({
+      where: {
+        procedureTypeId: procedureType.id,
+        status: ProcedureRecordStatus.ACTIVE,
+        metadata: {
+          path: "$.expenseRecurrence.enabled",
+          equals: true,
+        },
+      },
+      select: { id: true, clubId: true, memberId: true },
+      orderBy: { recordDate: "asc" },
+    });
+    const today = now.toISOString().slice(0, 10);
+    let created = 0;
+
+    for (const candidate of candidates) {
+      const deadlineStatus = await getOtherSetting(
+        candidate.clubId,
+        "form_pay_deadline_status",
+        candidate.memberId,
+      );
+      const skipDeadlines = deadlineStatus === "No";
+      const createdForRoot = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id
+          FROM procedure_records
+          WHERE id = ${candidate.id}
+          FOR UPDATE
+        `;
+
+        const root = await tx.procedureRecord.findUnique({
+          where: { id: candidate.id },
+        });
+        if (
+          !root ||
+          root.status !== ProcedureRecordStatus.ACTIVE ||
+          root.procedureTypeId !== procedureType.id
+        ) {
+          return 0;
+        }
+
+        const recurrence = readExpenseRecurrence(root.metadata);
+        if (!recurrence || recurrence.nextOccurrenceDate > today) {
+          return 0;
+        }
+
+        const totalAmount = skipDeadlines
+          ? 0
+          : roundMoney(decimalToNumber(root.totalAmount));
+        const rootMetadata = isJsonObject(root.metadata) ? root.metadata : {};
+        let remaining = recurrence.remaining;
+        let nextOccurrenceDate = recurrence.nextOccurrenceDate;
+        let nextOccurrenceNumber = recurrence.nextOccurrenceNumber;
+        let rootCreated = 0;
+
+        while (remaining > 0 && nextOccurrenceDate <= today) {
+          const occurrenceDate = toDateOnly(nextOccurrenceDate);
+          const occurrenceMetadata: Record<string, unknown> = {
+            ...rootMetadata,
+            isRecurringOccurrence: true,
+            recurrenceRootId: root.id,
+            recurrenceNumber: nextOccurrenceNumber,
+          };
+          delete occurrenceMetadata.expenseRecurrence;
+          delete occurrenceMetadata.expenseInvoice;
+          delete occurrenceMetadata.taxDocument;
+          occurrenceMetadata.taxDoc = false;
+
+          const record = await tx.procedureRecord.create({
+            data: {
+              procedureTypeId: root.procedureTypeId,
+              clubId: root.clubId,
+              memberId: root.memberId,
+              operatorId: root.operatorId,
+              totalAmount,
+              paidAmount: 0,
+              balanceAmount: totalAmount,
+              recordDate: occurrenceDate,
+              dueDate: occurrenceDate,
+              notes: root.notes,
+              metadata: occurrenceMetadata as Prisma.InputJsonValue,
+              status: ProcedureRecordStatus.ACTIVE,
+            },
+          });
+
+          if (!skipDeadlines) {
+            await ensureDefaultInstallment(
+              record.id,
+              totalAmount,
+              0,
+              nextOccurrenceDate,
+              nextOccurrenceDate,
+              root.notes,
+              tx,
+            );
+          }
+
+          remaining -= 1;
+          rootCreated += 1;
+          nextOccurrenceNumber += 1;
+          nextOccurrenceDate =
+            remaining > 0
+              ? addExpenseRecurrenceDate(
+                  recurrence.anchorDate,
+                  recurrence.interval,
+                  nextOccurrenceNumber - 1,
+                )
+              : nextOccurrenceDate;
+        }
+
+        const nextMetadata: Record<string, unknown> = {
+          ...rootMetadata,
+          expenseRecurrence: {
+            ...recurrence,
+            enabled: remaining > 0,
+            remaining,
+            nextOccurrenceNumber,
+            nextOccurrenceDate,
+          },
+        };
+        await tx.procedureRecord.update({
+          where: { id: root.id },
+          data: { metadata: nextMetadata as Prisma.InputJsonValue },
+        });
+        return rootCreated;
+      });
+      created += createdForRoot;
+    }
+
+    return { checked: candidates.length, created };
+  }
+
   async listRecords(
     ctx: ClubAuthContext,
     procedureTypeCode: string,
@@ -1438,6 +1737,11 @@ export class ProcedureService {
         notes: row.notes,
         serviceName: metaString(metadata, primaryKey) || null,
         typology: procedureTypologyFor(procedureTypeCode, metadata),
+        direction:
+          procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE &&
+          metaString(metadata, "expenseDirection") === "IN"
+            ? "IN"
+            : getProcedureDirection(procedureTypeCode),
         balanceAfter: readBalanceAfter(row),
         originalDebt: decimalToNumber(row.procedureRecord.totalAmount),
         residualDebt: decimalToNumber(row.procedureRecord.balanceAmount),

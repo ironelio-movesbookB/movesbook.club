@@ -399,3 +399,24 @@ form.member-archive-filters select {
     display: block !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   FAQ rich content (CKEditor HTML) — src/components/faqs/FaqHtml.tsx
+   Tailwind preflight strips list/heading/iframe defaults; restore them.
+------------------------------------------------------------------- */
+.faq-html { overflow-wrap: anywhere; line-height: 1.5; }
+.faq-html p { margin: 0 0 0.6em; }
+.faq-html h1 { font-size: 1.6em; font-weight: 700; margin: 0.4em 0; }
+.faq-html h2 { font-size: 1.35em; font-weight: 700; margin: 0.4em 0; }
+.faq-html h3 { font-size: 1.15em; font-weight: 600; margin: 0.4em 0; }
+.faq-html ul { list-style: disc; padding-left: 1.5em; margin: 0 0 0.6em; }
+.faq-html ol { list-style: decimal; padding-left: 1.5em; margin: 0 0 0.6em; }
+.faq-html a { color: #1d4ed8; text-decoration: underline; }
+.faq-html blockquote { border-left: 3px solid #ccc; padding-left: 0.8em; color: #555; margin: 0 0 0.6em; }
+.faq-html img { max-width: 100%; height: auto; display: inline-block; }
+.faq-html iframe { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
+.faq-html table { border-collapse: collapse; max-width: 100%; margin: 0 0 0.6em; }
+.faq-html td, .faq-html th { border: 1px solid #ccc; padding: 4px 8px; }
+.faq-html hr { margin: 0.8em 0; border-color: #ccc; }
+.faq-html-dark a { color: #a5f3fc; }
+.faq-html-dark blockquote { color: #cbd5e1; }

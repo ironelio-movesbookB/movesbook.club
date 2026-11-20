@@ -256,9 +256,7 @@ export default function TopBar({ onChatPanelClick }: TopBarProps) {
 
             {/* HeaderBar shown below HorizontalItemsBar when Help Info is clicked */}
             {showHelpInfo && (
-                <HeaderBar
-                    onHelpInfo={toggleHelpInfo}
-                />
+                <HeaderBar unreadCount={unreadCount} />
             )}
 
             {/* Toast Notifications */}

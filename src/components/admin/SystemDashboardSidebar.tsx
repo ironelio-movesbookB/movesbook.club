@@ -129,7 +129,7 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
     system: true,
     messages: true,
     infos: false,
-    faqs: false,
+    faqs: !!pathname?.startsWith('/admin/faqs'),
     html: false,
     promotions: false,
     settings_users: false,
@@ -450,9 +450,9 @@ const SystemDashboardSidebarContent = ({ isOpen, onToggle }: SystemDashboardSide
       id: 'faqs',
       label: 'Management Of FAQS',
       items: [
-        { label: 'Editor', icon: Edit },
-        { label: 'Management of the FAQS', icon: Settings },
-        { label: 'Display of the FAQS', icon: Monitor }
+        { label: 'Editor', icon: Edit, href: '/admin/faqs/new' },
+        { label: 'Management of the FAQS', icon: Settings, href: '/admin/faqs' },
+        { label: 'Display of the FAQS', icon: Monitor, href: '/faqs' }
       ]
     },
     {

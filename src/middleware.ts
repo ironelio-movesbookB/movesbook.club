@@ -71,6 +71,8 @@ const publicApiRoutes = [
   '/api/subscriptions/version-settings',
   /** External cron: sponsor contract/payment reminders (secret header) */
   '/api/club/sponsors/reminders',
+  /** External cron: create due recurrent expense records (secret header) */
+  '/api/club/expenses/recurrent',
   /** Registration payment page / success page (account not active yet, no token) */
   '/api/registration-payments',
   /** Member pay link from the club payment module (no login required) */

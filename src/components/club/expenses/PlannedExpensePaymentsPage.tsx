@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from "next/image";
 import Link from 'next/link';
 import {
@@ -23,15 +23,17 @@ import {
   CircleDollarSign,
   Loader2,
   X,
-} from "lucide-react";
-import { clubApiFetch } from "@/lib/club/servicePurchasesClient";
+} from 'lucide-react';
+import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import { resolvePublicImageUrl } from "@/lib/profileImageUrl";
 import {
   createProcedureClient,
   type ProcedureRecordView,
-} from "@/lib/club/procedureClient";
-import { PROCEDURE_TYPE_CODES } from "@/lib/procedures/types";
+} from '@/lib/club/procedureClient';
+import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { ExpenseCategoryIcon } from "@/components/club/expenses/ExpenseCategoryIcon";
+import PaymentModeSelect from "@/components/club/PaymentModeSelect";
+import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
 
 type ExpenseCategory = {
   id: string;
@@ -72,8 +74,8 @@ const procedureClient = createProcedureClient(PROCEDURE_TYPE_CODES.EXPENSE);
 
 function toDateInput(value: Date): string {
   const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -90,7 +92,7 @@ function getDefaultDateRange(): DateRange {
 }
 
 function formatAmount(value: number): string {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
     value,
   );
 }
@@ -142,7 +144,7 @@ async function fetchAllExpenseDeadlines(
     includePaid: showAll,
     fromDate: range.fromDate || undefined,
     toDate: range.toDate || undefined,
-    orderBy: "old",
+    orderBy: 'old',
   });
   const records = [...firstPage.items];
 
@@ -153,7 +155,7 @@ async function fetchAllExpenseDeadlines(
       includePaid: showAll,
       fromDate: range.fromDate || undefined,
       toDate: range.toDate || undefined,
-      orderBy: "old",
+      orderBy: 'old',
     });
     if (result.items.length === 0) break;
     records.push(...result.items);
@@ -168,10 +170,10 @@ export default function PlannedExpensePaymentsPage() {
   const [appliedRange, setAppliedRange] = useState<DateRange>(defaultRange);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [records, setRecords] = useState<CategorizedRecord[]>([]);
-  const [operators, setOperators] = useState<ExpenseFormOptions["operators"]>(
+  const [options, setOptions] = useState<ExpenseFormOptions | null>(null);
+  const [operators, setOperators] = useState<ExpenseFormOptions['operators']>(
     [],
   );
-  const [options, setOptions] = useState<ExpenseFormOptions | null>(null);
   const [operatorId, setOperatorId] = useState('');
   const [operatorPassword, setOperatorPassword] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -202,28 +204,29 @@ export default function PlannedExpensePaymentsPage() {
   const [paymentTarget, setPaymentTarget] = useState<CategorizedRecord | null>(
     null,
   );
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMode, setPaymentMode] = useState('cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [editError, setEditError] = useState("");
-  const [paymentError, setPaymentError] = useState("");
+  const [error, setError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [paymentError, setPaymentError] = useState('');
   const selectedOperator = operators.find(
     (operator) => operator.id === operatorId,
   );
   const operatorImageUrl = resolvePublicImageUrl(selectedOperator?.image);
+  const defaultPaymentMethods = useClubDefaultPaymentMethods();
 
   const loadRecords = useCallback(
     async (range: DateRange, includeAll: boolean) => {
       setLoading(true);
-      setError("");
+      setError('');
       try {
         const [categoryResponse, formOptions, deadlineRecords] =
           await Promise.all([
             clubApiFetch<{ items: ExpenseCategory[] }>(
-              "/api/club/settings/tables/expenses",
+              '/api/club/settings/tables/expenses',
             ),
             procedureClient.fetchFormOptions<ExpenseFormOptions>(),
             fetchAllExpenseDeadlines(range, includeAll),
@@ -244,7 +247,7 @@ export default function PlannedExpensePaymentsPage() {
             current ||
             formOptions.currentOperatorId ||
             formOptions.operators[0]?.id ||
-            "",
+            '',
         );
         setRecords(mappedRecords);
         setSelectedCategoryId(
@@ -259,7 +262,7 @@ export default function PlannedExpensePaymentsPage() {
         setError(
           err instanceof Error
             ? err.message
-            : "Unable to load planned expenses.",
+            : 'Unable to load planned expenses.',
         );
       } finally {
         setLoading(false);
@@ -306,7 +309,9 @@ export default function PlannedExpensePaymentsPage() {
             record.recordDate >= appliedRange.fromDate) &&
           (!appliedRange.toDate || record.recordDate <= appliedRange.toDate);
         const isPending = record.rest > 0;
-        const isExpired = Boolean(record.expireDate && record.expireDate <= today);
+        const isExpired = Boolean(
+          record.expireDate && record.expireDate <= today,
+        );
         return (
           inRange &&
           (showExpiredPending
@@ -491,7 +496,7 @@ export default function PlannedExpensePaymentsPage() {
       rangeDraft.toDate &&
       rangeDraft.fromDate > rangeDraft.toDate
     ) {
-      setError("The start date cannot be after the end date.");
+      setError('The start date cannot be after the end date.');
       return;
     }
     setAppliedRange({ ...rangeDraft });
@@ -504,9 +509,10 @@ export default function PlannedExpensePaymentsPage() {
     setRangeDraft(nextDefault);
     setAppliedRange(nextDefault);
     setShowAll(false);
+    setShowExpiredPending(false);
     setSelectedCategoryId(null);
     setPaymentTarget(null);
-    setError("");
+    setError('');
   }
 
   async function toggleExpenseLock() {
@@ -670,7 +676,7 @@ export default function PlannedExpensePaymentsPage() {
     }
 
     setSaving(true);
-    setEditError("");
+    setEditError('');
     try {
       await procedureClient.updateRecord(editTarget.id, {
         ...(amountChanged ? { totalAmount: amount } : {}),
@@ -680,6 +686,7 @@ export default function PlannedExpensePaymentsPage() {
         ...(protectedFieldsChanged ? { adminPassword } : {}),
         notes: editNotes,
         operatorId,
+        activateRecurrent: editTarget.isRecurrent,
       });
       setEditTarget(null);
       await loadRecords(appliedRange, showAll);
@@ -693,17 +700,21 @@ export default function PlannedExpensePaymentsPage() {
   }
 
   function selectExpenseForPayment(record: CategorizedRecord) {
+    if (!isUnlocked) return;
     setPaymentTarget((current) => (current?.id === record.id ? null : record));
     setPaymentAmount(record.rest.toFixed(2));
-    setPaymentNotes("");
-    setPaymentError("");
+    setPaymentMode('cash');
+    setPaymentNotes('');
+    setPaymentError('');
   }
 
   async function savePayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!paymentTarget) return;
+    if (!isUnlocked)
+      return setPaymentError("Unlock expenses before recording a payment.");
     const amount = Number(paymentAmount);
-    if (!operatorId) return setPaymentError("Select an operator.");
+    if (!operatorId) return setPaymentError('Select an operator.');
     if (!operatorPassword.trim())
       return setPaymentError(
         "Enter the operator password in the Operator section.",
@@ -719,13 +730,13 @@ export default function PlannedExpensePaymentsPage() {
     }
 
     setSaving(true);
-    setPaymentError("");
+    setPaymentError('');
     try {
       await procedureClient.addPayment(paymentTarget.id, {
         amountPaid: amount,
         paymentDate: toDateInput(new Date()),
         notes: paymentNotes,
-        payMode: "cash",
+        payMode: paymentMode,
         operatorId,
         operatorPassword,
         createReceipt: false,
@@ -734,7 +745,7 @@ export default function PlannedExpensePaymentsPage() {
       await loadRecords(appliedRange, showAll);
     } catch (err) {
       setPaymentError(
-        err instanceof Error ? err.message : "Unable to save payment.",
+        err instanceof Error ? err.message : 'Unable to save payment.',
       );
     } finally {
       setSaving(false);
@@ -742,6 +753,10 @@ export default function PlannedExpensePaymentsPage() {
   }
 
   async function deleteExpense(record: CategorizedRecord) {
+    if (!isUnlocked) {
+      window.alert("Unlock expenses before deleting an expense.");
+      return;
+    }
     if (record.pay > 0 && record.rest > 0) {
       window.alert("Deletion is not possible, expense in pending");
       return;
@@ -753,7 +768,7 @@ export default function PlannedExpensePaymentsPage() {
     if (!window.confirm(`Delete the expense "${record.primaryLabel}"?`)) return;
 
     setSaving(true);
-    setError("");
+    setError('');
     try {
       await procedureClient.deleteRecord(record.id, operatorPassword);
       setPaymentTarget((current) =>
@@ -766,6 +781,48 @@ export default function PlannedExpensePaymentsPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleExpenseLock() {
+    if (!operatorId) {
+      setUnlockError("Select an operator first.");
+      return;
+    }
+    if (!operatorPassword.trim()) {
+      setUnlockError("Enter the selected operator's password.");
+      return;
+    }
+
+    setUnlocking(true);
+    setUnlockError('');
+    try {
+      const result = await clubApiFetch<{ valid: boolean }>(
+        "/api/club/procedures/expense/verify-operator-password",
+        {
+          method: "POST",
+          body: JSON.stringify({ operatorId, password: operatorPassword }),
+        },
+      );
+      if (!result.valid) {
+        setIsUnlocked(false);
+        setUnlockError("Incorrect operator password.");
+        return;
+      }
+
+      const nextUnlocked = !isUnlocked;
+      setIsUnlocked(nextUnlocked);
+      if (!nextUnlocked) {
+        setPaymentTarget(null);
+        setEditTarget(null);
+      }
+    } catch (err) {
+      setIsUnlocked(false);
+      setUnlockError(
+        err instanceof Error ? err.message : "Unable to verify password.",
+      );
+    } finally {
+      setUnlocking(false);
     }
   }
 
@@ -816,7 +873,7 @@ export default function PlannedExpensePaymentsPage() {
                 }
                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-teal-800 hover:bg-teal-100"
               >
-                {expanded ? "−" : "+"}
+                {expanded ? '−' : '+'}
               </button>
             ) : (
               <span />
@@ -857,7 +914,7 @@ export default function PlannedExpensePaymentsPage() {
               key={child.id}
               className={`grid cursor-pointer grid-cols-[1.5rem_1.25rem_minmax(0,1fr)_5rem] items-center gap-2 border-l-4 px-3 py-2 text-sm ${
                 selectedCategoryId === child.id
-                  ? "border-l-teal-800 bg-teal-50"
+                  ? "border-l-teal-800 bg-teal-200"
                   : "border-l-transparent bg-white hover:bg-teal-50"
               }`}
             >
@@ -931,7 +988,13 @@ export default function PlannedExpensePaymentsPage() {
               <span className="mb-1 font-semibold text-gray-800">Operator</span>
               <select
                 value={operatorId}
-                onChange={(event) => setOperatorId(event.target.value)}
+                onChange={(event) => {
+                  setOperatorId(event.target.value);
+                  setIsUnlocked(false);
+                  setPaymentTarget(null);
+                  setEditTarget(null);
+                  setUnlockError('');
+                }}
                 required
                 aria-label="Active operator"
                 className="h-9 min-w-[190px] rounded border border-gray-400 bg-white px-2.5 text-gray-900 focus:border-teal-800 focus:outline-none focus:ring-1 focus:ring-teal-800"
@@ -948,7 +1011,13 @@ export default function PlannedExpensePaymentsPage() {
             <input
               type="password"
               value={operatorPassword}
-              onChange={(event) => setOperatorPassword(event.target.value)}
+              onChange={(event) => {
+                setOperatorPassword(event.target.value);
+                setIsUnlocked(false);
+                setPaymentTarget(null);
+                setEditTarget(null);
+                setUnlockError('');
+              }}
               aria-label="Operator password"
               autoComplete="current-password"
               placeholder="Password"
@@ -960,9 +1029,9 @@ export default function PlannedExpensePaymentsPage() {
               onClick={() => void toggleExpenseLock()}
               disabled={unlocking}
               aria-pressed={isUnlocked}
-              className={`mt-5 h-9 rounded px-4 text-[13px] font-semibold text-white disabled:opacity-60 ${isUnlocked ? 'border border-teal-900 bg-teal-800 hover:bg-teal-900' : 'border border-red-800 bg-red-700 hover:bg-red-800'}`}
+              className={`mt-5 h-9 rounded px-4 text-[13px] font-semibold text-white disabled:cursor-wait disabled:opacity-60 ${isUnlocked ? "border border-teal-900 bg-teal-800 hover:bg-teal-900" : "border border-red-800 bg-red-700 hover:bg-red-800"}`}
             >
-              {unlocking ? 'Checking...' : isUnlocked ? 'Unlocked' : 'Locked'}
+              {unlocking ? "Checking..." : isUnlocked ? "Unlocked" : "Locked"}
             </button>
             {unlockError && (
               <p role="alert" className="mt-5 text-xs font-medium text-red-700">
@@ -1042,17 +1111,29 @@ export default function PlannedExpensePaymentsPage() {
                   />
                   Show all expenses
                 </label>
+                <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[14px] font-normal text-red-700">
+                  <input
+                    type="checkbox"
+                    checked={showExpiredPending}
+                    onChange={(event) => {
+                      setShowExpiredPending(event.target.checked);
+                      setPaymentTarget(null);
+                      setPaymentError('');
+                    }}
+                  />
+                  Show pending expireds
+                </label>
                 <button
                   type="button"
                   aria-label={
                     expandedIds.size === allCategoryIds.length
-                      ? "Collapse all expenses"
-                      : "Expand all expenses"
+                      ? 'Collapse all expenses'
+                      : 'Expand all expenses'
                   }
                   title={
                     expandedIds.size === allCategoryIds.length
-                      ? "Collapse all"
-                      : "Expand all"
+                      ? 'Collapse all'
+                      : 'Expand all'
                   }
                   onClick={() =>
                     setExpandedIds(
@@ -1105,7 +1186,14 @@ export default function PlannedExpensePaymentsPage() {
                 </h2>
                 <button
                   type="button"
-                  className="rounded border border-gray-400 bg-white px-3 py-1 text-[13px] font-semibold text-gray-800 hover:bg-gray-100"
+                  onClick={openAddExpense}
+                  disabled={!isUnlocked || saving}
+                  title={
+                    !isUnlocked
+                      ? "Unlock expenses to add a new expense"
+                      : "Add a new expense"
+                  }
+                  className="rounded border border-gray-400 bg-white px-3 py-1 text-[13px] font-semibold text-gray-800 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   + Add new
                 </button>
@@ -1181,7 +1269,13 @@ export default function PlannedExpensePaymentsPage() {
                       {selectedRecords.map((record) => (
                         <tr
                           key={record.id}
-                          className={`border-t border-gray-200 ${paymentTarget?.id === record.id ? "bg-teal-50" : "bg-white hover:bg-gray-50"}`}
+                          className={`border-t border-gray-200 ${
+                            record.isRecurrent
+                              ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                              : paymentTarget?.id === record.id
+                                ? "bg-teal-200"
+                                : "bg-white hover:bg-gray-50"
+                          }`}
                         >
                           <td className="px-3 py-2">
                             {record.expireDate || record.recordDate}
@@ -1195,7 +1289,7 @@ export default function PlannedExpensePaymentsPage() {
                                       null)
                                     : null
                                 }
-                                className="h-4 w-4 shrink-0 text-teal-700"
+                                className={`h-4 w-4 shrink-0 ${record.isRecurrent ? "text-gray-400" : "text-teal-700"}`}
                               />
                               <span>{record.primaryLabel}</span>
                             </span>
@@ -1233,6 +1327,7 @@ export default function PlannedExpensePaymentsPage() {
                             <button
                               type="button"
                               onClick={() => selectExpenseForPayment(record)}
+                              disabled={!isUnlocked}
                               aria-label={
                                 paymentTarget?.id === record.id
                                   ? "Deselect expense for payment"
@@ -1243,19 +1338,21 @@ export default function PlannedExpensePaymentsPage() {
                                   ? "Deselect for payment"
                                   : "Select for payment"
                               }
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded border ${paymentTarget?.id === record.id ? "border-teal-800 bg-teal-800 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-teal-50"}`}
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-40 ${paymentTarget?.id === record.id ? "border-teal-800 bg-teal-800 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-teal-50"}`}
                             >
                               <CircleDollarSign className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => openExpenseEdit(record)}
-                              disabled={record.rest <= 0}
+                              disabled={!isUnlocked || record.rest <= 0}
                               aria-label="Edit expense"
                               title={
-                                record.rest > 0
-                                  ? "Edit expense"
-                                  : "Fully paid expenses cannot be edited"
+                                !isUnlocked
+                                  ? "Unlock expenses to edit"
+                                  : record.rest > 0
+                                    ? "Edit expense"
+                                    : "Fully paid expenses cannot be edited"
                               }
                               className="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-300 bg-white text-gray-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
@@ -1273,7 +1370,7 @@ export default function PlannedExpensePaymentsPage() {
                             <button
                               type="button"
                               onClick={() => void deleteExpense(record)}
-                              disabled={saving}
+                              disabled={saving || !isUnlocked}
                               aria-label="Delete expense"
                               title="Delete expense"
                               className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1293,7 +1390,7 @@ export default function PlannedExpensePaymentsPage() {
                 ) && (
                   <form
                     onSubmit={savePayment}
-                    className="grid gap-3 border-t border-[#d0d0d0] bg-white px-4 py-4 md:grid-cols-[minmax(170px,1fr)_minmax(220px,2fr)_auto] md:items-start"
+                    className="grid gap-3 border-t border-[#d0d0d0] bg-white px-4 py-4 md:grid-cols-[minmax(170px,1fr)_minmax(180px,1fr)_minmax(220px,2fr)_auto] md:items-start"
                   >
                     <div>
                       <label
@@ -1321,6 +1418,22 @@ export default function PlannedExpensePaymentsPage() {
                     </div>
                     <div>
                       <label
+                        htmlFor="planned-expense-payment-mode"
+                        className="mb-1 block text-sm font-semibold text-[#1b1b1b]"
+                      >
+                        Payment method
+                      </label>
+                      <PaymentModeSelect
+                        id="planned-expense-payment-mode"
+                        className="h-9 w-full rounded border border-gray-300 bg-white px-3"
+                        value={paymentMode}
+                        onChange={setPaymentMode}
+                        defaultPaymentMethods={defaultPaymentMethods}
+                        allowEmpty={false}
+                      />
+                    </div>
+                    <div>
+                      <label
                         htmlFor="planned-expense-payment-notes"
                         className="mb-1 block text-sm font-semibold text-[#1b1b1b]"
                       >
@@ -1338,7 +1451,7 @@ export default function PlannedExpensePaymentsPage() {
                     </div>
                     <button
                       type="submit"
-                      disabled={saving || !operatorId}
+                      disabled={saving || !operatorId || !isUnlocked}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded border border-teal-900 bg-teal-800 px-4 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60 md:mt-6"
                     >
                       {saving ? (

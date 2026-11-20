@@ -52,9 +52,6 @@ export default function DashboardSettingsModal({
   onLoadDefault: () => void;
 }) {
   const [pane, setPane] = useState<Pane | null>(null);
-  const togglePane = (next: Pane) => {
-    setPane((current) => (current === next ? null : next));
-  };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const selectedSection = draft.sections.find((section) => section.id === pane);
 
@@ -92,15 +89,15 @@ export default function DashboardSettingsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-16">
-      <div className={`w-full overflow-hidden rounded-md border border-gray-400 bg-white shadow-2xl ${pane ? 'max-w-3xl' : 'max-w-md'}`}>
+      <div className="w-full max-w-3xl overflow-hidden rounded-md border border-gray-400 bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-[#7a1f2b] px-3 py-2 text-white">
           <h2 className="text-sm font-semibold">Dashboard setting</h2>
           <button type="button" onClick={onCancel} className="text-lg leading-none" aria-label="Close">
             ×
           </button>
         </div>
-        <div className={`grid max-h-[70vh] overflow-hidden ${pane ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
-          <div className={`overflow-y-auto ${pane ? 'border-r border-gray-200' : ''}`}>
+        <div className={`grid max-h-[70vh] grid-cols-1 overflow-hidden ${pane ? 'md:grid-cols-2' : ''}`}>
+          <div className="overflow-y-auto border-r border-gray-200">
             <div className="flex items-center gap-2 border-b border-gray-200 bg-[#fff6cc] px-2 py-2">
               <input
                 type="checkbox"
@@ -111,7 +108,7 @@ export default function DashboardSettingsModal({
               <span className="flex-1 text-sm font-medium">Summary panels</span>
               <button
                 type="button"
-                onClick={() => togglePane('summary')}
+                onClick={() => setPane((current) => (current === 'summary' ? null : 'summary'))}
                 className={`rounded p-1 ${pane === 'summary' ? 'bg-white' : ''}`}
                 aria-pressed={pane === 'summary'}
                 aria-label="Summary panel order"
@@ -140,7 +137,9 @@ export default function DashboardSettingsModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() => togglePane(section.id)}
+                            onClick={() =>
+                              setPane((current) => (current === section.id ? null : section.id))
+                            }
                             className={`rounded p-1 ${pane === section.id ? 'bg-gray-100' : ''}`}
                             aria-pressed={pane === section.id}
                             aria-label={`${def?.label ?? 'Section'} settings`}

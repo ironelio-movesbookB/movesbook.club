@@ -54,6 +54,7 @@ function toTableRow(
     value: record.value,
     paid: record.pay,
     rest: record.rest,
+    isRecurringOccurrence: record.isRecurringOccurrence,
     casual: record.notes,
     operator: record.operatorName,
     dateEnd: record.lastPaymentDate ?? undefined,
