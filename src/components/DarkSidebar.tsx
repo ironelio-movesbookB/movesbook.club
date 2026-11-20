@@ -118,6 +118,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import MyPageTopicsEntryRow from '@/components/club/MyPageTopicsEntryRow';
 import SelectClubForTopicsModal from '@/components/club/SelectClubForTopicsModal';
 import { useRouter, usePathname } from 'next/navigation';
+import { shopFetch } from '@/lib/shop/browser';
 import {
   isClubAccountUserType,
   isGroupAccountUserType,
@@ -751,6 +752,7 @@ export default function DarkSidebar({
   const [clubAdminSubscriptionsOpen, setClubAdminSubscriptionsOpen] = useState(false);
   const [clubGeneralSettingsOpen, setClubGeneralSettingsOpen] = useState(false);
   const [clubShopOpen, setClubShopOpen] = useState(false);
+  const [shopPublicPath, setShopPublicPath] = useState('');
   const [clubSecurityOpen, setClubSecurityOpen] = useState(false);
   const [clubAdminInsertNewItemOpen, setClubAdminInsertNewItemOpen] = useState(false);
   const [clubArchivesOpen, setClubArchivesOpen] = useState(false);
@@ -926,11 +928,27 @@ export default function DarkSidebar({
   }, [pathname, userType, isTeamManagerUser, isCoachUser, isGroupAdminUser]);
 
   useEffect(() => {
-    if (!pathname?.startsWith('/clubs/shop')) return;
+    if (!pathname?.startsWith('/clubs/shop') && !pathname?.startsWith('/ArchiveSeles')) return;
     setClubManagementOpen(true);
     setClubShopOpen(true);
     setClubArchivesOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!clubShopOpen || shopPublicPath) return;
+    let cancelled = false;
+    shopFetch('/api/club/shop/context')
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const path = data?.workspace?.publicPath;
+        if (typeof path === 'string' && path) setShopPublicPath(path);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [clubShopOpen, shopPublicPath]);
 
   // Team archive pages: keep My Team menu (TEAM'S MANAGEMENT) even if tab state lags.
   useEffect(() => {
@@ -4571,34 +4589,118 @@ export default function DarkSidebar({
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
                                 {(
                                   [
-                                    { label: 'Dashboard', path: '/clubs/shop', Icon: LayoutDashboard, disabled: true },
-                                    { label: 'Products', path: '/clubs/shop/products/shop', Icon: Shirt },
-                                    { label: 'Orders', path: '/clubs/shop/orders', Icon: ListOrdered },
-                                    { label: 'Settings', path: '/clubs/shop/settings', Icon: Settings },
-                                  ] as const
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Dashboard',
+                                      path: '/clubs/shop',
+                                      Icon: LayoutDashboard,
+                                      title: 'Status of the sellings',
+                                    },
+                                    { kind: 'group' as const, label: 'Selling', Icon: ShoppingCart },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Panel of shop online',
+                                      path: shopPublicPath,
+                                      Icon: Globe,
+                                      title: 'Members and other people purchase the club products online',
+                                      online: true,
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Sale of new product(s)',
+                                      path: '/ArchiveSeles/new_product_sale',
+                                      Icon: ShoppingBasket,
+                                      title: 'The operator sells one product, or more products, and takes a quick payment',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Panel of sellings',
+                                      path: '/clubs/shop/sell',
+                                      Icon: LayoutGrid,
+                                      title: 'The operator sells products to one or more members and records their payment',
+                                    },
+                                    { kind: 'group' as const, label: 'Storing', Icon: FolderOpen },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Orders',
+                                      path: '/clubs/shop/orders',
+                                      Icon: ListOrdered,
+                                      title: 'Online orders from members and other customers',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Archive of Sellings',
+                                      path: '/ArchiveSeles/product_sale_list',
+                                      Icon: Receipt,
+                                      title: 'All the sellings',
+                                    },
+                                    { kind: 'group' as const, label: 'Configuration', Icon: Settings },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Products',
+                                      path: '/clubs/shop/products/shop',
+                                      Icon: Shirt,
+                                      title: 'Insert and edit products',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Settings',
+                                      path: '/clubs/shop/settings',
+                                      Icon: Settings2,
+                                      title: 'Rules for the purchase of the products and their payment',
+                                    },
+                                  ]
                                 ).map((item, index, list) => {
-                                  const disabled = 'disabled' in item && item.disabled;
+                                  const border = index < list.length - 1 ? 'border-b border-gray-600/50' : '';
+                                  if (item.kind === 'group') {
+                                    const GroupIcon = item.Icon;
+                                    return (
+                                      <div
+                                        key={item.label}
+                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[11px] font-bold uppercase tracking-wide text-yellow-300 ${border}`}
+                                      >
+                                        <GroupIcon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                                        <span>{item.label}</span>
+                                      </div>
+                                    );
+                                  }
+                                  const ItemIcon = item.Icon;
                                   return (
-                                  <button
-                                    key={item.path}
-                                    type="button"
-                                    disabled={disabled}
-                                    title={disabled ? 'Dashboard is disabled for now' : undefined}
-                                    onClick={() => {
-                                      if (disabled) return;
-                                      if (isClubAccountUserType(userType)) {
-                                        writeClubWorkspaceTab('my-entity');
-                                        setCurrentTab('my-entity');
-                                      }
-                                      router.push(item.path);
-                                    }}
-                                    className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors ${
-                                      disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-[#333]'
-                                    } ${index < list.length - 1 ? 'border-b border-gray-600/50' : ''}`}
-                                  >
-                                    <item.Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
-                                    <span className="leading-snug">{item.label}</span>
-                                  </button>
+                                    <button
+                                      key={item.label}
+                                      type="button"
+                                      title={item.title}
+                                      onClick={() => {
+                                        const open = (path: string) => {
+                                          if (isClubAccountUserType(userType)) {
+                                            writeClubWorkspaceTab('my-entity');
+                                            setCurrentTab('my-entity');
+                                          }
+                                          router.push(path);
+                                        };
+                                        if (item.online) {
+                                          if (shopPublicPath) {
+                                            open(shopPublicPath);
+                                            return;
+                                          }
+                                          void shopFetch('/api/club/shop/context')
+                                            .then(async (response) => (response.ok ? response.json() : null))
+                                            .then((data) => {
+                                              const path = data?.workspace?.publicPath;
+                                              if (typeof path !== 'string' || !path) return;
+                                              setShopPublicPath(path);
+                                              open(path);
+                                            })
+                                            .catch(() => undefined);
+                                          return;
+                                        }
+                                        open(item.path);
+                                      }}
+                                      className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${border}`}
+                                    >
+                                      <ItemIcon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                                      <span className="leading-snug">{item.label}</span>
+                                    </button>
                                   );
                                 })}
                               </div>
