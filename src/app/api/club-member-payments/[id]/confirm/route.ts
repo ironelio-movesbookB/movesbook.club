@@ -6,15 +6,15 @@ import {
   markMemberOnlinePaymentPaid,
   settleMemberOnlinePayment,
 } from '@/lib/club/memberOnlinePayments';
-import { euroCents, retrieveStripeCheckoutSession } from '@/lib/payments/stripeRest';
-import { capturePaypalOrder, euroValue } from '@/lib/payments/paypalRest';
+import { currencyMinorUnits, retrieveStripeCheckoutSession } from '@/lib/payments/stripeRest';
+import { capturePaypalOrder, currencyValue } from '@/lib/payments/paypalRest';
 import type { ActivePaypalCredentials, ActiveStripeCredentials } from '@/lib/payments/paymentSettings';
 
 export const dynamic = 'force-dynamic';
 
 async function tellTheClub(paymentId: string, text: string) {
   const payment = await getMemberOnlinePayment(paymentId);
-  if (!payment) return;
+  if (!payment || payment.createdByUserId === payment.memberUserId) return;
   const [user1Id, user2Id] = [payment.createdByUserId, payment.memberUserId].sort();
   const conversation = await prisma.chatConversation.upsert({
     where: { user1Id_user2Id: { user1Id, user2Id } },
@@ -49,35 +49,41 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const session = await retrieveStripeCheckoutSession(credentials as ActiveStripeCredentials, sessionId);
       const valid =
         session.paid &&
-        session.currency === 'eur' &&
-        session.amountCents === euroCents(payment.amountEur) &&
+        session.currency === payment.currency.toLowerCase() &&
+        session.amountCents === currencyMinorUnits(payment.amountEur, payment.currency) &&
         session.reference === payment.id;
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
-      await settleMemberOnlinePayment(payment);
-      await markMemberOnlinePaymentPaid(payment.id, session.paymentIntent || sessionId);
+      if (!(await markMemberOnlinePaymentPaid(payment.id, session.paymentIntent || sessionId))) {
+        return NextResponse.json({ paid: true });
+      }
     } else {
       const orderId = (body.orderId || payment.providerRef || '').trim();
       if (!orderId) return NextResponse.json({ error: 'The PayPal payment is missing' }, { status: 400 });
       const capture = await capturePaypalOrder(credentials as ActivePaypalCredentials, orderId, payment.id);
       const valid =
         capture.completed &&
-        capture.currency === 'EUR' &&
-        capture.amountValue === euroValue(payment.amountEur) &&
+        capture.currency === payment.currency &&
+        capture.amountValue === currencyValue(payment.amountEur, payment.currency) &&
         capture.reference === payment.id;
       if (!valid) {
         return NextResponse.json({ paid: false, error: 'The payment was not completed' }, { status: 402 });
       }
-      await settleMemberOnlinePayment(payment);
-      await markMemberOnlinePaymentPaid(payment.id, capture.captureId || orderId);
+      if (!(await markMemberOnlinePaymentPaid(payment.id, capture.captureId || orderId))) {
+        return NextResponse.json({ paid: true });
+      }
     }
+    // The money is already taken, so a settle error is logged instead of failing the member's page.
+    await settleMemberOnlinePayment(payment).catch((error) => {
+      console.error('club member settle:', payment.id, error);
+    });
 
     const paid = await getMemberOnlinePayment(payment.id);
     const how = payment.provider === 'paypal' ? 'PayPal' : 'card';
     await tellTheClub(
       payment.id,
-      `Payment received: € ${payment.amountEur.toFixed(2)} by ${how}. The money is in the ${payment.entityName} account.`,
+      `Payment received: ${payment.currency === 'EUR' ? '€' : payment.currency} ${payment.amountEur.toFixed(2)} by ${how}. The money is in the ${payment.entityName} account.`,
     ).catch(() => undefined);
     return NextResponse.json({ paid: paid?.status === 'paid' });
   } catch (error) {

@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import DisplayModePanel from "@/components/display/DisplayModePanel";
 import { useDisplayLayoutOptions } from "@/hooks/useDisplayLayoutOptions";
 
 interface DisplayOptionsToolbarProps {
@@ -26,67 +24,36 @@ export default function DisplayOptionsToolbar({
   onToggleLeftSidebar,
   onToggleRightSidebar,
 }: DisplayOptionsToolbarProps) {
-  const { showOptionsToolbar } = useDisplayLayoutOptions();
-  const [panelOpen, setPanelOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!panelOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) {
-        setPanelOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [panelOpen]);
+  const { showSectionsToolbar } = useDisplayLayoutOptions();
+  if (!showSectionsToolbar) return null;
 
   return (
-    <div className={`relative z-30 shrink-0 border-b bg-white print:hidden ${showOptionsToolbar ? "px-4 py-2 md:px-12" : "h-10"}`}>
+    <div className="relative z-30 shrink-0 border-b bg-white px-4 py-2 md:px-12">
       <div className="flex items-center gap-4">
-        {showOptionsToolbar ? (
-        <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-hidden flex-wrap pr-12">
+        <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-hidden flex-wrap">
+          <ToggleOption
+            checked={showLeftSidebar}
+            label="Left side bar"
+            onChange={onToggleLeftSidebar}
+          />
+
           <ToggleOption
             checked={showAdBanner}
-            label="Advertising Banner"
+            label="Advertising banner"
             onChange={onToggleAdBanner}
           />
 
           <ToggleOption
             checked={showPersonalBanner}
-            label="Personal Banner & Picture"
+            label="Personal banner"
             onChange={onTogglePersonalBanner}
           />
 
           <ToggleOption
-            checked={showLeftSidebar}
-            label="Left Sidebar"
-            onChange={onToggleLeftSidebar}
-          />
-
-          <ToggleOption
             checked={showRightSidebar}
-            label="Right Sidebar"
+            label="Right sidebar"
             onChange={onToggleRightSidebar}
           />
-        </div>
-        ) : <div className="flex-1" />}
-        <div ref={panelRef} className="absolute right-2 top-1/2 z-40 -translate-y-1/2">
-          <button
-            type="button"
-            onClick={() => setPanelOpen((open) => !open)}
-            className="flex h-7 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-base font-bold leading-none text-gray-900 shadow-sm hover:bg-gray-100"
-            aria-expanded={panelOpen}
-            aria-label="Open the display carousel"
-            title="Display carousel"
-          >
-            «
-          </button>
-          {panelOpen ? (
-            <div className="fixed right-4 top-28 z-[80]">
-              <DisplayModePanel onClose={() => setPanelOpen(false)} />
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

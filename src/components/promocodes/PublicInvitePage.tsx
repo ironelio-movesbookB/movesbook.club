@@ -228,7 +228,7 @@ export default function PublicInvitePage() {
         ) : null}
 
         <a
-          href="https://movesbook.it"
+          href="https://movesbook.eu"
           target="_blank"
           rel="noreferrer"
           className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 hover:bg-slate-100"

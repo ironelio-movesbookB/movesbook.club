@@ -274,7 +274,7 @@ export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
   (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),
 );
 
-/** Management data sub-buttons → existing archives (scoped with ?memberId=). */
+/** Mngmnt sub-buttons → existing archives (scoped with ?memberId=). */
 export const MEMBER_OVERVIEW_MNGMNT_LINKS: { label: string; path: string }[] = [
   { label: 'Bookings', path: '/clubs/archive_reservations' },
   { label: 'Subscriptions', path: '/clubs/subscription' },

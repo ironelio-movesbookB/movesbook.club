@@ -277,7 +277,7 @@ export default function HomePage() {
               </p>
               
               {/* User Type Selection */}
-              <div className="flex justify-center space-x-4 mb-12 flex-wrap gap-4">
+              <div className="mb-12 flex flex-wrap items-center justify-center gap-4">
                 {[
                   { id: 'athlete' as const, label: t('user_type_athlete') },
                   { id: 'coach' as const, label: t('user_type_coach') },
@@ -288,9 +288,9 @@ export default function HomePage() {
                   <button
                     key={type.id}
                     onClick={() => setUserType(type.id)}
-                    className={`px-8 py-4 rounded-xl font-semibold transition-all duration-300 backdrop-blur-sm border-2 ${
+                    className={`inline-flex h-14 w-32 items-center justify-center rounded-xl font-semibold transition-all duration-300 backdrop-blur-sm border-2 ${
                       userType === type.id
-                        ? 'bg-blue-600 text-white shadow-2xl transform scale-105 border-blue-400'
+                        ? 'bg-blue-600 text-white shadow-2xl border-blue-400'
                         : 'bg-white bg-opacity-15 text-white shadow-lg hover:bg-opacity-25 border-white border-opacity-30'
                     }`}
                   >
@@ -300,9 +300,9 @@ export default function HomePage() {
               </div>
 
               {/* Features Grid */}
-              <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+              <div className="grid max-w-6xl items-stretch gap-8 md:grid-cols-2 mx-auto">
                 {getFeaturesForUserType(userType).map((feature, index) => (
-                  <div key={index} className="bg-white bg-opacity-10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-500 hover:scale-105">
+                  <div key={index} className="flex h-full min-h-[320px] flex-col items-center justify-center bg-white bg-opacity-10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-500">
                     <div className="w-20 h-20 bg-blue-500 bg-opacity-60 rounded-2xl flex items-center justify-center mb-6 mx-auto">
                       {(() => {
                         const Icon = feature.icon;

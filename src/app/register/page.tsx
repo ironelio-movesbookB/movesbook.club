@@ -15,6 +15,7 @@ import {
   type RegistrationUserType,
 } from '@/lib/registration/waysToGetStarted';
 import type { CountryPriceInfo } from '@/lib/countries/countryPriceFormula';
+import type { PaymentModeCode } from '@/lib/subscriptions/paymentModalities';
 
 export default function RegisterPage() {
   const { t, currentLanguage } = useLanguage();
@@ -43,6 +44,8 @@ export default function RegisterPage() {
     expiration: '',
   });
   const [countryPrice, setCountryPrice] = useState<CountryPriceInfo | null>(null);
+  /** Payment modality A–F chosen in "Ways to get started" (A unless the user opens "See more options"). */
+  const [paymentModality, setPaymentModality] = useState<PaymentModeCode>('A');
   const router = useRouter();
 
   useEffect(() => {
@@ -134,6 +137,7 @@ export default function RegisterPage() {
           subscriptionVersionId: formData.subscriptionVersionId ?? undefined,
           useSpecialOffer: specialOfferConfirmed,
           useSpecialUpgrade: specialUpgradeConfirmed,
+          paymentModality,
           specialUpgradeSoftware: specialUpgradeConfirmed ? specialUpgradeSoftware : undefined,
           registrationMode:
             typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
@@ -301,9 +305,10 @@ export default function RegisterPage() {
                 })
               }
               selectedVersionId={formData.subscriptionVersionId}
-              onVersionSelect={(subscriptionVersionId) =>
-                setFormData({ ...formData, subscriptionVersionId })
-              }
+              onVersionSelect={(subscriptionVersionId) => {
+                setFormData({ ...formData, subscriptionVersionId });
+                setPaymentModality('A');
+              }}
               lang={formData.language}
               specialOfferConfirmed={specialOfferConfirmed}
               onSpecialOfferConfirmChange={handleSpecialOfferConfirmChange}
@@ -311,6 +316,8 @@ export default function RegisterPage() {
               specialUpgradeSoftware={specialUpgradeSoftware}
               onSpecialUpgradeConfirmChange={handleSpecialUpgradeConfirmChange}
               countryPrice={countryPrice}
+              paymentModality={paymentModality}
+              onPaymentModalityChange={setPaymentModality}
             />
 
             {/* Name + Surname - 2 Columns */}

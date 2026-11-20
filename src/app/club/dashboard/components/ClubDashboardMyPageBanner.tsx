@@ -3,6 +3,7 @@
 import { Camera, Home, Menu, Settings, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { DEFAULT_HERO_BANNER_URL } from '@/lib/profileBannerSequence';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import SafeCoverImage from '@/components/media/SafeCoverImage';
@@ -56,6 +57,7 @@ export default function ClubDashboardMyPageBanner({
 }: ClubDashboardMyPageBannerProps) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { showCentralToolbar } = useDisplayLayoutOptions();
   const displayName = clubName?.trim() || 'Club Magia Avollino Club';
 
   const entityCoverInputRef = useEntityImageInput();
@@ -78,8 +80,8 @@ export default function ClubDashboardMyPageBanner({
 
   return (
     <div className="mb-6 flex-shrink-0 px-0">
-      <div className="flex w-full flex-col lg:flex-row shadow-lg overflow-hidden bg-black min-h-[220px] max-h-[280px]">
-        <div className="relative flex-1 min-h-[200px] lg:min-h-[220px] min-w-0">
+      <div className="flex w-full flex-col lg:flex-row shadow-lg overflow-hidden bg-black min-h-[340px] max-h-[420px]">
+        <div className="relative flex-1 min-h-[320px] lg:min-h-[340px] min-w-0">
           <SafeCoverImage
             src={src}
             fill
@@ -187,6 +189,7 @@ export default function ClubDashboardMyPageBanner({
         )}
       </div>
 
+      {showCentralToolbar && (
       <div className="flex-shrink-0">
         <div className="bg-gray-800 overflow-hidden shadow-lg relative h-[52px]">
           <div
@@ -296,6 +299,7 @@ export default function ClubDashboardMyPageBanner({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

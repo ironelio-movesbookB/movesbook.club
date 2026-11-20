@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Share2 } from 'lucide-react';
 import SocialShareModal from '@/components/news/SocialShareModal';
 import PostInviteToMovesbookModal from '@/components/club/PostInviteToMovesbookModal';
@@ -14,10 +14,22 @@ type Props = {
   qrFileName: string;
   /** Optional richer body for Post on Movesbook (HTML). */
   postBodyHtml?: string;
+  /** Post on Movesbook targets every member (confirmation before posting). */
+  postToAllMembers?: boolean;
+  /** Extra controls shown above the buttons (e.g. a filter that changes `path`). */
+  children?: ReactNode;
 };
 
 /** Top banner with a public page link: open, copy, download QR, share, QR preview. */
-export default function PublicLinkBanner({ title, description, path, qrFileName, postBodyHtml }: Props) {
+export default function PublicLinkBanner({
+  title,
+  description,
+  path,
+  qrFileName,
+  postBodyHtml,
+  postToAllMembers = false,
+  children,
+}: Props) {
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -59,6 +71,7 @@ export default function PublicLinkBanner({ title, description, path, qrFileName,
           <h2 className="text-lg font-bold">{title}</h2>
           <p className="mt-1 text-sm text-blue-100">{description}</p>
           <p className="mt-2 truncate font-mono text-xs text-blue-200">{url}</p>
+          {children ? <div className="mt-3">{children}</div> : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <a
               href={path}
@@ -118,6 +131,7 @@ export default function PublicLinkBanner({ title, description, path, qrFileName,
         title={title}
         bodyHtml={postBodyHtml || `<p>${description}</p>`}
         inviteUrl={url}
+        allMembers={postToAllMembers}
       />
     </>
   );

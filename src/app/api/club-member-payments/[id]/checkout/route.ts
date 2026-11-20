@@ -18,6 +18,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const origin = registrationOrigin(request);
     const pageUrl = `${origin}/pay/club/${payment.id}`;
     if (payment.status === 'paid') return NextResponse.json({ url: pageUrl });
+    if (payment.status === 'cancelled') {
+      return NextResponse.json(
+        { error: 'This payment link was replaced by a newer one. Use the latest link you received.' },
+        { status: 410 },
+      );
+    }
 
     const credentials = await credentialsForMemberPayment(payment);
     if (!credentials) {
@@ -31,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const stripe = credentials as ActiveStripeCredentials;
       const session = await createStripeCheckoutSession(stripe, {
         amountEur: payment.amountEur,
+        currency: payment.currency,
         productName: payment.description,
         reference: payment.id,
         successUrl: `${pageUrl}?provider=stripe&session_id={CHECKOUT_SESSION_ID}`,
@@ -43,6 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const paypal = credentials as ActivePaypalCredentials;
     const order = await createPaypalOrder(paypal, {
       amountEur: payment.amountEur,
+      currency: payment.currency,
       description: payment.description,
       reference: payment.id,
       returnUrl: `${pageUrl}?provider=paypal`,

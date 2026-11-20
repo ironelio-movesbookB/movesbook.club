@@ -66,6 +66,7 @@ import DarkSidebar from '@/components/DarkSidebar';
 import SimpleFooter from '@/components/SimpleFooter';
 import AddMemberModal from '@/components/AddMemberModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import WorkoutSection from '@/components/workouts/WorkoutSection';
@@ -171,15 +172,23 @@ function AthleteDashboardContent() {
     | 'staff-feedbacks'
     | 'club-staff-messages'
   >('overview');
-  const [showAdBanner, setShowAdBanner] = useState(true);
-  const [showPersonalBanner, setShowPersonalBanner] = useState(true);
-  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
-  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const {
+    showAdBanner,
+    showPersonalBanner,
+    showLeftSidebar,
+    showRightSidebar,
+    showSectionsToolbar: showToolbar,
+    showCentralToolbar,
+    setShowAdBanner,
+    setShowPersonalBanner,
+    setShowLeftSidebar,
+    setShowRightSidebar,
+    setShowSectionsToolbar: setShowToolbar,
+  } = useDisplayLayoutOptions();
   const [newsExpanded, setNewsExpanded] = useState(false);
   const [musicExpanded, setMusicExpanded] = useState(false);
   const [clubAddSongsOgpOpen, setClubAddSongsOgpOpen] = useState(false);
   const [clubAddSongsOgpExpanded, setClubAddSongsOgpExpanded] = useState(false);
-  const [showToolbar, setShowToolbar] = useState(true);
   const showLegacyButtonBars = false;
   const [activeRightTab, setActiveRightTab] = useState<'actions-planner' | 'chat-panel'>('actions-planner');
   const [expandedActionsPlanner, setExpandedActionsPlanner] = useState(true);
@@ -624,31 +633,31 @@ function AthleteDashboardContent() {
         <div className={`flex items-center justify-between flex-wrap gap-2 transition-all duration-300 ${showToolbar ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={showLeftSidebar} onChange={(e) => setShowLeftSidebar(e.target.checked)} className="w-4 h-4" />
+              <span className="flex items-center gap-1">
+                {showLeftSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                Left side bar
+              </span>
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showAdBanner} onChange={(e) => setShowAdBanner(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showAdBanner ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Advertising Banner
+                Advertising banner
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showPersonalBanner} onChange={(e) => setShowPersonalBanner(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showPersonalBanner ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Personal Banner & Picture
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={showLeftSidebar} onChange={(e) => setShowLeftSidebar(e.target.checked)} className="w-4 h-4" />
-              <span className="flex items-center gap-1">
-                {showLeftSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Left Sidebar
+                Personal banner
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showRightSidebar} onChange={(e) => setShowRightSidebar(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showRightSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Right Sidebar
+                Right sidebar
               </span>
             </label>
             {showLegacyButtonBars && (
@@ -695,7 +704,7 @@ function AthleteDashboardContent() {
 
       <div className="flex-1 flex flex-col w-full py-2">
         {showAdBanner && (
-          <div className="flex-shrink-0">
+          <div className="mb-4 flex-shrink-0">
             <AdvertisementCarousel />
           </div>
         )}
@@ -756,7 +765,7 @@ function AthleteDashboardContent() {
         )}
 
         {/* Personal Banner - Horizontal Navigation Bar */}
-        {showPersonalBanner && (
+        {showCentralToolbar && (
           <div className="flex-shrink-0">
             <div className="bg-gray-800 overflow-hidden shadow-lg relative" style={{ height: '52px' }}>
               {/* Background image with subtle overlay (matches legacy: same cover as main banner when set) */}

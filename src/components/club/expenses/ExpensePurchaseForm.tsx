@@ -1,23 +1,31 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { BarChart3, Eye, EyeOff, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { BarChart3, Eye, EyeOff, X } from 'lucide-react';
 import ProcedureFormSection, {
   ProcedureFormCell,
   ProcedureFormGrid,
   procedureHighlightInputClass,
   procedureInputClass,
   procedureReadonlyInputClass,
-} from "@/components/procedures/ProcedureFormLayout";
-import { createProcedureClient } from "@/lib/club/procedureClient";
-import { uploadExpenseInvoice } from "@/lib/club/expenseInvoiceClient";
-import { fetchCompanies } from "@/lib/club/archives/clubArchiveClient";
-import PaymentModeSelect from "@/components/club/PaymentModeSelect";
-import { useClubDefaultPaymentMethods } from "@/hooks/useClubDefaultPaymentMethods";
-import { getProcedureDefinition } from "@/lib/procedures/registry";
-import { PROCEDURE_TYPE_CODES } from "@/lib/procedures/types";
+} from '@/components/procedures/ProcedureFormLayout';
+import { createProcedureClient } from '@/lib/club/procedureClient';
+import { uploadExpenseInvoice } from '@/lib/club/expenseInvoiceClient';
+import { fetchCompanies } from '@/lib/club/archives/clubArchiveClient';
+import PaymentModeSelect from '@/components/club/PaymentModeSelect';
+import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
+import { getProcedureDefinition } from '@/lib/procedures/registry';
+import {
+  PROCEDURE_TYPE_CODES,
+  type ExpenseRecurrenceInterval,
+} from '@/lib/procedures/types';
+import { clubApiFetch } from "@/lib/club/servicePurchasesClient";
+import {
+  ExpenseCategoryIcon,
+  EXPENSE_ICON_OPTIONS,
+} from "@/components/club/expenses/ExpenseCategoryIcon";
 
 type ExpenseFormOptions = {
   expenses: { id: string; name: string }[];
@@ -29,6 +37,23 @@ type ExpenseFormOptions = {
   currentOperatorId: string | null;
 };
 
+type ExpenseCategoryOption = {
+  id: string;
+  icon: string | null;
+};
+
+const RECURRENCE_INTERVALS: {
+  value: ExpenseRecurrenceInterval;
+  label: string;
+}[] = [
+  { value: "7d", label: "7 days" },
+  { value: "14d", label: "14 days" },
+  { value: "15d", label: "15 days" },
+  { value: "1m", label: "month" },
+  { value: "2m", label: "2 months" },
+  { value: "3m", label: "3 months" },
+];
+
 export default function ExpensePurchaseForm() {
   const router = useRouter();
   const def = getProcedureDefinition(PROCEDURE_TYPE_CODES.EXPENSE)!;
@@ -39,59 +64,80 @@ export default function ExpensePurchaseForm() {
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
 
   const [options, setOptions] = useState<ExpenseFormOptions | null>(null);
+  const [expenseCategories, setExpenseCategories] = useState<
+    ExpenseCategoryOption[]
+  >([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>(
     [],
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  const [invoicePreviewUrl, setInvoicePreviewUrl] = useState("");
+  const [invoicePreviewUrl, setInvoicePreviewUrl] = useState('');
   const invoiceInputRef = useRef<HTMLInputElement>(null);
   const [createdRecordId, setCreatedRecordId] = useState<string | null>(null);
-  const [expenseId, setExpenseId] = useState("");
-  const [expenseName, setExpenseName] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [operatorId, setOperatorId] = useState("");
-  const [operatorPassword, setOperatorPassword] = useState("");
-  const [value, setValue] = useState("");
-  const [pay, setPay] = useState("");
+  const [expenseId, setExpenseId] = useState('');
+  const [expenseName, setExpenseName] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [operatorId, setOperatorId] = useState('');
+  const [operatorPassword, setOperatorPassword] = useState('');
+  const [value, setValue] = useState('');
+  const [pay, setPay] = useState('');
   const [movementDate, setMovementDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
   const [movementTime, setMovementTime] = useState(() => {
     const d = new Date();
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   });
   // Planned expense: when the rest is due. The deadline shows up in Expense Deadlines until paid.
   const [dueDate, setDueDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
-  const [causal, setCausal] = useState("");
-  const [payMode, setPayMode] = useState("cash");
+  const [causal, setCausal] = useState('');
+  const [payMode, setPayMode] = useState('cash');
+  const [categoryAverage, setCategoryAverage] = useState<number | null>(null);
+  const [categoryAverageCount, setCategoryAverageCount] = useState(0);
+  const [categoryAverageLoading, setCategoryAverageLoading] = useState(false);
+  const [categoryAverageError, setCategoryAverageError] = useState('');
+  const [recurrent, setRecurrent] = useState(false);
+  const [recurrenceInterval, setRecurrenceInterval] =
+    useState<ExpenseRecurrenceInterval>("7d");
+  const [repeatCount, setRepeatCount] = useState("1");
 
   useEffect(() => {
     Promise.all([
       client.fetchFormOptions<ExpenseFormOptions>(),
       fetchCompanies(),
+      clubApiFetch<{ flatItems?: ExpenseCategoryOption[] }>(
+        "/api/club/settings/tables/expenses",
+      ).catch(() => ({ flatItems: [] })),
     ])
-      .then(([opts, co]) => {
+      .then(([opts, co, expenseCategoryResponse]) => {
         setOptions(opts);
+        setExpenseCategories(expenseCategoryResponse.flatItems ?? []);
         setCompanies(co.length ? co : opts.companies);
         if (opts.currentOperatorId) setOperatorId(opts.currentOperatorId);
         else if (opts.operators[0]?.id) setOperatorId(opts.operators[0].id);
         const companyList = co.length ? co : opts.companies;
         if (companyList[0]?.id) setCompanyId(companyList[0].id);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Load failed"))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Load failed'))
       .finally(() => setLoading(false));
   }, [client]);
 
   const selectedExpense = options?.expenses.find((e) => e.id === expenseId);
+  const selectedExpenseIcon = expenseCategories.find(
+    (expense) => expense.id === expenseId,
+  )?.icon;
+  const selectedIconLabel = EXPENSE_ICON_OPTIONS.find(
+    (option) => option.value === selectedExpenseIcon,
+  )?.label;
   const selectedCompany = companies.find((c) => c.id === companyId);
   const total = Number(value) || 0;
-  const paid = pay === "" ? 0 : Number(pay);
+  const paid = pay === '' ? 0 : Number(pay);
   const rest = Math.max(0, total - paid);
 
   useEffect(() => {
@@ -99,8 +145,48 @@ export default function ExpensePurchaseForm() {
   }, [selectedExpense]);
 
   useEffect(() => {
+    if (!expenseId) {
+      setCategoryAverage(null);
+      setCategoryAverageCount(0);
+      setCategoryAverageError('');
+      return;
+    }
+
+    const controller = new AbortController();
+    setCategoryAverageLoading(true);
+    setCategoryAverageError('');
+    const query = new URLSearchParams({
+      expenseId,
+      beforeDate: movementDate,
+    });
+    clubApiFetch<{ average: number | null; count: number }>(
+      `/api/club/procedures/expense/category-average?${query}`,
+      { signal: controller.signal },
+    )
+      .then((result) => {
+        setCategoryAverage(result.average);
+        setCategoryAverageCount(result.count);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setCategoryAverage(null);
+        setCategoryAverageCount(0);
+        setCategoryAverageError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load the category average.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCategoryAverageLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [expenseId, movementDate]);
+
+  useEffect(() => {
     if (!invoiceFile) {
-      setInvoicePreviewUrl("");
+      setInvoicePreviewUrl('');
       return;
     }
 
@@ -111,24 +197,32 @@ export default function ExpensePurchaseForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
+    setError('');
     if (!options?.clubMemberId)
-      return setError("The club account could not be identified.");
+      return setError('The club account could not be identified.');
     if (!expenseName.trim())
-      return setError("Please select or enter an expense.");
+      return setError('Please select or enter an expense.');
     if (!invoiceFile)
-      return setError("Please load the invoice picture for this expense.");
-    if (total <= 0) return setError("Amount must be greater than zero.");
-    if (!operatorId) return setError("Please select an operator.");
+      return setError('Please load the invoice picture for this expense.');
+    if (total <= 0) return setError('Amount must be greater than zero.');
+    if (!operatorId) return setError('Please select an operator.');
     if (!operatorPassword.trim())
-      return setError("Operator password is required.");
-    if (paid < 0) return setError("Payment cannot be negative.");
-    if (paid > total) return setError("Payment cannot exceed total.");
+      return setError('Operator password is required.');
+    if (paid < 0) return setError('Payment cannot be negative.');
+    if (paid > total) return setError('Payment cannot exceed total.');
+    if (
+      recurrent &&
+      (!Number.isInteger(Number(repeatCount)) ||
+        Number(repeatCount) < 1 ||
+        Number(repeatCount) > 1000)
+    ) {
+      return setError("Repeat must be a whole number between 1 and 1000.");
+    }
     if (rest > 0 && !dueDate)
-      return setError("Please set the planned payment date for the rest.");
+      return setError('Please set the planned payment date for the rest.');
     if (rest > 0 && dueDate < movementDate) {
       return setError(
-        "The planned payment date cannot be before the expense date.",
+        'The planned payment date cannot be before the expense date.',
       );
     }
 
@@ -154,6 +248,13 @@ export default function ExpensePurchaseForm() {
           movementTime,
           companyId,
           companyName: selectedCompany?.name,
+          recurrent,
+          ...(recurrent
+            ? {
+                recurrenceInterval,
+                repeatCount: Number(repeatCount),
+              }
+            : {}),
         });
         recordId = created.recordId;
         setCreatedRecordId(recordId);
@@ -161,7 +262,7 @@ export default function ExpensePurchaseForm() {
       await uploadExpenseInvoice(recordId, invoiceFile);
       router.push(def.routes.records);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -177,7 +278,7 @@ export default function ExpensePurchaseForm() {
             <ProcedureFormCell label="Official name of Club/Team">
               <input
                 type="text"
-                value={options?.clubName ?? ""}
+                value={options?.clubName ?? ''}
                 readOnly
                 disabled
                 className={procedureReadonlyInputClass}
@@ -205,6 +306,20 @@ export default function ExpensePurchaseForm() {
         <ProcedureFormSection title="Expense">
           <ProcedureFormGrid>
             <ProcedureFormCell label="Expense category">
+              <p
+                className="mb-1 min-h-4 text-right text-xs text-red-600"
+                aria-live="polite"
+              >
+                {expenseId
+                  ? categoryAverageLoading
+                    ? "Loading average..."
+                    : categoryAverageError
+                      ? categoryAverageError
+                      : categoryAverage == null
+                        ? "No previous records"
+                        : `Average of ${categoryAverageCount} records: €${categoryAverage.toFixed(2)}`
+                  : ''}
+              </p>
               <select
                 className={procedureInputClass}
                 value={expenseId}
@@ -226,6 +341,16 @@ export default function ExpensePurchaseForm() {
                   value={expenseName}
                   onChange={(e) => setExpenseName(e.target.value)}
                 />
+                <span
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border border-gray-300 bg-white text-gray-700"
+                  title={selectedIconLabel ?? "Expense icon"}
+                  aria-label={selectedIconLabel ?? "Expense icon"}
+                >
+                  <ExpenseCategoryIcon
+                    name={selectedExpenseIcon ?? "coins"}
+                    className="h-5 w-5"
+                  />
+                </span>
                 <button
                   type="button"
                   disabled
@@ -237,6 +362,59 @@ export default function ExpensePurchaseForm() {
                 </button>
               </div>
             </ProcedureFormCell>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 md:col-span-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={recurrent}
+                  onChange={(event) => setRecurrent(event.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                Recurrent
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                Every
+                <select
+                  className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  value={recurrenceInterval}
+                  onChange={(event) => {
+                    const selectedInterval = RECURRENCE_INTERVALS.find(
+                      (interval) => interval.value === event.target.value,
+                    );
+                    if (selectedInterval) {
+                      setRecurrenceInterval(selectedInterval.value);
+                    }
+                  }}
+                  disabled={!recurrent}
+                >
+                  {RECURRENCE_INTERVALS.map((interval) => (
+                    <option key={interval.value} value={interval.value}>
+                      {interval.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                Repeat
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  className="w-20 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  value={repeatCount}
+                  onChange={(event) => setRepeatCount(event.target.value)}
+                  disabled={!recurrent}
+                />
+                times
+              </label>
+              {recurrent && (
+                <span className="text-xs text-gray-500">
+                  Additional occurrences are created unpaid on their scheduled
+                  dates.
+                </span>
+              )}
+            </div>
             <ProcedureFormCell label="Value">
               <input
                 type="number"
@@ -293,7 +471,7 @@ export default function ExpensePurchaseForm() {
           {total > 0 && (
             <p className="mt-2 text-xs text-gray-600">
               {rest <= 0
-                ? "Fully paid now: the payment is recorded as OUT in the Archive of Payments."
+                ? 'Fully paid now: the payment is recorded as OUT in the Archive of Payments.'
                 : paid > 0
                   ? `€${paid.toFixed(2)} is paid now (OUT); the rest of €${rest.toFixed(2)} is planned for ${dueDate}.`
                   : `Planned expense: nothing is paid now; €${rest.toFixed(2)} is planned for ${dueDate}. Pay it later from Expense Deadlines.`}
@@ -320,7 +498,7 @@ export default function ExpensePurchaseForm() {
                 className="hidden"
                 onChange={(event) => {
                   setInvoiceFile(event.currentTarget.files?.[0] ?? null);
-                  event.currentTarget.value = "";
+                  event.currentTarget.value = '';
                 }}
               />
               <button
@@ -350,7 +528,7 @@ export default function ExpensePurchaseForm() {
                     </button>
                   </div>
                   {invoicePreviewUrl &&
-                    invoiceFile.type.startsWith("image/") && (
+                    invoiceFile.type.startsWith('image/') && (
                       <Image
                         src={invoicePreviewUrl}
                         alt={`Preview of ${invoiceFile.name}`}
@@ -361,7 +539,7 @@ export default function ExpensePurchaseForm() {
                       />
                     )}
                   {invoicePreviewUrl &&
-                    invoiceFile.type === "application/pdf" && (
+                    invoiceFile.type === 'application/pdf' && (
                       <iframe
                         src={invoicePreviewUrl}
                         title={`Preview of ${invoiceFile.name}`}
@@ -387,7 +565,7 @@ export default function ExpensePurchaseForm() {
             <ProcedureFormCell label="Password">
               <div className="relative">
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   className={procedureInputClass}
                   value={operatorPassword}
                   onChange={(e) => setOperatorPassword(e.target.value)}
@@ -438,7 +616,7 @@ export default function ExpensePurchaseForm() {
             disabled={saving}
             className="px-6 py-2 bg-red-700 text-white rounded disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? 'Saving...' : 'Save'}
           </button>
           <button
             type="button"

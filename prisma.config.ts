@@ -43,6 +43,15 @@ export default defineConfig({
       'club_setting_typology_listprices',
       'club_setting_subscription_packages',
       'lanes_for_days',
+      'subscription_modality_presets',
+      'movesbook_deadlines',
+      // FAQ system — created at runtime by src/lib/faqs/faqService.ts (ensureFaqTables).
+      'faq_entries',
+      'faq_entry_sections',
+      'faq_entry_translations',
+      'faq_entry_pages',
+      'faq_list_items',
+      'faq_view_settings',
     ]
   }
 });

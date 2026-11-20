@@ -31,18 +31,14 @@ export default function ClubMyClubInfoSubmenu({ clubId }: { clubId?: string | nu
       key: 'admin',
       label: 'Admin profile',
       icon: UserCircle,
-      href: clubId
-        ? `/club/settings?clubId=${encodeURIComponent(clubId)}#admin-profile`
-        : '/club/settings#admin-profile',
+      href: '/profile',
     },
     {
       key: 'club',
       label: 'Club profile',
       needsClub: true,
       icon: Building2,
-      href: clubId
-        ? `/club/settings?clubId=${encodeURIComponent(clubId)}#club-profile`
-        : undefined,
+      href: clubId ? `/my-club?clubId=${encodeURIComponent(clubId)}` : undefined,
     },
     {
       key: 'messages',

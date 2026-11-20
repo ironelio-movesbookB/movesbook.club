@@ -38,7 +38,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json(options);
     }
 
-    if (params.type === PROCEDURE_TYPE_CODES.MEMBER_DEBT) {
+    if (
+      params.type === PROCEDURE_TYPE_CODES.MEMBER_DEBT ||
+      params.type === PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION
+    ) {
       const options = await fetchMemberDebtFormOptions(auth.ctx);
       return NextResponse.json(options);
     }

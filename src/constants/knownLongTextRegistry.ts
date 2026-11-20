@@ -17,6 +17,17 @@ import {
   PAYMENT_INFO_DEFAULT_IT,
   PAYMENT_INFO_TRANSLATION_KEY,
 } from './paymentInfoLongText';
+import { PAY_MODE_ALERT_EN, PAY_MODE_ALERT_IT, PAY_MODE_ALERT_KEY } from './payModeAlertLongText';
+import {
+  EVENT_SIBLING_DISCOUNT_INFO_EN,
+  EVENT_SIBLING_DISCOUNT_INFO_IT,
+  EVENT_SIBLING_DISCOUNT_INFO_KEY,
+} from './eventSiblingDiscountLongText';
+import {
+  EVENT_QUICK_REGISTRATION_EN,
+  EVENT_QUICK_REGISTRATION_IT,
+  EVENT_QUICK_REGISTRATION_KEY,
+} from './eventQuickRegistrationLongText';
 import {
   ADD_AVAILABLE_SLOTS_FORM_EN,
   ADD_AVAILABLE_SLOTS_FORM_IT,
@@ -85,6 +96,26 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     category: 'management',
     descriptionEn: 'Member profile Settings — “Type of payments — method default” Info popup.',
     values: { en: PAYMENT_INFO_DEFAULT_EN, it: PAYMENT_INFO_DEFAULT_IT },
+  },
+  {
+    key: PAY_MODE_ALERT_KEY,
+    category: 'management',
+    descriptionEn:
+      'Pay mode dropdowns and “Methods your members can use” — alert explaining red (pay link) and blue (verify) methods.',
+    values: { en: PAY_MODE_ALERT_EN, it: PAY_MODE_ALERT_IT },
+  },
+  {
+    key: EVENT_SIBLING_DISCOUNT_INFO_KEY,
+    category: 'management',
+    descriptionEn: 'Manage Events → event editor → “Sibling / relative discount” explanation.',
+    values: { en: EVENT_SIBLING_DISCOUNT_INFO_EN, it: EVENT_SIBLING_DISCOUNT_INFO_IT },
+  },
+  {
+    key: EVENT_QUICK_REGISTRATION_KEY,
+    category: 'management',
+    descriptionEn:
+      'Event subscription page → “Quick registration” box at the top of the form ({club} = club / team name).',
+    values: { en: EVENT_QUICK_REGISTRATION_EN, it: EVENT_QUICK_REGISTRATION_IT },
   },
   {
     key: MEMBER_REMOVE_SLOTS_INFO_KEY,

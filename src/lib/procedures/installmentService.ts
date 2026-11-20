@@ -34,34 +34,46 @@ function mapRow(row: {
     paid: decimalToNumber(row.paid as never),
     balance: decimalToNumber(row.balance as never),
     paymentDate: row.paymentDate.toISOString().slice(0, 10),
-    expireDate: row.expireDate ? row.expireDate.toISOString().slice(0, 10) : null,
+    expireDate: row.expireDate
+      ? row.expireDate.toISOString().slice(0, 10)
+      : null,
     createdAt: row.createdAt.toISOString(),
     description: row.description,
   };
 }
 
-export async function listInstallments(recordId: string): Promise<InstallmentDto[]> {
+export async function listInstallments(
+  recordId: string,
+): Promise<InstallmentDto[]> {
   // Heal stale installment rests left by older payment paths.
   await reconcileInstallmentsWithRecord(recordId);
 
   const rows = await prisma.procedureInstallment.findMany({
     where: { procedureRecordId: recordId },
     // Oldest expire first; same day → oldest createdAt first.
-    orderBy: [{ expireDate: 'asc' }, { paymentDate: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [
+      { expireDate: 'asc' },
+      { paymentDate: 'asc' },
+      { createdAt: 'asc' },
+    ],
   });
   return rows.map(mapRow);
 }
 
 /** Installments of many records in one query — list views cannot afford a round trip per record. */
 export async function listInstallmentsForRecords(
-  recordIds: string[]
+  recordIds: string[],
 ): Promise<Map<string, InstallmentDto[]>> {
   const byRecord = new Map<string, InstallmentDto[]>();
   if (recordIds.length === 0) return byRecord;
 
   const rows = await prisma.procedureInstallment.findMany({
     where: { procedureRecordId: { in: recordIds } },
-    orderBy: [{ expireDate: 'asc' }, { paymentDate: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [
+      { expireDate: 'asc' },
+      { paymentDate: 'asc' },
+      { createdAt: 'asc' },
+    ],
   });
 
   for (const row of rows) {
@@ -79,17 +91,23 @@ export async function listInstallmentsForRecords(
  */
 export function projectInstallmentsOnBalance(
   installments: InstallmentDto[],
-  recordBalance: number
+  recordBalance: number,
 ): InstallmentDto[] {
   const rows = installments.map((row) => ({ ...row }));
   if (rows.length === 0) return rows;
 
   const balance = roundMoney(recordBalance);
   if (balance <= 0.005) {
-    return rows.map((row) => ({ ...row, paid: roundMoney(row.paid + row.balance), balance: 0 }));
+    return rows.map((row) => ({
+      ...row,
+      paid: roundMoney(row.paid + row.balance),
+      balance: 0,
+    }));
   }
 
-  let excess = roundMoney(rows.reduce((sum, row) => sum + row.balance, 0) - balance);
+  let excess = roundMoney(
+    rows.reduce((sum, row) => sum + row.balance, 0) - balance,
+  );
   if (excess <= 0.005) return rows;
 
   for (const row of rows) {
@@ -112,7 +130,7 @@ export async function createInstallment(
     expireDate?: string | null;
     description?: string | null;
   },
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
 ): Promise<InstallmentDto> {
   const client = tx ?? prisma;
   const row = await client.procedureInstallment.create({
@@ -137,29 +155,38 @@ export async function updateInstallment(
     paymentDate: string;
     expireDate: string | null;
     description: string | null;
-  }>
+  }>,
+  tx?: Prisma.TransactionClient,
 ): Promise<InstallmentDto | null> {
-  const existing = await prisma.procedureInstallment.findFirst({
+  const client = tx ?? prisma;
+  const existing = await client.procedureInstallment.findFirst({
     where: { id, procedureRecordId: recordId },
   });
   if (!existing) return null;
 
-  const row = await prisma.procedureInstallment.update({
+  const row = await client.procedureInstallment.update({
     where: { id },
     data: {
       ...(input.balance != null ? { balance: input.balance } : {}),
       ...(input.paid != null ? { paid: input.paid } : {}),
-      ...(input.paymentDate ? { paymentDate: toDateOnly(input.paymentDate) } : {}),
+      ...(input.paymentDate
+        ? { paymentDate: toDateOnly(input.paymentDate) }
+        : {}),
       ...(input.expireDate !== undefined
         ? { expireDate: input.expireDate ? toDateOnly(input.expireDate) : null }
         : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.description !== undefined
+        ? { description: input.description }
+        : {}),
     },
   });
   return mapRow(row);
 }
 
-export async function deleteInstallment(id: string, recordId: string): Promise<boolean> {
+export async function deleteInstallment(
+  id: string,
+  recordId: string,
+): Promise<boolean> {
   const result = await prisma.procedureInstallment.deleteMany({
     where: { id, procedureRecordId: recordId },
   });
@@ -176,15 +203,24 @@ function roundMoney(value: number): number {
 export async function applyPaymentToInstallments(
   recordId: string,
   amount: number,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  installmentId?: string | null,
 ): Promise<void> {
   const client = tx ?? prisma;
   let remaining = roundMoney(amount);
   if (remaining <= 0) return;
 
   const rows = await client.procedureInstallment.findMany({
-    where: { procedureRecordId: recordId, balance: { gt: 0 } },
-    orderBy: [{ expireDate: 'asc' }, { paymentDate: 'asc' }, { createdAt: 'asc' }],
+    where: {
+      procedureRecordId: recordId,
+      balance: { gt: 0 },
+      ...(installmentId ? { id: installmentId } : {}),
+    },
+    orderBy: [
+      { expireDate: 'asc' },
+      { paymentDate: 'asc' },
+      { createdAt: 'asc' },
+    ],
   });
 
   for (const row of rows) {
@@ -202,13 +238,19 @@ export async function applyPaymentToInstallments(
     });
     remaining = roundMoney(remaining - apply);
   }
+
+  if (installmentId && remaining > 0) {
+    throw new Error(
+      "Payment exceeds the selected deadline's remaining balance.",
+    );
+  }
 }
 
 /** Undo `applyPaymentToInstallments` for a deleted payment: the latest paid installments reopen first. */
 export async function reversePaymentOnInstallments(
   recordId: string,
   amount: number,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const client = tx ?? prisma;
   let remaining = roundMoney(amount);
@@ -216,7 +258,11 @@ export async function reversePaymentOnInstallments(
 
   const rows = await client.procedureInstallment.findMany({
     where: { procedureRecordId: recordId, paid: { gt: 0 } },
-    orderBy: [{ expireDate: 'desc' }, { paymentDate: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [
+      { expireDate: 'desc' },
+      { paymentDate: 'desc' },
+      { createdAt: 'desc' },
+    ],
   });
 
   for (const row of rows) {
@@ -242,7 +288,7 @@ export async function reversePaymentOnInstallments(
  */
 export async function reconcileInstallmentsWithRecord(
   recordId: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const client = tx ?? prisma;
   const record = await client.procedureRecord.findUnique({
@@ -251,15 +297,21 @@ export async function reconcileInstallmentsWithRecord(
   });
   if (!record) return;
 
-  const recordBalance = roundMoney(decimalToNumber(record.balanceAmount as never));
+  const recordBalance = roundMoney(
+    decimalToNumber(record.balanceAmount as never),
+  );
   const rows = await client.procedureInstallment.findMany({
     where: { procedureRecordId: recordId },
-    orderBy: [{ expireDate: 'asc' }, { paymentDate: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [
+      { expireDate: 'asc' },
+      { paymentDate: 'asc' },
+      { createdAt: 'asc' },
+    ],
   });
   if (rows.length === 0) return;
 
   const sumBalance = roundMoney(
-    rows.reduce((s, r) => s + decimalToNumber(r.balance as never), 0)
+    rows.reduce((s, r) => s + decimalToNumber(r.balance as never), 0),
   );
   const excess = roundMoney(sumBalance - recordBalance);
   if (excess > 0.005) {
@@ -289,17 +341,22 @@ export async function ensureDefaultInstallment(
   paymentDate: string,
   expireDate?: string | null,
   description?: string | null,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const client = tx ?? prisma;
-  const count = await client.procedureInstallment.count({ where: { procedureRecordId: recordId } });
+  const count = await client.procedureInstallment.count({
+    where: { procedureRecordId: recordId },
+  });
   if (count > 0) return;
-  await createInstallment({
-    procedureRecordId: recordId,
-    balance: Math.max(0, total - paid),
-    paid,
-    paymentDate,
-    expireDate: expireDate ?? paymentDate,
-    description,
-  }, tx);
+  await createInstallment(
+    {
+      procedureRecordId: recordId,
+      balance: Math.max(0, total - paid),
+      paid,
+      paymentDate,
+      expireDate: expireDate ?? paymentDate,
+      description,
+    },
+    tx,
+  );
 }

@@ -18,9 +18,12 @@ export async function GET(request: NextRequest) {
 
     await prismaConnect();
     const parsed = parseMubPageRequest(request);
-    const resolved = await resolveMubPageQuery(parsed, userId, 'read');
+    const resolved = await resolveMubPageQuery(request, parsed, userId, 'read');
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      return NextResponse.json(
+        { error: resolved.error, code: resolved.code },
+        { status: resolved.status },
+      );
     }
 
     const page = await getMubPage(resolved.query, parsed.lang);
@@ -40,9 +43,12 @@ export async function PATCH(request: NextRequest) {
 
     await prismaConnect();
     const parsed = parseMubPageRequest(request);
-    const resolved = await resolveMubPageQuery(parsed, userId, 'write');
+    const resolved = await resolveMubPageQuery(request, parsed, userId, 'write');
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      return NextResponse.json(
+        { error: resolved.error, code: resolved.code },
+        { status: resolved.status },
+      );
     }
 
     const body = (await request.json()) as { backgroundColor?: string; displayMode?: number };

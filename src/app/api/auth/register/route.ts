@@ -3,7 +3,13 @@ import bcrypt from 'bcryptjs';
 import { SportType, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
-import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
+import { getSubscriptionById, getSubscriptionEditData } from '@/lib/admin/subscriptionSettingsMock';
+import {
+  MODALITY_SUBSCRIPTION_DAYS,
+  resolveRegistrationModality,
+  splitIntoDeadlines,
+  type RegistrationModalityChoice,
+} from '@/lib/subscriptions/paymentModalities';
 import { copyVersionSettingsToUser } from '@/lib/admin/versionSettingsStore';
 import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 import {
@@ -32,6 +38,11 @@ import {
   type CountryPriceInfo,
 } from '@/lib/countries/countryPriceFormula';
 import { getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
+import {
+  createDeadlinesForPayment,
+  ensureMovesbookDeadlinesTable,
+  registrationTypology,
+} from '@/lib/movesbookDeadlines/movesbookDeadlines';
 import {
   createRegistrationPayment,
   ensureRegistrationPaymentTables,
@@ -64,6 +75,7 @@ export async function POST(request: NextRequest) {
       useSpecialUpgrade,
       specialUpgradeSoftware,
       registrationMode,
+      paymentModality,
     } = await request.json();
 
     await hydrateVersionSettings();
@@ -90,6 +102,22 @@ export async function POST(request: NextRequest) {
         { error: 'Choose either the special offer or the special upgrade, not both' },
         { status: 400 },
       );
+    }
+
+    // Payment modality A–F (versions with modalities set up; special offers/upgrades keep their own price).
+    let modality: RegistrationModalityChoice | null = null;
+    if (selectedVersion && !withSpecialOffer && !withSpecialUpgrade) {
+      try {
+        modality = resolveRegistrationModality(
+          getSubscriptionEditData(selectedVersion.id)?.general.paymentModalities,
+          paymentModality,
+        );
+      } catch (e) {
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : 'Invalid payment modality' },
+          { status: 400 },
+        );
+      }
     }
 
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
@@ -183,6 +211,7 @@ export async function POST(request: NextRequest) {
     let testMode = true;
     if (usesPaymentFlow) {
       await ensureRegistrationPaymentTables();
+      await ensureMovesbookDeadlinesTable();
       try {
         countryPrice = await getCountryPriceInfo(String(country));
       } catch (e) {
@@ -314,11 +343,18 @@ export async function POST(request: NextRequest) {
         const dateEnd =
           upgradeRegistration?.dateEnd ??
           offerRegistration?.dateEnd ??
-          addDaysYmd(dateStart, versionDurationDays(selectedVersion.id));
-        const basePriceEur = Number(
-          upgradeRegistration?.costEuro ?? offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0,
-        );
-        const amountEur = priceForCountry(basePriceEur, countryPrice.factor);
+          addDaysYmd(dateStart, modality ? MODALITY_SUBSCRIPTION_DAYS : versionDurationDays(selectedVersion.id));
+        // With a modality, this payment is its first deadline (the rest go to the Archive of Deadlines).
+        const modalityTotalEur = modality ? priceForCountry(modality.quote.total, countryPrice.factor) : null;
+        const basePriceEur = modality
+          ? modality.deadlineAmounts[0]
+          : Number(
+              upgradeRegistration?.costEuro ?? offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0,
+            );
+        const amountEur =
+          modality && modalityTotalEur != null
+            ? splitIntoDeadlines(modalityTotalEur, modality.quote.deadlines)[0]
+            : priceForCountry(basePriceEur, countryPrice.factor);
         const amountLocalValue =
           countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR'
             ? localAmount(amountEur, countryPrice.eurToLocal)
@@ -350,7 +386,28 @@ export async function POST(request: NextRequest) {
           amountLocal: amountLocalValue,
           language: userLanguage,
           periodId,
+          paymentModality: modality?.code ?? null,
+          modalityTotalEur,
+          modalityDeadlines: modality?.quote.deadlines ?? null,
         });
+        // Archive of Deadlines (Movesbook): one deadline per payment step of this registration.
+        await createDeadlinesForPayment(
+          tx,
+          {
+            id: paymentId,
+            userId: created.id,
+            status: paymentStatus,
+            provider: null,
+            versionId: selectedVersion.id,
+            versionName: selectedVersion.name,
+            amountEur,
+            periodId,
+            paymentModality: modality?.code ?? null,
+            modalityTotalEur,
+            modalityDeadlines: modality?.quote.deadlines ?? null,
+          },
+          { dateStart, typology: registrationTypology(registrationMode) },
+        );
         await setAccountActivationStatus(
           tx,
           created.id,

@@ -29,12 +29,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ? body.provider
         : payment.provider;
     const providerRef = returnedRef || payment.providerRef;
+    const credentials = await getActivePaymentCredentials();
+    const origin = registrationOrigin(request);
+
+    // Test mode: deadline / renewal payments are confirmed without a provider (registration skips payment instead).
+    if (body.provider === 'test') {
+      if (!credentials.testMode || (payment.kind !== 'deadline' && payment.kind !== 'renewal')) {
+        return NextResponse.json({ error: 'Test payments are not available' }, { status: 400 });
+      }
+      await finalizePaidRegistration({ ...payment, provider: null }, `test-${Date.now()}`, origin);
+      return NextResponse.json({ paid: true, next: successUrl });
+    }
+
     if (!provider || !providerRef) {
       return NextResponse.json({ error: 'The payment was not started' }, { status: 400 });
     }
-
-    const credentials = await getActivePaymentCredentials();
-    const origin = registrationOrigin(request);
 
     if (provider === 'stripe' || provider === 'klarna') {
       if (!credentials.stripe) {

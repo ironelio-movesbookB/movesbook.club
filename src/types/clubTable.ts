@@ -65,6 +65,10 @@ export type Member = {
   operator?: string;
   /** Operator id behind `operator` — needed to preselect the operator when editing a row. */
   operatorId?: string;
+  /** Direction of an expense record in the expense archive. */
+  expenseDirection?: 'IN' | 'OUT';
+  /** Payment direction for cash-movement rows. */
+  direction?: 'IN' | 'OUT';
   /** Club staff type when row comes from club_staff (coadmin/operator/collaborator). */
   staffType?: string | null;
   /** Club staff employment area / role when row comes from club_staff. */
@@ -82,7 +86,6 @@ export type Member = {
   residual?: number;
 
   // movement
-  direction?: "IN" | "OUT" | "all";
   payMod?: string;
   casual?: string;
   originalDebt?: number;
@@ -98,6 +101,10 @@ export type Member = {
   isDuplicate?: boolean;
   /** Archive of Payments: stored as "To be verified" and not confirmed yet (grey row). */
   toBeVerified?: boolean;
+  /** Later instances generated from a recurrent expense schedule (grey row). */
+  isRecurringOccurrence?: boolean;
+  /** Recurrent expense still planned and awaiting activation. */
+  isRecurrent?: boolean;
   /** Cash archive cancellation state for procedure payments. */
   cancelled?: boolean;
   /** Cash archive reversals reference the original payment and cannot be edited/deleted alone. */
@@ -106,7 +113,7 @@ export type Member = {
    * Archive of Users A/B/C/D:
    * member | pending | not_member | archived
    */
-  membershipStatus?: "member" | "pending" | "not_member" | "archived";
+  membershipStatus?: 'member' | 'pending' | 'not_member' | 'archived';
   /** Staff-only archive rows (no pending/not-member actions). */
   isStaffOnly?: boolean;
   /** Member account is a Coach (ID6) — status circle is half filled. */

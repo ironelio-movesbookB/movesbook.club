@@ -1,126 +1,137 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'movesbook.displayLayoutOptions';
-const MODES_KEY = 'movesbook.displayLayoutModes';
-export const DISPLAY_LAYOUT_EVENT = 'movesbook:display-layout';
+const LAYOUT_EVENT = 'movesbook:display-layout';
 
-export type DisplayLayoutOptions = {
+export type LayoutModeId = '1' | '2' | '3';
+
+export type LayoutSnapshot = {
   showAdBanner: boolean;
   showPersonalBanner: boolean;
   showLeftSidebar: boolean;
   showRightSidebar: boolean;
-  /** The row of section checkboxes. The carousel button stays available when this is off. */
-  showOptionsToolbar: boolean;
+  showSectionsToolbar: boolean;
+  showMyPageToolbar: boolean;
+  showCentralToolbar: boolean;
 };
 
-export type LayoutModeId = 'mode1' | 'mode2' | 'mode3';
+export type DisplayLayoutOptions = LayoutSnapshot & {
+  modes: Partial<Record<LayoutModeId, LayoutSnapshot>>;
+};
 
-export type SavedLayoutModes = Record<LayoutModeId, DisplayLayoutOptions | null>;
-
-const DEFAULTS: DisplayLayoutOptions = {
+const DEFAULT_SNAPSHOT: LayoutSnapshot = {
   showAdBanner: true,
   showPersonalBanner: true,
   showLeftSidebar: true,
   showRightSidebar: true,
-  showOptionsToolbar: true,
+  showSectionsToolbar: true,
+  showMyPageToolbar: true,
+  showCentralToolbar: true,
 };
 
-const EMPTY_MODES: SavedLayoutModes = {
-  mode1: null,
-  mode2: null,
-  mode3: null,
+const DEFAULTS: DisplayLayoutOptions = {
+  ...DEFAULT_SNAPSHOT,
+  modes: {},
 };
 
-/** Each carousel step hides the next section that is still visible. A full cycle restores everything. */
-const CAROUSEL_ORDER: (keyof DisplayLayoutOptions)[] = [
-  'showLeftSidebar',
-  'showAdBanner',
-  'showPersonalBanner',
-  'showRightSidebar',
-];
-
-function readOptions(): DisplayLayoutOptions {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<DisplayLayoutOptions>;
-    return { ...DEFAULTS, ...parsed };
-  } catch {
-    return DEFAULTS;
-  }
+function snapshotOf(options: DisplayLayoutOptions): LayoutSnapshot {
+  return {
+    showAdBanner: options.showAdBanner,
+    showPersonalBanner: options.showPersonalBanner,
+    showLeftSidebar: options.showLeftSidebar,
+    showRightSidebar: options.showRightSidebar,
+    showSectionsToolbar: options.showSectionsToolbar,
+    showMyPageToolbar: options.showMyPageToolbar,
+    showCentralToolbar: options.showCentralToolbar,
+  };
 }
 
-function readModes(): SavedLayoutModes {
-  try {
-    const raw = localStorage.getItem(MODES_KEY);
-    if (!raw) return EMPTY_MODES;
-    const parsed = JSON.parse(raw) as Partial<SavedLayoutModes>;
-    return {
-      mode1: parsed.mode1 ? { ...DEFAULTS, ...parsed.mode1 } : null,
-      mode2: parsed.mode2 ? { ...DEFAULTS, ...parsed.mode2 } : null,
-      mode3: parsed.mode3 ? { ...DEFAULTS, ...parsed.mode3 } : null,
-    };
-  } catch {
-    return EMPTY_MODES;
-  }
+function normalizeSnapshot(raw: Partial<LayoutSnapshot> | undefined): LayoutSnapshot {
+  return { ...DEFAULT_SNAPSHOT, ...raw };
 }
 
-function writeOptions(next: DisplayLayoutOptions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  window.dispatchEvent(new Event(DISPLAY_LAYOUT_EVENT));
+function normalize(raw: Partial<DisplayLayoutOptions> | null | undefined): DisplayLayoutOptions {
+  const modesIn = raw?.modes && typeof raw.modes === 'object' ? raw.modes : {};
+  const modes: DisplayLayoutOptions['modes'] = {};
+  (['1', '2', '3'] as LayoutModeId[]).forEach((id) => {
+    if (modesIn[id]) modes[id] = normalizeSnapshot(modesIn[id]);
+  });
+  return {
+    ...DEFAULT_SNAPSHOT,
+    ...raw,
+    modes,
+  };
 }
 
-function writeModes(next: SavedLayoutModes) {
-  localStorage.setItem(MODES_KEY, JSON.stringify(next));
-  window.dispatchEvent(new Event(DISPLAY_LAYOUT_EVENT));
-}
-
-export function nextCarouselLayout(current: DisplayLayoutOptions): DisplayLayoutOptions {
-  const key = CAROUSEL_ORDER.find((item) => current[item]);
-  if (!key) return { ...DEFAULTS };
-  return { ...current, [key]: false };
+function sameLayout(a: DisplayLayoutOptions, b: DisplayLayoutOptions): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export function useDisplayLayoutOptions() {
   const [options, setOptions] = useState<DisplayLayoutOptions>(DEFAULTS);
-  const [modes, setModes] = useState<SavedLayoutModes>(EMPTY_MODES);
   const [hydrated, setHydrated] = useState(false);
+  const skipBroadcast = useRef(false);
 
   useEffect(() => {
-    const reload = () => {
-      setOptions(readOptions());
-      setModes(readModes());
-      setHydrated(true);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setOptions(normalize(JSON.parse(raw) as Partial<DisplayLayoutOptions>));
+    } catch {
+      /* ignore corrupt storage */
+    }
+    setHydrated(true);
+
+    const onLayout = (event: Event) => {
+      const detail = (event as CustomEvent<DisplayLayoutOptions>).detail;
+      if (!detail) return;
+      const next = normalize(detail);
+      setOptions((prev) => {
+        if (sameLayout(prev, next)) return prev;
+        skipBroadcast.current = true;
+        return next;
+      });
     };
-    reload();
-    window.addEventListener(DISPLAY_LAYOUT_EVENT, reload);
-    window.addEventListener('storage', reload);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      try {
+        const next = event.newValue ? normalize(JSON.parse(event.newValue)) : DEFAULTS;
+        setOptions((prev) => {
+          if (sameLayout(prev, next)) return prev;
+          skipBroadcast.current = true;
+          return next;
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener(LAYOUT_EVENT, onLayout);
+    window.addEventListener('storage', onStorage);
     return () => {
-      window.removeEventListener(DISPLAY_LAYOUT_EVENT, reload);
-      window.removeEventListener('storage', reload);
+      window.removeEventListener(LAYOUT_EVENT, onLayout);
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
 
-  const patchOptions = useCallback((patch: Partial<DisplayLayoutOptions>) => {
-    setOptions((prev) => {
-      let changed = false;
-      for (const key of Object.keys(patch) as (keyof DisplayLayoutOptions)[]) {
-        if (patch[key] !== undefined && patch[key] !== prev[key]) {
-          changed = true;
-          break;
-        }
-      }
-      if (!changed) return prev;
+  useEffect(() => {
+    if (!hydrated) return;
+    if (skipBroadcast.current) {
+      skipBroadcast.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
+    } catch {
+      /* ignore quota errors */
+    }
+    window.dispatchEvent(new CustomEvent(LAYOUT_EVENT, { detail: options }));
+  }, [options, hydrated]);
 
+  const patchOptions = useCallback((patch: Partial<LayoutSnapshot>) => {
+    setOptions((prev) => {
       const next = { ...prev, ...patch };
-      try {
-        writeOptions(next);
-      } catch {
-        /* ignore quota errors */
-      }
-      return next;
+      return sameLayout(prev, next) ? prev : next;
     });
   }, []);
 
@@ -140,92 +151,130 @@ export function useDisplayLayoutOptions() {
     (showRightSidebar: boolean) => patchOptions({ showRightSidebar }),
     [patchOptions],
   );
+  const setShowSectionsToolbar = useCallback(
+    (showSectionsToolbar: boolean) => patchOptions({ showSectionsToolbar }),
+    [patchOptions],
+  );
+  const setShowMyPageToolbar = useCallback(
+    (showMyPageToolbar: boolean) => patchOptions({ showMyPageToolbar }),
+    [patchOptions],
+  );
+  const setShowCentralToolbar = useCallback(
+    (showCentralToolbar: boolean) => patchOptions({ showCentralToolbar }),
+    [patchOptions],
+  );
+  const setBannerSection = useCallback((visible: boolean) => {
+    patchOptions({ showAdBanner: visible, showPersonalBanner: visible });
+  }, [patchOptions]);
 
-  const applyCarouselStep = useCallback(() => {
-    const next = nextCarouselLayout(readOptions());
-    try {
-      writeOptions(next);
-    } catch {
-      /* ignore quota errors */
-    }
-    setOptions(next);
-  }, []);
-
-  const saveMode = useCallback((id: LayoutModeId) => {
-    const next = { ...readModes(), [id]: readOptions() };
-    try {
-      writeModes(next);
-    } catch {
-      /* ignore quota errors */
-    }
-    setModes(next);
-  }, []);
-
-  const loadMode = useCallback((id: LayoutModeId) => {
-    const saved = readModes()[id];
-    if (!saved) return false;
-    try {
-      writeOptions(saved);
-    } catch {
-      return false;
-    }
-    setOptions(saved);
-    return true;
-  }, []);
-
-  const hideExceptCentral = useCallback(() => {
-    const next: DisplayLayoutOptions = {
+  const hideAllExceptCentral = useCallback(() => {
+    patchOptions({
       showAdBanner: false,
       showPersonalBanner: false,
       showLeftSidebar: false,
       showRightSidebar: false,
-      showOptionsToolbar: false,
-    };
-    try {
-      writeOptions(next);
-    } catch {
-      /* ignore quota errors */
-    }
-    setOptions(next);
-  }, []);
+      showSectionsToolbar: false,
+      showMyPageToolbar: false,
+      showCentralToolbar: false,
+    });
+  }, [patchOptions]);
 
   const restoreAll = useCallback(() => {
-    try {
-      writeOptions(DEFAULTS);
-    } catch {
-      /* ignore quota errors */
-    }
-    setOptions(DEFAULTS);
+    patchOptions(DEFAULT_SNAPSHOT);
+  }, [patchOptions]);
+
+  const saveMode = useCallback((id: LayoutModeId) => {
+    setOptions((prev) => ({
+      ...prev,
+      modes: { ...prev.modes, [id]: snapshotOf(prev) },
+    }));
+  }, []);
+
+  const loadMode = useCallback((id: LayoutModeId) => {
+    setOptions((prev) => {
+      const saved = prev.modes[id];
+      if (!saved) return prev;
+      return { ...prev, ...normalizeSnapshot(saved), modes: prev.modes };
+    });
+  }, []);
+
+  const applyCarousel = useCallback(() => {
+    patchOptions({ showAdBanner: true });
+  }, [patchOptions]);
+
+  /** From everything visible: hide the first three sections, then the right sidebar, then restore. */
+  const cycleCentralToolbar = useCallback(() => {
+    setOptions((prev) => {
+      const sectionsHidden = !prev.showSectionsToolbar;
+      const bannerHidden = !prev.showAdBanner && !prev.showPersonalBanner;
+      const myPageHidden = !prev.showMyPageToolbar;
+      const rightHidden = !prev.showRightSidebar;
+      const firstThreeHidden = sectionsHidden && bannerHidden && myPageHidden && !rightHidden;
+      const allFourHidden = sectionsHidden && bannerHidden && myPageHidden && rightHidden;
+
+      if (allFourHidden) {
+        return {
+          ...prev,
+          showSectionsToolbar: true,
+          showAdBanner: true,
+          showPersonalBanner: true,
+          showMyPageToolbar: true,
+          showRightSidebar: true,
+          showCentralToolbar: true,
+        };
+      }
+      if (firstThreeHidden) {
+        return { ...prev, showRightSidebar: false, showCentralToolbar: true };
+      }
+      return {
+        ...prev,
+        showSectionsToolbar: false,
+        showAdBanner: false,
+        showPersonalBanner: false,
+        showMyPageToolbar: false,
+        showRightSidebar: true,
+        showCentralToolbar: true,
+      };
+    });
   }, []);
 
   return useMemo(
     () => ({
       ...options,
-      modes,
       hydrated,
+      bannerSectionVisible: options.showAdBanner || options.showPersonalBanner,
       setShowAdBanner,
       setShowPersonalBanner,
       setShowLeftSidebar,
       setShowRightSidebar,
-      applyCarouselStep,
+      setShowSectionsToolbar,
+      setShowMyPageToolbar,
+      setShowCentralToolbar,
+      setBannerSection,
+      hideAllExceptCentral,
+      restoreAll,
       saveMode,
       loadMode,
-      hideExceptCentral,
-      restoreAll,
+      applyCarousel,
+      cycleCentralToolbar,
     }),
     [
       options,
-      modes,
       hydrated,
       setShowAdBanner,
       setShowPersonalBanner,
       setShowLeftSidebar,
       setShowRightSidebar,
-      applyCarouselStep,
+      setShowSectionsToolbar,
+      setShowMyPageToolbar,
+      setShowCentralToolbar,
+      setBannerSection,
+      hideAllExceptCentral,
+      restoreAll,
       saveMode,
       loadMode,
-      hideExceptCentral,
-      restoreAll,
+      applyCarousel,
+      cycleCentralToolbar,
     ],
   );
 }

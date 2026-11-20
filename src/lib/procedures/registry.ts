@@ -14,7 +14,11 @@ import type { ProcedureTypeCode } from './types';
 import { PROCEDURE_TYPE_CODES } from './types';
 
 /** Standard archive tab ids — reuse for every procedure. */
-export type ProcedureArchiveTabId = 'records' | 'deadlines' | 'payments' | 'receipts';
+export type ProcedureArchiveTabId =
+  | 'records'
+  | 'deadlines'
+  | 'payments'
+  | 'receipts';
 
 export type ProcedureMetadataKeys = {
   /** Shown in the primary detail column (e.g. service name, expense name). */
@@ -82,7 +86,8 @@ const SERVICE_SALE: ProcedureDefinition = {
   },
   form: {
     title: 'Services for the customers',
-    subtitle: 'Register a service sale and optionally record a payment in the same form.',
+    subtitle:
+      'Register a service sale and optionally record a payment in the same form.',
   },
 };
 
@@ -112,7 +117,8 @@ const EXPENSE: ProcedureDefinition = {
   },
   form: {
     title: 'Member expenses',
-    subtitle: 'Insert an expense: pay it now, or plan it with a payment date and pay it later.',
+    subtitle:
+      'Insert an expense: pay it now, or plan it with a payment date and pay it later.',
   },
 };
 
@@ -170,7 +176,8 @@ const MEMBER_DEBT: ProcedureDefinition = {
   },
   form: {
     title: 'Add a credit',
-    subtitle: "How you can add a debt beside the 'classic' debts of subscription and purchasest",
+    subtitle:
+      "How you can add a debt beside the 'classic' debts of subscription and purchasest",
   },
 };
 
@@ -261,7 +268,39 @@ const MEMBER_CREDIT: ProcedureDefinition = {
   },
 };
 
-export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinition> = {
+const EVENT_SUBSCRIPTION: ProcedureDefinition = {
+  code: PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION,
+  name: 'Event Subscription',
+  typologyLabel: 'EVENT',
+  pageSize: 25,
+  metadataKeys: { primary: 'eventName', secondary: 'eventType' },
+  columnHeaders: { primary: 'Event', secondary: 'Type of event' },
+  routes: {
+    form: '/clubs/events',
+    records: '/clubs/archive_events',
+    deadlines: '/clubs/archive_deadlines?procedureType=event_subscription',
+    payments: '/clubs/movement_cash_details/IN',
+    receipts: '/clubs/archive_receipts',
+    paymentDetail: (id) => `/clubs/events/payment_detail/${id}`,
+  },
+  archiveTitles: {
+    records: 'Archive — Events',
+    deadlines: 'Sellings of events',
+    payments: 'Archive of Payments',
+    receipts: 'Archive of Receipts',
+    paymentForm: 'Payment — Event subscription',
+    newRecordButton: '+ New event',
+  },
+  form: {
+    title: 'Event subscriptions',
+    subtitle: 'Subscriptions to club / team events (Manage Events).',
+  },
+};
+
+export const PROCEDURE_DEFINITIONS: Record<
+  ProcedureTypeCode,
+  ProcedureDefinition
+> = {
   [PROCEDURE_TYPE_CODES.SERVICE_SALE]: SERVICE_SALE,
   [PROCEDURE_TYPE_CODES.EXPENSE]: EXPENSE,
   [PROCEDURE_TYPE_CODES.PRODUCT_SALE]: PRODUCT_SALE,
@@ -269,11 +308,14 @@ export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinitio
   [PROCEDURE_TYPE_CODES.MEMBERSHIP]: MEMBERSHIP,
   [PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION]: COURSE_SUBSCRIPTION,
   [PROCEDURE_TYPE_CODES.MEMBER_CREDIT]: MEMBER_CREDIT,
+  [PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION]: EVENT_SUBSCRIPTION,
 };
 
 export const ALL_PROCEDURE_CODES = Object.values(PROCEDURE_TYPE_CODES);
 
-export function getProcedureDefinition(code: string): ProcedureDefinition | null {
+export function getProcedureDefinition(
+  code: string,
+): ProcedureDefinition | null {
   if (code in PROCEDURE_DEFINITIONS) {
     return PROCEDURE_DEFINITIONS[code as ProcedureTypeCode];
   }
@@ -282,6 +324,15 @@ export function getProcedureDefinition(code: string): ProcedureDefinition | null
 
 export function getProcedureTypology(code: string): string {
   return getProcedureDefinition(code)?.typologyLabel ?? 'PROCEDURE';
+}
+
+/** Typology of one record: event subscriptions show "EVENT - <type of event>". */
+export function procedureTypologyFor(code: string, metadata: unknown): string {
+  const base = getProcedureTypology(code);
+  if (code !== PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION) return base;
+  const meta = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
+  const eventType = String(meta.eventType ?? '').trim();
+  return eventType ? `${base} - ${eventType}` : base;
 }
 
 /** Cash direction of a procedure's payments: OUT when the club pays (expenses, member credits). */
@@ -308,29 +359,30 @@ export function getProcedureTabs(
   active: ProcedureArchiveTabId,
   selectedRecordId?: string | null,
   /** Member of the selected row — scopes the Payments/Receipts tabs to "this member" by default. */
-  selectedMemberId?: string | null
+  selectedMemberId?: string | null,
 ): ProcedureTab[] {
   const def = PROCEDURE_DEFINITIONS[code];
   // For service sales, Deadlines always lists SERVICES deadlines (payment form is separate).
-  const deadlineHref =
-    selectedRecordId
-      ? def.routes.paymentDetail(selectedRecordId)
-      : def.routes.deadlines;
+  const deadlineHref = selectedRecordId
+    ? def.routes.paymentDetail(selectedRecordId)
+    : def.routes.deadlines;
   // Sibling archives open on the selected record and can widen to the member or the whole club.
   const scopeQuery = archiveScopeQuery(selectedRecordId, selectedMemberId);
   const paymentsHref = `${def.routes.payments}${scopeQuery}`;
   const receiptsHref = `${def.routes.receipts}${scopeQuery}`;
 
-  return (['records', 'deadlines', 'payments', 'receipts'] as const).map((tabId) => ({
-    id: tabId,
-    label: TAB_LABELS[tabId],
-    href:
-      tabId === 'records'
-        ? def.routes.records
-        : tabId === 'deadlines'
-          ? deadlineHref
-          : tabId === 'payments'
-            ? paymentsHref
-            : receiptsHref,
-  }));
+  return (['records', 'deadlines', 'payments', 'receipts'] as const).map(
+    (tabId) => ({
+      id: tabId,
+      label: TAB_LABELS[tabId],
+      href:
+        tabId === 'records'
+          ? def.routes.records
+          : tabId === 'deadlines'
+            ? deadlineHref
+            : tabId === 'payments'
+              ? paymentsHref
+              : receiptsHref,
+    }),
+  );
 }

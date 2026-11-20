@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/admin/clubSubscriptionStatus';
 import { flagEmojiFromCountryName } from '@/lib/admin/countryFlag';
 import { typeBadgeLabel } from '@/lib/admin/userPcuPanel';
+import type { ListSortDir, ListSortKey } from '@/lib/admin/listColumnSort';
 import type { UserType } from '@prisma/client';
 import type { FavouritePriority } from '@/lib/admin/userProfilePanelSettings';
 import { normalizeFavouritePriority } from '@/lib/admin/userProfilePanelSettings';
@@ -529,6 +530,14 @@ export default function AdminRegisteredUsersList({
 
   const [membershipTab, setMembershipTab] = useState<MembershipTab>('all');
   const [orderBy, setOrderBy] = useState<string>(() => getDefaultMembershipSortOrder('all'));
+  /** Header "V" sort: applied by the API to the whole filtered list, before paging. */
+  const [sortKey, setSortKey] = useState<ListSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<ListSortDir>('asc');
+  /** Archive of Payments: user-arranged column order (drag & drop), kept per browser. */
+  const columnOrderStorageKey = `admin-list-column-order:${listPurpose}`;
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [dragColumnId, setDragColumnId] = useState<string | null>(null);
+  const dragColumnRef = useRef<string | null>(null);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
   const [page, setPage] = useState(1);
@@ -541,7 +550,10 @@ export default function AdminRegisteredUsersList({
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const { requestPassword, passwordModal } = useSuperAdminPassword();
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>(segment === 'all' ? 'grid' : 'list');
+  /** The Archive of Payments is table-only (card view removed). */
+  const cardViewAllowed = listPurpose !== 'payments';
+  const defaultViewMode: 'list' | 'grid' = cardViewAllowed && segment === 'all' ? 'grid' : 'list';
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(defaultViewMode);
   const [filterOpen, setFilterOpen] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [draftFilters, setDraftFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -630,13 +642,14 @@ export default function AdminRegisteredUsersList({
     setDraftFilters(next);
     setMembershipTab('all');
     setPage(1);
-    setViewMode(segment === 'all' ? 'grid' : 'list');
+    setViewMode(defaultViewMode);
   }, [
     statsBarActive,
     statsBarCountry,
     statsBarKind,
     statsBarVersion,
     segment,
+    defaultViewMode,
   ]);
 
   useEffect(() => {
@@ -706,6 +719,10 @@ export default function AdminRegisteredUsersList({
         q: searchApplied,
       });
       if (orderBy) params.set('order', orderBy);
+      if (sortKey) {
+        params.set('sort', sortKey);
+        params.set('dir', sortDir);
+      }
       if (appliedFilters.country) params.set('country', appliedFilters.country);
       if (appliedFilters.mainSport) params.set('sport', appliedFilters.mainSport);
       if (appliedFilters.version) params.set('version', appliedFilters.version);
@@ -757,6 +774,8 @@ export default function AdminRegisteredUsersList({
     searchApplied,
     segment,
     orderBy,
+    sortKey,
+    sortDir,
     appliedFilters,
     paymentStatus,
     membershipTab,
@@ -1469,6 +1488,169 @@ export default function AdminRegisteredUsersList({
       profilePanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [profileState]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(columnOrderStorageKey) || '[]');
+      if (Array.isArray(saved)) setColumnOrder(saved.filter((id): id is string => typeof id === 'string'));
+    } catch {
+      /* no saved order */
+    }
+  }, [columnOrderStorageKey]);
+
+  const columnsArrangeable = listPurpose === 'payments';
+  const thBase = 'px-3 py-2 text-left font-semibold border-r border-[#3d7a80]';
+  const tdBase = 'px-3 py-2 border-t border-gray-300';
+
+  const clearUpgradeCheck = (row: RowUser) => {
+    const pw = window.prompt('Super Admin password to clear the Check deadline');
+    if (!pw) return;
+    void (async () => {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/registered-users/clear-upgrade-check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            userId: row.id,
+            upgradeId: row.upgradeId,
+            password: pw,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not clear check');
+        await load();
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not clear check');
+      }
+    })();
+  };
+
+  type ListColumn = {
+    id: string;
+    label: string;
+    thClass: string;
+    sortKey?: ListSortKey;
+    cell: (r: RowUser) => ReactNode;
+  };
+
+  const baseColumns: ListColumn[] = [
+    ...(listPurpose === 'subscriptions'
+      ? [{ id: 'mode', label: 'Mode', thClass: 'px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14', cell: (r: RowUser) => <ModeCell row={r} /> }]
+      : []),
+    ...(isAllSegment
+      ? [{
+          id: 'userType',
+          label: 'Type of User',
+          thClass: `${thBase} min-w-[7rem]`,
+          cell: (r: RowUser) => <td className={tdBase}>{typeBadgeLabel(r.userType as UserType)}</td>,
+        }]
+      : []),
+    { id: 'fullName', label: 'Full name', thClass: thBase, sortKey: 'fullName', cell: (r) => <td className={`${tdBase} font-medium`}>{r.displayName || '—'}</td> },
+    { id: 'country', label: 'Country', thClass: thBase, sortKey: 'country', cell: (r) => <td className={tdBase}>{r.country?.trim() || '—'}</td> },
+    { id: 'flag', label: 'Flag', thClass: 'px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14', cell: (r) => <CountryFlagCell country={r.country} /> },
+    { id: 'location', label: 'Location', thClass: thBase, sortKey: 'location', cell: (r) => <td className={tdBase}>{r.location?.trim() || '—'}</td> },
+    ...(listPurpose === 'products'
+      ? ([
+          { id: 'date', label: 'Date', thClass: thBase, cell: (r) => <td className={`${tdBase} whitespace-nowrap`}>{r.dateStart}</td> },
+          { id: 'product', label: 'Product', thClass: thBase, cell: () => <td className={tdBase}>{purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}</td> },
+          { id: 'description', label: 'Description', thClass: thBase, cell: (r) => <td className={tdBase}>{subscriptionPurchaseDescription(r.userType, r.version, 1)}</td> },
+          { id: 'qty', label: 'Qty', thClass: 'px-2 py-2 text-left font-semibold border-r border-[#3d7a80]', cell: () => <td className="px-2 py-2 border-t border-gray-300 text-center">1</td> },
+        ] as ListColumn[])
+      : ([
+          { id: 'dateStart', label: 'Date Start', thClass: thBase, sortKey: 'dateStart', cell: (r) => <td className={`${tdBase} whitespace-nowrap`}>{r.dateStart}</td> },
+          { id: 'dateEnd', label: 'Date End', thClass: thBase, sortKey: 'dateEnd', cell: (r) => <td className={`${tdBase} whitespace-nowrap`}>{r.dateEnd ?? '—'}</td> },
+          { id: 'versionType', label: 'Version type', thClass: thBase, sortKey: 'versionType', cell: (r) => <VersionTypeCell row={r} /> },
+          { id: 'check', label: 'Check', thClass: thBase, cell: (r) => <CheckCell row={r} onClearCheck={clearUpgradeCheck} /> },
+          { id: 'version', label: 'Version', thClass: thBase, sortKey: 'version', cell: (r) => <VersionCell row={r} /> },
+        ] as ListColumn[])),
+    ...(listPurpose === 'payments'
+      ? ([
+          { id: 'paymentFor', label: 'Payment for', thClass: thBase, sortKey: 'paymentFor', cell: () => <td className={tdBase}>{purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}</td> },
+          { id: 'payMode', label: 'Pay mode', thClass: thBase, sortKey: 'payMode', cell: (r) => <td className={`${tdBase} whitespace-nowrap`}>{listPaymentModeLabel(rowPaymentMode(r))}</td> },
+        ] as ListColumn[])
+      : []),
+    {
+      id: 'username',
+      label: 'Username',
+      thClass: thBase,
+      sortKey: 'username',
+      cell: (r) => (
+        <td className={`${tdBase} font-medium`}>
+          {isClubsSegment || (isAllSegment && isClubUserType(r.userType)) ? (
+            <button
+              type="button"
+              onClick={() => void openClubUserPanel(r.id, r.primaryClubId)}
+              className="text-blue-800 underline hover:text-blue-950 font-medium"
+            >
+              {r.username}
+            </button>
+          ) : (
+            r.username
+          )}
+        </td>
+      ),
+    },
+    ...(showCompanyColumn
+      ? [{
+          id: 'companyName',
+          label: 'Company name',
+          thClass: `${thBase} min-w-[8rem]`,
+          sortKey: 'companyName' as ListSortKey,
+          cell: (r: RowUser) => (
+            <td className={tdBase}>{isAllSegment && r.userType === 'ATHLETE' ? '' : r.companyName || '—'}</td>
+          ),
+        }]
+      : []),
+    { id: 'amount', label: 'E', thClass: 'px-2 py-2 text-left font-semibold border-r border-[#3d7a80] w-14', cell: (r) => <AmountCell row={r} /> },
+    {
+      id: 'status',
+      label: 'Status',
+      thClass: thBase,
+      cell: (r) => (
+        <td className={tdBase}>
+          <span className={clubAdminStatusClassName(r.statusTone)}>{r.status}</span>
+        </td>
+      ),
+    },
+  ];
+
+  // Saved order first (ignoring ids no longer shown), then any new columns in their default place.
+  const visibleColumns: ListColumn[] = columnsArrangeable
+    ? [
+        ...columnOrder
+          .map((id) => baseColumns.find((c) => c.id === id))
+          .filter((c): c is ListColumn => Boolean(c)),
+        ...baseColumns.filter((c) => !columnOrder.includes(c.id)),
+      ]
+    : baseColumns;
+
+  const moveColumn = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const ids = visibleColumns.map((c) => c.id);
+    const from = ids.indexOf(fromId);
+    const to = ids.indexOf(toId);
+    if (from < 0 || to < 0) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    setColumnOrder(ids);
+    try {
+      localStorage.setItem(columnOrderStorageKey, JSON.stringify(ids));
+    } catch {
+      /* order just won't persist */
+    }
+  };
+
+  const toggleSort = (key: ListSortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+    setPage(1);
+  };
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 text-gray-900">
@@ -2206,6 +2388,7 @@ export default function AdminRegisteredUsersList({
             </span>
           </div>
 
+          {cardViewAllowed && (
           <div className="flex items-center gap-1 ml-auto">
             <button
               type="button"
@@ -2224,6 +2407,7 @@ export default function AdminRegisteredUsersList({
               <LayoutGrid className="w-5 h-5" />
             </button>
           </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-4 text-sm text-blue-800 underline">
@@ -2366,48 +2550,55 @@ export default function AdminRegisteredUsersList({
             <thead>
               <tr className="bg-[#4a8f96] text-white">
                 <th className="w-10 px-2 py-2 text-left font-semibold border-r border-[#3d7a80]" />
-                {listPurpose === 'subscriptions' ? (
-                  <th className="px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14">Mode</th>
-                ) : null}
-                {isAllSegment && (
-                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80] min-w-[7rem]">
-                    Type of User
-                  </th>
-                )}
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Full name</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Country</th>
-                <th className="px-2 py-2 text-center font-semibold border-r border-[#3d7a80] w-14">Flag</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Location</th>
-                {listPurpose === 'products' ? (
-                  <>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Product</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Description</th>
-                    <th className="px-2 py-2 text-left font-semibold border-r border-[#3d7a80]">Qty</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date Start</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Date End</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version type</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Check</th>
-                    <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Version</th>
-                  </>
-                )}
-                {listPurpose === 'payments' ? (
-                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Payment for</th>
-                ) : null}
-                {listPurpose === 'payments' ? (
-                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Pay mode</th>
-                ) : null}
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Username</th>
-                {showCompanyColumn && (
-                  <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80] min-w-[8rem]">
-                    Company name
-                  </th>
-                )}
-                <th className="px-2 py-2 text-left font-semibold border-r border-[#3d7a80] w-14">E</th>
-                <th className="px-3 py-2 text-left font-semibold border-r border-[#3d7a80]">Status</th>
+                {visibleColumns.map((col) => {
+                  const sortable = columnsArrangeable && col.sortKey;
+                  const sortedHere = sortable && sortKey === col.sortKey;
+                  return (
+                    <th
+                      key={col.id}
+                      className={`${col.thClass} ${columnsArrangeable ? 'cursor-move select-none' : ''} ${
+                        dragColumnId === col.id ? 'opacity-50' : ''
+                      }`}
+                      draggable={columnsArrangeable}
+                      onDragStart={(e) => {
+                        dragColumnRef.current = col.id;
+                        setDragColumnId(col.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', col.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (dragColumnRef.current) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragColumnRef.current) moveColumn(dragColumnRef.current, col.id);
+                        dragColumnRef.current = null;
+                        setDragColumnId(null);
+                      }}
+                      onDragEnd={() => {
+                        dragColumnRef.current = null;
+                        setDragColumnId(null);
+                      }}
+                      title={columnsArrangeable ? 'Drag to move this column' : undefined}
+                    >
+                      {sortable ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(col.sortKey as ListSortKey)}
+                          className="inline-flex items-center gap-1 font-semibold hover:underline"
+                          title={`Sort by ${col.label}`}
+                        >
+                          {col.label}
+                          <span className={sortedHere ? 'text-amber-300' : 'opacity-70'} aria-hidden>
+                            {sortedHere ? (sortDir === 'asc' ? '▲' : '▼') : 'V'}
+                          </span>
+                        </button>
+                      ) : (
+                        col.label
+                      )}
+                    </th>
+                  );
+                })}
                 <th className="w-12 px-2 py-2 text-center font-semibold"> </th>
               </tr>
             </thead>
@@ -2415,11 +2606,7 @@ export default function AdminRegisteredUsersList({
               {tableRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={
-                      (showCompanyColumn ? 13 : 12) +
-                      (isAllSegment ? 1 : 0) +
-                      (listPurpose === 'payments' ? 2 : listPurpose === 'subscriptions' ? 0 : 1)
-                    }
+                    colSpan={visibleColumns.length + 2}
                     className="px-4 py-10 text-center text-gray-500 bg-white"
                   >
                     {listPurpose !== 'subscriptions' && productFilterHidesRows
@@ -2441,100 +2628,9 @@ export default function AdminRegisteredUsersList({
                         className="rounded border-gray-500"
                       />
                     </td>
-                    {listPurpose === 'subscriptions' ? <ModeCell row={r} /> : null}
-                    {isAllSegment && (
-                      <td className="px-3 py-2 border-t border-gray-300">
-                        {typeBadgeLabel(r.userType as UserType)}
-                      </td>
-                    )}
-                    <td className="px-3 py-2 border-t border-gray-300 font-medium">{r.displayName || '—'}</td>
-                    <td className="px-3 py-2 border-t border-gray-300">{r.country?.trim() || '—'}</td>
-                    <CountryFlagCell country={r.country} />
-                    <td className="px-3 py-2 border-t border-gray-300">{r.location?.trim() || '—'}</td>
-                    {listPurpose === 'products' ? (
-                      <>
-                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">{r.dateStart}</td>
-                        <td className="px-3 py-2 border-t border-gray-300">
-                          {purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}
-                        </td>
-                        <td className="px-3 py-2 border-t border-gray-300">
-                          {subscriptionPurchaseDescription(r.userType, r.version, 1)}
-                        </td>
-                        <td className="px-2 py-2 border-t border-gray-300 text-center">1</td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">{r.dateStart}</td>
-                        <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
-                          {r.dateEnd ?? '—'}
-                        </td>
-                        <VersionTypeCell row={r} />
-                        <CheckCell
-                          row={r}
-                          onClearCheck={(row) => {
-                            const pw = window.prompt('Super Admin password to clear the Check deadline');
-                            if (!pw) return;
-                            void (async () => {
-                              try {
-                                const token = localStorage.getItem('adminToken');
-                                const res = await fetch('/api/admin/registered-users/clear-upgrade-check', {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                  },
-                                  body: JSON.stringify({
-                                    userId: row.id,
-                                    upgradeId: row.upgradeId,
-                                    password: pw,
-                                  }),
-                                });
-                                const data = await res.json().catch(() => ({}));
-                                if (!res.ok) throw new Error(data.error || 'Could not clear check');
-                                await load();
-                              } catch (e) {
-                                window.alert(e instanceof Error ? e.message : 'Could not clear check');
-                              }
-                            })();
-                          }}
-                        />
-                        <VersionCell row={r} />
-                      </>
-                    )}
-                    {listPurpose === 'payments' ? (
-                      <td className="px-3 py-2 border-t border-gray-300">
-                        {purchaseProductLabel(RECORDED_MEMBERSHIP_PRODUCT)}
-                      </td>
-                    ) : null}
-                    {listPurpose === 'payments' ? (
-                      <td className="px-3 py-2 border-t border-gray-300 whitespace-nowrap">
-                        {listPaymentModeLabel(rowPaymentMode(r))}
-                      </td>
-                    ) : null}
-                    <td className="px-3 py-2 border-t border-gray-300 font-medium">
-                      {isClubsSegment || (isAllSegment && isClubUserType(r.userType)) ? (
-                        <button
-                          type="button"
-                          onClick={() => void openClubUserPanel(r.id, r.primaryClubId)}
-                          className="text-blue-800 underline hover:text-blue-950 font-medium"
-                        >
-                          {r.username}
-                        </button>
-                      ) : (
-                        r.username
-                      )}
-                    </td>
-                    {showCompanyColumn && (
-                      <td className="px-3 py-2 border-t border-gray-300">
-                        {isAllSegment && r.userType === 'ATHLETE'
-                          ? ''
-                          : r.companyName || '—'}
-                      </td>
-                    )}
-                    <AmountCell row={r} />
-                    <td className="px-3 py-2 border-t border-gray-300">
-                      <span className={clubAdminStatusClassName(r.statusTone)}>{r.status}</span>
-                    </td>
+                    {visibleColumns.map((col) => (
+                      <Fragment key={col.id}>{col.cell(r)}</Fragment>
+                    ))}
                     <td className="px-2 py-2 border-t border-gray-300 text-center">
                       <button
                         type="button"

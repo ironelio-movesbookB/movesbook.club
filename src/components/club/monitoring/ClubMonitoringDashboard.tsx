@@ -18,16 +18,18 @@ import {
   ClipboardList,
   Loader2,
   Mail,
+  Pencil,
   Printer,
   Receipt,
   Settings,
+  Trash2,
   User,
   Users,
 } from 'lucide-react';
-import { DeleteRowButton, EditRowButton } from '@/components/procedures/ArchiveRowActions';
 import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   PREVIEW_LIMIT,
+  SECTION_PREVIEW_COLUMNS,
   archiveSectionById,
   summaryTileById,
   type ArchiveSectionId,
@@ -74,21 +76,17 @@ function escapeHtml(value: string): string {
   );
 }
 
-function cell(value: string | undefined): string {
-  return value && value.trim() ? value : '—';
-}
-
 function printRows(title: string, rows: PreviewRow[]) {
   const popup = window.open('', '_blank', 'noopener,noreferrer');
   if (!popup) return;
   const body = rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(cell(row.typology))}</td><td>${escapeHtml(cell(row.detail))}</td><td>${escapeHtml(cell(row.date))}</td><td>${escapeHtml(cell(row.paymentIn))}</td><td>${escapeHtml(cell(row.paymentOut))}</td></tr>`,
+        `<tr><td>${escapeHtml(row.title)}</td><td>${escapeHtml(row.detail)}</td><td>${escapeHtml(row.date)}</td></tr>`,
     )
     .join('');
   popup.document.write(
-    `<!doctype html><title>${escapeHtml(title)}</title><style>body{font-family:sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#115e59;color:#fff}button{margin:0 0 12px;padding:8px 12px}</style><body><button type="button" onclick="window.print()">Print or save as PDF</button><h1>${escapeHtml(title)}</h1><table><thead><tr><th>Full Name</th><th>Typology</th><th>Detail</th><th>Date</th><th>Payment IN</th><th>Payment OUT</th></tr></thead><tbody>${body || '<tr><td colspan="6">No records.</td></tr>'}</tbody></table></body>`,
+    `<!doctype html><title>${escapeHtml(title)}</title><body><h1>${escapeHtml(title)}</h1><table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Name</th><th>Detail</th><th>Date</th></tr></thead><tbody>${body}</tbody></table><script>window.print()</script></body>`,
   );
   popup.document.close();
 }
@@ -227,30 +225,27 @@ export default function ClubMonitoringDashboard({
       {error ? <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {visibleTiles.length > 0 ? (
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 flex flex-wrap gap-2">
           {visibleTiles.map((tile) => {
             const def = summaryTileById(tile.id);
             if (!def) return null;
             const Icon = TILE_ICONS[tile.id];
             const count = snapshot?.counts[tile.id];
+            const open = detail?.id === tile.id;
             return (
-              <div key={tile.id} className="overflow-hidden rounded border border-gray-300 shadow-sm">
-                <div className="flex items-start justify-between px-3 py-2 text-white" style={{ backgroundColor: def.color }}>
-                  <Icon className="h-8 w-8 opacity-90" strokeWidth={1.5} />
-                  <div className="text-right">
-                    <div className="text-2xl font-semibold leading-none">{count == null ? '…' : count}</div>
-                    <div className="mt-1 text-sm">{def.label}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void openDetail(tile.id)}
-                  className="flex w-full items-center justify-center gap-2 bg-white py-1.5 text-sm text-gray-800 hover:bg-gray-50"
-                >
-                  <Icon className="h-4 w-4" style={{ color: def.color }} />
-                  View Detail
-                </button>
-              </div>
+              <button
+                key={tile.id}
+                type="button"
+                title={def.label}
+                onClick={() => void openDetail(tile.id)}
+                className={`flex h-12 min-w-[92px] items-center justify-between gap-3 rounded-sm px-3 text-white shadow-sm ${
+                  open ? 'ring-2 ring-black/40' : ''
+                }`}
+                style={{ backgroundColor: def.color }}
+              >
+                <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />
+                <span className="text-xl font-semibold leading-none">{count == null ? '…' : count}</span>
+              </button>
             );
           })}
         </div>
@@ -288,7 +283,16 @@ export default function ClubMonitoringDashboard({
                 <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>
             ) : (
-              <PreviewTable rows={detail.items} altColor="#f3f4f6" visibleCount={detail.items.length} />
+              <PreviewTable
+                rows={detail.items}
+                altColor="#f3f4f6"
+                visibleCount={detail.items.length}
+                columns={[
+                  { key: 'name', header: 'Name' },
+                  { key: 'detail', header: 'Detail' },
+                  { key: 'date', header: 'Date' },
+                ]}
+              />
             )}
           </div>
         ) : loading && !series ? (
@@ -347,22 +351,7 @@ export default function ClubMonitoringDashboard({
                   type="button"
                   className="px-3 py-2 text-gray-600"
                   aria-label={`Print ${def.label}`}
-                  onClick={() => {
-                    void (async () => {
-                      let rows = sectionRows[section.id] ?? [];
-                      if (rows.length === 0) {
-                        try {
-                          const preview = await loadPreview(section.id);
-                          rows = preview.items;
-                          setSectionRows((current) => ({ ...current, [section.id]: preview.items }));
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : 'Could not load this archive');
-                          return;
-                        }
-                      }
-                      printRows(def.label, rows.slice(0, visibleCount || rows.length || PREVIEW_LIMIT));
-                    })();
-                  }}
+                  onClick={() => printRows(def.label, (sectionRows[section.id] ?? []).slice(0, visibleCount || PREVIEW_LIMIT))}
                 >
                   <Printer className="h-4 w-4" />
                 </button>
@@ -379,7 +368,8 @@ export default function ClubMonitoringDashboard({
                         rows={rows}
                         altColor={section.altColor}
                         visibleCount={visibleCount}
-                        onOpenArchive={() => router.push(def.readAllPath)}
+                        columns={SECTION_PREVIEW_COLUMNS[section.id]}
+                        archivePath={def.readAllPath}
                       />
                       {rows.length > section.rows && !showAll ? (
                         <button
@@ -430,83 +420,59 @@ function PreviewTable({
   rows,
   altColor,
   visibleCount,
-  onOpenArchive,
+  columns,
+  archivePath,
 }: {
   rows: PreviewRow[];
   altColor: string;
   visibleCount: number;
-  onOpenArchive?: () => void;
+  columns: { key: string; header: string }[];
+  archivePath?: string;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const router = useRouter();
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-500">No records.</p>;
   }
-  const visible = rows.slice(0, visibleCount);
-  const headers = ['Full Name', 'Typology', 'Detail', 'Date', 'Payment IN', 'Payment OUT', 'Edit', 'Delete'];
-  const allChecked = visible.length > 0 && visible.every((row) => selected.has(row.id));
-  const openArchive = () => onOpenArchive?.();
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[880px] border-collapse text-sm">
-        <thead className="bg-teal-800 text-white">
-          <tr className="text-left">
-            <th className="w-10 px-2 py-2">
-              <input
-                type="checkbox"
-                checked={allChecked}
-                aria-label="Select all"
-                onChange={(event) => {
-                  setSelected((current) => {
-                    const next = new Set(current);
-                    if (event.target.checked) {
-                      for (const row of visible) next.add(row.id);
-                    } else {
-                      for (const row of visible) next.delete(row.id);
-                    }
-                    return next;
-                  });
-                }}
-              />
+      <table className="w-full min-w-[720px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-[#2f8f3a] text-left text-white">
+            <th className="w-10 px-2 py-2 font-semibold">
+              <span className="sr-only">Select</span>
             </th>
-            {headers.map((header) => (
-              <th key={header} className="px-3 py-2 font-semibold whitespace-nowrap">
-                {header}
+            {columns.map((column) => (
+              <th key={column.key} className="whitespace-nowrap px-2 py-2 font-semibold">
+                {column.header}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {visible.map((row, index) => (
+          {rows.slice(0, visibleCount).map((row, index) => (
             <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
               <td className="px-2 py-1.5">
-                <input
-                  type="checkbox"
-                  checked={selected.has(row.id)}
-                  aria-label={`Select ${row.title}`}
-                  onChange={(event) => {
-                    setSelected((current) => {
-                      const next = new Set(current);
-                      if (event.target.checked) next.add(row.id);
-                      else next.delete(row.id);
-                      return next;
-                    });
-                  }}
-                />
+                <input type="checkbox" aria-label={`Select ${row.title}`} />
               </td>
-              <td className="px-3 py-1.5">{row.title}</td>
-              <td className="px-3 py-1.5">{row.typology || '—'}</td>
-              <td className="px-3 py-1.5">{row.detail || '—'}</td>
-              <td className="px-3 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
-              <td className="px-3 py-1.5 whitespace-nowrap">{row.paymentIn || '—'}</td>
-              <td className={`px-3 py-1.5 whitespace-nowrap ${row.paymentOut ? 'text-red-700' : ''}`}>
-                {row.paymentOut || '—'}
-              </td>
-              <td className="px-3 py-1.5">
-                <EditRowButton onClick={openArchive} />
-              </td>
-              <td className="px-3 py-1.5">
-                <DeleteRowButton onClick={openArchive} />
-              </td>
+              {columns.map((column) => (
+                <td key={column.key} className="whitespace-nowrap px-2 py-1.5">
+                  {column.key === 'edit' || column.key === 'delete' ? (
+                    <button
+                      type="button"
+                      className="text-gray-700 hover:text-black"
+                      aria-label={column.header}
+                      title={column.header}
+                      onClick={() => {
+                        if (archivePath) router.push(archivePath);
+                      }}
+                    >
+                      {column.key === 'edit' ? <Pencil className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  ) : (
+                    row.fields?.[column.key] || '—'
+                  )}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

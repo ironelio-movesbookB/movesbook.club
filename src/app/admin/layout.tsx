@@ -17,7 +17,8 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
   const isGlobalSettings = pathname?.startsWith('/admin/global-settings');
   const isAccessAudioSettings = pathname?.startsWith('/admin/access-audio-settings');
-  const useSystemSidebar = isGlobalSettings || isAccessAudioSettings;
+  const isFaqAdmin = pathname?.startsWith('/admin/faqs');
+  const useSystemSidebar = isGlobalSettings || isAccessAudioSettings || isFaqAdmin;
   const isChat = pathname?.startsWith('/admin/chat');
   const isStatistics = pathname?.startsWith('/admin/statistics');
   const isLogin = pathname?.startsWith('/admin/login');

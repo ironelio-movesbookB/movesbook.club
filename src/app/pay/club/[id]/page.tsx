@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { formatClubMoney } from '@/lib/club/clubCurrency';
 
 type PaymentView = {
   id: string;
-  status: 'pending' | 'paid';
+  status: 'pending' | 'paid' | 'cancelled';
   amountEur: number;
+  currency?: string;
   description: string;
   entityName: string;
   memberName: string;
@@ -19,10 +21,6 @@ type PageProps = {
   params: { id: string };
   searchParams: { provider?: string; session_id?: string; token?: string; cancelled?: string };
 };
-
-function euro(amount: number): string {
-  return `€ ${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 export default function ClubMemberPayPage({ params, searchParams }: PageProps) {
   const [payment, setPayment] = useState<PaymentView | null>(null);
@@ -142,14 +140,21 @@ export default function ClubMemberPayPage({ params, searchParams }: PageProps) {
           <div>
             <p className="text-lg font-semibold text-green-800">Payment received</p>
             <p className="mt-2 text-sm text-gray-700">
-              {euro(payment.amountEur)} is paid to {payment.entityName}. You can close this page.
+              {formatClubMoney(payment.amountEur, payment.currency)} is paid to {payment.entityName}. You can close this page.
+            </p>
+          </div>
+        ) : payment.status === 'cancelled' ? (
+          <div>
+            <p className="text-lg font-semibold text-gray-900">This link is no longer valid</p>
+            <p className="mt-2 text-sm text-gray-700">
+              {payment.entityName} replaced it with a newer payment link. Please use the latest link you received.
             </p>
           </div>
         ) : (
           <div>
             <p className="text-sm text-gray-600">{payment.description}</p>
             <p className="mt-1 text-sm text-gray-600">Paying to {payment.entityName}</p>
-            <p className="mt-4 text-3xl font-semibold text-gray-950">{euro(payment.amountEur)}</p>
+            <p className="mt-4 text-3xl font-semibold text-gray-950">{formatClubMoney(payment.amountEur, payment.currency)}</p>
             {notice ? <p className="mt-3 text-sm text-amber-800">{notice}</p> : null}
             {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
             <button
@@ -161,8 +166,8 @@ export default function ClubMemberPayPage({ params, searchParams }: PageProps) {
               {busy
                 ? 'Opening the payment…'
                 : payment.provider === 'paypal'
-                  ? `Pay ${euro(payment.amountEur)} with PayPal`
-                  : `Pay ${euro(payment.amountEur)} by card`}
+                  ? `Pay ${formatClubMoney(payment.amountEur, payment.currency)} with PayPal`
+                  : `Pay ${formatClubMoney(payment.amountEur, payment.currency)} by card`}
             </button>
             <p className="mt-3 text-xs text-gray-500">
               {payment.provider === 'paypal'
