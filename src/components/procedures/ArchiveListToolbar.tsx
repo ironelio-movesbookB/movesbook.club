@@ -47,6 +47,8 @@ type Props = {
   onStatisticsClick?: () => void;
   onSendData?: () => void;
   sendDataTitle?: string;
+  onShare?: () => void;
+  shareButtonTitle?: string;
 };
 
 const inputClass =
@@ -74,6 +76,8 @@ export default function ArchiveListToolbar({
   onStatisticsClick,
   onSendData,
   sendDataTitle,
+  onShare,
+  shareButtonTitle,
 }: Props) {
   const orderControl = (
     <label className={`flex min-w-[150px] flex-col ${compact ? 'min-w-[130px]' : ''}`}>
@@ -177,6 +181,8 @@ export default function ArchiveListToolbar({
         onStatisticsClick={onStatisticsClick}
         onSendData={onSendData}
         sendDataTitle={sendDataTitle}
+        onShare={onShare}
+        shareButtonTitle={shareButtonTitle}
         photoMode={photoMode}
         onPhotoModeChange={onPhotoModeChange}
       />

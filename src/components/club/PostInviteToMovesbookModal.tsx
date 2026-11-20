@@ -14,6 +14,8 @@ type Props = {
   bodyHtml: string;
   /** Optional absolute or site path for the invite link (appended to body). */
   inviteUrl?: string;
+  /** Pre-check every member and ask for confirmation before posting (shown at their login). */
+  allMembers?: boolean;
 };
 
 /** Post an invite into selected members' "Alert posted" section (staff note). */
@@ -23,6 +25,7 @@ export default function PostInviteToMovesbookModal({
   title,
   bodyHtml,
   inviteUrl,
+  allMembers = false,
 }: Props) {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -47,25 +50,25 @@ export default function PostInviteToMovesbookModal({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not load members');
       const list = (data.members || []) as Array<Record<string, unknown>>;
-      setMembers(
-        list
-          .map((m) => {
-            const member = (m.member || {}) as Record<string, unknown>;
-            return {
-              id: String(m.id || ''),
-              userId: String(member.id || m.memberId || ''),
-              name: String(member.name || member.username || 'Member'),
-              username: member.username ? String(member.username) : undefined,
-            };
-          })
-          .filter((m) => m.id),
-      );
+      const mapped = list
+        .map((m) => {
+          const member = (m.member || {}) as Record<string, unknown>;
+          return {
+            id: String(m.id || ''),
+            userId: String(member.id || m.memberId || ''),
+            name: String(member.name || member.username || 'Member'),
+            username: member.username ? String(member.username) : undefined,
+          };
+        })
+        .filter((m) => m.id);
+      setMembers(mapped);
+      if (allMembers) setSelected(new Set(mapped.map((m) => m.id)));
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not load members');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allMembers]);
 
   useEffect(() => {
     if (open) {
@@ -86,6 +89,16 @@ export default function PostInviteToMovesbookModal({
   const post = async () => {
     const clubId = sponsorWorkspaceId();
     if (!clubId || !selected.size) return;
+    if (
+      allMembers &&
+      !window.confirm(
+        `Post this as a message shown at login to ${
+          selected.size === members.length ? 'all' : selected.size
+        } member(s) of the club/team?`,
+      )
+    ) {
+      return;
+    }
     setPosting(true);
     setMessage('');
     const token = getAuthToken();
@@ -143,6 +156,16 @@ export default function PostInviteToMovesbookModal({
           </p>
           <p className="rounded bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800">{title}</p>
           {loading ? <p className="text-sm text-gray-500">Loading members…</p> : null}
+          {members.length ? (
+            <label className="flex items-center gap-2 px-2 text-sm font-medium text-gray-800">
+              <input
+                type="checkbox"
+                checked={selected.size === members.length}
+                onChange={(e) => setSelected(e.target.checked ? new Set(members.map((m) => m.id)) : new Set())}
+              />
+              Select all ({members.length})
+            </label>
+          ) : null}
           <ul className="max-h-64 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
             {members.map((m) => (
               <li key={m.id}>

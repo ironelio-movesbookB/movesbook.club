@@ -31,6 +31,9 @@ type Props = {
   /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
   onSendData?: () => void;
   sendDataTitle?: string;
+  /** Replaces the default "share the current page" action. */
+  onShare?: () => void;
+  shareButtonTitle?: string;
   /** When set, the two view buttons switch the member-photo layout. */
   photoMode?: 'with' | 'without';
   onPhotoModeChange?: (mode: 'with' | 'without') => void;
@@ -74,6 +77,8 @@ export default function ArchiveActionsBar({
   onStatisticsClick,
   onSendData,
   sendDataTitle,
+  onShare,
+  shareButtonTitle,
   photoMode,
   onPhotoModeChange,
 }: Props) {
@@ -101,8 +106,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => setShareOpen(true)}
-            title="Share the current page"
+            onClick={() => (onShare ? onShare() : setShareOpen(true))}
+            title={shareButtonTitle ?? 'Share the current page'}
           >
             <Share2 className="h-3.5 w-3.5" />
             Share

@@ -8,6 +8,7 @@ export const PROCEDURE_TYPE_CODES = {
   MEMBERSHIP: 'membership',
   COURSE_SUBSCRIPTION: 'course_subscription',
   MEMBER_CREDIT: 'member_credit',
+  EVENT_SUBSCRIPTION: 'event_subscription',
 } as const;
 
 export type ProcedureTypeCode =
@@ -146,6 +147,8 @@ export type CreateProcedureRecordInput = {
   receiptAnnotations?: string | null;
   serviceName?: string | null;
   taxDocument?: TaxDocumentInput | null;
+  /** Create the deadline even when Other settings turned deadlines off (event subscriptions). */
+  forceDeadline?: boolean;
 };
 
 export type AddProcedurePaymentInput = {

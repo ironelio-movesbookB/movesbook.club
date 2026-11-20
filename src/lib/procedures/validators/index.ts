@@ -135,6 +135,12 @@ export function parseCreateRecord(type: string, body: unknown): ParseCreateRecor
       }
       return { ok: true, data: mapMemberCreditCreateToInput(parsed.data) };
     }
+    case PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION:
+      return {
+        ok: false,
+        status: 400,
+        error: 'Event subscription deadlines are created by the event subscribe page',
+      };
     default: {
       const _exhaustive: never = type;
       return { ok: false, status: 400, error: `No create validator for procedure type: ${_exhaustive}` };

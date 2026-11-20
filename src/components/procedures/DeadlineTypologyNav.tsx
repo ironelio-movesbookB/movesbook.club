@@ -9,6 +9,7 @@ const INCOMING = [
   { id: 'services', label: 'Services', href: '/clubs/dead_line', procedureType: 'service_sale' },
   { id: 'sellings', label: 'Sellings', href: '/ArchiveSeles/product_deadline', procedureType: 'product_sale' },
   { id: 'member_debts', label: 'Member debts', href: '/clubs/member_debt_dead_line', procedureType: 'member_debt' },
+  { id: 'events', label: 'Sellings of events', href: '/clubs/events/deadlines', procedureType: 'event_subscription' },
 ] as const;
 
 const OUTGOING = [

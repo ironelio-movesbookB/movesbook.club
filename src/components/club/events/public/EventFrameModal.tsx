@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import EventDescription from '@/components/club/events/EventDescription';
 import { formatYmd, primaryButton, secondaryButton } from '@/components/club/events/eventUi';
 import { formatEventEuro } from '@/lib/club/events/eventConstants';
 
@@ -11,6 +12,7 @@ export type EventFrameItem = {
   endDate: string;
   location: string;
   cost: number;
+  currency?: string;
   coverUrl: string | null;
   bannerUrl: string;
   subscribeHref: string;
@@ -72,11 +74,14 @@ export default function EventFrameModal({ item, orgName, onClose }: Props) {
               {item.endDate && item.endDate !== item.startDate ? ` – ${formatYmd(item.endDate)}` : ''}
               {item.location ? ` · ${item.location}` : ''}
             </p>
-            <p className="mt-1 text-sm font-medium text-gray-800">
-              {item.cost > 0 ? formatEventEuro(item.cost) : 'Free'}
+            <p className="mt-1 text-base font-semibold text-gray-800">
+              {item.cost > 0 ? formatEventEuro(item.cost, item.currency) : 'Free'}
             </p>
             {item.description ? (
-              <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{item.description}</p>
+              <EventDescription
+                html={item.description}
+                className="mt-3 max-h-56 overflow-y-auto pr-1 text-sm text-gray-700"
+              />
             ) : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <a href={item.subscribeHref} className={primaryButton}>

@@ -10,20 +10,31 @@ import {
   primaryButton,
   secondaryButton,
 } from '@/components/club/events/eventUi';
-import { eventApi } from '@/lib/club/events/eventClient';
+import EventSubscribersList from '@/components/club/events/EventSubscribersList';
+import EventAttachmentViewer, { type EventAttachment } from '@/components/club/events/public/EventAttachmentViewer';
+import RichTextEditor from '@/components/shared/RichTextEditor';
+import { fetchEventSiblingDiscountInfo } from '@/constants/eventSiblingDiscountLongText';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { clubEventSubscribePath, eventApi } from '@/lib/club/events/eventClient';
 import {
   CLUB_EVENT_SUBSCRIBER_TYPES,
   CLUB_EVENT_TYPES,
+  EVENT_ATTACHMENT_ACCEPT,
+  EVENT_PAYMENT_MODALITIES,
+  EVENT_SUBEVENT_TEXT_COLORS,
   emptyEventProfile,
   formatEventEuro,
+  subeventTextColorHex,
   type ClubEvent,
   type ClubEventExtraText,
   type ClubEventProfile,
   type ClubEventRegistration,
   type ClubEventService,
   type ClubEventSubevent,
+  type EventPaymentModality,
 } from '@/lib/club/events/eventConstants';
 import { sponsorApi } from '@/lib/club/sponsors/sponsorClient';
+import { stripStoredHtml } from '@/lib/promocodes/suggestMovesbookCopy';
 
 type Props = { eventId?: string };
 
@@ -40,12 +51,19 @@ export default function EventEditPage({ eventId }: Props) {
   const [sponsors, setSponsors] = useState<SponsorOption[]>([]);
   const [id, setId] = useState(isNew ? '' : eventId);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [currency, setCurrency] = useState('EUR');
+  const [webModulePath, setWebModulePath] = useState('');
+  const [viewer, setViewer] = useState<EventAttachment | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [svcName, setSvcName] = useState('');
   const [svcPrice, setSvcPrice] = useState('0');
   const [textDraft, setTextDraft] = useState('');
+  const [textDraftUpload, setTextDraftUpload] = useState(false);
+  const [textDraftUploadLabel, setTextDraftUploadLabel] = useState('');
+  const [siblingInfo, setSiblingInfo] = useState('');
+  const { currentLanguage } = useLanguage();
   const [subDraft, setSubDraft] = useState({
     name: '',
     startDate: '',
@@ -53,6 +71,7 @@ export default function EventEditPage({ eventId }: Props) {
     cost: '0',
     seats: '0',
     externalToMain: false,
+    textColor: '',
   });
 
   const load = useCallback(async () => {
@@ -65,11 +84,13 @@ export default function EventEditPage({ eventId }: Props) {
         eventApi<{ registrations: ClubEventRegistration[] }>(`/${eventId}/registrations`),
       ]);
       setId(event.id);
+      setWebModulePath(clubEventSubscribePath(event.workspaceId, event.publicToken));
       setProfile({
         name: event.name,
         eventType: event.eventType as ClubEventProfile['eventType'],
         startDate: event.startDate,
         endDate: event.endDate,
+        subscriptionCloseDate: event.subscriptionCloseDate || event.endDate,
         cost: event.cost,
         seats: event.seats,
         allowSubevents: event.allowSubevents,
@@ -93,10 +114,12 @@ export default function EventEditPage({ eventId }: Props) {
         attachment1Url: event.attachment1Url,
         attachment2Name: event.attachment2Name,
         attachment2Url: event.attachment2Url,
-        fileUploadEnabled: event.fileUploadEnabled,
+        fileUploadEnabled: false,
         fileUploadLabel: event.fileUploadLabel,
         siblingDiscount: event.siblingDiscount,
+        paymentModality: event.paymentModality,
       });
+      setCurrency(event.currency || 'EUR');
       setServices(event.services);
       setTexts(event.texts);
       setSubevents(event.subevents);
@@ -115,6 +138,16 @@ export default function EventEditPage({ eventId }: Props) {
       .then((d) => setSponsors((d.items || []).map((s) => ({ id: s.id, name: s.name }))))
       .catch(() => setSponsors([]));
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void fetchEventSiblingDiscountInfo(currentLanguage).then((value) => {
+      if (active) setSiblingInfo(stripStoredHtml(value));
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentLanguage]);
 
   const set = <K extends keyof ClubEventProfile>(key: K, value: ClubEventProfile[K]) => {
     setProfile((p) => ({ ...p, [key]: value }));
@@ -202,9 +235,23 @@ export default function EventEditPage({ eventId }: Props) {
     if (!label) return;
     setTexts((list) => [
       ...list,
-      { id: `tmp-${Date.now()}`, label, mandatory: false, enabled: true, sortOrder: list.length },
+      {
+        id: `tmp-${Date.now()}`,
+        label,
+        mandatory: false,
+        enabled: true,
+        sortOrder: list.length,
+        fileUploadEnabled: textDraftUpload,
+        fileUploadLabel: textDraftUpload ? textDraftUploadLabel.trim() : '',
+      },
     ]);
     setTextDraft('');
+    setTextDraftUpload(false);
+    setTextDraftUploadLabel('');
+  };
+
+  const patchText = (index: number, patch: Partial<ClubEventExtraText>) => {
+    setTexts((list) => list.map((x, idx) => (idx === index ? { ...x, ...patch } : x)));
   };
 
   const saveSubevent = async () => {
@@ -224,12 +271,21 @@ export default function EventEditPage({ eventId }: Props) {
             cost: Number(subDraft.cost) || 0,
             seats: Number(subDraft.seats) || 0,
             externalToMain: subDraft.externalToMain,
+            textColor: subDraft.textColor,
           },
         }),
       });
       setSubevents(data.event.subevents);
       setProfile((p) => ({ ...p, allowSubevents: true }));
-      setSubDraft({ name: '', startDate: '', endDate: '', cost: '0', seats: '0', externalToMain: false });
+      setSubDraft({
+        name: '',
+        startDate: '',
+        endDate: '',
+        cost: '0',
+        seats: '0',
+        externalToMain: false,
+        textColor: '',
+      });
       if (isNew) router.replace(`/clubs/events/${eventIdSaved}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save sub-event');
@@ -273,11 +329,35 @@ export default function EventEditPage({ eventId }: Props) {
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <Section title="Basics">
+      <Section
+        title="Basics"
+        titleExtra={
+          <label className="flex items-center gap-2 text-sm font-normal text-gray-700">
+            <input
+              type="checkbox"
+              checked={profile.hideFromShare}
+              onChange={(e) => set('hideFromShare', e.target.checked)}
+            />
+            Hide from the shared events page
+          </label>
+        }
+        actions={
+          webModulePath ? (
+            <a
+              href={webModulePath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={secondaryButton}
+              title="Open the subscription page of this event"
+            >
+              Web module
+            </a>
+          ) : (
+            <span className="text-xs text-gray-400">Save the event to open the web module</span>
+          )
+        }
+      >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name">
-            <input className={inputClass} value={profile.name} onChange={(e) => set('name', e.target.value)} />
-          </Field>
           <Field label="Type">
             <select
               className={inputClass}
@@ -290,6 +370,9 @@ export default function EventEditPage({ eventId }: Props) {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Name">
+            <input className={inputClass} value={profile.name} onChange={(e) => set('name', e.target.value)} />
           </Field>
           <Field label="Start date">
             <input
@@ -304,21 +387,15 @@ export default function EventEditPage({ eventId }: Props) {
               type="date"
               className={inputClass}
               value={profile.endDate}
-              onChange={(e) => set('endDate', e.target.value)}
-            />
-          </Field>
-          <Field label="Cost (€)">
-            <input
-              className={inputClass}
-              value={String(profile.cost)}
-              onChange={(e) => set('cost', Number(e.target.value) || 0)}
-            />
-          </Field>
-          <Field label="Seats (0 = unlimited)">
-            <input
-              className={inputClass}
-              value={String(profile.seats)}
-              onChange={(e) => set('seats', Number(e.target.value) || 0)}
+              onChange={(e) => {
+                const endDate = e.target.value;
+                setProfile((p) => ({
+                  ...p,
+                  endDate,
+                  subscriptionCloseDate:
+                    !p.subscriptionCloseDate || p.subscriptionCloseDate === p.endDate ? endDate : p.subscriptionCloseDate,
+                }));
+              }}
             />
           </Field>
           <Field label="Subscriber type">
@@ -334,32 +411,55 @@ export default function EventEditPage({ eventId }: Props) {
               ))}
             </select>
           </Field>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-red-600">
+              Closing subscriptions
+            </label>
+            <input
+              type="date"
+              className={inputClass}
+              value={profile.subscriptionCloseDate}
+              onChange={(e) => set('subscriptionCloseDate', e.target.value)}
+            />
+          </div>
+          <Field label="Cost (€)">
+            <input
+              className={inputClass}
+              value={String(profile.cost)}
+              onChange={(e) => set('cost', Number(e.target.value) || 0)}
+            />
+          </Field>
+          <Field label="Seats (0 = unlimited)">
+            <input
+              className={inputClass}
+              value={String(profile.seats)}
+              onChange={(e) => set('seats', Number(e.target.value) || 0)}
+            />
+          </Field>
         </div>
         <div className="mt-3 space-y-2 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={profile.membersOnly}
-              onChange={(e) => set('membersOnly', e.target.checked)}
-            />
-            Members only
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={profile.openToNonMembers}
-              onChange={(e) => set('openToNonMembers', e.target.checked)}
-            />
-            Also open to non-members
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={profile.hideFromShare}
-              onChange={(e) => set('hideFromShare', e.target.checked)}
-            />
-            Hide from the shared events page
-          </label>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className="font-medium text-gray-800">Who can subscribe:</span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={profile.membersOnly}
+                onChange={(e) => set('membersOnly', e.target.checked)}
+              />
+              Member
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={profile.openToNonMembers}
+                onChange={(e) => set('openToNonMembers', e.target.checked)}
+              />
+              Not member
+            </label>
+            {!profile.membersOnly && !profile.openToNonMembers ? (
+              <span className="text-xs text-red-600">Tick at least one</span>
+            ) : null}
+          </div>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -377,53 +477,69 @@ export default function EventEditPage({ eventId }: Props) {
             onChange={(e) => set('confirmationText', e.target.value)}
           />
         </Field>
+        <Field label="Payment modality" className="mt-3">
+          <select
+            className={inputClass}
+            value={profile.paymentModality}
+            onChange={(e) => set('paymentModality', e.target.value as EventPaymentModality)}
+          >
+            {EVENT_PAYMENT_MODALITIES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            B, D (at the club) and E (pay later) create a deadline in the Archive of Deadlines that can be paid later.
+            Prices are in {currency}.
+          </p>
+        </Field>
       </Section>
 
       <Section title="Sibling / relative discount">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={profile.siblingDiscount.enabled}
-            onChange={(e) =>
-              set('siblingDiscount', { ...profile.siblingDiscount, enabled: e.target.checked })
-            }
-          />
-          Enable relative discount
-        </label>
-        {profile.siblingDiscount.enabled ? (
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <Field label="Parent / relative name">
-              <input
-                className={inputClass}
-                value={profile.siblingDiscount.parentName}
-                onChange={(e) =>
-                  set('siblingDiscount', { ...profile.siblingDiscount, parentName: e.target.value })
-                }
-              />
-            </Field>
-            <Field label="Fiscal code">
-              <input
-                className={inputClass}
-                value={profile.siblingDiscount.fiscalCode}
-                onChange={(e) =>
-                  set('siblingDiscount', { ...profile.siblingDiscount, fiscalCode: e.target.value })
-                }
-              />
-            </Field>
-            <Field label="Discount %">
-              <input
-                className={inputClass}
-                value={String(profile.siblingDiscount.percent)}
-                onChange={(e) =>
-                  set('siblingDiscount', {
-                    ...profile.siblingDiscount,
-                    percent: Number(e.target.value) || 0,
-                  })
-                }
-              />
-            </Field>
-          </div>
+        {siblingInfo ? (
+          <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            {siblingInfo}
+          </p>
         ) : null}
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="space-y-2 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={profile.siblingDiscount.enabled}
+                onChange={(e) =>
+                  set('siblingDiscount', { ...profile.siblingDiscount, enabled: e.target.checked })
+                }
+              />
+              Enable relative discount
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                disabled={!profile.siblingDiscount.enabled}
+                checked={profile.siblingDiscount.applyToNonMembers}
+                onChange={(e) =>
+                  set('siblingDiscount', { ...profile.siblingDiscount, applyToNonMembers: e.target.checked })
+                }
+              />
+              Apply discount to not-member too
+            </label>
+          </div>
+          <Field label="Discount %" className="w-40">
+            <input
+              className={inputClass}
+              disabled={!profile.siblingDiscount.enabled}
+              value={String(profile.siblingDiscount.percent)}
+              onChange={(e) =>
+                set('siblingDiscount', {
+                  ...profile.siblingDiscount,
+                  percent: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                })
+              }
+            />
+          </Field>
+        </div>
       </Section>
 
       <Section title="Additional services">
@@ -431,7 +547,7 @@ export default function EventEditPage({ eventId }: Props) {
           {services.map((s, i) => (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm">
               <span>
-                {s.name} — {formatEventEuro(s.price)}
+                {s.name} — {formatEventEuro(s.price, currency)}
               </span>
               <button
                 type="button"
@@ -467,39 +583,35 @@ export default function EventEditPage({ eventId }: Props) {
           One row to start; add more with the button. Max about two lines per text. Mark mandatory when the
           subscriber must confirm it.
         </p>
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {texts.map((t, i) => (
-            <li key={t.id} className="rounded border border-gray-200 p-3 text-sm">
+            <li key={t.id} className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 text-sm">
               <textarea
                 className={inputClass}
-                rows={2}
+                rows={3}
                 value={t.label}
-                onChange={(e) =>
-                  setTexts((list) => list.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))
-                }
+                onChange={(e) => patchText(i, { label: e.target.value })}
               />
-              <div className="mt-2 flex flex-wrap gap-3">
-                <label className="flex items-center gap-1">
+              <UploadOption
+                enabled={t.fileUploadEnabled}
+                label={t.fileUploadLabel}
+                onEnabled={(on) => patchText(i, { fileUploadEnabled: on })}
+                onLabel={(value) => patchText(i, { fileUploadLabel: value })}
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
                     checked={t.enabled}
-                    onChange={(e) =>
-                      setTexts((list) =>
-                        list.map((x, idx) => (idx === i ? { ...x, enabled: e.target.checked } : x)),
-                      )
-                    }
+                    onChange={(e) => patchText(i, { enabled: e.target.checked })}
                   />
                   Enabled
                 </label>
-                <label className="flex items-center gap-1">
+                <label className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
                     checked={t.mandatory}
-                    onChange={(e) =>
-                      setTexts((list) =>
-                        list.map((x, idx) => (idx === i ? { ...x, mandatory: e.target.checked } : x)),
-                      )
-                    }
+                    onChange={(e) => patchText(i, { mandatory: e.target.checked })}
                   />
                   Mandatory
                 </label>
@@ -514,35 +626,30 @@ export default function EventEditPage({ eventId }: Props) {
             </li>
           ))}
         </ul>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <textarea
-            className={`${inputClass} max-w-xl`}
-            rows={2}
-            placeholder="New additional text"
-            value={textDraft}
-            onChange={(e) => setTextDraft(e.target.value)}
-          />
-          <button type="button" className={secondaryButton} onClick={addText}>
-            Add text
-          </button>
-        </div>
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={profile.fileUploadEnabled}
-            onChange={(e) => set('fileUploadEnabled', e.target.checked)}
-          />
-          Ask the subscriber to upload a file
-        </label>
-        {profile.fileUploadEnabled ? (
-          <Field label="Upload label" className="mt-2">
-            <input
-              className={inputClass}
-              value={profile.fileUploadLabel}
-              onChange={(e) => set('fileUploadLabel', e.target.value)}
+        <div className={`${texts.length ? 'mt-4' : ''} text-sm`}>
+          <div className="flex items-stretch gap-3">
+            <textarea
+              className={`${inputClass} min-h-[110px] flex-1`}
+              rows={4}
+              placeholder="New additional text"
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
             />
-          </Field>
-        ) : null}
+            <button
+              type="button"
+              className="w-28 shrink-0 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50"
+              onClick={addText}
+            >
+              Add text
+            </button>
+          </div>
+          <UploadOption
+            enabled={textDraftUpload}
+            label={textDraftUploadLabel}
+            onEnabled={setTextDraftUpload}
+            onLabel={setTextDraftUploadLabel}
+          />
+        </div>
       </Section>
 
       <Section title="Location">
@@ -568,11 +675,14 @@ export default function EventEditPage({ eventId }: Props) {
 
       <Section title="Banner, cover & sponsor">
         <Field label="Description (under the banner / EVENT FRAME)">
-          <textarea
-            className={inputClass}
-            rows={4}
+          <RichTextEditor
             value={profile.description}
-            onChange={(e) => set('description', e.target.value)}
+            onChange={(html) => set('description', html)}
+            minHeight="160px"
+            maxHeight="420px"
+            showTestButton={false}
+            focusRingClass="focus:ring-2 focus:ring-blue-500"
+            placeholder="Type or paste text / HTML"
           />
         </Field>
         <Field label="Banner click URL (opens in a new tab)" className="mt-3">
@@ -632,27 +742,36 @@ export default function EventEditPage({ eventId }: Props) {
           />
         </Field>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelClass}>Attachment 1 {profile.attachment1Name ? `(${profile.attachment1Name})` : ''}</label>
-            <input
-              type="file"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadMedia('attachment1', f);
-              }}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Attachment 2 {profile.attachment2Name ? `(${profile.attachment2Name})` : ''}</label>
-            <input
-              type="file"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadMedia('attachment2', f);
-              }}
-            />
-          </div>
+          {([1, 2] as const).map((slot) => {
+            const name = slot === 1 ? profile.attachment1Name : profile.attachment2Name;
+            const url = slot === 1 ? profile.attachment1Url : profile.attachment2Url;
+            return (
+              <div key={slot}>
+                <label className={labelClass}>Attachment {slot}</label>
+                {url ? (
+                  <button
+                    type="button"
+                    className="mb-1 block text-left text-sm text-blue-700 underline"
+                    onClick={() => setViewer({ url, name: name || `Attachment ${slot}` })}
+                  >
+                    {name || `Attachment ${slot}`}
+                  </button>
+                ) : null}
+                <input
+                  type="file"
+                  accept={EVENT_ATTACHMENT_ACCEPT}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadMedia(slot === 1 ? 'attachment1' : 'attachment2', f);
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Formats: DOC, DOCX, JPG, PNG, PDF, TXT, RTF, XLS, XLSX, MP4 (max 50 MB).
+        </p>
       </Section>
 
       <Section title="Sub-events">
@@ -664,7 +783,9 @@ export default function EventEditPage({ eventId }: Props) {
           {subevents.map((s) => (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm">
               <span>
-                <strong>{s.name}</strong> · {s.startDate} → {s.endDate} · {formatEventEuro(s.cost)}
+                <strong style={{ color: subeventTextColorHex(s.textColor) }}>{s.name}</strong> · {s.startDate} →{' '}
+                {s.endDate} · {formatEventEuro(s.cost, currency)}
+                {s.seats > 0 ? ` · ${s.seats} seats` : ''}
                 {s.externalToMain ? ' · external' : ''}
               </span>
               <button type="button" className={dangerButton} onClick={() => void deleteSub(s.id)}>
@@ -673,14 +794,15 @@ export default function EventEditPage({ eventId }: Props) {
             </li>
           ))}
         </ul>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
-            className={inputClass}
+            className={`${inputClass} sm:flex-1`}
             placeholder="Sub-event name"
             value={subDraft.name}
+            style={{ color: subeventTextColorHex(subDraft.textColor) }}
             onChange={(e) => setSubDraft((d) => ({ ...d, name: e.target.value }))}
           />
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex shrink-0 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={subDraft.externalToMain}
@@ -688,30 +810,53 @@ export default function EventEditPage({ eventId }: Props) {
             />
             External to the main event
           </label>
-          <input
-            type="date"
-            className={inputClass}
-            value={subDraft.startDate}
-            onChange={(e) => setSubDraft((d) => ({ ...d, startDate: e.target.value }))}
-          />
-          <input
-            type="date"
-            className={inputClass}
-            value={subDraft.endDate}
-            onChange={(e) => setSubDraft((d) => ({ ...d, endDate: e.target.value }))}
-          />
-          <input
-            className={inputClass}
-            placeholder="Cost"
-            value={subDraft.cost}
-            onChange={(e) => setSubDraft((d) => ({ ...d, cost: e.target.value }))}
-          />
-          <input
-            className={inputClass}
-            placeholder="Seats"
-            value={subDraft.seats}
-            onChange={(e) => setSubDraft((d) => ({ ...d, seats: e.target.value }))}
-          />
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-5">
+          <SubField label="Start date">
+            <input
+              type="date"
+              className={inputClass}
+              value={subDraft.startDate}
+              onChange={(e) => setSubDraft((d) => ({ ...d, startDate: e.target.value }))}
+            />
+          </SubField>
+          <SubField label="End date">
+            <input
+              type="date"
+              className={inputClass}
+              value={subDraft.endDate}
+              onChange={(e) => setSubDraft((d) => ({ ...d, endDate: e.target.value }))}
+            />
+          </SubField>
+          <SubField label="Cost (€)">
+            <input
+              className={inputClass}
+              value={subDraft.cost}
+              onChange={(e) => setSubDraft((d) => ({ ...d, cost: e.target.value }))}
+            />
+          </SubField>
+          <SubField label="Seats (0 = unlimited)">
+            <input
+              className={inputClass}
+              value={subDraft.seats}
+              onChange={(e) => setSubDraft((d) => ({ ...d, seats: e.target.value }))}
+            />
+          </SubField>
+          <SubField label="Select text color">
+            <select
+              className={inputClass}
+              value={subDraft.textColor}
+              style={{ color: subeventTextColorHex(subDraft.textColor) }}
+              onChange={(e) => setSubDraft((d) => ({ ...d, textColor: e.target.value }))}
+            >
+              <option value="">Default</option>
+              {EVENT_SUBEVENT_TEXT_COLORS.map((c) => (
+                <option key={c.key} value={c.key} style={{ color: c.hex }}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </SubField>
         </div>
         <button type="button" className={`${secondaryButton} mt-2`} disabled={saving} onClick={() => void saveSubevent()}>
           Add sub-event
@@ -720,19 +865,7 @@ export default function EventEditPage({ eventId }: Props) {
 
       {!isNew ? (
         <Section title={`Subscribers (${registrations.length})`}>
-          <ul className="divide-y divide-gray-100 rounded border">
-            {registrations.map((r) => (
-              <li key={r.id} className="flex justify-between gap-2 px-3 py-2 text-sm">
-                <span>
-                  {r.fullName} · {r.email}
-                </span>
-                <span>{formatEventEuro(r.amountPaid)}</span>
-              </li>
-            ))}
-            {!registrations.length ? (
-              <li className="px-3 py-4 text-center text-gray-500">No subscribers yet.</li>
-            ) : null}
-          </ul>
+          <EventSubscribersList registrations={registrations} />
         </Section>
       ) : null}
 
@@ -744,16 +877,75 @@ export default function EventEditPage({ eventId }: Props) {
           {saving ? 'Saving…' : 'Save event'}
         </button>
       </div>
+      <EventAttachmentViewer file={viewer} onClose={() => setViewer(null)} />
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function UploadOption({
+  enabled,
+  label,
+  onEnabled,
+  onLabel,
+}: {
+  enabled: boolean;
+  label: string;
+  onEnabled: (on: boolean) => void;
+  onLabel: (value: string) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={enabled} onChange={(e) => onEnabled(e.target.checked)} />
+        Ask the subscriber to upload a file
+      </label>
+      {enabled ? (
+        <div className="mt-2">
+          <label className={labelClass}>Upload label</label>
+          <input
+            className={inputClass}
+            placeholder="e.g. Add your Medical certificate"
+            value={label}
+            onChange={(e) => onLabel(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-gray-500">Formats: TXT, DOC, DOCX, XLS, XLSX, PDF, JPG, PNG (max 10 MB).</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  titleExtra,
+  actions,
+  children,
+}: {
+  title: string;
+  titleExtra?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-semibold text-gray-900">{title}</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          {titleExtra}
+        </div>
+        {actions}
+      </div>
       {children}
     </section>
+  );
+}
+
+function SubField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <span className="mb-0.5 block text-[11px] font-medium text-gray-500">{label}</span>
+      {children}
+    </div>
   );
 }
 

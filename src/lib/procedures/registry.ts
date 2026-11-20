@@ -261,6 +261,35 @@ const MEMBER_CREDIT: ProcedureDefinition = {
   },
 };
 
+const EVENT_SUBSCRIPTION: ProcedureDefinition = {
+  code: PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION,
+  name: 'Event Subscription',
+  typologyLabel: 'EVENT',
+  pageSize: 25,
+  metadataKeys: { primary: 'eventName', secondary: 'eventType' },
+  columnHeaders: { primary: 'Event', secondary: 'Type of event' },
+  routes: {
+    form: '/clubs/events',
+    records: '/clubs/archive_events',
+    deadlines: '/clubs/events/deadlines',
+    payments: '/clubs/movement_cash_details/IN',
+    receipts: '/clubs/archive_receipts',
+    paymentDetail: (id) => `/clubs/events/payment_detail/${id}`,
+  },
+  archiveTitles: {
+    records: 'Archive — Events',
+    deadlines: 'Sellings of events',
+    payments: 'Archive of Payments',
+    receipts: 'Archive of Receipts',
+    paymentForm: 'Payment — Event subscription',
+    newRecordButton: '+ New event',
+  },
+  form: {
+    title: 'Event subscriptions',
+    subtitle: 'Subscriptions to club / team events (Manage Events).',
+  },
+};
+
 export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinition> = {
   [PROCEDURE_TYPE_CODES.SERVICE_SALE]: SERVICE_SALE,
   [PROCEDURE_TYPE_CODES.EXPENSE]: EXPENSE,
@@ -269,6 +298,7 @@ export const PROCEDURE_DEFINITIONS: Record<ProcedureTypeCode, ProcedureDefinitio
   [PROCEDURE_TYPE_CODES.MEMBERSHIP]: MEMBERSHIP,
   [PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION]: COURSE_SUBSCRIPTION,
   [PROCEDURE_TYPE_CODES.MEMBER_CREDIT]: MEMBER_CREDIT,
+  [PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION]: EVENT_SUBSCRIPTION,
 };
 
 export const ALL_PROCEDURE_CODES = Object.values(PROCEDURE_TYPE_CODES);
@@ -299,6 +329,15 @@ export function procedurePaymentHref(
 
 export function getProcedureTypology(code: string): string {
   return getProcedureDefinition(code)?.typologyLabel ?? 'PROCEDURE';
+}
+
+/** Typology of one record: event subscriptions show "EVENT - <type of event>". */
+export function procedureTypologyFor(code: string, metadata: unknown): string {
+  const base = getProcedureTypology(code);
+  if (code !== PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION) return base;
+  const meta = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
+  const eventType = String(meta.eventType ?? '').trim();
+  return eventType ? `${base} - ${eventType}` : base;
 }
 
 /** Cash direction of a procedure's payments: OUT when the club pays (expenses, member credits). */

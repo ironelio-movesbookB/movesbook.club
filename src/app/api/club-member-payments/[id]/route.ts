@@ -16,6 +16,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     id: payment.id,
     status: closed ? 'closed' : payment.status,
     amountEur: payment.amountEur,
+    currency: payment.currency,
     description: payment.description,
     entityName: payment.entityName,
     memberName: payment.memberName,
