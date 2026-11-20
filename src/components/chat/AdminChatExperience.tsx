@@ -13,6 +13,7 @@ import {
   Search,
   Trash2,
   ChevronRight,
+  ChevronDown,
   Send,
   Camera,
   Shield,
@@ -24,6 +25,8 @@ import {
   Copy,
   Forward,
   Pin,
+  Mic,
+  Square,
 } from 'lucide-react';
 import ChatSettingsUsersModal, {
   defaultChatUserFilterSettings,
@@ -31,6 +34,16 @@ import ChatSettingsUsersModal, {
 } from './ChatSettingsUsersModal';
 import ChatMemberGroupSelectModal from './ChatMemberGroupSelectModal';
 import AdminChatUsersPanel from './AdminChatUsersPanel';
+import {
+  buildAudioContent,
+  buildImageContent,
+  isImageContent,
+  messagePreview,
+  parseAudioContent,
+  parseImageContent,
+} from '@/lib/chat/messageContent';
+import { chatDayKey, chatDayLabel } from '@/lib/chat/chatDayLabel';
+import { useChatVoiceRecording } from '@/hooks/useChatVoiceRecording';
 
 type BroadcastMode = 'all' | 'group' | 'subscribers' | 'favourites';
 
@@ -56,14 +69,8 @@ type ContextMenuState = {
   message: BroadcastMessage;
 };
 
-function isImageContent(content: string): boolean {
-  return content.startsWith('data:image/');
-}
-
 function previewText(content: string, max = 80): string {
-  if (isImageContent(content)) return '[Image]';
-  const text = content.trim();
-  return text.length > max ? `${text.slice(0, max)}…` : text;
+  return messagePreview(content, max);
 }
 
 type ChannelSubscriber = {
@@ -416,10 +423,18 @@ export default function AdminChatExperience({
   const [forwarding, setForwarding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BroadcastMessage | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [floatingDayLabel, setFloatingDayLabel] = useState<string | null>(null);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
 
   const composerMenuRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const floatingDayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inviteUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/register?invite=${isClubChannel ? `club-${clubId}` : 'movesbook-admin'}`
@@ -1011,12 +1026,22 @@ export default function AdminChatExperience({
       : subscribers;
 
   const sendBroadcast = async (rawContent?: string) => {
-    const content = (rawContent ?? message).trim();
-    if (!content) return;
+    const source =
+      rawContent != null
+        ? rawContent
+        : pendingImage
+          ? buildImageContent(pendingImage, message)
+          : message;
+    const content =
+      source.startsWith('data:image/') || source.startsWith('data:audio/')
+        ? source
+        : source.trim();
+    if (!content || sendingBroadcast) return;
     if (isClubChannel && mode === 'group' && !selectedMemberGroupId) {
       window.alert('Select a member group using the settings button first.');
       return;
     }
+    setSendingBroadcast(true);
     try {
       const res = await fetch('/api/chat/broadcast', {
         method: 'POST',
@@ -1058,18 +1083,42 @@ export default function AdminChatExperience({
         /* ignore */
       }
       setMessage('');
+      setPendingImage(null);
     } catch {
       window.alert('Failed to send broadcast');
+    } finally {
+      setSendingBroadcast(false);
     }
   };
 
-  const sendImageFile = (file: File) => {
+  const {
+    isRecording,
+    recordingSeconds,
+    voiceError,
+    setVoiceError,
+    startVoiceRecording,
+    cancelVoiceRecording,
+    stopAndSendVoiceRecording,
+    formatRecordingTime,
+  } = useChatVoiceRecording({
+    canStart: !pendingImage,
+    busy: sendingBroadcast,
+    onRecorded: async (audioDataUrl) => {
+      await sendBroadcast(buildAudioContent(audioDataUrl));
+    },
+  });
+
+  const canSendText = Boolean(message.trim() || pendingImage);
+  const showVoiceButton = !canSendText && !isRecording;
+
+  const attachImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) return;
     if (file.size > 4 * 1024 * 1024) return;
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string' && reader.result.startsWith('data:image/')) {
-        void sendBroadcast(reader.result);
+        // Keep pending so caption can be typed, then Send posts both together.
+        setPendingImage(reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -1082,7 +1131,7 @@ export default function AdminChatExperience({
       if (items[i].type.startsWith('image/')) {
         e.preventDefault();
         const file = items[i].getAsFile();
-        if (file) sendImageFile(file);
+        if (file) attachImageFile(file);
         return;
       }
     }
@@ -1116,9 +1165,10 @@ export default function AdminChatExperience({
     if (!contextMenu) return;
     const msg = contextMenu.message;
     setContextMenu(null);
+    const image = parseImageContent(msg.content);
     try {
-      if (isImageContent(msg.content)) {
-        const res = await fetch(msg.content);
+      if (image) {
+        const res = await fetch(image.src);
         const blob = await res.blob();
         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       } else {
@@ -1126,7 +1176,7 @@ export default function AdminChatExperience({
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(isImageContent(msg.content) ? '[Image]' : msg.content);
+        await navigator.clipboard.writeText(image?.caption || messagePreview(msg.content));
       } catch {
         /* ignore */
       }
@@ -1236,7 +1286,10 @@ export default function AdminChatExperience({
     if (m.mode !== mode) return false;
     if (hiddenIds.has(m.id)) return false;
     if (searchOpen && searchQuery.trim()) {
-      if (isImageContent(m.content)) return '[image]'.includes(searchQuery.trim().toLowerCase());
+      if (isImageContent(m.content)) {
+        const q = searchQuery.trim().toLowerCase();
+        return messagePreview(m.content).toLowerCase().includes(q) || '[image]'.includes(q);
+      }
       return m.content.toLowerCase().includes(searchQuery.trim().toLowerCase());
     }
     return true;
@@ -1246,12 +1299,107 @@ export default function AdminChatExperience({
     ? filteredHistory.find((m) => m.id === pinnedId) ?? null
     : null;
 
-  useEffect(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    // Scroll only the messages pane — never the page (scrollIntoView causes a jump).
-    el.scrollTop = el.scrollHeight;
-  }, [filteredHistory.length, mode]);
+    const target = el.scrollHeight - el.clientHeight;
+    if (behavior === 'smooth') {
+      el.scrollTo({ top: target, behavior: 'smooth' });
+    } else {
+      el.scrollTop = target;
+    }
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+    setFloatingDayLabel(null);
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const container = messagesContainerRef.current;
+    if (!container || !messageId) return;
+    const target = container.querySelector(
+      `[data-message-id="${CSS.escape(messageId)}"]`
+    ) as HTMLElement | null;
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextTop =
+      targetRect.top -
+      containerRect.top +
+      container.scrollTop -
+      Math.max(24, container.clientHeight * 0.25);
+    container.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+    stickToBottomRef.current = false;
+    setShowScrollToBottom(true);
+
+    setHighlightMessageId(messageId);
+    if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    highlightClearTimerRef.current = setTimeout(() => {
+      setHighlightMessageId((cur) => (cur === messageId ? null : cur));
+    }, 1600);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    };
+  }, []);
+
+  const updateFloatingDayFromScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const containerTop = el.getBoundingClientRect().top;
+    const markers = el.querySelectorAll<HTMLElement>('[data-chat-day-label]');
+    let label: string | null = null;
+    for (let i = 0; i < markers.length; i++) {
+      const marker = markers[i];
+      const top = marker.getBoundingClientRect().top - containerTop;
+      if (top <= 28) {
+        label = marker.dataset.chatDayLabel || null;
+      } else {
+        break;
+      }
+    }
+    if (!label && markers.length > 0) {
+      label = markers[0].dataset.chatDayLabel || null;
+    }
+    if (label) {
+      setFloatingDayLabel(label);
+      if (floatingDayTimerRef.current) clearTimeout(floatingDayTimerRef.current);
+      floatingDayTimerRef.current = setTimeout(() => setFloatingDayLabel(null), 1200);
+    }
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 80;
+    stickToBottomRef.current = atBottom;
+    setShowScrollToBottom(!atBottom && filteredHistory.length > 0);
+    if (!atBottom) updateFloatingDayFromScroll();
+    else setFloatingDayLabel(null);
+  }, [filteredHistory.length, updateFloatingDayFromScroll]);
+
+  useEffect(() => {
+    return () => {
+      if (floatingDayTimerRef.current) clearTimeout(floatingDayTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+    setFloatingDayLabel(null);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!stickToBottomRef.current && filteredHistory.length > 0) {
+      setShowScrollToBottom(true);
+      return;
+    }
+    scrollToBottom('auto');
+  }, [filteredHistory.length, mode, scrollToBottom]);
 
   const toolbarBtn =
     'inline-flex items-center gap-1.5 px-2 py-1.5 text-[12px] text-[#7ec8e3] hover:bg-white/10 rounded transition';
@@ -2118,11 +2266,18 @@ export default function AdminChatExperience({
 
             {pinnedMessage && (
               <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-                <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">Pinned</div>
-                  <div className="truncate">{previewText(pinnedMessage.content, 100)}</div>
-                </div>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-start gap-2 rounded text-left hover:bg-amber-100/70"
+                  title="Jump to pinned message"
+                  onClick={() => scrollToMessage(pinnedMessage.id)}
+                >
+                  <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">Pinned</div>
+                    <div className="truncate">{previewText(pinnedMessage.content, 100)}</div>
+                  </div>
+                </button>
                 <button
                   type="button"
                   className="shrink-0 text-amber-700 hover:underline"
@@ -2136,54 +2291,152 @@ export default function AdminChatExperience({
               </div>
             )}
 
-            <div ref={messagesContainerRef} className="relative min-h-0 flex-1 overflow-y-auto">
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.09]">
-                <div className="relative text-[#9a9a9a]">
-                  <svg width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-                  </svg>
-                  <div className="absolute bottom-8 right-1 rounded-full bg-[#b0b0b0] p-1.5 text-white">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+            <div className="relative min-h-0 flex-1">
+              {floatingDayLabel && filteredHistory.length > 0 && (
+                <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2">
+                  <span className="inline-block rounded-full bg-black/55 px-3 py-1 text-[12px] font-medium text-white shadow-sm backdrop-blur-sm">
+                    {floatingDayLabel}
+                  </span>
+                </div>
+              )}
+              <div
+                ref={messagesContainerRef}
+                className="relative h-full overflow-y-auto"
+                onScroll={handleMessagesScroll}
+              >
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.09]">
+                  <div className="relative text-[#9a9a9a]">
+                    <svg width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
                     </svg>
+                    <div className="absolute bottom-8 right-1 rounded-full bg-[#b0b0b0] p-1.5 text-white">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="relative z-10 flex h-full flex-col gap-2 p-4">
-                {filteredHistory.length === 0 ? null : (
-                  filteredHistory.map((m) => (
-                    <div
-                      key={m.id}
-                      onContextMenu={(e) => handleMessageContextMenu(e, m)}
-                      className="ml-auto max-w-[85%] cursor-context-menu rounded-lg bg-[#dcf8c6] px-3 py-2 text-sm text-[#222] shadow-sm"
-                    >
-                      <div className="mb-0.5 text-[10px] font-semibold uppercase text-[#5a7a3a]">
-                        {BROADCAST_SENT_LABELS[m.mode]}
-                      </div>
-                      {isImageContent(m.content) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={m.content}
-                          alt="Broadcast"
-                          className="max-h-56 max-w-full rounded object-contain"
-                        />
-                      ) : (
-                        <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                      )}
-                      <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-gray-500">
-                        {pinnedId === m.id && <Pin className="h-3 w-3 text-amber-600" />}
-                        <span>{new Date(m.createdAt).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
+                <div className="relative z-10 flex min-h-full flex-col gap-2 p-4">
+                  {filteredHistory.length === 0 ? null : (
+                    filteredHistory.map((m, index) => {
+                      const dayKey = chatDayKey(m.createdAt);
+                      const prevDayKey =
+                        index > 0 ? chatDayKey(filteredHistory[index - 1].createdAt) : null;
+                      const showDaySeparator = Boolean(dayKey && dayKey !== prevDayKey);
+                      const dayLabel = showDaySeparator ? chatDayLabel(m.createdAt) : null;
+                      return (
+                        <div key={m.id} className="contents">
+                          {showDaySeparator && dayLabel ? (
+                            <div
+                              data-chat-day-label={dayLabel}
+                              className="my-1 flex justify-center"
+                            >
+                              <span className="rounded-full bg-[#dbe6ef] px-3 py-1 text-[12px] font-medium text-[#4a667a] shadow-sm">
+                                {dayLabel}
+                              </span>
+                            </div>
+                          ) : null}
+                          <div
+                            data-message-id={m.id}
+                            onContextMenu={(e) => handleMessageContextMenu(e, m)}
+                            className={`ml-auto max-w-[85%] cursor-context-menu rounded-lg bg-[#dcf8c6] px-3 py-2 text-sm text-[#222] shadow-sm ${
+                              highlightMessageId === m.id || pinnedId === m.id
+                                ? 'ring-2 ring-amber-400'
+                                : ''
+                            }`}
+                          >
+                            <div className="mb-0.5 text-[10px] font-semibold uppercase text-[#5a7a3a]">
+                              {BROADCAST_SENT_LABELS[m.mode]}
+                            </div>
+                            {(() => {
+                              const image = parseImageContent(m.content);
+                              if (image) {
+                                return (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={image.src}
+                                      alt="Broadcast"
+                                      className="max-h-56 max-w-full rounded object-contain"
+                                    />
+                                    {image.caption ? (
+                                      <div className="mt-2 whitespace-pre-wrap break-words">
+                                        {image.caption}
+                                      </div>
+                                    ) : null}
+                                  </>
+                                );
+                              }
+                              const audio = parseAudioContent(m.content);
+                              if (audio) {
+                                return (
+                                  <audio
+                                    controls
+                                    preload="metadata"
+                                    src={audio.src}
+                                    className="mt-0.5 max-w-full"
+                                    style={{ width: '240px' }}
+                                  >
+                                    Your browser does not support audio playback.
+                                  </audio>
+                                );
+                              }
+                              return (
+                                <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                              );
+                            })()}
+                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-gray-500">
+                              {pinnedId === m.id && <Pin className="h-3 w-3 text-amber-600" />}
+                              <span>{new Date(m.createdAt).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
+              {showScrollToBottom && filteredHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => scrollToBottom('smooth')}
+                  className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-gray-700 text-white shadow-lg transition-opacity hover:bg-gray-800"
+                  title="Jump to latest messages"
+                >
+                  <ChevronDown className="h-6 w-6" />
+                </button>
+              )}
             </div>
 
             {/* Broadcast composer */}
             <div className="relative shrink-0 border-t border-[#cfcfcf] bg-white px-2 py-1.5" ref={composerMenuRef}>
+              {pendingImage && (
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={pendingImage}
+                    alt="Paste preview"
+                    className="h-14 w-14 rounded border border-gray-300 object-cover"
+                  />
+                  <span className="min-w-0 flex-1 text-sm text-gray-600">
+                    Image ready — add a caption, then Send (both post together)
+                  </span>
+                  <button
+                    type="button"
+                    className="text-sm text-gray-500 hover:text-gray-800"
+                    onClick={() => setPendingImage(null)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+              {voiceError && (
+                <p className="mb-1 px-1 text-sm text-red-600" role="alert">
+                  {voiceError}
+                </p>
+              )}
               {showComposerMenu && (
                 <div className="absolute bottom-full left-2 z-20 mb-1 min-w-[180px] rounded border border-[#ccc] bg-white py-1 shadow-lg">
                   {!showMuteSubmenu ? (
@@ -2258,49 +2511,92 @@ export default function AdminChatExperience({
                 </div>
               )}
 
-              <div className="flex items-end gap-1.5 rounded border border-[#cfcfcf] bg-white px-1.5 py-1">
-                <button
-                  type="button"
-                  className="mb-0.5 shrink-0 rounded p-1 text-[#555] hover:bg-[#e8e8e8]"
-                  onClick={() => {
-                    setShowComposerMenu((v) => !v);
-                    setShowMuteSubmenu(false);
-                  }}
-                  title="Settings"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onPaste={handlePaste}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void sendBroadcast();
+              {isRecording ? (
+                <div className="flex items-center gap-2 rounded border border-[#cfcfcf] bg-white px-1.5 py-1">
+                  <button
+                    type="button"
+                    onClick={cancelVoiceRecording}
+                    className="mb-0.5 shrink-0 rounded p-1 text-gray-500 hover:bg-[#e8e8e8] hover:text-gray-800"
+                    title="Cancel recording"
+                    aria-label="Cancel recording"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
+                    <span className="text-sm font-medium tabular-nums text-red-600">
+                      {formatRecordingTime(recordingSeconds)}
+                    </span>
+                    <span className="truncate text-sm text-gray-500">Recording…</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={stopAndSendVoiceRecording}
+                    disabled={sendingBroadcast || recordingSeconds < 1}
+                    className="mb-0.5 shrink-0 rounded bg-[#8b1a1a] p-1 text-white hover:bg-[#6e1414] disabled:opacity-40"
+                    title="Send voice message"
+                  >
+                    <Square className="h-4 w-4 fill-current" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-end gap-1.5 rounded border border-[#cfcfcf] bg-white px-1.5 py-1">
+                  <button
+                    type="button"
+                    className="mb-0.5 shrink-0 rounded p-1 text-[#555] hover:bg-[#e8e8e8]"
+                    onClick={() => {
+                      setShowComposerMenu((v) => !v);
+                      setShowMuteSubmenu(false);
+                    }}
+                    title="Settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </button>
+                  <textarea
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (voiceError) setVoiceError(null);
+                    }}
+                    onPaste={handlePaste}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void sendBroadcast();
+                      }
+                    }}
+                    rows={1}
+                    placeholder={
+                      pendingImage
+                        ? 'Add a caption…'
+                        : 'Broadcast (paste image, add caption, then Send)'
                     }
-                  }}
-                  rows={1}
-                  placeholder="Broadcast (paste image to send)"
-                  className="max-h-28 min-h-[28px] min-w-0 flex-1 resize-none border-0 bg-transparent py-1 text-sm leading-5 outline-none placeholder:text-gray-400 scrollbar-hide"
-                />
-                <button
-                  type="button"
-                  className="mb-0.5 shrink-0 rounded p-1 text-[#555] hover:bg-[#e8e8e8]"
-                  title="Notifications"
-                >
-                  <Bell className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendBroadcast()}
-                  disabled={!message.trim()}
-                  className="mb-0.5 shrink-0 rounded bg-[#8b1a1a] p-1 text-white hover:bg-[#6e1414] disabled:opacity-40"
-                  title="Send broadcast"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </div>
+                    className="max-h-28 min-h-[28px] min-w-0 flex-1 resize-none border-0 bg-transparent py-1 text-sm leading-5 outline-none placeholder:text-gray-400 scrollbar-hide"
+                  />
+                  {showVoiceButton ? (
+                    <button
+                      type="button"
+                      onClick={() => void startVoiceRecording()}
+                      disabled={sendingBroadcast}
+                      className="mb-0.5 shrink-0 rounded p-1 text-[#555] hover:bg-[#e8e8e8] hover:text-[#222] disabled:opacity-40"
+                      title="Record voice message"
+                      aria-label="Record voice message"
+                    >
+                      <Mic className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void sendBroadcast()}
+                      disabled={sendingBroadcast || !canSendText}
+                      className="mb-0.5 shrink-0 rounded bg-[#8b1a1a] p-1 text-white hover:bg-[#6e1414] disabled:opacity-40"
+                      title="Send broadcast"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </section>
             </>

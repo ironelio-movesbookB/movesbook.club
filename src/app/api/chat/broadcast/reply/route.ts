@@ -47,15 +47,23 @@ export async function POST(request: NextRequest) {
 
     const rawContent = typeof body.content === 'string' ? body.content : '';
     const isImage = rawContent.startsWith('data:image/');
-    const content = isImage ? rawContent : rawContent.trim();
+    const isAudio = rawContent.startsWith('data:audio/');
+    const isMediaDataUrl = isImage || isAudio;
+    const content = isMediaDataUrl ? rawContent : rawContent.trim();
     if (!content) {
       return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
     }
-    if (!isImage && content.length > 4000) {
+    if (!isMediaDataUrl && content.length > 4000) {
       return NextResponse.json({ error: 'Message is too long' }, { status: 400 });
     }
     if (isImage && content.length > 6_000_000) {
       return NextResponse.json({ error: 'Image is too large' }, { status: 400 });
+    }
+    if (isAudio && content.length > 60_000) {
+      return NextResponse.json(
+        { error: 'Voice message is too large. Try a shorter note.' },
+        { status: 400 }
+      );
     }
 
     const replyToId = typeof body.replyToId === 'string' ? body.replyToId.trim() : '';
@@ -139,18 +147,26 @@ export async function PATCH(request: NextRequest) {
     const messageId = typeof body.messageId === 'string' ? body.messageId.trim() : '';
     const rawContent = typeof body.content === 'string' ? body.content : '';
     const isImage = rawContent.startsWith('data:image/');
-    const content = isImage ? rawContent : rawContent.trim();
+    const isAudio = rawContent.startsWith('data:audio/');
+    const isMediaDataUrl = isImage || isAudio;
+    const content = isMediaDataUrl ? rawContent : rawContent.trim();
     if (!messageId) {
       return NextResponse.json({ error: 'messageId is required' }, { status: 400 });
     }
     if (!content) {
       return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
     }
-    if (!isImage && content.length > 4000) {
+    if (!isMediaDataUrl && content.length > 4000) {
       return NextResponse.json({ error: 'Message is too long' }, { status: 400 });
     }
     if (isImage && content.length > 6_000_000) {
       return NextResponse.json({ error: 'Image is too large' }, { status: 400 });
+    }
+    if (isAudio && content.length > 60_000) {
+      return NextResponse.json(
+        { error: 'Voice message is too large. Try a shorter note.' },
+        { status: 400 }
+      );
     }
 
     const existing = await prisma.chatBroadcastMessage.findUnique({ where: { id: messageId } });

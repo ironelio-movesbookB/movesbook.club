@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 
 function normalizeTelegramUsername(username: string | undefined): string | null {
   if (!username || typeof username !== 'string') return null;
-  const u = username.trim().replace(/^@/, '');
+  const u = username.trim().replace(/^@+/, '').toLowerCase();
   return u ? `@${u}` : null;
 }
 

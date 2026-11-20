@@ -48,7 +48,8 @@ model User {
   sections                 WorkoutSection[]
   executionTechniques      ExecutionTechnique[]
   workoutTemplates         WorkoutTemplate[]
-  telegramAccount          String?
+  /// Telegram @username; must be unique across users when set (null allowed for many users).
+  telegramAccount          String?   @unique
   telegramChatId           String?   // Telegram chat id for sending/receiving via bot
   lastSeenAt               DateTime? // For chat online/offline status
   /// Profile/avatar: public path, remote URL, or data URL (operator-style upload stores data:image/...).

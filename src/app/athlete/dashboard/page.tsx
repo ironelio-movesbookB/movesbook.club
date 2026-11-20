@@ -66,6 +66,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import WorkoutSection from '@/components/workouts/WorkoutSection';
 import NutritionSection from '@/components/nutrition/NutritionSection';
 import ChatPanel from '@/components/chat/ChatPanel';
+import ChatPeerInfoSidebar from '@/components/chat/ChatPeerInfoSidebar';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import ChatUnreadBadge from '@/components/chat/ChatUnreadBadge';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
@@ -161,6 +162,8 @@ function AthleteDashboardContent() {
   const [telegramAccount, setTelegramAccount] = useState('');
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
   const [isLoadingTelegram, setIsLoadingTelegram] = useState(false);
+  /** Chat header click → show peer profile in the dashboard right sidebar. */
+  const [chatPeerInfoUserId, setChatPeerInfoUserId] = useState<string | null>(null);
   /** Open Club Channel chat on My Club tab (member view). */
   const [clubChatOpen, setClubChatOpen] = useState(false);
   /** After Telegram join, open club chat instead of My Page audience picker. */
@@ -394,7 +397,7 @@ function AthleteDashboardContent() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setUserTelegramAccount(formattedAccount);
+          setUserTelegramAccount(data.telegramAccount || formattedAccount);
           setShowJoinModal(false);
           setTelegramAccount('');
           if (pendingClubChatOpen) {
@@ -427,6 +430,25 @@ function AthleteDashboardContent() {
       setShowRightSidebar(true);
     }
   }, [activeTab, activeSection]);
+
+  // Clear peer User Info when leaving chat
+  useEffect(() => {
+    const chatOpen =
+      (activeTab === 'my-page' && activeSection === 'chat' && Boolean(chatAudience)) ||
+      (activeTab === 'my-entity' && clubChatOpen);
+    if (!chatOpen) setChatPeerInfoUserId(null);
+  }, [activeTab, activeSection, chatAudience, clubChatOpen]);
+
+  // Opening User Info should reveal the right sidebar
+  useEffect(() => {
+    if (chatPeerInfoUserId) setShowRightSidebar(true);
+  }, [chatPeerInfoUserId]);
+
+  const chatOpen =
+    (activeTab === 'my-page' && activeSection === 'chat' && Boolean(chatAudience)) ||
+    (activeTab === 'my-entity' && clubChatOpen);
+  /** With both sidebars off, chat grows to the bottom of the viewport. */
+  const chatFillsViewport = chatOpen && !showLeftSidebar && !showRightSidebar;
 
   // Don't render if not authenticated (after all hooks are called)
   if (loading || !user) {
@@ -571,13 +593,18 @@ function AthleteDashboardContent() {
   };
 
   return (
-    <div className="bg-gray-50 flex flex-col" style={{ minHeight: '100vh' }}>
-      <div className="print:hidden">
+    <div
+      className={`bg-gray-50 flex flex-col ${
+        chatFillsViewport ? 'h-screen overflow-hidden' : ''
+      }`}
+      style={chatFillsViewport ? undefined : { minHeight: '100vh' }}
+    >
+      <div className="print:hidden shrink-0">
         <ModernNavbar />
       </div>
       
       {/* Display Options Toolbar */}
-      <div className={`bg-white border-b px-4 py-1 transition-all duration-300 print:hidden ${showToolbar ? '' : 'overflow-hidden'}`}>
+      <div className={`shrink-0 bg-white border-b px-4 py-1 transition-all duration-300 print:hidden ${showToolbar ? '' : 'overflow-hidden'}`}>
         <div className={`flex items-center justify-between flex-wrap gap-2 transition-all duration-300 ${showToolbar ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -650,7 +677,7 @@ function AthleteDashboardContent() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col w-full py-2">
+      <div className="flex min-h-0 flex-1 flex-col w-full py-2">
         {showAdBanner && (
           <div className="flex-shrink-0">
             <AdvertisementCarousel />
@@ -891,7 +918,7 @@ function AthleteDashboardContent() {
           </div>
         )}
 
-        <div className="flex-1 flex gap-0">
+        <div className="flex min-h-0 flex-1 gap-0">
           {/* Left Sidebar - Hidden when News Expand is on */}
           {showLeftSidebar && !newsExpanded && !musicExpanded && !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start print:hidden">
@@ -968,7 +995,7 @@ function AthleteDashboardContent() {
           )}
 
           {/* Main Content Area */}
-          <div className={`flex-1 min-w-0 flex flex-col ${activeTab === 'my-page' && activeSection === 'personal-settings' ? '' : 'px-4'}`}>
+          <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${activeTab === 'my-page' && activeSection === 'personal-settings' ? '' : 'px-4'}`}>
             {activeTab === 'my-page' ? <SharingNotifications scope={{ type: 'mypage' }} /> : null}
             {activeTab === 'my-page' && (
               <div className="flex-1 flex flex-col min-h-0">
@@ -985,12 +1012,18 @@ function AthleteDashboardContent() {
                 {activeSection === 'settings' && <AthleteSettings t={t} />}
                 {activeSection === 'personal-settings' && <PersonalSettingsPanel user={user} />}
                 {activeSection === 'chat' && chatAudience && (
-                  <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
+                  <div
+                    className={`flex min-h-0 flex-1 flex-col ${
+                      chatFillsViewport ? '' : 'max-h-[75vh]'
+                    }`}
+                  >
                     <ChatPanel
                       key={chatAudience}
                       embedded
                       chatAudience={chatAudience}
+                      onPeerInfoSelect={setChatPeerInfoUserId}
                       onClose={() => {
+                        setChatPeerInfoUserId(null);
                         setActiveSection('overview');
                         setChatAudience(null);
                       }}
@@ -1099,13 +1132,21 @@ function AthleteDashboardContent() {
                   />
                 </div>
               ) : clubChatOpen && (selectedClubId ?? myClubs[0]?.id) ? (
-                <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
+                <div
+                  className={`flex min-h-0 flex-1 flex-col ${
+                    chatFillsViewport ? '' : 'max-h-[75vh]'
+                  }`}
+                >
                   <ChatPanel
                     key={`club-chat-${selectedClubId ?? myClubs[0]?.id}`}
                     embedded
                     clubId={selectedClubId ?? myClubs[0]?.id}
                     chatAudience="club-member"
-                    onClose={() => setClubChatOpen(false)}
+                    onPeerInfoSelect={setChatPeerInfoUserId}
+                    onClose={() => {
+                      setChatPeerInfoUserId(null);
+                      setClubChatOpen(false);
+                    }}
                   />
                 </div>
               ) : clubMainPanel === 'club-news' ? (
@@ -1198,7 +1239,12 @@ function AthleteDashboardContent() {
             !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 print:hidden">
               <div className="bg-white shadow-sm border h-full flex flex-col overflow-y-auto">
-                {activeTab === 'my-entity' ? (
+                {chatPeerInfoUserId ? (
+                  <ChatPeerInfoSidebar
+                    userId={chatPeerInfoUserId}
+                    onClose={() => setChatPeerInfoUserId(null)}
+                  />
+                ) : activeTab === 'my-entity' ? (
                   <AthleteMyClubRightSidebar clubId={selectedClubId ?? myClubs[0]?.id ?? null} />
                 ) : (
                   <div className="p-4 flex flex-col">
@@ -1263,9 +1309,11 @@ function AthleteDashboardContent() {
         </div>
       </div>
 
-      <div className="print:hidden">
-        <SimpleFooter />
-      </div>
+      {!chatFillsViewport && (
+        <div className="print:hidden shrink-0">
+          <SimpleFooter />
+        </div>
+      )}
 
       <ChangeBannerModal
         isOpen={showChangeBannerModal}

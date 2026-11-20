@@ -3,6 +3,7 @@ import { ensureStaffPrismaModels, prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
 import { normalizeTelegramAccount, isValidSportType } from '@/lib/profileSports';
+import { assertTelegramAccountAvailable } from '@/lib/telegramAccountUnique';
 import {
   mergeProfilePanelIntoAdminSettings,
   readAdminReferences,
@@ -428,6 +429,7 @@ export async function createClubStaff(ctx: ClubAuthContext, input: ClubStaffWrit
   const telegramAccount = input.telegramAccount
     ? normalizeTelegramAccount(String(input.telegramAccount))
     : null;
+  await assertTelegramAccountAvailable(telegramAccount);
   const youtubeChannelUrl = youtubeUrlFromAdminInfo(
     parseClubAdminInfo(input.adminInfo),
     input.youtubeChannelUrl,
@@ -553,6 +555,7 @@ export async function updateClubStaff(
   const telegramAccount = input.telegramAccount
     ? normalizeTelegramAccount(String(input.telegramAccount))
     : null;
+  await assertTelegramAccountAvailable(telegramAccount, existing.userId);
   const youtubeChannelUrl = youtubeUrlFromAdminInfo(
     parseClubAdminInfo(input.adminInfo),
     input.youtubeChannelUrl,

@@ -409,9 +409,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const content = typeof body.content === 'string' ? body.content.trim() : '';
+    const rawContent = typeof body.content === 'string' ? body.content : '';
+    const isMediaDataUrl =
+      rawContent.startsWith('data:image/') || rawContent.startsWith('data:audio/');
+    const content = isMediaDataUrl ? rawContent : rawContent.trim();
     if (!content) {
       return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
+    }
+    if (isMediaDataUrl && content.length > 60_000) {
+      return NextResponse.json(
+        { error: 'Media message is too large. Try a shorter voice note.' },
+        { status: 400 }
+      );
     }
 
     const mode = typeof body.mode === 'string' ? body.mode.trim() : 'all';
