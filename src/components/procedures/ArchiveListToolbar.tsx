@@ -40,6 +40,13 @@ type Props = {
   onPhotoModeChange?: (mode: 'with' | 'without') => void;
   /** Hide filter form (actions + pagination only). */
   hideFilters?: boolean;
+  /** Tighter single-row filter chrome (Administration). */
+  compact?: boolean;
+  /** Enable Statistics as a link (Archive of Expenses → Expense graphs). */
+  statisticsHref?: string;
+  onStatisticsClick?: () => void;
+  onSendData?: () => void;
+  sendDataTitle?: string;
 };
 
 const inputClass =
@@ -62,9 +69,14 @@ export default function ArchiveListToolbar({
   photoMode,
   onPhotoModeChange,
   hideFilters = false,
+  compact = false,
+  statisticsHref,
+  onStatisticsClick,
+  onSendData,
+  sendDataTitle,
 }: Props) {
   const orderControl = (
-    <label className="flex min-w-[150px] flex-col">
+    <label className={`flex min-w-[150px] flex-col ${compact ? 'min-w-[130px]' : ''}`}>
       <span className="mb-1 block text-[12px] font-semibold text-gray-800">Order</span>
       <select
         className={`${inputClass} !mb-0 leading-normal`}
@@ -78,17 +90,27 @@ export default function ArchiveListToolbar({
   );
 
   return (
-    <div className="mb-3">
+    <div className={compact ? 'mb-2' : 'mb-3'}>
       {!hideFilters && (
-        <div className="mb-3 rounded-md border border-teal-800/20 bg-[#eef6f5] px-4 py-3">
-          <div className="mb-2 text-[13px] font-semibold text-teal-900">{title}</div>
+        <div
+          className={`rounded-md border border-teal-800/20 bg-[#eef6f5] ${
+            compact ? 'mb-2 px-3 py-2' : 'mb-3 px-4 py-3'
+          }`}
+        >
+          {!compact ? (
+            <div className="mb-2 text-[13px] font-semibold text-teal-900">{title}</div>
+          ) : null}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               onApply();
             }}
           >
-            <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+            <div
+              className={`flex flex-wrap items-end ${
+                compact ? 'gap-x-3 gap-y-2' : 'gap-x-4 gap-y-3'
+              }`}
+            >
               {orderFirst && orderControl}
               <label className="flex min-w-[180px] flex-1 flex-col">
                 <span className="mb-1 block text-[12px] font-semibold text-gray-800">Search</span>
@@ -151,6 +173,10 @@ export default function ArchiveListToolbar({
         paginationTrailing={paginationTrailing}
         selectedCount={selectedCount}
         onDeleteSelected={onDeleteSelected}
+        statisticsHref={statisticsHref}
+        onStatisticsClick={onStatisticsClick}
+        onSendData={onSendData}
+        sendDataTitle={sendDataTitle}
         photoMode={photoMode}
         onPhotoModeChange={onPhotoModeChange}
       />

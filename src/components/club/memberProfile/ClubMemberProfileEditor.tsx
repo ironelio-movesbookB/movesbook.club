@@ -63,6 +63,7 @@ import SignaturePad, {
   type SignaturePadHandle,
 } from '@/components/club/memberProfile/SignaturePad';
 import NewsCategoryMultiSelect from '@/components/club/memberProfile/NewsCategoryMultiSelect';
+import MemberAdministrationPanel from '@/components/club/memberProfile/MemberAdministrationPanel';
 import MemberProfileSettingsTab from '@/components/club/memberProfile/MemberProfileSettingsTab';
 import CoachNotesPanel from '@/components/club/memberProfile/CoachNotesPanel';
 import ImageLightbox from '@/components/common/ImageLightbox';
@@ -111,6 +112,7 @@ export type ProfileTabId =
   | 'pay-for'
   | 'other-details'
   | 'parents'
+  | 'administration'
   | 'settings'
   | 'messages-staff'
   | 'notes-coach'
@@ -3890,6 +3892,17 @@ export default function ClubMemberProfileEditor({
 
         <SaveBar canSave={!readOnlyClub} onSave={() => saveClubSection('parents')} />
       </div>
+    );
+  }
+
+  if (activeTab === 'administration') {
+    return (
+      <MemberAdministrationPanel
+        data={data}
+        onChange={onChange}
+        onReload={onReload}
+        readOnly={readOnlyClub}
+      />
     );
   }
 

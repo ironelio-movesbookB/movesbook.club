@@ -175,6 +175,8 @@ export async function syncMemberSettingsDeadlines(opts: {
   );
 
   if (missing.length === 0 && keysToPay.length === 0) {
+    // One-shot Create Deadlines trigger — clear even when everything was already filed.
+    if (createAll) football.paymentStatus = 'Pending';
     return {
       ...state,
       firstPaidRecorded: state.paidKeys.includes('firstPayment'),
@@ -302,6 +304,11 @@ export async function syncMemberSettingsDeadlines(opts: {
   const paidKeys = await paidKeysFromInstallments(prisma, recordId);
   for (const key of paidKeys) {
     football[key] = { ...football[key], status: 'Paid' };
+  }
+
+  // Dropdown/button trigger is one-shot — restore a normal status after filing.
+  if (createAll) {
+    football.paymentStatus = 'Pending';
   }
 
   return {

@@ -15,6 +15,7 @@ import {
 } from "./installmentService";
 import { PROCEDURE_TYPE_CODES } from "./types";
 import { updateTaxDocumentCounter } from "@/lib/club/otherSettingsReader";
+import { mailReceiptPdfInBackground } from "./receiptPdfMail";
 import {
   forgetMemberSettingsDeadlines,
   forgetMemberSettingsFirstPaid,
@@ -373,7 +374,7 @@ export class ProcedureService {
       ...(input.taxDocument ? { taxDocument: input.taxDocument } : {}),
     });
 
-    return prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const record = await tx.procedureRecord.create({
         data: {
           procedureTypeId: procedureType.id,
@@ -467,6 +468,8 @@ export class ProcedureService {
 
       return { recordId: record.id, paymentId, receiptId };
     });
+    mailReceiptPdfInBackground(created.receiptId);
+    return created;
   }
 
   async addPayment(
@@ -614,6 +617,7 @@ export class ProcedureService {
         );
       }
     }
+    mailReceiptPdfInBackground(receiptId);
 
     return {
       paymentId: paymentResult.paymentId,

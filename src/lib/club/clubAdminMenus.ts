@@ -298,23 +298,31 @@ export function memberOverviewInsertLabel(label: string): string {
   return label;
 }
 
-/** Management buttons on Member Overview. Grids open under the buttons. */
+/**
+ * Administration buttons on Member Overview.
+ * Order matches product feedback; Subscriptions is the default.
+ * Grids open under the buttons (existing archive loaders).
+ */
 export const MEMBER_OVERVIEW_MNGMNT_LINKS: {
   label: string;
   archiveType?: ArchiveType;
   services?: boolean;
 }[] = [
-  { label: 'Cash', archiveType: 'cash-movements' },
-  { label: 'Payments', archiveType: 'payments' },
-  { label: 'Deadlines', archiveType: 'deadlines' },
-  { label: 'Services', services: true },
-  { label: 'Products', archiveType: 'product-sales-unified' },
-  { label: 'Courses', archiveType: 'subscriptions' },
-  { label: 'Accesses', archiveType: 'accesses' },
-  { label: 'Credits', archiveType: 'credits' },
-  { label: 'Receipts', archiveType: 'receipts' },
+  { label: 'Subscriptions', archiveType: 'subscriptions' },
   { label: 'Bookings', archiveType: 'reservations' },
+  { label: 'Memberships', archiveType: 'affiliations' },
+  { label: 'Services', services: true },
+  { label: 'Purchases', archiveType: 'product-sales-unified' },
+  { label: 'Deadlines', archiveType: 'deadlines' },
+  { label: 'Credits', archiveType: 'credits' },
+  { label: 'Payments', archiveType: 'payments' },
+  { label: 'Receipts', archiveType: 'receipts' },
+  { label: 'Accesses', archiveType: 'accesses' },
+  { label: 'Contacts', archiveType: 'marketing-contacts' },
 ];
+
+/** Default Administration archive button. */
+export const MEMBER_OVERVIEW_ADMIN_DEFAULT_LABEL = 'Subscriptions';
 
 export function appendMemberIdToPath(path: string, memberId: string): string {
   const [base, query = ''] = path.split('?');

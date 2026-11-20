@@ -98,6 +98,11 @@ type Props = {
   saving: boolean;
   message: string;
   onSave: () => void;
+  /**
+   * `full` — entire Settings tab.
+   * `subscription` — Administration page: visibility + Current subscription / Payments only.
+   */
+  variant?: "full" | "subscription";
 };
 
 type InstallmentKey = MemberSettingsInstallmentKey;
@@ -130,7 +135,9 @@ export default function MemberProfileSettingsTab({
   saving,
   message,
   onSave,
+  variant = "full",
 }: Props) {
+  const subscriptionOnly = variant === "subscription";
   const clubEnabledPayments = useClubEnabledPaymentMethods();
   const { currentLanguage } = useLanguage();
   const lang = (currentLanguage || "en").toLowerCase().split("-")[0] || "en";
@@ -511,6 +518,15 @@ export default function MemberProfileSettingsTab({
     onSave();
   };
 
+  /** After patchSettings, save once the parent has the new club state. */
+  const saveAfterPatchRef = useRef(false);
+  useEffect(() => {
+    if (!saveAfterPatchRef.current) return;
+    saveAfterPatchRef.current = false;
+    void handleSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run after club patch lands
+  }, [club]);
+
   const installmentRows: Array<{ key: InstallmentKey; label: string }> = [
     { key: "firstPayment", label: "First payment" },
     { key: "secondPayment", label: "Second payment" },
@@ -661,6 +677,45 @@ export default function MemberProfileSettingsTab({
     ? String(installmentsTotal)
     : installmentsTotal.toFixed(2);
 
+  const unfiledWithAmount = installmentRows.some(
+    ({ key }) => !isFiled(key) && installmentAmount(key) > 0,
+  );
+
+  /** Files installment rows into Archive of the Deadlines. */
+  const createDeadlinesNow = () => {
+    if (readOnlyClub || saving) return;
+    if (!unfiledWithAmount) {
+      window.alert(
+        deadlines.recordId
+          ? "All payment deadlines are already in the Archive of the Deadlines."
+          : "Enter at least one payment amount before creating deadlines.",
+      );
+      return;
+    }
+    saveAfterPatchRef.current = true;
+    patchSettings((prev) => ({
+      ...prev,
+      football: {
+        ...prev.football,
+        paymentStatus: CREATE_DEADLINES_PAYMENT_STATUS,
+      },
+    }));
+  };
+
+  /** Paid tick → save so archives update and the Paid box jumps to the next deadline. */
+  const markInstallmentPaidAndSave = (key: InstallmentKey, paid: boolean) => {
+    if (paid) {
+      if (!canMarkPaid || installmentAmount(key) <= 0) {
+        if (installmentAmount(key) <= 0) {
+          window.alert("Enter the payment amount before marking it as Paid.");
+        }
+        return;
+      }
+      saveAfterPatchRef.current = true;
+    }
+    patchInstallment(key, "status", paid ? "Paid" : "");
+  };
+
   return (
     <div>
       {showVisibility ? (
@@ -679,6 +734,8 @@ export default function MemberProfileSettingsTab({
         </SectionCard>
       ) : null}
 
+      {!subscriptionOnly ? (
+      <>
       <SectionCard title="Other settings">
         <Row2>
           <Field label="Heart rate">
@@ -1267,10 +1324,18 @@ export default function MemberProfileSettingsTab({
         open={paymentInfoOpen}
         onClose={() => setPaymentInfoOpen(false)}
       />
+      </>
+      ) : null}
 
-      {sportFields ? (
-        <SectionCard title={`TEAM fields — ${selectedTeamSport}`}>
-          <Field label={sportFields.labels.athleteStatus}>
+      {sportFields || subscriptionOnly ? (
+        <SectionCard
+          title={
+            subscriptionOnly
+              ? "Current subscription"
+              : `TEAM fields — ${selectedTeamSport}`
+          }
+        >
+          <Field label={sportFields?.labels.athleteStatus ?? "Athlete status"}>
             <div className="flex flex-wrap gap-4">
               {TEAM_ATHLETE_STATUS_OPTIONS.map((status) => (
                 <label
@@ -1296,7 +1361,7 @@ export default function MemberProfileSettingsTab({
             </div>
           </Field>
 
-          {sportFields.registrationStatus ? (
+          {sportFields?.registrationStatus ? (
             <Field label="Status">
               <div className="flex flex-wrap gap-4">
                 {TEAM_REGISTRATION_STATUS_OPTIONS.map((status) => (
@@ -1327,7 +1392,7 @@ export default function MemberProfileSettingsTab({
             </Field>
           ) : null}
 
-          {sportFields.administrativeSummary ? (
+          {sportFields?.administrativeSummary ? (
             <div className="mt-3">
               <Row4>
                 <Field label="Fiscal code">
@@ -1354,7 +1419,7 @@ export default function MemberProfileSettingsTab({
           ) : null}
 
           <Row2>
-            <Field label={sportFields.labels.membershipNumber}>
+            <Field label={sportFields?.labels.membershipNumber ?? "Membership number"}>
               <TextInput
                 disabled={readOnlyClub}
                 value={s.football.membershipNumber}
@@ -1369,7 +1434,7 @@ export default function MemberProfileSettingsTab({
                 }
               />
             </Field>
-            <Field label={sportFields.labels.expiringDate}>
+            <Field label={sportFields?.labels.expiringDate ?? "Expiring date"}>
               <TextInput
                 type="date"
                 disabled={readOnlyClub}
@@ -1524,8 +1589,8 @@ export default function MemberProfileSettingsTab({
                                 ? "Fully paid — checkbox locked."
                                 : canMarkPaid
                                   ? index === 0
-                                    ? "On save: copies all deadlines into the Archive of the Deadlines, records this payment (pending amount only) in Cash / Archive of Payments, then moves Paid to the next deadline."
-                                    : "On save: pays only the pending amount for this deadline into Cash / Archive of Payments."
+                                    ? "Marks this deadline paid in the Archive of the Deadlines, adds the payment to the Archive of Payments, then moves Paid to the next deadline."
+                                    : "Marks this deadline paid in the Archive of the Deadlines and adds the payment to the Archive of Payments."
                                   : "Choose Cash, Cheque, Payment slip or Bank transfer as payment method to mark as paid."
                             }
                           >
@@ -1539,10 +1604,9 @@ export default function MemberProfileSettingsTab({
                                 (s.football[key].status === "Paid" && canMarkPaid)
                               }
                               onChange={(e) =>
-                                patchInstallment(
+                                markInstallmentPaidAndSave(
                                   key,
-                                  "status",
-                                  e.target.checked ? "Paid" : "",
+                                  e.target.checked,
                                 )
                               }
                               className="h-3.5 w-3.5 border-red-400 accent-red-600 disabled:opacity-60"
@@ -1586,12 +1650,39 @@ export default function MemberProfileSettingsTab({
               Total : {installmentsTotalLabel}
             </p>
 
-            <Row2>
-              <div />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end">
+              <div className="flex flex-col gap-2 md:items-start">
+                <button
+                  type="button"
+                  disabled={readOnlyClub || saving || !unfiledWithAmount}
+                  onClick={createDeadlinesNow}
+                  title="Generate the deadlines of payment in the Archive of the Deadlines"
+                  className="h-9 rounded border border-red-800 bg-red-600 px-4 text-sm font-bold text-white shadow hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {saving &&
+                  s.football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS
+                    ? "Creating…"
+                    : "Create Deadlines"}
+                </button>
+                <p className="text-xs text-gray-600">
+                  Creates all payment deadlines in the{" "}
+                  <Link
+                    href="/clubs/archive_deadlines"
+                    className="font-semibold text-red-600 underline"
+                  >
+                    Archive of the Deadlines
+                  </Link>
+                  .
+                </p>
+              </div>
               <Field label="Payment status">
                 <TextSelect
                   disabled={readOnlyClub}
-                  value={s.football.paymentStatus}
+                  value={
+                    s.football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS
+                      ? "Pending"
+                      : s.football.paymentStatus
+                  }
                   onChange={(e) =>
                     patchSettings((prev) => ({
                       ...prev,
@@ -1608,16 +1699,12 @@ export default function MemberProfileSettingsTab({
                       {x}
                     </option>
                   ))}
-                  <option value={CREATE_DEADLINES_PAYMENT_STATUS}>
-                    Create deadlines – generate the deadlines of payment in the
-                    Archive of the Deadlines
-                  </option>
                 </TextSelect>
               </Field>
-            </Row2>
+            </div>
             {deadlines.recordId ||
             s.football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS ||
-            s.football.firstPayment.status === "Paid" ? (
+            newlyPaidKeys.length > 0 ? (
               <p className="text-right text-xs text-gray-600">
                 {deadlines.recordId ? (
                   <>
@@ -1636,7 +1723,9 @@ export default function MemberProfileSettingsTab({
                     .{" "}
                   </>
                 ) : null}
-                {pendingFiling ? "Click Save to create them. " : null}
+                {pendingFiling && !saving
+                  ? "Saving to update the archives… "
+                  : null}
                 {paidMissingAmount ? (
                   <span className="font-semibold text-red-600">
                     Enter the payment amount to record it as paid.
@@ -1646,6 +1735,8 @@ export default function MemberProfileSettingsTab({
             ) : null}
           </div>
 
+          {!subscriptionOnly ? (
+          <>
           <Row2 className="md:items-end">
             {athleteProfile.currentTeam !== false ? (
               <Field
@@ -1717,7 +1808,7 @@ export default function MemberProfileSettingsTab({
                 <option value="No">No</option>
               </TextSelect>
             </Field>
-            {sportFields.registrationType ? (
+            {sportFields?.registrationType ? (
               <Field label="Registration type">
                 <TextSelect
                   className="h-9"
@@ -1769,7 +1860,7 @@ export default function MemberProfileSettingsTab({
           </Row2>
 
           <Row2>
-            <Field label={`${sportFields.labels.category ?? categoryLabel} **`}>
+            <Field label={`${sportFields?.labels.category ?? categoryLabel} **`}>
               <TextSelect
                 disabled={readOnlyClub || categoryOptions.length === 0}
                 value={s.football.category}
@@ -1861,7 +1952,11 @@ export default function MemberProfileSettingsTab({
           <Row2>
             {athleteProfile.footHand !== false ? (
               <SportChoiceField
-                label={athleteProfile.footHand ?? sportFields.labels.footHand}
+                label={
+                  athleteProfile.footHand ??
+                  sportFields?.labels.footHand ??
+                  "Foot/Hand"
+                }
                 value={s.football.footHand}
                 choices={
                   athleteProfile.footHandOptions ?? [
@@ -2129,6 +2224,8 @@ export default function MemberProfileSettingsTab({
               ))}
             </div>
           </Field>
+          </>
+          ) : null}
         </SectionCard>
       ) : null}
 

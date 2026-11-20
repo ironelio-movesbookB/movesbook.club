@@ -19,6 +19,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const origin = registrationOrigin(request);
     const pageUrl = `${origin}/pay/club/${payment.id}`;
     if (payment.status === 'paid') return NextResponse.json({ url: pageUrl });
+    if (payment.status === 'cancelled') {
+      return NextResponse.json(
+        { error: 'This payment link was replaced by a newer one. Use the latest link you received.' },
+        { status: 410 },
+      );
+    }
     if (!(await memberOnlinePaymentStillDue(payment.id))) {
       return NextResponse.json(
         { error: 'This deadline is already paid. This payment link can no longer be used.' },

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import ShareModal from '@/components/ShareModal';
 import {
   BarChart3,
@@ -23,6 +24,13 @@ type Props = {
   paginationTrailing?: ReactNode;
   /** Optional title used in mail / share copy. */
   shareTitle?: string;
+  /** When set, the Statistics button navigates here. Otherwise it stays disabled. */
+  statisticsHref?: string;
+  /** When set, the Statistics button calls this (used if no href is given). */
+  onStatisticsClick?: () => void;
+  /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
+  onSendData?: () => void;
+  sendDataTitle?: string;
   /** When set, the two view buttons switch the member-photo layout. */
   photoMode?: 'with' | 'without';
   onPhotoModeChange?: (mode: 'with' | 'without') => void;
@@ -62,10 +70,15 @@ export default function ArchiveActionsBar({
   onDeleteSelected,
   shareTitle,
   paginationTrailing,
+  statisticsHref,
+  onStatisticsClick,
+  onSendData,
+  sendDataTitle,
   photoMode,
   onPhotoModeChange,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
+  const statisticsEnabled = Boolean(statisticsHref || onStatisticsClick);
   const canDelete = selectedCount > 0 && typeof onDeleteSelected === 'function';
 
   return (
@@ -79,8 +92,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => handleSendDataByMail(shareTitle)}
-            title="Send current page link by mail"
+            onClick={() => (onSendData ? onSendData() : handleSendDataByMail(shareTitle))}
+            title={sendDataTitle ?? 'Send current page link by mail'}
           >
             <Send className="h-3.5 w-3.5" />
             Send data
@@ -100,10 +113,27 @@ export default function ArchiveActionsBar({
             <ClipboardList className="h-3.5 w-3.5" />
             Totals
           </button>
-          <button type="button" disabled className={inactiveBtn} title="Not available yet">
-            <BarChart3 className="h-3.5 w-3.5" />
-            Statistics
-          </button>
+          {statisticsEnabled && statisticsHref ? (
+            <Link href={statisticsHref} className={activeBtn} title="Open statistics">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Statistics
+            </Link>
+          ) : statisticsEnabled ? (
+            <button
+              type="button"
+              className={activeBtn}
+              onClick={onStatisticsClick}
+              title="Open statistics"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Statistics
+            </button>
+          ) : (
+            <button type="button" disabled className={inactiveBtn} title="Not available yet">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Statistics
+            </button>
+          )}
           <button
             type="button"
             disabled={!canDelete}

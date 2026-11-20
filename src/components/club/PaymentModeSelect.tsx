@@ -4,9 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   normalizePaymentTypeValue,
   OTHERS_PAYMENT_OPTION,
+  PAY_MODE_TONE_COLOR,
   PAYMENT_TYPE_OPTIONS,
+  payModeTone,
   splitPaymentMethodsForForm,
 } from '@/lib/procedures/payModes';
+
+function toneStyle(value: string) {
+  return { color: PAY_MODE_TONE_COLOR[payModeTone(value)] };
+}
 
 type Props = {
   value: string;
@@ -43,7 +49,9 @@ export default function PaymentModeSelect({
   disabledMethods = [],
 }: Props) {
   const optionProps = (method: string) =>
-    disabledMethods.includes(method) ? { disabled: true, className: 'text-gray-400' } : {};
+    disabledMethods.includes(method)
+      ? { disabled: true, style: { color: '#9ca3af' } }
+      : { style: toneStyle(method) };
   const locked = Array.isArray(allowedMethods);
   const normalizedValue = locked ? value : normalizePaymentTypeValue(value) || value;
   const lockedOptions = useMemo(() => {
@@ -94,10 +102,11 @@ export default function PaymentModeSelect({
       id={id}
       disabled={disabled}
       className={className}
+      style={toneStyle(selectValue)}
       value={selectValue}
       onChange={(e) => handleChange(e.target.value)}
     >
-      {allowEmpty ? <option value="">select</option> : null}
+      {allowEmpty ? <option value="" style={toneStyle('')}>select</option> : null}
       {locked
         ? lockedOptions.map((m) => (
             <option key={m.value} value={m.value} {...optionProps(m.value)}>
@@ -112,7 +121,11 @@ export default function PaymentModeSelect({
             </option>
           ))
         : null}
-      {!locked && others.length > 0 ? <option value={OTHERS_PAYMENT_OPTION}>Others</option> : null}
+      {!locked && others.length > 0 ? (
+        <option value={OTHERS_PAYMENT_OPTION} style={toneStyle('')}>
+          Others
+        </option>
+      ) : null}
       {!locked && showOthers
         ? others.map((m) => (
             <option key={`other-${m.value}`} value={m.value} {...optionProps(m.value)}>

@@ -4601,7 +4601,7 @@ model ShopSettings {
   workspaceId          String   @db.VarChar(191)
   slug                 String   @unique @db.VarChar(80)
   displayName          String   @default("") @db.VarChar(120)
-  shopDescription      String   @default("") @db.Text
+  shopDescription      String   @db.Text
   shopActive         Boolean  @default(true)
   orderEmailsEnabled Boolean  @default(true)
   /// "logo" or "banner": what the public shop page shows at the top.
@@ -4625,7 +4625,7 @@ model ShopProduct {
   workspaceKind      String   @db.VarChar(16)
   workspaceId        String   @db.VarChar(191)
   name               String   @db.VarChar(160)
-  description        String   @default("") @db.Text
+  description        String   @db.Text
   price              Decimal  @db.Decimal(10, 2)
   vatRate            Decimal  @default(0) @db.Decimal(5, 2)
   quantity           Int      @default(0)
