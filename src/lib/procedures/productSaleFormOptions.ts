@@ -4,7 +4,7 @@ import { fetchProcedureCustomerOptions } from './clubMembers';
 import { fetchClubOperatorOptions } from './clubOperators';
 import { listCompanies } from '@/lib/club/archives/clubArchiveService';
 import type { ClubAuthContext } from './types';
-import { isHardwareProductSector, shopSector } from '@/lib/shop/sectors';
+import { formatProductSectors, isHardwareProductSector } from '@/lib/shop/sectors';
 import { nextSellingNumber } from '@/lib/shop/nextSellingNumber';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { PROCEDURE_TYPE_CODES } from './types';
@@ -53,7 +53,7 @@ export async function fetchProductSaleFormOptions(
       id: row.id,
       name: text(row.name) || `Product ${row.id}`,
       cost: num(row.price),
-      sector: shopSector(row.sector),
+      sector: formatProductSectors(row.sector),
       allowMultipleUnits: row.allowMultipleUnits,
       imageUrl: row.imageUrl,
     });

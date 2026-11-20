@@ -17,7 +17,7 @@ import PaymentModeSelect from '@/components/club/PaymentModeSelect';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-import { SELLING_SECTORS, shopSector } from '@/lib/shop/sectors';
+import { SELLING_SECTORS, productInSector, productSectorLabel, productSectors } from '@/lib/shop/sectors';
 import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 type CatalogProduct = {
@@ -117,7 +117,7 @@ function ProductPurchaseFormInner() {
   const visibleProducts = useMemo(() => {
     const catalog = options?.products ?? [];
     if (!sectorFilter) return catalog;
-    return catalog.filter((product) => shopSector(product.sector) === sectorFilter);
+    return catalog.filter((product) => productInSector(product.sector, sectorFilter));
   }, [options, sectorFilter]);
 
   const taggedTotal = useMemo(
@@ -132,7 +132,7 @@ function ProductPurchaseFormInner() {
   const total = Number(value) || 0;
   const paid = pay === '' ? 0 : Number(pay);
   const rest = Math.max(0, total - paid);
-  const sectorName = [...new Set(lines.map((line) => shopSector(line.sector)))].join(' - ') || 'Shop';
+  const sectorName = [...new Set(lines.flatMap((line) => productSectors(line.sector)))].join(' - ') || 'Shop';
 
   function tagProduct(product: CatalogProduct) {
     setLines((current) => {
@@ -151,7 +151,7 @@ function ProductPurchaseFormInner() {
           quantity: 1,
           price: product.cost,
           allowMultipleUnits: product.allowMultipleUnits,
-          sector: shopSector(product.sector),
+          sector: sectorFilter || productSectors(product.sector).join(' - '),
           imageUrl: product.imageUrl,
         },
       ];
@@ -292,7 +292,7 @@ function ProductPurchaseFormInner() {
                       />
                       <Picture src={product.imageUrl} fallback={<Package size={14} />} className="h-8 w-8 rounded" />
                       <span className="min-w-0 flex-1 truncate">{product.name}</span>
-                      <span className="shrink-0 text-xs text-gray-500">{product.sector}</span>
+                      <span className="shrink-0 text-xs text-gray-500">{productSectorLabel(product.sector)}</span>
                       <span className="shrink-0 font-medium">€{product.cost.toFixed(2)}</span>
                     </label>
                   );

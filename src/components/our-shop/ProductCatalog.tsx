@@ -17,8 +17,9 @@ import { shopFetch } from '@/lib/shop/browser';
 import {
   SHOP_SECTOR_TITLE,
   isHardwareProductSector,
+  productInSector,
+  productSectorLabel,
   shopProductListPath,
-  shopSector,
   shopSectorFromPath,
 } from '@/lib/shop/sectors';
 
@@ -237,7 +238,7 @@ function ProductCard({
               ) : null}
             </div>
             {showSector ? (
-              <p className="mt-0.5 text-xs text-gray-400">{shopSector(product.sector)}</p>
+              <p className="mt-0.5 text-xs text-gray-400">{productSectorLabel(product.sector)}</p>
             ) : null}
           </div>
 
@@ -294,9 +295,8 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const listed = products.filter((product) => {
-    const productSector = shopSector(product.sector);
-    if (sector === 'All') return !isHardwareProductSector(productSector);
-    return productSector === sector;
+    if (sector === 'All') return !isHardwareProductSector(product.sector);
+    return productInSector(product.sector, sector);
   });
   const addSector = sector === 'All' ? 'Shop' : sector;
   const pageCount = Math.max(1, Math.ceil(listed.length / pageSize));

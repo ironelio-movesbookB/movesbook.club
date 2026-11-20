@@ -15,6 +15,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { shopFetch } from '@/lib/shop/browser';
 import ProductCountPopup from '@/components/club/products/ProductCountPopup';
+import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 
 type OrderStatus = 'pending' | 'completed' | 'cancelled';
 type PaymentStatus = 'paid' | 'unpaid';
@@ -116,6 +117,8 @@ function OrdersPage() {
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadOrders = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -170,6 +173,14 @@ function OrdersPage() {
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [orders, search, paymentFilter, statusFilter, productId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, paymentFilter, statusFilter, productId]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleOrders = filteredOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   async function changeStatus(order: Order, status: OrderStatus) {
     if (order.status === status) return;
@@ -324,6 +335,18 @@ function OrdersPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex justify-end border-b border-slate-100 px-3 py-3">
+            <ProcedurePagination
+              page={safePage}
+              pageSize={pageSize}
+              total={filteredOrders.length}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          </div>
           <table className="min-w-[1100px] w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -342,7 +365,7 @@ function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredOrders.map((order) => {
+              {visibleOrders.map((order) => {
                 const busy = updatingOrderId === order.id;
                 const productCount =
                   order.productCount ?? order.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -444,9 +467,12 @@ function OrdersPage() {
         </div>
       )}
 
-      <div className="pb-2 text-xs text-slate-400">
-        Showing {filteredOrders.length} of {orders.length} orders
-      </div>
+      {!loading && (
+        <div className="pb-2 text-xs text-slate-400">
+          Showing {filteredOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1}
+          –{Math.min(safePage * pageSize, filteredOrders.length)} of {filteredOrders.length} orders
+        </div>
+      )}
     </div>
   );
 }

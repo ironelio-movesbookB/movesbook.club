@@ -7,7 +7,7 @@ import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import { fetchProcedureCustomerOptions, fetchSingleUserOptions } from '@/lib/procedures/clubMembers';
 import type { ShopWorkspace } from './auth';
 import { personName } from './auth';
-import { sellingArchiveSector, sellingPerformedBy, shopSector } from './sectors';
+import { formatProductSectors, productSectors, sellingArchiveSector, sellingPerformedBy } from './sectors';
 import { nextSellingNumber } from './nextSellingNumber';
 import { findPublicOrg, publicOrgCard } from '@/lib/club/publicOrg';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
@@ -342,7 +342,7 @@ export async function saveProduct(
     isVisible: !hideFromShop,
     allowMultipleUnits: input.allowMultipleUnits ?? true,
     allowNonMembers: input.allowNonMembers ?? true,
-    sector: shopSector(input.sector),
+    sector: formatProductSectors(input.sector),
   };
   if (!data.name) throw new Error('Enter a product name.');
 
@@ -594,8 +594,7 @@ async function writeDeadline(
 ) {
   const memberId = memberUserId || workspace.adminId;
   const productName = lines.map((line) => line.product.name).join(', ').slice(0, 180) || 'Shop';
-  const sectors = [...new Set(lines.map((line) => shopSector(line.product.sector)))];
-  const sectorName = sectors.join(' - ') || 'Shop';
+  const sectorName = [...new Set(lines.flatMap((line) => productSectors(line.product.sector)))].join(' - ') || 'Shop';
   const id = randomUUID();
   const metadata = {
     productName,
@@ -718,7 +717,7 @@ async function createOneOrder(
     restAmount: total,
     paymentMethod: options.paymentMethod,
     source: options.source,
-    sector: [...new Set(lines.map((line) => shopSector(line.product.sector)))].join(' - ') || 'Shop',
+    sector: [...new Set(lines.flatMap((line) => productSectors(line.product.sector)))].join(' - ') || 'Shop',
     operatorName: '-',
     subtotal,
     discount,

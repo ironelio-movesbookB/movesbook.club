@@ -927,9 +927,15 @@ function sellingListStatus(record: {
 }
 
 function soldProductSector(sector: string | null | undefined) {
-  const value = String(sector ?? '').trim().toLowerCase();
-  if (value === 'shop' || value === 'bar' || value === 'restaurant') return value.toUpperCase();
-  return 'OTHER';
+  const parts = String(sector ?? '')
+    .split(/[,|/]/)
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part === 'shop' || part === 'bar' || part === 'restaurant');
+  if (parts.length === 0) return 'OTHER';
+  return ['shop', 'bar', 'restaurant']
+    .filter((name) => parts.includes(name))
+    .map((name) => name.toUpperCase())
+    .join(', ');
 }
 
 export async function listProductSaleLines(

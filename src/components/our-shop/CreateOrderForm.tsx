@@ -9,7 +9,8 @@ import { ShopFrame, ShopHeader } from '@/components/our-shop/pageChrome';
 import {
   SELLING_SECTORS,
   isHardwareProductSector,
-  shopSector,
+  productInSector,
+  productSectorLabel,
 } from '@/lib/shop/sectors';
 
 const inputClass =
@@ -102,7 +103,7 @@ export default function CreateOrderForm() {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     return sellable.filter((product) => {
-      if (sectorFilter && shopSector(product.sector) !== sectorFilter) return false;
+      if (sectorFilter && !productInSector(product.sector, sectorFilter)) return false;
       if (!q) return true;
       return product.name.toLowerCase().includes(q);
     });
@@ -274,7 +275,7 @@ export default function CreateOrderForm() {
                   <span className="min-w-0 truncate">{product.name}</span>
                 </span>
                 <span className="shrink-0 text-gray-500">
-                  {shopSector(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
+                  {productSectorLabel(product.sector)} · {formatPrice(product.price)} · stock {product.quantity}
                 </span>
               </button>
             ))
