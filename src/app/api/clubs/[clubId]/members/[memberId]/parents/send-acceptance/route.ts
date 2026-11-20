@@ -8,6 +8,7 @@ import { readEntityDescription } from '@/lib/club/clubDocuments';
 import { buildPdfBufferFromHtmlContent } from '@/lib/club/clubDocumentsGenerate';
 import { isMemberUnderage } from '@/lib/club/memberProfileDefaults';
 import { escapeHtml, isValidEmail } from '@/lib/club/memberArchiveActions';
+import { parentsAcceptanceMailCopy } from '@/lib/club/parentsAcceptanceMailCopy';
 import type { ParentData } from '@/lib/club/memberProfileTypes';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,12 @@ function safeFileName(value: string): string {
   return value.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Document';
 }
 
+function normalizeLang(code: string | null | undefined): string {
+  const raw = String(code || '').trim().toLowerCase();
+  if (!raw) return '';
+  return raw.split(/[-_]/)[0] || '';
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { clubId: string; memberId: string } },
@@ -36,6 +43,14 @@ export async function POST(
   const viewerUserId = token ? verifyToken(token)?.userId : null;
   if (!viewerUserId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let bodyLanguage = '';
+  try {
+    const body = (await request.json()) as { language?: string };
+    bodyLanguage = normalizeLang(body?.language);
+  } catch {
+    bodyLanguage = '';
   }
 
   const bundle = await loadMemberProfileBundle({
@@ -80,26 +95,41 @@ export async function POST(
     );
   }
 
-  const owner =
+  const [owner, settings] = await Promise.all([
     kind === 'team'
-      ? await prisma.team.findUnique({ where: { id: bundle.clubId }, select: { admin: { select: { email: true } } } })
-      : await prisma.club.findUnique({ where: { id: bundle.clubId }, select: { admin: { select: { email: true } } } });
+      ? prisma.team.findUnique({
+          where: { id: bundle.clubId },
+          select: { admin: { select: { email: true } } },
+        })
+      : prisma.club.findUnique({
+          where: { id: bundle.clubId },
+          select: { admin: { select: { email: true } } },
+        }),
+    prisma.userSettings.findUnique({
+      where: { userId: String(viewerUserId) },
+      select: { language: true },
+    }),
+  ]);
   const ownerEmail = owner?.admin?.email?.trim() ?? '';
   const replyTo = isValidEmail(ownerEmail) ? ownerEmail : undefined;
+  const language =
+    bodyLanguage || normalizeLang(settings?.language) || 'en';
 
   const entityName = bundle.clubName.trim() || (kind === 'team' ? 'Team' : 'Club');
+  const copy = parentsAcceptanceMailCopy(language, kind, entityName);
+
   let rulesPdf: Buffer;
   let privacyPdf: Buffer;
   try {
     [rulesPdf, privacyPdf] = await Promise.all([
       buildPdfBufferFromHtmlContent({
-        title: 'Rules',
+        title: copy.rulesTitle,
         entityName,
         html: docs.rulesHtml,
         orientation: 'portrait',
       }),
       buildPdfBufferFromHtmlContent({
-        title: 'Privacy policy',
+        title: copy.privacyTitle,
         entityName,
         html: docs.privacyPolicyHtml,
         orientation: 'portrait',
@@ -127,27 +157,32 @@ export async function POST(
 
   const attachments = [
     {
-      filename: `Rules - ${safeFileName(entityName)}.pdf`,
+      filename: `${copy.rulesTitle} - ${safeFileName(entityName)}.pdf`,
       content: rulesPdf,
       contentType: 'application/pdf',
     },
     {
-      filename: `Privacy policy - ${safeFileName(entityName)}.pdf`,
+      filename: `${copy.privacyTitle} - ${safeFileName(entityName)}.pdf`,
       content: privacyPdf,
       contentType: 'application/pdf',
     },
   ];
 
-  const sentence = `We hereby inform you that you have read and accepted the rules and regulations of our ${kind}.`;
-  const text = `${sentence}\n\nBest regards,\n${entityName}`;
-  const html = `<p>${escapeHtml(sentence)}</p><p>Best regards,<br>${escapeHtml(entityName)}</p>`;
-  const subject = `Acceptance of the rules and regulations - ${entityName}`;
+  const text = `${copy.sentence}\n\n${copy.regards},\n${entityName}`;
+  const html = `<p>${escapeHtml(copy.sentence)}</p><p>${escapeHtml(copy.regards)},<br>${escapeHtml(entityName)}</p>`;
 
   const sent: string[] = [];
   const failed: string[] = [];
   for (const r of recipients) {
     try {
-      await sendIonosEmail({ to: r.email, subject, html, text, replyTo, attachments });
+      await sendIonosEmail({
+        to: r.email,
+        subject: copy.subject,
+        html,
+        text,
+        replyTo,
+        attachments,
+      });
       sent.push(r.email);
     } catch (error) {
       console.error('[parents/send-acceptance] send failed', r.email, error);
@@ -156,7 +191,10 @@ export async function POST(
   }
 
   if (sent.length === 0) {
-    return NextResponse.json({ error: 'The email could not be sent. Please try again later.', failed }, { status: 502 });
+    return NextResponse.json(
+      { error: 'The email could not be sent. Please try again later.', failed },
+      { status: 502 },
+    );
   }
-  return NextResponse.json({ success: true, sent, failed });
+  return NextResponse.json({ success: true, sent, failed, language });
 }

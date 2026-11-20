@@ -801,8 +801,13 @@ function MemberListPageContent() {
           </div>
         )
       ) : archiveSection === 'staff' ? (
-        <div className="min-h-0 flex-1">
-          <ClubStaffList />
+        <div className="min-h-0 flex-1 space-y-0">
+          <div className="flex items-center justify-between rounded-t-lg bg-teal-800 px-4 py-3 text-white">
+            <h1 className="text-lg font-semibold whitespace-nowrap">Archive — Staff</h1>
+          </div>
+          <div className="overflow-hidden rounded-b-lg border border-gray-200 border-t-0 bg-white">
+            <ClubStaffList />
+          </div>
         </div>
       ) : archiveSection === 'club-profile' ? (
         <ArchiveEntityProfilePanel clubId={clubId} />

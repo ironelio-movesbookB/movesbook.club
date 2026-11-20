@@ -87,6 +87,9 @@ export async function sendIonosEmail(payload: IonosEmailPayload): Promise<void> 
       filename: sanitizeHeader(a.filename),
       content: a.content,
       contentType: a.contentType,
+      contentDisposition: 'attachment' as const,
+      // Binary PDFs must be base64-encoded or some clients show them as corrupt/HTML.
+      encoding: Buffer.isBuffer(a.content) ? ('base64' as const) : undefined,
     })),
   });
 

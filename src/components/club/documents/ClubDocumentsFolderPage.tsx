@@ -384,9 +384,12 @@ export default function ClubDocumentsFolderPage() {
               <p className="text-sm text-gray-500">
                 Club&apos;s management / General settings
               </p>
-              <h1 className="mt-0.5 text-xl font-semibold text-gray-950">Documents</h1>
+              <h1 className="mt-0.5 text-xl font-semibold text-gray-950">
+                Documents useful
+              </h1>
               <p className="mt-1 text-sm text-gray-600">
-                Rules, Privacy Policy, PDFs, and generated reports for this {entityWord.toLowerCase()}
+                Folder of documents useful for the {entityWord.toLowerCase()} and for users —
+                Rules, Privacy Policy, PDFs, and generated reports
                 {clubName ? (
                   <>
                     {' '}
@@ -405,10 +408,10 @@ export default function ClubDocumentsFolderPage() {
                   setPdfFile(null);
                   setSelectedSources([]);
                 }}
-                className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-md bg-red-700 px-3 text-sm font-semibold text-white hover:bg-red-800"
+                className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-md bg-red-700 px-3 text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-800"
               >
                 <FilePlus2 className="h-4 w-4" />
-                Add document
+                + Add document
               </button>
             ) : null}
           </div>
@@ -460,7 +463,7 @@ export default function ClubDocumentsFolderPage() {
                   type="button"
                   disabled={!pageShared}
                   onClick={() => {
-                    setShareTitle('Documents');
+                    setShareTitle('Documents useful');
                     setShareUrl(absoluteUrl(sharedPageUrl));
                     setShareOpen(true);
                   }}

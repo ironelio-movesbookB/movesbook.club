@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  CheckRow,
   Field,
   Row2,
   SectionCard,
@@ -12,6 +13,10 @@ import { useSportT } from '@/components/sport/useSportT';
 import { normalizeEntitySport } from '@/lib/sport/entitySportOptions';
 import { splitFieldLabel } from '@/lib/sport/sportI18n';
 import type { SportFieldDef } from '@/lib/sport/sportProfileTypes';
+import {
+  decodeMultiSportValues,
+  encodeMultiSportValues,
+} from '@/lib/sport/sportProfileTypes';
 import { teamSportInfoFields, teamSportProfile } from '@/lib/sport/teamSportProfiles';
 import type { EntitySportProfileData } from '@/lib/team/teamProfileTypes';
 
@@ -40,6 +45,37 @@ export function SportFieldGrid({
         const value = values[def.key] ?? '';
         const { label, examples: rawExamples } = splitFieldLabel(def.label);
         const examples = rawExamples ? st(rawExamples) : undefined;
+        if (def.multi && def.options && def.options.length > 0) {
+          const selected = decodeMultiSportValues(value);
+          return (
+            <div
+              key={def.key}
+              className="col-span-full flex flex-col justify-end md:col-span-2"
+            >
+              <Field label={`${st(label)} (multicheck)`}>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 rounded border border-gray-200 bg-white px-3 py-2">
+                  {def.options.map((choice) => {
+                    const checked = selected.includes(choice);
+                    return (
+                      <CheckRow
+                        key={choice}
+                        label={st(choice)}
+                        disabled={readOnly}
+                        checked={checked}
+                        onChange={(on) => {
+                          const next = on
+                            ? [...selected, choice]
+                            : selected.filter((v) => v !== choice);
+                          onChange(def.key, encodeMultiSportValues(next));
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+          );
+        }
         return (
           <div key={def.key} className="flex flex-col justify-end">
             <Field label={st(label)}>

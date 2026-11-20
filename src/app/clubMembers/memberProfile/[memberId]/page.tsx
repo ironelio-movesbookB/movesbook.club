@@ -29,10 +29,10 @@ const CLUB_TABS: TabMeta[] = [
   { id: 'parents', label: PARENTS_TAB_LABEL, clubScoped: true },
   { id: 'pay-for', label: 'Pay for…', clubScoped: true },
   { id: 'other-details', label: 'Other Club data', clubScoped: true },
-  { id: 'administration', label: 'Administration', clubScoped: true },
   { id: 'settings', label: 'Settings', clubScoped: true },
   { id: 'messages-staff', label: 'Alert posted', clubScoped: true },
   { id: 'notes-coach', label: 'Coach notes', clubScoped: true },
+  { id: 'administration', label: 'Administration', clubScoped: true },
   { id: 'presences', label: 'Presences', clubScoped: true },
   { id: 'stats', label: 'Stats', clubScoped: true },
 ];
