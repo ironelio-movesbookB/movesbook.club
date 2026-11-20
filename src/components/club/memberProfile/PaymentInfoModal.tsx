@@ -5,19 +5,35 @@ import { X } from 'lucide-react';
 import { getInfoRepsCloseLabel } from '@/constants/infoRepsLongText';
 import { fetchPaymentInfoText } from '@/constants/paymentInfoLongText';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
+import {
+  normalizeToolsLanguage,
+  resolveProfileLanguageCodeForToolsLoad,
+} from '@/utils/toolsProfileLanguage';
 import { longTextDisplayHtml } from '@/utils/richTextTranslation';
 import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
 
 type PaymentInfoModalProps = {
   open: boolean;
   onClose: () => void;
+  /**
+   * Language of the member whose profile is open (Member profile → Other references → Language).
+   * Falls back to the signed-in user's profile language, then the UI language.
+   */
+  memberLanguage?: string | null;
 };
 
-/** Types of payments help — `Payment_info` long text in the top navbar language. */
-export default function PaymentInfoModal({ open, onClose }: PaymentInfoModalProps) {
+/** Types of payments help — `Payment_info` long text in the member's / current user profile language. */
+export default function PaymentInfoModal({
+  open,
+  onClose,
+  memberLanguage,
+}: PaymentInfoModalProps) {
   const { currentLanguage } = useLanguage();
-  const language = normalizeToolsLanguage(currentLanguage);
+  const language = normalizeToolsLanguage(
+    String(memberLanguage || '').trim() ||
+      resolveProfileLanguageCodeForToolsLoad() ||
+      currentLanguage,
+  );
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
   const bodyHtml = useMemo(() => sanitizeRichHtml(longTextDisplayHtml(body)), [body]);
