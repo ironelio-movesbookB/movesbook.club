@@ -272,17 +272,20 @@ async function assertOperatorPassword(
     procedureTypeCode === PROCEDURE_TYPE_CODES.SERVICE_SALE ||
     procedureTypeCode === PROCEDURE_TYPE_CODES.PRODUCT_SALE ||
     procedureTypeCode === PROCEDURE_TYPE_CODES.EXPENSE;
-  if (!requiresPassword) return;
+  let passwordRequired = requiresPassword;
   if (clubId) {
     const setting = await getOtherSetting(
       clubId,
       "operator_pass_status",
       userId,
     );
-    if (!setting || !isPasswordEnabledSetting(setting)) return;
+    passwordRequired = isPasswordEnabledSetting(setting ?? "");
   }
   const trimmed = password?.trim();
-  if (!trimmed) throw new Error("Operator password is required");
+  if (!trimmed) {
+    if (passwordRequired) throw new Error("Operator password is required");
+    return;
+  }
   if (!operatorId) throw new Error("Operator is required");
   const ok = await verifyOperatorPassword(operatorId, trimmed);
   if (!ok) throw new Error("Operator password is incorrect");
