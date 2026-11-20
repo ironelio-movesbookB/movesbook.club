@@ -31,6 +31,18 @@ function ProductImage({ src }: { src: string }) {
   );
 }
 
+function RestAmount({ value }: { value: unknown }) {
+  const amount = Number(value);
+  const settled = !Number.isFinite(amount) || amount <= 0;
+  return <span className={`font-semibold ${settled ? 'text-green-900' : 'text-red-600'}`}>{money(value)}</span>;
+}
+
+function saleRowClass(row: Member) {
+  if (row.status === 'Cancelled') return '!bg-gray-100 text-gray-500';
+  if (row.status === 'Pending') return '!bg-blue-50 text-blue-800';
+  return 'text-black';
+}
+
 function ValuePaid({ value, paid }: { value: unknown; paid: unknown }) {
   const discounted = Number(paid) < Number(value);
   return (
@@ -111,19 +123,8 @@ function ProductSaleListPageInner() {
       header: 'Value / Cost paid',
       render: (value, row) => <ValuePaid value={value} paid={row.paid} />,
     },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (value) => (
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-            value === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'
-          }`}
-        >
-          {String(value ?? '-')}
-        </span>
-      ),
-    },
+    { key: 'rest', header: 'Rest', render: (value) => <RestAmount value={value} /> },
+    { key: 'status', header: 'Status' },
     { key: 'operator', header: 'Operator' },
     { key: 'service', header: 'Receipt' },
     {
@@ -159,6 +160,7 @@ function ProductSaleListPageInner() {
         archiveType="product-sale-lines"
         columns={columns}
         refreshKey={refreshKey}
+        getRowClassName={saleRowClass}
         footerHint={
           productId
             ? `Only sellings that include ${productName}.`

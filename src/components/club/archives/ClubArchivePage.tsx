@@ -31,6 +31,7 @@ type Props = {
   headerAction?: ReactNode;
   /** Bump to force a reload (e.g. after adding a member). */
   refreshKey?: number;
+  getRowClassName?: (row: Member) => string;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
   bordered?: boolean;
@@ -51,6 +52,7 @@ function ClubArchivePageInner({
   memberId: memberIdProp,
   headerAction,
   refreshKey = 0,
+  getRowClassName,
   onEditItem,
   onDeleteItem,
   bordered = false,
@@ -203,6 +205,7 @@ function ClubArchivePageInner({
         bordered={bordered}
         columns={columns}
         rows={data}
+        getRowClassName={getRowClassName}
         loading={loading}
         emptyMessage={emptyMessage}
         selectable={selectable || !!onDeleteItem}

@@ -914,6 +914,18 @@ export async function listUnifiedProductSales(
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
+function sellingListStatus(record: {
+  recordStatus?: string;
+  balanceAmount: number;
+  paidAmount: number;
+  metadata: Record<string, unknown> | null;
+}) {
+  if (record.recordStatus === 'DELETED') return 'Cancelled';
+  const marked = text(record.metadata?.orderStatus).toLowerCase() === 'completed';
+  const settled = record.balanceAmount <= 0 && record.paidAmount > 0;
+  return marked || settled ? 'Completed' : 'Pending';
+}
+
 function soldProductSector(sector: string | null | undefined) {
   const value = String(sector ?? '').trim().toLowerCase();
   if (value === 'shop' || value === 'bar' || value === 'restaurant') return value.toUpperCase();
@@ -936,7 +948,8 @@ export async function listProductSaleLines(
         typology: 'Selling',
         casual: soldProductSector(text(item.casual)),
         paid: item.value,
-        status: item.status === 'Paid' ? 'Paid' : 'Unpaid',
+        rest: item.status === 'Paid' ? 0 : item.value,
+        status: item.status === 'Paid' ? 'Completed' : 'Pending',
         service: '-',
         operator: '-',
       }));
@@ -946,6 +959,7 @@ export async function listProductSaleLines(
       page: 1,
       pageSize: 500,
       memberId: params.memberId,
+      includeDeleted: true,
     });
     const recordIds = procedure.items.map((row) => row.id);
     const receipts = recordIds.length
@@ -1018,7 +1032,8 @@ export async function listProductSaleLines(
           category: displaySellingNumber(meta.sellingNumber) || '-',
           service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
           operator: online ? 'Online shop' : row.operatorName || '-',
-          status: row.balanceAmount > 0 ? 'Unpaid' : 'Paid',
+          rest: row.balanceAmount,
+          status: sellingListStatus(row),
           source: 'procedure',
         });
       });
