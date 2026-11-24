@@ -690,7 +690,15 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       return;
     }
     router.push('/club/dashboard');
-  }, [selectedClubId, formClubs, router, isTeamWorkspaceUser, pathname, showMyClubTab]);
+  }, [
+    selectedClubId,
+    formClubs,
+    router,
+    isTeamWorkspaceUser,
+    onClubDashboard,
+    pathname,
+    showMyClubTab,
+  ]);
 
   const handleMyTeamClick = useCallback(() => {
     handleMyClubTabClick();

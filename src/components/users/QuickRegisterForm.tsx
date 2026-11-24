@@ -808,11 +808,13 @@ export default function QuickRegisterForm() {
 
         <div className="qr-register-split">
           <div className="qr-register-split-left">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               className="qr-register-badge qr-register-badge-light"
               src="/img/register-now.png"
               alt="REGISTER NOW"
             />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               className="qr-register-badge qr-register-badge-dark"
               src="/img/dark_logo.jpg"

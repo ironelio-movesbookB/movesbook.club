@@ -86,7 +86,10 @@ export default function SportDropdownParametersSettings() {
     [catalog, sport],
   );
 
-  const parameters = workingCatalog.bySport[sport]?.parameters ?? [];
+  const parameters = useMemo(
+    () => workingCatalog.bySport[sport]?.parameters ?? [],
+    [workingCatalog, sport],
+  );
 
   useEffect(() => {
     if (!parameters.some((p) => p.key === selectedParamKey) && parameters[0]) {

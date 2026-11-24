@@ -468,7 +468,7 @@ function AthleteDashboardContent() {
     } else {
       setShowRightSidebar(true);
     }
-  }, [activeTab, activeSection]);
+  }, [activeTab, activeSection, setShowRightSidebar]);
 
   // Clear peer User Info when leaving chat
   useEffect(() => {
@@ -481,7 +481,7 @@ function AthleteDashboardContent() {
   // Opening User Info should reveal the right sidebar
   useEffect(() => {
     if (chatPeerInfoUserId) setShowRightSidebar(true);
-  }, [chatPeerInfoUserId]);
+  }, [chatPeerInfoUserId, setShowRightSidebar]);
 
   const chatOpen =
     (activeTab === 'my-page' && activeSection === 'chat' && Boolean(chatAudience)) ||
