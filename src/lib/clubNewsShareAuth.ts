@@ -71,6 +71,9 @@ export type ClubSharedFeedItem =
       author: string | null;
       /** Creator user id when known (for posted-by filters). */
       posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       categoryName: string | null;
       method: string | null;
       image: string | null;
@@ -89,6 +92,9 @@ export type ClubSharedFeedItem =
       creatorUsername: string | null;
       /** Creator user id when known (for posted-by filters). */
       posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       image: string | null;
       url: string;
       description: string | null;
@@ -108,6 +114,9 @@ export type ClubSharedFeedItem =
       creatorUsername: string | null;
       /** Creator user id when known (for posted-by filters). */
       posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       image: string | null;
       url: string;
       description: string | null;

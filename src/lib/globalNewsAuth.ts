@@ -37,6 +37,11 @@ export type GlobalNewsFeedItem =
       image: string | null;
       briefDesc: string | null;
       internetLink: string | null;
+      /** Creator user id for posted-by filters. */
+      posterUserId: string | null;
+      creatorCountry: string | null;
+      expiresAt: string | null;
+      deletedAt: string | null;
       inGlobalNews: true;
     }
   | {
@@ -50,6 +55,11 @@ export type GlobalNewsFeedItem =
       url: string;
       description: string | null;
       customDescription: string | null;
+      /** Creator user id for posted-by filters. */
+      posterUserId: string | null;
+      creatorCountry: string | null;
+      expiresAt: string | null;
+      deletedAt: string | null;
       inGlobalNews: true;
     }
   | {
@@ -64,11 +74,25 @@ export type GlobalNewsFeedItem =
       description: string | null;
       customDescription: string | null;
       memberCount: number;
+      /** Creator user id for posted-by filters. */
+      posterUserId: string | null;
+      creatorCountry: string | null;
+      expiresAt: string | null;
+      deletedAt: string | null;
       inGlobalNews: true;
     };
 
+export type FetchGlobalNewsOptions = {
+  /** When true, include soft-deleted OGP / OGP groups (for Show deleted filters). */
+  includeDeleted?: boolean;
+};
+
 /** Merged News + OGP + OGP groups marked for Global News, newest first. */
-export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> {
+export async function fetchGlobalNewsFeedItems(
+  options: FetchGlobalNewsOptions = {},
+): Promise<GlobalNewsFeedItem[]> {
+  const includeDeleted = options.includeDeleted === true;
+
   const [newsRows, ogpRows, globalGroupIds] = await Promise.all([
     prisma.news.findMany({
       where: { inGlobalNews: true } as { inGlobalNews: boolean },
@@ -78,21 +102,29 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
       },
     }),
     prisma.ogpArticle.findMany({
-      where: { inGlobalNews: true, deletedAt: null } as {
-        inGlobalNews: boolean;
-        deletedAt: null;
-      },
+      where: includeDeleted
+        ? ({ inGlobalNews: true } as { inGlobalNews: boolean })
+        : ({ inGlobalNews: true, deletedAt: null } as {
+            inGlobalNews: boolean;
+            deletedAt: null;
+          }),
       orderBy: { savedAt: 'desc' },
       include: {
-        user: { select: { username: true } },
+        user: { select: { username: true, country: true } },
       },
     }),
     // Raw id lookup so this works before/without a Prisma client regenerate for inGlobalNews.
-    prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM ogp_news_groups
-      WHERE inGlobalNews = true AND deletedAt IS NULL
-      ORDER BY savedAt DESC
-    `,
+    includeDeleted
+      ? prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM ogp_news_groups
+          WHERE inGlobalNews = true
+          ORDER BY savedAt DESC
+        `
+      : prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM ogp_news_groups
+          WHERE inGlobalNews = true AND deletedAt IS NULL
+          ORDER BY savedAt DESC
+        `,
   ]);
 
   const ogpGroupRows =
@@ -101,7 +133,7 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
           where: { id: { in: globalGroupIds.map((r) => r.id) } },
           orderBy: { savedAt: 'desc' },
           include: {
-            user: { select: { username: true } },
+            user: { select: { username: true, country: true } },
             items: {
               orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
               take: 1,
@@ -121,6 +153,21 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
         })
       : [];
 
+  // News has userId but no Prisma User relation — resolve countries in one lookup.
+  const newsUserIds = [
+    ...new Set(newsRows.map((n) => n.userId).filter((id): id is string => Boolean(id))),
+  ];
+  const newsUsers =
+    newsUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: newsUserIds } },
+          select: { id: true, country: true },
+        })
+      : [];
+  const newsCountryByUserId = new Map(
+    newsUsers.map((u) => [u.id, u.country ?? null] as const),
+  );
+
   const items: GlobalNewsFeedItem[] = [
     ...newsRows.map((n) => ({
       kind: 'news' as const,
@@ -133,6 +180,10 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
       image: n.image,
       briefDesc: n.briefDesc,
       internetLink: n.internetLink,
+      posterUserId: n.userId ?? null,
+      creatorCountry: n.userId ? (newsCountryByUserId.get(n.userId) ?? null) : null,
+      expiresAt: null,
+      deletedAt: null,
       inGlobalNews: true as const,
     })),
     ...ogpRows.map((a) => ({
@@ -146,6 +197,10 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
       url: a.url,
       description: a.description,
       customDescription: a.customDescription,
+      posterUserId: a.userId ?? null,
+      creatorCountry: a.user?.country ?? null,
+      expiresAt: a.expiresAt ? a.expiresAt.toISOString() : null,
+      deletedAt: a.deletedAt ? a.deletedAt.toISOString() : null,
       inGlobalNews: true as const,
     })),
     ...ogpGroupRows.map((g) => {
@@ -162,6 +217,10 @@ export async function fetchGlobalNewsFeedItems(): Promise<GlobalNewsFeedItem[]> 
         description: first?.description ?? null,
         customDescription: g.customDescription ?? first?.customDescription ?? null,
         memberCount: g._count.items,
+        posterUserId: g.userId ?? null,
+        creatorCountry: g.user?.country ?? null,
+        expiresAt: g.expiresAt ? g.expiresAt.toISOString() : null,
+        deletedAt: g.deletedAt ? g.deletedAt.toISOString() : null,
         inGlobalNews: true as const,
       };
     }),

@@ -18,6 +18,7 @@ import SharedNewsItemPreviewModal, {
   type SharedNewsPreviewPayload,
 } from '@/components/news/SharedNewsItemPreviewModal';
 import NewsFeedMetaLine from '@/components/news/NewsFeedMetaLine';
+import { useAuth } from '@/hooks/useAuth';
 
 type ClubSharedNewsPanelProps = {
   clubId: string;
@@ -29,13 +30,14 @@ type ClubSharedNewsPanelProps = {
 type GlobalKindFilter = 'all' | 'news' | 'ogp' | 'ogp-group';
 type SortMode = 'date-desc' | 'date-asc' | 'alpha-asc' | 'alpha-desc';
 /** Posted-by radio filter (empty = show all). */
-type PostedByFilter = '' | 'me' | 'admin-staff' | 'members' | 'movesbook';
+type PostedByFilter = '' | 'me' | 'admin-staff' | 'members' | 'movesbook' | 'my-country';
 
 const POSTED_BY_OPTIONS: { value: Exclude<PostedByFilter, ''>; label: string }[] = [
   { value: 'me', label: 'posted by me' },
   { value: 'admin-staff', label: 'posted by admin & staff' },
   { value: 'members', label: 'posted by members' },
   { value: 'movesbook', label: 'posted by movesbook' },
+  { value: 'my-country', label: 'posted by my country' },
 ];
 
 const KIND_FILTER_OPTIONS: { value: GlobalKindFilter; label: string }[] = [
@@ -95,6 +97,28 @@ function itemPosterUserId(item: ClubSharedFeedItem): string | null {
   return item.posterUserId?.trim() || null;
 }
 
+function getExpiresAtMs(item: ClubSharedFeedItem): number | null {
+  if (!item.expiresAt) return null;
+  const ms = new Date(item.expiresAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** No Duration (= null/empty) means unlimited — not expired. */
+function isNotExpired(item: ClubSharedFeedItem): boolean {
+  const expMs = getExpiresAtMs(item);
+  if (expMs == null) return true;
+  return expMs >= Date.now();
+}
+
+function hasExpirationDateSet(item: ClubSharedFeedItem): boolean {
+  return getExpiresAtMs(item) != null;
+}
+
+/** True only when an expiration date is set and that date is in the past. */
+function isPastExpired(item: ClubSharedFeedItem): boolean {
+  return hasExpirationDateSet(item) && !isNotExpired(item);
+}
+
 function highlightText(text: string, query: string): ReactNode {
   if (!text) return '';
   if (!query || !query.trim()) return text;
@@ -123,6 +147,7 @@ export default function ClubSharedNewsPanel({
   onClose,
 }: ClubSharedNewsPanelProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState<ClubSharedFeedItem[]>([]);
   const [isClubAdmin, setIsClubAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -138,6 +163,9 @@ export default function ClubSharedNewsPanel({
   const [currentPage, setCurrentPage] = useState(1);
   const [sortMode, setSortMode] = useState<SortMode>('date-desc');
   const [postedByFilter, setPostedByFilter] = useState<PostedByFilter>('');
+  const [excludeExpiredAndDeleted, setExcludeExpiredAndDeleted] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [preview, setPreview] = useState<SharedNewsPreviewPayload | null>(null);
 
   const isGlobalFeed = type === 'all';
@@ -145,6 +173,7 @@ export default function ClubSharedNewsPanel({
   const adminStaffIdSet = useMemo(() => new Set(adminStaffUserIds), [adminStaffUserIds]);
   const memberIdSet = useMemo(() => new Set(memberUserIds), [memberUserIds]);
   const movesbookIdSet = useMemo(() => new Set(movesbookUserIds), [movesbookUserIds]);
+  const currentUserCountry = (user?.country ?? '').trim().toLowerCase();
 
   /** OGP groups open the member list page; news/OGP open the preview modal. */
   const openPreview = useCallback(
@@ -187,6 +216,28 @@ export default function ClubSharedNewsPanel({
         const id = itemPosterUserId(item);
         return Boolean(id && movesbookIdSet.has(id));
       });
+    } else if (postedByFilter === 'my-country') {
+      result = result.filter((item) => {
+        const creatorCountry = (item.creatorCountry ?? '').trim().toLowerCase();
+        return Boolean(currentUserCountry && creatorCountry && creatorCountry === currentUserCountry);
+      });
+    }
+
+    // Mirror Global News / Movesbook Global News expired/deleted filter behavior.
+    if (isGlobalFeed) {
+      if (excludeExpiredAndDeleted) {
+        result = result.filter((item) => !item.deletedAt && isNotExpired(item));
+      } else {
+        if (showExpired) {
+          result = result.filter(isPastExpired);
+          if (!showDeleted) {
+            result = result.filter((item) => !item.deletedAt);
+          }
+        }
+        if (showDeleted) {
+          result = result.filter((item) => Boolean(item.deletedAt));
+        }
+      }
     }
 
     const sorted = [...result];
@@ -208,9 +259,14 @@ export default function ClubSharedNewsPanel({
     searchQuery,
     postedByFilter,
     currentUserId,
+    currentUserCountry,
     adminStaffIdSet,
     memberIdSet,
     movesbookIdSet,
+    excludeExpiredAndDeleted,
+    showExpired,
+    showDeleted,
+    isGlobalFeed,
     sortMode,
   ]);
 
@@ -235,8 +291,10 @@ export default function ClubSharedNewsPanel({
     setLoading(true);
     setError(null);
     try {
+      const params = new URLSearchParams({ type });
+      if (type === 'all') params.set('includeDeleted', '1');
       const res = await fetch(
-        `/api/clubs/${encodeURIComponent(clubId)}/shared-news?type=${encodeURIComponent(type)}`,
+        `/api/clubs/${encodeURIComponent(clubId)}/shared-news?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error('Failed to load shared news');
@@ -431,37 +489,6 @@ export default function ClubSharedNewsPanel({
               </p>
             ) : null}
           </div>
-          {isGlobalFeed ? (
-            <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-800">
-              <legend className="sr-only">Filter by poster</legend>
-              {POSTED_BY_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className="inline-flex cursor-pointer items-center gap-1.5 select-none"
-                >
-                  <input
-                    type="radio"
-                    name="club-global-posted-by"
-                    value={opt.value}
-                    checked={postedByFilter === opt.value}
-                    onChange={() => {
-                      setPostedByFilter(opt.value);
-                      setCurrentPage(1);
-                    }}
-                    onClick={() => {
-                      // Allow clearing the filter by clicking the active radio again.
-                      if (postedByFilter === opt.value) {
-                        setPostedByFilter('');
-                        setCurrentPage(1);
-                      }
-                    }}
-                    className="h-3.5 w-3.5 border-gray-400 text-red-600 focus:ring-red-500"
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              ))}
-            </fieldset>
-          ) : null}
           {onClose ? (
             <button
               type="button"
@@ -474,6 +501,91 @@ export default function ClubSharedNewsPanel({
           ) : null}
         </div>
       </div>
+
+      {isGlobalFeed ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-700 bg-gray-800 px-4 py-2.5 text-sm">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="radio"
+              name="club-global-exclude-expired-deleted"
+              checked={excludeExpiredAndDeleted}
+              onChange={() => {
+                setExcludeExpiredAndDeleted(true);
+                setShowExpired(false);
+                setShowDeleted(false);
+                setCurrentPage(1);
+              }}
+              onClick={() => {
+                if (excludeExpiredAndDeleted) {
+                  setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }
+              }}
+              className="h-3.5 w-3.5 border-gray-400 text-cyan-600 focus:ring-cyan-500"
+              aria-label="Exclude expired & deleted"
+            />
+            <span className="whitespace-nowrap text-white">Exclude expired & deleted</span>
+          </label>
+
+          <fieldset className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+            <legend className="sr-only">Filter by poster and status</legend>
+            {POSTED_BY_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="inline-flex cursor-pointer items-center gap-1.5 select-none"
+              >
+                <input
+                  type="radio"
+                  name="club-global-posted-by"
+                  value={opt.value}
+                  checked={postedByFilter === opt.value}
+                  onChange={() => {
+                    setPostedByFilter(opt.value);
+                    setCurrentPage(1);
+                  }}
+                  onClick={() => {
+                    // Allow clearing the filter by clicking the active radio again.
+                    if (postedByFilter === opt.value) {
+                      setPostedByFilter('');
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="h-3.5 w-3.5 border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                />
+                <span className="whitespace-nowrap text-white">{opt.label}</span>
+              </label>
+            ))}
+            <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+              <input
+                type="checkbox"
+                checked={showExpired}
+                onChange={(e) => {
+                  setShowExpired(e.target.checked);
+                  if (e.target.checked) setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                aria-label="Show expired"
+              />
+              <span className="whitespace-nowrap text-yellow-300">Show expired</span>
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(e) => {
+                  setShowDeleted(e.target.checked);
+                  if (e.target.checked) setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                aria-label="Show deleted"
+              />
+              <span className="whitespace-nowrap text-yellow-300">Show deleted</span>
+            </label>
+          </fieldset>
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {loading ? (
