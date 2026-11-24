@@ -1,14 +1,14 @@
 /** Club / team public website (Marketing → Website). Client-safe. */
 
 export const WEBSITE_SECTIONS = [
-  { key: 'registrations', label: 'Online registration form', linkHint: 'Link of your registration form' },
-  { key: 'documents', label: 'Shared documents', linkHint: 'Club rules and privacy policy are shown automatically' },
+  { key: 'registrations', label: 'Registrations and renewals', linkHint: 'Link of your registration form' },
+  { key: 'documents', label: 'Document archive', linkHint: 'Club rules and privacy policy are shown automatically' },
   { key: 'shop', label: 'Online shop', linkHint: 'Your services and products are shown automatically' },
   { key: 'events', label: 'Events and tournaments', linkHint: 'Upcoming events are shown automatically' },
-  { key: 'medical_visit', label: 'Medical visit booking', linkHint: 'Link to book the medical visit' },
-  { key: 'calendar', label: 'Shared calendar', linkHint: 'Link of your public calendar' },
+  { key: 'medical_visit', label: 'Medical certificate', linkHint: 'Link to update the medical certificate' },
+  { key: 'calendar', label: 'Activity calendar', linkHint: 'Link of your public calendar' },
   { key: 'sponsors', label: 'Sponsors', linkHint: 'Visible sponsors are shown automatically' },
-  { key: 'online_payments', label: 'Online payments', linkHint: 'Link to pay the fees online' },
+  { key: 'online_payments', label: 'Digital payments (deadlines)', linkHint: 'Link to pay the deadlines online' },
 ] as const;
 
 export type WebsiteSectionKey = (typeof WEBSITE_SECTIONS)[number]['key'];
@@ -36,8 +36,14 @@ export type WebsiteSettings = {
   donationEnabled: boolean;
   donationText: string;
   donationTaxCode: string;
+  /** Promotional image of the 5x1000 block (https URL or site path); empty = the standard illustration. */
+  donationImage: string;
   socials: Record<WebsiteSocialKey, string>;
 };
+
+/** Static illustrations used when the club has not set its own image. */
+export const WEBSITE_DONATION_PLACEHOLDER = '/img/promo.jpg';
+export const WEBSITE_SHOP_PLACEHOLDER = '/img/shop_promo.jpg';
 
 export const WEBSITE_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,58}[a-z0-9])$/;
 export const WEBSITE_MAX_COVER_BYTES = 8 * 1024 * 1024;

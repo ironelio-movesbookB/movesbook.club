@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
+import { useDisplayLayoutOptions } from "@/hooks/useDisplayLayoutOptions";
 
 interface DisplayOptionsToolbarProps {
   showAdBanner: boolean;
@@ -23,31 +24,40 @@ export default function DisplayOptionsToolbar({
   onToggleLeftSidebar,
   onToggleRightSidebar,
 }: DisplayOptionsToolbarProps) {
+  const { showSectionsToolbar } = useDisplayLayoutOptions();
+  if (!showSectionsToolbar) return null;
+
   return (
     <div className="relative z-30 shrink-0 border-b bg-white px-4 py-2 md:px-12">
       <div className="flex items-center gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-hidden flex-wrap">
           <ToggleOption
+            checked={showLeftSidebar}
+            label="Left side bar"
+            onChange={onToggleLeftSidebar}
+          />
+
+          <ToggleOption
+            checked={showLeftSidebar}
+            label="Left side bar"
+            onChange={onToggleLeftSidebar}
+          />
+
+          <ToggleOption
             checked={showAdBanner}
-            label="Advertising Banner"
+            label="Advertising banner"
             onChange={onToggleAdBanner}
           />
 
           <ToggleOption
             checked={showPersonalBanner}
-            label="Personal Banner & Picture"
+            label="Personal banner"
             onChange={onTogglePersonalBanner}
           />
 
           <ToggleOption
-            checked={showLeftSidebar}
-            label="Left Sidebar"
-            onChange={onToggleLeftSidebar}
-          />
-
-          <ToggleOption
             checked={showRightSidebar}
-            label="Right Sidebar"
+            label="Right sidebar"
             onChange={onToggleRightSidebar}
           />
         </div>

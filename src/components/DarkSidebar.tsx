@@ -18,6 +18,8 @@ import {
   Music,
   CalendarDays,
   LayoutDashboard,
+  ListOrdered,
+  Shirt,
   ChevronDown,
   Plus,
   UserCircle,
@@ -112,9 +114,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import MyPageTopicsEntryRow from '@/components/club/MyPageTopicsEntryRow';
 import SelectClubForTopicsModal from '@/components/club/SelectClubForTopicsModal';
 import { useRouter, usePathname } from 'next/navigation';
+import { shopFetch } from '@/lib/shop/browser';
 import {
   isClubAccountUserType,
   isGroupAccountUserType,
@@ -130,6 +134,7 @@ import {
   userHasClubProfile,
 } from '@/lib/club/clubSidebarLabel';
 import { formatCreatableCompaniesSidebarLabel } from '@/lib/club/creatableCompaniesQuota.shared';
+import MyCompaniesPanel from '@/components/sidebar/MyCompaniesPanel';
 import CommunitiesSharingLists from '@/components/sharing/CommunitiesSharingLists';
 import type { SharePartyKind } from '@/lib/sharing/sharingTypes';
 import { useSharingSummary } from '@/hooks/useSharingSummary';
@@ -150,6 +155,7 @@ import ClubMembersDashboardSection from '@/components/club/ClubMembersDashboardS
 import PersonalMyTopicsSidebarBlock from '@/components/club/PersonalMyTopicsSidebarBlock';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
 import MubSidebarBar from '@/components/mub/MubSidebarBar';
+import SidebarAccountBesidePhoto from '@/components/sidebar/SidebarAccountBesidePhoto';
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { CLUB_WEBSITE_SETTINGS_INDEX_PATH, clubWebsiteDisplayUrl } from '@/lib/clubWebsiteSettingsPaths';
 import { PERSONAL_WEBSITE_TOPICS_PATH } from '@/lib/personalWebsiteSettingsPaths';
@@ -172,9 +178,11 @@ import {
   CLUB_ADMIN_ARCHIVE_GROUPS,
   CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS,
   COACH_ADMIN_ARCHIVE_GROUPS,
-  type ClubAdminArchiveItem,
   type ClubAdminInsertItem,
 } from '@/lib/club/clubAdminMenus';
+import ClubAdminArchiveGroupsNav, {
+  CLUB_SUBMENU_BG,
+} from '@/components/club/ClubAdminArchiveGroupsNav';
 
 function SidebarStackedGlobeIcon({ badge }: { badge: 'M' | 'F' | 'star' }) {
   return (
@@ -220,28 +228,6 @@ function renderClubAdminInsertItemLeading(item: ClubAdminInsertItem): ReactNode 
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
 }
 
-function renderClubAdminArchiveLeading(item: ClubAdminArchiveItem): ReactNode {
-  if (item.kind === 'affiliate') {
-    return (
-      <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center text-white">
-        <Shield className="h-4 w-4 opacity-95" strokeWidth={1.5} />
-        <Star className="pointer-events-none absolute h-2 w-2 fill-white text-white" strokeWidth={0} />
-      </span>
-    );
-  }
-  if (item.kind === 'overview') {
-    return (
-      <span className="flex shrink-0 items-center gap-0.5 text-white opacity-95">
-        <Server className="h-3.5 w-3.5" strokeWidth={2} />
-        <ChevronRight className="h-3 w-3" strokeWidth={2} />
-      </span>
-    );
-  }
-  if (item.kind === 'child') return null;
-  const Icon = item.Icon;
-  return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
-}
-
 /** Blue "Section …" row of the official Club My Club menu (header only until its contents are defined). */
 function ClubOfficialSectionRow({
   icon: Icon,
@@ -263,26 +249,19 @@ function ClubOfficialSectionRow({
   );
 }
 
-/** Official Club My Club menu nests these rows inside "My Club Dashboard"; other layouts render them flat. */
+/** @deprecated Nesting under My Club Dashboard was wrong — official layout is flat. Kept as a pass-through. */
 function ClubDashboardGroup({
-  enabled,
   children,
-  ...dashboard
 }: {
-  enabled: boolean;
+  enabled?: boolean;
   children: ReactNode;
   clubId?: string;
   youtubeChannelUrl?: string | null;
-  canManageClub: boolean;
+  canManageClub?: boolean;
   onYoutubeChannelUrlSaved?: (clubId: string, url: string | null) => void;
   onClubBootstrapped?: (club: { id: string; name?: string; youtubeChannelUrl?: string | null }) => void;
 }) {
-  if (!enabled) return <>{children}</>;
-  return (
-    <ClubMembersDashboardSection {...dashboard} title="My Club Dashboard">
-      {children}
-    </ClubMembersDashboardSection>
-  );
+  return <>{children}</>;
 }
 
 interface DarkSidebarProps {
@@ -318,6 +297,10 @@ interface DarkSidebarProps {
   onSuggestMovesbookClick?: () => void;
   /** My Club → SOCIAL → Chat (club broadcast channel) */
   onClubChatClick?: () => void;
+  /** My Club → SOCIAL / Section Social → Messages (current club staff↔member inbox) */
+  onClubMessagesClick?: () => void;
+  /** My Page → Messages → Messages-Feedbacks with Club\Team (all clubs inbox) */
+  onClubStaffMessagesClick?: () => void;
   /** My Club → Club News → News (shared editorial news) */
   onClubNewsSectionClick?: () => void;
   /** My Club → Club News → Movesbook News (public archive, credential-filtered) */
@@ -369,6 +352,8 @@ interface DarkSidebarProps {
   clubProfileLoaded?: boolean;
   /** Club admin — companies creatable vs already created (from subscription version). */
   creatableCompaniesQuota?: import('@/lib/club/creatableCompaniesQuota.shared').CreatableCompaniesQuota | null;
+  /** Member view of a structure: tab title (My Club, My Team, My Group, Trained Group). */
+  entityTabLabel?: string;
 }
 
 export default function DarkSidebar({
@@ -393,6 +378,8 @@ export default function DarkSidebar({
   onAccessOutcomeSettingsClick,
   onSuggestMovesbookClick,
   onClubChatClick,
+  onClubMessagesClick,
+  onClubStaffMessagesClick,
   onClubNewsSectionClick,
   onClubMovesbookArchiveNewsSectionClick,
   onClubMovesbookNewsSectionClick,
@@ -407,22 +394,20 @@ export default function DarkSidebar({
   onTabChange,
   profileImageFromDb,
   onProfileImageSaved,
-  onCreateClubClick,
   onBecomeMemberClick,
   athleteTeams = [],
   onAthleteTeamSelect,
-  onCreateGroupTrainedClick,
-  onCreateTeamClick,
-  onCreateGroupClick,
   clubMyClubTabVisible = false,
   hideMyPageTab = false,
   clubProfileLoaded = true,
   creatableCompaniesQuota = null,
+  entityTabLabel,
 }: DarkSidebarProps) {
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useLanguage();
+  const { showMyPageToolbar } = useDisplayLayoutOptions();
   const [allowVisiting, setAllowVisiting] = useState(true);
   const [showChangeProfilePhotoModal, setShowChangeProfilePhotoModal] = useState(false);
   const [userImageOverride, setUserImageOverride] = useState<string | null | undefined>(undefined);
@@ -440,6 +425,8 @@ export default function DarkSidebar({
   const [selectedAthleteTeamId, setSelectedAthleteTeamId] = useState<string | null>(null);
   const [currentClubMembersOpen, setCurrentClubMembersOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  /** Official My Club: Section Social nests club social rows + Friends / Communities. */
+  const [sectionSocialOpen, setSectionSocialOpen] = useState(false);
   const [myDashboardOpen, setMyDashboardOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -760,6 +747,8 @@ export default function DarkSidebar({
   const [clubMonitoringsOpen, setClubMonitoringsOpen] = useState(false);
   const [clubAdminSubscriptionsOpen, setClubAdminSubscriptionsOpen] = useState(false);
   const [clubGeneralSettingsOpen, setClubGeneralSettingsOpen] = useState(false);
+  const [clubShopOpen, setClubShopOpen] = useState(false);
+  const [shopPublicPath, setShopPublicPath] = useState('');
   const [clubSecurityOpen, setClubSecurityOpen] = useState(false);
   const [clubAdminInsertNewItemOpen, setClubAdminInsertNewItemOpen] = useState(false);
   const [clubArchivesOpen, setClubArchivesOpen] = useState(false);
@@ -916,10 +905,12 @@ export default function DarkSidebar({
   // Keep TEAM/CLUB Archives expanded while browsing archive routes (remount resets state).
   useEffect(() => {
     if (!pathname) return;
+    const onShopRoute = pathname.startsWith('/clubs/shop');
     const onArchiveRoute =
-      pathname.startsWith('/clubMembers') ||
-      pathname.startsWith('/clubs/') ||
-      pathname.startsWith('/club/staff');
+      !onShopRoute &&
+      (pathname.startsWith('/clubMembers') ||
+        pathname.startsWith('/clubs/') ||
+        pathname.startsWith('/club/staff'));
     if (!onArchiveRoute) return;
     if (
       isTeamManagerUser ||
@@ -931,6 +922,29 @@ export default function DarkSidebar({
       setClubArchivesOpen(true);
     }
   }, [pathname, userType, isTeamManagerUser, isCoachUser, isGroupAdminUser]);
+
+  useEffect(() => {
+    if (!pathname?.startsWith('/clubs/shop') && !pathname?.startsWith('/ArchiveSeles')) return;
+    setClubManagementOpen(true);
+    setClubShopOpen(true);
+    setClubArchivesOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!clubShopOpen || shopPublicPath) return;
+    let cancelled = false;
+    shopFetch('/api/club/shop/context')
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const path = data?.workspace?.publicPath;
+        if (typeof path === 'string' && path) setShopPublicPath(path);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [clubShopOpen, shopPublicPath]);
 
   // Team archive pages: keep My Team menu (TEAM'S MANAGEMENT) even if tab state lags.
   useEffect(() => {
@@ -1206,6 +1220,28 @@ export default function DarkSidebar({
   /** Official MY CLUB menu (club accounts): Dashboard group, blue Sections, then Friends / Communities / Events. */
   const officialClubMyClub = showClubMyEntityTop && isClubAccountUserType(userType);
 
+  const openClubMessagesForCurrentClub = () => {
+    if (onClubMessagesClick) {
+      onClubMessagesClick();
+      return;
+    }
+    const clubId =
+      (displaySelectedClub as { id?: string } | null)?.id || selectedEntityId || null;
+    if (clubId) {
+      router.push(`/clubs/messages?clubId=${encodeURIComponent(String(clubId))}`);
+      return;
+    }
+    router.push('/clubs/messages');
+  };
+
+  const openClubStaffMessagesAllClubs = () => {
+    if (onClubStaffMessagesClick) {
+      onClubStaffMessagesClick();
+      return;
+    }
+    router.push('/clubs/messages');
+  };
+
   const handleMyPage = () => {
     router.push('/privacy');
   };
@@ -1433,6 +1469,7 @@ export default function DarkSidebar({
     ) : null;
 
   const getEntityLabel = () => {
+    if (entityTabLabel) return entityTabLabel;
     if (isClubAccountUserType(userType)) return t('sidebar_my_club');
     if (isTeamManagerUser) return t('sidebar_my_team');
     if (isGroupAdminUser) return t('sidebar_my_group');
@@ -1703,6 +1740,7 @@ export default function DarkSidebar({
     <>
     <div className="w-full h-full bg-gray-900 text-white flex flex-col overflow-hidden" style={{ width: '320px' }}>
       {/* Tab Navigation — club accounts: My Club tab only while a sidebar club workspace is open */}
+      {showMyPageToolbar && (
       <div className="flex flex-shrink-0 border-b border-gray-700 bg-gray-900">
         {!hideMyPageTab && (
           <button
@@ -1729,6 +1767,7 @@ export default function DarkSidebar({
           </button>
         )}
       </div>
+      )}
 
       {/* Top: club accounts on "My Club" = club header + logo/details + primary menus; else legacy profile strip */}
       {showClubMyEntityTop ? (
@@ -1736,12 +1775,11 @@ export default function DarkSidebar({
           personName={user?.name || 'User'}
           club={displaySelectedClub ?? null}
           userCountry={user?.country}
-          userImageUrl={userImageOverride ?? user?.image}
           userType={userType}
           onClubYoutubeSaved={handleClubYoutubeSaved}
           onClubBootstrapped={handleClubBootstrapped}
-          onChangeLogo={() => setShowChangeProfilePhotoModal(true)}
           onChatClick={onClubChatClick}
+          onMessagesClick={openClubMessagesForCurrentClub}
         />
       ) : (
         <div className="bg-gray-800 p-3 flex-shrink-0">
@@ -1768,8 +1806,9 @@ export default function DarkSidebar({
             <span className="text-white text-sm font-medium truncate">{user?.name || 'User'}</span>
           </div>
 
-          {/* Profile Picture — `users_new.image` via API + local override after upload */}
-          <div className="mb-2">
+          {/* Profile picture with type of user, current version and expiration beside it */}
+          <div className="mb-2 flex items-start gap-2">
+            <div className="w-20 shrink-0">
             <div className="w-20 h-20 bg-gray-700 rounded-lg mb-1 overflow-hidden flex items-center justify-center relative border border-gray-600/60">
               {sidebarProfileImageSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1790,6 +1829,8 @@ export default function DarkSidebar({
             >
               {t('sidebar_change_photo')}
             </button>
+            </div>
+            <SidebarAccountBesidePhoto userType={user?.userType} />
           </div>
 
           {/* User Details - Compact Single Line */}
@@ -1823,8 +1864,6 @@ export default function DarkSidebar({
             <span className="text-white text-xs">{t('sidebar_allow_visiting')}</span>
           </div>
 
-          <MubSidebarBar variant="compact" />
-
           {/* Visitor Tracking - Compact */}
           <div className="space-y-1 mb-2">
             <div className="flex items-center gap-1.5 text-white text-xs">
@@ -1854,6 +1893,8 @@ export default function DarkSidebar({
 
           {/* Comments Section - Compact */}
           <div className="text-gray-500 text-xs">{t('sidebar_comments')}</div>
+
+          <MubSidebarBar variant="compact" className="mt-2" />
         </div>
       )}
 
@@ -1899,7 +1940,9 @@ export default function DarkSidebar({
                   <Mail className="h-5 w-5 shrink-0" />
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span>
-                      {isCoachUser
+                      {isManagedEntityWorkspaceUser
+                        ? 'My Companies'
+                        : isCoachUser
                         ? t('sidebar_my_groups_trained')
                         : isTeamManagerUser
                           ? t('sidebar_my_teams')
@@ -1925,48 +1968,34 @@ export default function DarkSidebar({
                   />
                 </button>
               </div>
-              {myClubsOpen && isClubAccountUserType(userType) && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateClubClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a club
-                  </button>
-                  {formCreatedClubs.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedClubs.map((club: { id: string; name: string; description?: string | null }) => {
-                          const label = formatMyClubsSidebarLabel(club);
-                          const isSelected = selectedEntityId === club.id;
-                          return (
-                            <li key={club.id}>
-                              <button
-                                type="button"
-                                onClick={() => handleMyPageClubSelect(club.id)}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
+              {myClubsOpen && isManagedEntityWorkspaceUser && (
+                <MyCompaniesPanel
+                  userType={userType}
+                  adminUsername={user?.username || user?.name || 'username'}
+                  companyLimitReached={companyLimitReached}
+                  selectedEntityId={selectedEntityId}
+                  onOpenTopics={openMyTopicsClubPicker}
+                  onBecomeMemberClick={onBecomeMemberClick}
+                  onOpenOwnedHere={(row) => {
+                    if (row.kind === 'club' && isClubAccountUserType(userType)) {
+                      handleMyPageClubSelect(row.id);
+                      return;
+                    }
+                    if (typeof window !== 'undefined') {
+                      if (row.kind === 'club' || row.kind === 'team') {
+                        localStorage.setItem('selectedClub', row.id);
+                      }
+                      if (row.kind === 'team') localStorage.setItem('selectedTeam', row.id);
+                    }
+                    writeClubWorkspaceTab('my-entity');
+                    onEntitySelect?.(row.id);
+                    setCurrentTab('my-entity');
+                    if (row.kind === 'team') onMyTeamClick?.();
+                    else if (row.kind === 'group') onMyGroupClick?.();
+                    else if (row.kind === 'coaching-group') onMyCoachingGroupClick?.();
+                    else if (row.kind === 'club') onMyClubClick?.();
+                  }}
+                />
               )}
               {myClubsOpen && isAthleteUser && (
                 <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
@@ -2003,155 +2032,6 @@ export default function DarkSidebar({
                             </li>
                           );
                         })}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isCoachUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateGroupTrainedClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    {t('create_group_trained')}
-                  </button>
-                  {formCreatedEntities.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (group: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === group.id;
-                          const label = formatEntitySidebarLabel(group);
-                          return (
-                            <li key={group.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onEntitySelect?.(group.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
-                      </ul>
-                    </>
-                  )}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isTeamManagerUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateTeamClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a team
-                  </button>
-                  {formCreatedEntities.length > 0 ? (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (team: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === team.id;
-                          const label = formatEntitySidebarLabel(team);
-                          return (
-                            <li key={team.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (typeof window !== 'undefined') {
-                                    localStorage.setItem('selectedClub', team.id);
-                                    localStorage.setItem('selectedTeam', team.id);
-                                  }
-                                  writeClubWorkspaceTab('my-entity');
-                                  onEntitySelect?.(team.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
-                      </ul>
-                    </>
-                  ) : null}
-                  <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15 pt-3">
-                    <MyPageTopicsEntryRow onOpenClubPicker={openMyTopicsClubPicker} />
-                  </div>
-                </div>
-              )}
-              {myClubsOpen && isGroupAdminUser && (
-                <div className="border-t border-teal-900/40 bg-[#2d2d2d] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onCreateGroupClick?.()}
-                    disabled={companyLimitReached}
-                    className="mx-auto block w-full max-w-[220px] rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-center text-sm font-semibold text-white shadow hover:from-red-600 hover:to-red-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-red-500 disabled:hover:to-red-700"
-                  >
-                    Create a group
-                  </button>
-                  {formCreatedEntities.length > 0 && (
-                    <>
-                      <div className="mx-auto mt-4 max-w-[220px] border-t border-white/15" />
-                      <ul className="mt-3 space-y-1">
-                        {formCreatedEntities.map(
-                          (group: { id: string; name: string; description?: string | null }) => {
-                          const isSelected = selectedEntityId === group.id;
-                          const label = formatEntitySidebarLabel(group);
-                          return (
-                            <li key={group.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onEntitySelect?.(group.id);
-                                  setCurrentTab('my-entity');
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-1 py-1.5 text-left text-sm text-white transition-colors hover:bg-zinc-700/80 ${
-                                  isSelected ? 'bg-zinc-700/60' : ''
-                                }`}
-                              >
-                                <span
-                                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.8)]"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1 truncate leading-snug">{label}</span>
-                              </button>
-                            </li>
-                          );
-                        },
-                        )}
                       </ul>
                     </>
                   )}
@@ -2268,6 +2148,15 @@ export default function DarkSidebar({
                           onContactActivitiesClick();
                         } else {
                           router.push('/profile#member-info');
+                          if (typeof window !== 'undefined') {
+                            window.setTimeout(() => {
+                              document
+                                .querySelector<HTMLButtonElement>(
+                                  '[data-member-profile-tab="contacts"]',
+                                )
+                                ?.click();
+                            }, 0);
+                          }
                         }
                       }}
                       className="flex w-full items-center gap-2 border-t border-black/25 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90"
@@ -2441,7 +2330,7 @@ export default function DarkSidebar({
 
             <div className="border-b border-teal-700">
               <div className="flex w-full items-stretch bg-teal-800 text-white">
-                <button
+            <button
                   type="button"
                   onClick={() => setNotificationsOpen((v) => !v)}
                   aria-expanded={notificationsOpen}
@@ -2472,7 +2361,7 @@ export default function DarkSidebar({
                     <span className="leading-snug">
                       Notifications from movesbook staff ({notificationCounts.movesbook})
                     </span>
-                  </button>
+            </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -2566,7 +2455,7 @@ export default function DarkSidebar({
                   </button>
                   <button
                     type="button"
-                    onClick={() => openOrgFeedbacks('mine')}
+                    onClick={() => openClubStaffMessagesAllClubs()}
                     className="mt-1 flex w-full items-center gap-3 border border-[#aeaeae] bg-[#4f4f4f] px-3 py-2.5 text-left text-sm text-white transition-colors hover:bg-[#3d3d3d]"
                   >
                     <MessageSquare className="h-4 w-4 shrink-0 opacity-95" />
@@ -2893,7 +2782,10 @@ export default function DarkSidebar({
                       </div>
                     </div>
 
-                    <ClubSocialSubmenu onChatClick={onClubChatClick} />
+                    <ClubSocialSubmenu
+                      onChatClick={onClubChatClick}
+                      onMessagesClick={openClubMessagesForCurrentClub}
+                    />
 
                     {isClubAccountUserType(userType) ? (
                       <ClubMyClubInfoSubmenu
@@ -2935,17 +2827,33 @@ export default function DarkSidebar({
                   </>
                 )}
 
-                <ClubDashboardGroup
-                  enabled={officialClubMyClub}
-                  clubId={displaySelectedClub?.id as string | undefined}
-                  youtubeChannelUrl={
-                    (displaySelectedClub as { youtubeChannelUrl?: string | null })
-                      ?.youtubeChannelUrl ?? null
-                  }
-                  canManageClub={clubWebsiteManage}
-                  onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
-                  onClubBootstrapped={handleClubBootstrapped}
-                >
+                {officialClubMyClub ? (
+                  <ClubMembersDashboardSection
+                    title="My Club Dashboard"
+                    clubId={displaySelectedClub?.id as string | undefined}
+                    youtubeChannelUrl={
+                      (displaySelectedClub as { youtubeChannelUrl?: string | null })
+                        ?.youtubeChannelUrl ?? null
+                    }
+                    canManageClub={clubWebsiteManage}
+                    onYoutubeChannelUrlSaved={handleClubYoutubeSaved}
+                    onClubBootstrapped={handleClubBootstrapped}
+                  />
+                ) : null}
+
+                {officialClubMyClub ? (
+                  <ClubSocialSubmenu
+                    variant="section"
+                    open={sectionSocialOpen}
+                    onOpenChange={setSectionSocialOpen}
+                    onChatClick={onClubChatClick}
+                    onMessagesClick={openClubMessagesForCurrentClub}
+                  />
+                ) : null}
+
+                {/* Official club: social-based rows only while Section Social is open. */}
+                {(!officialClubMyClub || sectionSocialOpen) ? (
+                <ClubDashboardGroup enabled={false}>
                 {officialClubMyClub ? (
                   <button
                     type="button"
@@ -2972,25 +2880,25 @@ export default function DarkSidebar({
 
                 {officialClubMyClub ? null : (
                   <>
-                    {/* Favourite Page */}
-                    <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
-                      <div className="flex items-center justify-between py-2.5 px-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Heart className="w-5 h-5 shrink-0 opacity-90" />
-                          <span className="font-semibold tracking-wide truncate">Favourite Page</span>
-                        </div>
-                        <ChevronDown className="w-4 h-4 opacity-90" />
-                      </div>
+                {/* Favourite Page */}
+                <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
+                  <div className="flex items-center justify-between py-2.5 px-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Heart className="w-5 h-5 shrink-0 opacity-90" />
+                      <span className="font-semibold tracking-wide truncate">Favourite Page</span>
                     </div>
-                    <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
-                      <div className="flex items-center justify-between py-2.5 px-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Heart className="w-5 h-5 shrink-0 opacity-90" />
-                          <span className="font-semibold tracking-wide truncate">My List</span>
-                        </div>
-                        <ChevronDown className="w-4 h-4 opacity-90" />
-                      </div>
+                    <ChevronDown className="w-4 h-4 opacity-90" />
+                  </div>
+                </div>
+                <div className="w-full bg-[#4b4b4b] text-white border-b border-teal-700">
+                  <div className="flex items-center justify-between py-2.5 px-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Heart className="w-5 h-5 shrink-0 opacity-90" />
+                      <span className="font-semibold tracking-wide truncate">My List</span>
                     </div>
+                    <ChevronDown className="w-4 h-4 opacity-90" />
+                  </div>
+                </div>
                   </>
                 )}
 
@@ -3056,13 +2964,13 @@ export default function DarkSidebar({
 
                 <div className="border-b border-teal-700">
                   <div className="flex w-full items-stretch bg-teal-800 text-white">
-                    <button
-                      type="button"
+                <button
+                  type="button"
                       onClick={() => setNotificationsOpen((v) => !v)}
                       aria-expanded={notificationsOpen}
                       className="flex flex-1 items-center gap-2.5 min-w-0 py-2.5 pl-3 pr-2 text-left hover:bg-teal-700 transition-colors"
-                    >
-                      <Mail className="w-5 h-5 shrink-0" />
+                >
+                    <Mail className="w-5 h-5 shrink-0" />
                       <span className="font-semibold tracking-wide truncate">
                         Notifications({notificationCounts.total})
                       </span>
@@ -3089,7 +2997,7 @@ export default function DarkSidebar({
                         <span className="leading-snug">
                           Notifications from movesbook staff ({notificationCounts.movesbook})
                         </span>
-                      </button>
+                </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -3598,6 +3506,14 @@ export default function DarkSidebar({
                 </div>
 
                 </ClubDashboardGroup>
+                ) : null}
+
+                {officialClubMyClub && sectionSocialOpen
+                  ? renderFriendsAndCommunitiesMenus({
+                      showEvents: false,
+                      titleCase: true,
+                    })
+                  : null}
 
                 {officialClubMyClub ? (
                   <>
@@ -3611,15 +3527,15 @@ export default function DarkSidebar({
                   </>
                 ) : (
                   /* TRAINING section header */
-                  <div className="w-full bg-[#7a0d1c] text-white border-b border-teal-700">
-                    <div className="flex items-center justify-between py-2 px-3">
-                      <div className="flex items-center gap-2.5">
-                        <BookOpen className="w-5 h-5" />
-                        <span className="font-bold tracking-wide text-sm">TRAINING</span>
-                      </div>
-                      <ChevronDown className="w-4 h-4 opacity-90" />
+                <div className="w-full bg-[#7a0d1c] text-white border-b border-teal-700">
+                  <div className="flex items-center justify-between py-2 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <BookOpen className="w-5 h-5" />
+                      <span className="font-bold tracking-wide text-sm">TRAINING</span>
                     </div>
-                  </div>
+                    <ChevronDown className="w-4 h-4 opacity-90" />
+                  </div>                
+                </div>
                 )}
 
                 {/* CLUB'S MANAGEMENT: CLUB + My Club — collapsed purple strip; expanded = red header + full submenu panel */}
@@ -3980,7 +3896,7 @@ export default function DarkSidebar({
                               />
                             </button>
                             {accountsAndDeviceOpen && (
-                              <div className="border-t border-gray-700/90 bg-[#1e272a] text-white">
+                              <div className="border-t border-gray-700/90 bg-[#414040] text-white">
                                 {/* Accounts */}
                                 <div className="border-b border-gray-700/80">
                                   <button
@@ -4028,7 +3944,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubManageAccountsOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             <button
                                               type="button"
                                               className="flex w-full items-center gap-2 border-b border-gray-700/60 py-2 pl-8 pr-2 text-left text-[11px] font-medium text-white hover:bg-[#333]"
@@ -4077,7 +3993,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubAccountsYellowOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             {(
                                               [
                                                 { dot: 'bg-amber-400', label: 'Price list' },
@@ -4151,7 +4067,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubQrCodesOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             {(
                                               [
                                                 { dot: 'bg-amber-400', label: 'Price list' },
@@ -4199,7 +4115,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubRfidBadgesOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             {(
                                               [
                                                 { dot: 'bg-amber-400', label: 'Price list' },
@@ -4247,7 +4163,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubMagneticOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             {(
                                               [
                                                 { dot: 'bg-amber-400', label: 'Price list' },
@@ -4295,7 +4211,7 @@ export default function DarkSidebar({
                                           />
                                         </button>
                                         {clubSmartcardsOpen && (
-                                          <div className="border-t border-gray-700/70 bg-[#2a2a2a]">
+                                          <div className="border-t border-gray-700/70 bg-[#414040]">
                                             {(
                                               [
                                                 { dot: 'bg-amber-400', label: 'Price list' },
@@ -4354,6 +4270,13 @@ export default function DarkSidebar({
                                     <div className="border-t border-gray-700/80 bg-[#263238]">
                                       <button
                                         type="button"
+                                        onClick={() => {
+                                          if (isClubAccountUserType(userType)) {
+                                            writeClubWorkspaceTab('my-entity');
+                                            setCurrentTab('my-entity');
+                                          }
+                                          router.push('/clubs/shop/products/hardware');
+                                        }}
                                         className="flex w-full items-center gap-2 border-b border-gray-700/80 py-2 pl-5 pr-2 text-left text-[11px] text-white hover:bg-[#2e3c43]"
                                       >
                                         <ShoppingCart className="h-3.5 w-3.5 shrink-0 opacity-95" />
@@ -4409,13 +4332,13 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubMonitoringsOpen && (
-                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                              <div className="border-t border-gray-600/80 bg-[#414040]">
                                 <div className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 transition-colors hover:bg-[#333]">
-                                  <button
-                                    type="button"
+                                <button
+                                  type="button"
                                     onClick={() => openClubDashboardPage(false)}
                                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                                  >
+                                >
                                     <Star className="h-4 w-4 shrink-0 text-white" strokeWidth={1.75} />
                                     <span className="text-[13px] font-medium text-yellow-300">Dashboard</span>
                                   </button>
@@ -4428,7 +4351,7 @@ export default function DarkSidebar({
                                       title="Dashboard setting"
                                     >
                                       <Settings className="h-3.5 w-3.5" />
-                                    </button>
+                                </button>
                                     <button
                                       type="button"
                                       onClick={() => openClubDashboardPage(false)}
@@ -4470,7 +4393,7 @@ export default function DarkSidebar({
                                     />
                                   </button>
                                   {clubAdminSubscriptionsOpen && (
-                                    <div className="border-t border-gray-600/60 bg-[#1e272a]">
+                                    <div className="border-t border-gray-600/60 bg-[#414040]">
                                       <button
                                         type="button"
                                         className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-6 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#2a3438]"
@@ -4536,7 +4459,10 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubAdminInsertNewItemOpen && (
-                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                              <div
+                                className="border-t border-gray-600/80"
+                                style={{ background: CLUB_SUBMENU_BG }}
+                              >
                                 {CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS.map((group, gi) => (
                                   <div
                                     key={gi}
@@ -4596,70 +4522,169 @@ export default function DarkSidebar({
                             </button>
                             {clubArchivesOpen && (
                               <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
-                                {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
-                                  <div
-                                    key={gi}
-                                    className={
-                                      gi > 0 ? 'border-t border-gray-600/70' : ''
+                                <ClubAdminArchiveGroupsNav
+                                  groups={CLUB_ADMIN_ARCHIVE_GROUPS}
+                                  onNavigate={(path) => {
+                                    if (isClubAccountUserType(userType)) {
+                                      writeClubWorkspaceTab('my-entity');
+                                      setCurrentTab('my-entity');
                                     }
-                                  >
-                                    {group.map((item, ii) => {
-                                      const rowBorder =
-                                        ii < group.length - 1
-                                          ? 'border-b border-gray-600/50'
-                                          : '';
+                                    router.push(path);
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
 
-                                      if (item.kind === 'group') {
-                                        const GroupIcon = item.Icon;
-                                        return (
-                                          <div
-                                            key={item.label}
-                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[13px] font-semibold text-white ${rowBorder}`}
-                                          >
-                                            <GroupIcon
-                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
-                                              strokeWidth={2}
-                                            />
-                                            <span className="min-w-0 leading-snug">
-                                              {item.label}
-                                            </span>
-                                          </div>
-                                        );
-                                      }
-
-                                      const isChild = item.kind === 'child';
-                                      return (
-                                        <button
-                                          key={item.label}
-                                          type="button"
-                                          onClick={() => {
-                                            if ('path' in item && item.path) {
-                                              if (isClubAccountUserType(userType)) {
-                                                writeClubWorkspaceTab('my-entity');
-                                                setCurrentTab('my-entity');
-                                              }
-                                              router.push(item.path);
-                                            }
-                                            // Handle click event
-                                          }}
-                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-12' : 'pl-3'
-                                          } ${rowBorder}`}
-                                        >
-                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
-                                          <span className="min-w-0 leading-snug">{item.label}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                ))}
+                          <div className="border-b border-gray-600/90">
+                            <button
+                              type="button"
+                              onClick={() => setClubShopOpen((open) => !open)}
+                              className="flex w-full items-stretch bg-[#5c5c5c] text-left text-white transition-colors hover:bg-[#656565]"
+                            >
+                              <div className="flex w-9 shrink-0 items-center justify-center border-r border-gray-600/60 py-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-teal-800">
+                                  <Move className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                                </div>
+                              </div>
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pr-2 pl-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <ShoppingCart className="h-4 w-4 shrink-0 opacity-95" />
+                                  <span className={`truncate text-sm font-medium ${clubShopOpen ? 'text-yellow-300' : 'text-white'}`}>
+                                    Shop
+                                  </span>
+                                </div>
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${
+                                    clubShopOpen ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+                            {clubShopOpen && (
+                              <div className="border-t border-gray-600/80 bg-[#414040]">
+                                {(
+                                  [
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Dashboard',
+                                      path: '/clubs/shop',
+                                      Icon: LayoutDashboard,
+                                      title: 'Status of the sellings',
+                                    },
+                                    { kind: 'group' as const, label: 'Selling', Icon: ShoppingCart },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Panel of shop online',
+                                      path: shopPublicPath,
+                                      Icon: Globe,
+                                      title: 'Members and other people purchase the club products online',
+                                      online: true,
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Sale of new product(s)',
+                                      path: '/ArchiveSeles/new_product_sale',
+                                      Icon: ShoppingBasket,
+                                      title: 'The operator sells one product, or more products, and takes a quick payment',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Panel of sellings',
+                                      path: '/clubs/shop/sell',
+                                      Icon: LayoutGrid,
+                                      title: 'The operator sells products to one or more members and records their payment',
+                                    },
+                                    { kind: 'group' as const, label: 'Storing', Icon: FolderOpen },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Orders',
+                                      path: '/clubs/shop/orders',
+                                      Icon: ListOrdered,
+                                      title: 'Online orders from members and other customers',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Archive of Sellings',
+                                      path: '/ArchiveSeles/product_sale_list',
+                                      Icon: Receipt,
+                                      title: 'All the sellings',
+                                    },
+                                    { kind: 'group' as const, label: 'Configuration', Icon: Settings },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Products',
+                                      path: '/clubs/shop/products/shop',
+                                      Icon: Shirt,
+                                      title: 'Insert and edit products',
+                                    },
+                                    {
+                                      kind: 'item' as const,
+                                      label: 'Settings',
+                                      path: '/clubs/shop/settings',
+                                      Icon: Settings2,
+                                      title: 'Rules for the purchase of the products and their payment',
+                                    },
+                                  ]
+                                ).map((item, index, list) => {
+                                  const border = index < list.length - 1 ? 'border-b border-gray-600/50' : '';
+                                  if (item.kind === 'group') {
+                                    const GroupIcon = item.Icon;
+                                    return (
+                                      <div
+                                        key={item.label}
+                                        className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[11px] font-bold uppercase tracking-wide text-yellow-300 ${border}`}
+                                      >
+                                        <GroupIcon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                                        <span>{item.label}</span>
+                                      </div>
+                                    );
+                                  }
+                                  const ItemIcon = item.Icon;
+                                  return (
+                                    <button
+                                      key={item.label}
+                                      type="button"
+                                      title={item.title}
+                                      onClick={() => {
+                                        const open = (path: string) => {
+                                          if (isClubAccountUserType(userType)) {
+                                            writeClubWorkspaceTab('my-entity');
+                                            setCurrentTab('my-entity');
+                                          }
+                                          router.push(path);
+                                        };
+                                        if (item.online) {
+                                          if (shopPublicPath) {
+                                            open(shopPublicPath);
+                                            return;
+                                          }
+                                          void shopFetch('/api/club/shop/context')
+                                            .then(async (response) => (response.ok ? response.json() : null))
+                                            .then((data) => {
+                                              const path = data?.workspace?.publicPath;
+                                              if (typeof path !== 'string' || !path) return;
+                                              setShopPublicPath(path);
+                                              open(path);
+                                            })
+                                            .catch(() => undefined);
+                                          return;
+                                        }
+                                        open(item.path);
+                                      }}
+                                      className={`flex w-full items-center gap-2 py-2 pl-8 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${border}`}
+                                    >
+                                      <ItemIcon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                                      <span className="leading-snug">{item.label}</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
 
                           {(
                             [
-                              { Icon: ShoppingCart, label: 'Shop', arrow: 'right' as const },
                               {
                                 Icon: ScanLine,
                                 label: 'Access Control',
@@ -4730,7 +4755,7 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubGeneralSettingsOpen && (
-                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                              <div className="border-t border-gray-600/80 bg-[#414040]">
                                 {(
                                   [
                                     {
@@ -4768,6 +4793,40 @@ export default function DarkSidebar({
                                       path: '/club/settings/payment_settings',
                                     },
                                     {
+                                      Icon: CreditCard,
+                                      label: 'Payment methods for members',
+                                      path: '/club/settings/member_payment_methods',
+                                    },
+                                    {
+                                      Icon: ShoppingBasket,
+                                      label: 'Products for selling',
+                                      group: true as const,
+                                    },
+                                    {
+                                      Icon: LayoutGrid,
+                                      label: 'ALL products',
+                                      path: '/clubs/shop/products/all',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Bar',
+                                      path: '/clubs/shop/products/bar',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Restaurant',
+                                      path: '/clubs/shop/products/restaurant',
+                                      nested: true as const,
+                                    },
+                                    {
+                                      Icon: ShoppingCart,
+                                      label: 'Product of the Shop',
+                                      path: '/clubs/shop/products/shop',
+                                      nested: true as const,
+                                    },
+                                    {
                                       Icon: LayoutGrid,
                                       label: 'Tables',
                                       path: '/club/settings/tables/areas',
@@ -4795,7 +4854,7 @@ export default function DarkSidebar({
                                     },
                                     {
                                       Icon: FileText,
-                                      label: 'Documents',
+                                      label: 'Documents useful',
                                       path: '/club/settings/documents',
                                     },
                                   ] as const
@@ -4804,6 +4863,19 @@ export default function DarkSidebar({
                                   const path = 'path' in item ? item.path : undefined;
                                   const panel =
                                     'panel' in item ? item.panel : undefined;
+                                  const group = 'group' in item && item.group;
+                                  const nested = 'nested' in item && item.nested;
+                                  if (group) {
+                                    return (
+                                      <div
+                                        key={subLabel}
+                                        className="flex w-full items-center gap-2 border-b border-gray-600/70 py-2 pl-3 pr-2 text-[13px] font-semibold text-white"
+                                      >
+                                        <SubIcon className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                        <span className="leading-snug">{subLabel}</span>
+                                      </div>
+                                    );
+                                  }
                                   return (
                                     <button
                                       key={subLabel}
@@ -4826,7 +4898,9 @@ export default function DarkSidebar({
                                           router.push(href);
                                         }
                                       }}
-                                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                      className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] ${
+                                        nested ? 'pl-8' : 'pl-3'
+                                      } ${
                                         subIdx < arr.length - 1 ? 'border-b border-gray-600/70' : ''
                                       }`}
                                     >
@@ -4865,7 +4939,7 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubSecurityOpen && (
-                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                              <div className="border-t border-gray-600/80 bg-[#414040]">
                                 <button
                                   type="button"
                                   className="flex w-full items-center justify-between border-b border-gray-600/70 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
@@ -4965,7 +5039,7 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubMarketingOpen && (
-                              <div className="border-t border-gray-600/80 bg-[#2a2a2a]">
+                              <div className="border-t border-gray-600/80 bg-[#414040]">
                                 <button
                                   type="button"
                                   onClick={() => router.push('/clubs/marketing/sponsors')}
@@ -4973,6 +5047,14 @@ export default function DarkSidebar({
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
                                   <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
                                 </button>
                                 <button
                                   type="button"
@@ -5152,10 +5234,12 @@ export default function DarkSidebar({
                   </div>
                 )}
 
-                {renderFriendsAndCommunitiesMenus({
-                  showEvents: true,
-                  titleCase: officialClubMyClub,
-                })}
+                {!officialClubMyClub
+                  ? renderFriendsAndCommunitiesMenus({
+                      showEvents: true,
+                      titleCase: false,
+                    })
+                  : null}
               </div>
             ) : (
               <>
@@ -5184,8 +5268,8 @@ export default function DarkSidebar({
                               <Settings className="h-5 w-5 shrink-0 text-white opacity-95" aria-hidden />
                             </div>
                             <ChevronDown className="h-4 w-4 text-white opacity-95" strokeWidth={2.5} aria-hidden />
-                          </div>
-                        </button>
+                      </div>
+                    </button>
                       ) : (
                         <div className="w-full bg-[#3a3a3a] text-white shadow-inner">
                           <button
@@ -5227,53 +5311,12 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubArchivesOpen && (
-                              <div className="bg-[#1e272a] text-white">
-                                {CLUB_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
-                                  <div
-                                    key={gi}
-                                    className={gi > 0 ? 'border-t border-gray-600/70' : ''}
-                                  >
-                                    {group.map((item, ii) => {
-                                      const rowBorder =
-                                        ii < group.length - 1
-                                          ? 'border-b border-gray-600/50'
-                                          : '';
-                                      if (item.kind === 'group') {
-                                        const GroupIcon = item.Icon;
-                                        return (
-                                          <div
-                                            key={item.label}
-                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
-                                          >
-                                            <GroupIcon
-                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
-                                              strokeWidth={2}
-                                            />
-                                            <span className="min-w-0 leading-snug">{item.label}</span>
-                                          </div>
-                                        );
-                                      }
-                                      const isChild = item.kind === 'child';
-                                      return (
-                                        <button
-                                          key={item.label}
-                                          type="button"
-                                          onClick={() => {
-                                            if ('path' in item && item.path) {
-                                              router.push(item.path);
-                                            }
-                                          }}
-                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-12' : 'pl-3'
-                                          } ${rowBorder}`}
-                                        >
-                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
-                                          <span className="min-w-0 leading-snug">{item.label}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                ))}
+                              <div className="bg-[#2a2a2a] text-white">
+                                <ClubAdminArchiveGroupsNav
+                                  groups={CLUB_ADMIN_ARCHIVE_GROUPS}
+                                  textClassName="text-[12px]"
+                                  onNavigate={(path) => router.push(path)}
+                                />
                               </div>
                             )}
                           </div>
@@ -5307,14 +5350,22 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubGeneralSettingsOpen && (
-                              <div className="bg-[#1e272a] text-white">
+                              <div className="text-white" style={{ background: CLUB_SUBMENU_BG }}>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/club/settings/member_payment_methods')}
+                                  className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <CreditCard className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                                  <span className="leading-snug">Payment methods for members</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => router.push('/club/settings/documents')}
                                   className="flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
                                 >
                                   <FileText className="h-3.5 w-3.5 shrink-0 opacity-95" />
-                                  <span className="leading-snug">Documents</span>
+                                  <span className="leading-snug">Documents useful</span>
                                 </button>
                                 <button
                                   type="button"
@@ -5377,8 +5428,8 @@ export default function DarkSidebar({
                               <Settings className="h-5 w-5 shrink-0 text-white opacity-95" aria-hidden />
                             </div>
                             <ChevronDown className="h-4 w-4 text-white opacity-95" strokeWidth={2.5} aria-hidden />
-                          </div>
-                        </button>
+                      </div>
+                    </button>
                       ) : (
                         <div className="w-full bg-[#3a3a3a] text-white shadow-inner">
                           <button
@@ -5420,53 +5471,12 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubArchivesOpen && (
-                              <div className="bg-[#1e272a] text-white">
-                                {COACH_ADMIN_ARCHIVE_GROUPS.map((group, gi) => (
-                                  <div
-                                    key={gi}
-                                    className={gi > 0 ? 'border-t border-gray-600/70' : ''}
-                                  >
-                                    {group.map((item, ii) => {
-                                      const rowBorder =
-                                        ii < group.length - 1
-                                          ? 'border-b border-gray-600/50'
-                                          : '';
-                                      if (item.kind === 'group') {
-                                        const GroupIcon = item.Icon;
-                                        return (
-                                          <div
-                                            key={item.label}
-                                            className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[12px] font-semibold text-white ${rowBorder}`}
-                                          >
-                                            <GroupIcon
-                                              className="h-3.5 w-3.5 shrink-0 opacity-95"
-                                              strokeWidth={2}
-                                            />
-                                            <span className="min-w-0 leading-snug">{item.label}</span>
-                                          </div>
-                                        );
-                                      }
-                                      const isChild = item.kind === 'child';
-                                      return (
-                                        <button
-                                          key={item.label}
-                                          type="button"
-                                          onClick={() => {
-                                            if ('path' in item && item.path) {
-                                              router.push(item.path);
-                                            }
-                                          }}
-                                          className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333] ${
-                                            isChild ? 'pl-12' : 'pl-3'
-                                          } ${rowBorder}`}
-                                        >
-                                          {isChild ? null : renderClubAdminArchiveLeading(item)}
-                                          <span className="min-w-0 leading-snug">{item.label}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                ))}
+                              <div className="bg-[#2a2a2a] text-white">
+                                <ClubAdminArchiveGroupsNav
+                                  groups={COACH_ADMIN_ARCHIVE_GROUPS}
+                                  textClassName="text-[12px]"
+                                  onNavigate={(path) => router.push(path)}
+                                />
                               </div>
                             )}
                           </div>
@@ -5494,7 +5504,7 @@ export default function DarkSidebar({
                               </div>
                             </button>
                             {clubMarketingOpen && (
-                              <div className="bg-[#1e272a] text-white">
+                              <div className="text-white" style={{ background: CLUB_SUBMENU_BG }}>
                                 <button
                                   type="button"
                                   onClick={() => router.push('/clubs/marketing/sponsors')}
@@ -5502,6 +5512,14 @@ export default function DarkSidebar({
                                 >
                                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400" />
                                   <span className="leading-snug">Sponsor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/clubs/events')}
+                                  className="flex w-full items-center gap-2 border-b border-gray-600/50 py-2 pl-3 pr-2 text-left text-[12px] font-medium text-white transition-colors hover:bg-[#333]"
+                                >
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" />
+                                  <span className="leading-snug">Manage Events</span>
                                 </button>
                                 <button
                                   type="button"

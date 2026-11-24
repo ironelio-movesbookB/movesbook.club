@@ -1,10 +1,12 @@
 import type { ZodError } from 'zod';
-import { PROCEDURE_TYPE_CODES, type AddProcedurePaymentInput, type CreateProcedureRecordInput, type ProcedureTypeCode } from '../types';
-import { addProcedurePaymentSchema } from './common';
 import {
-  createExpenseRecordSchema,
-  mapExpenseCreateToInput,
-} from './expense';
+  PROCEDURE_TYPE_CODES,
+  type AddProcedurePaymentInput,
+  type CreateProcedureRecordInput,
+  type ProcedureTypeCode,
+} from '../types';
+import { addProcedurePaymentSchema } from './common';
+import { createExpenseRecordSchema, mapExpenseCreateToInput } from './expense';
 import {
   createMemberDebtRecordSchema,
   mapMemberDebtCreateToInput,
@@ -31,7 +33,9 @@ import {
   mapMemberCreditCreateToInput,
 } from './memberCredit';
 
-const KNOWN_PROCEDURE_TYPES = new Set<string>(Object.values(PROCEDURE_TYPE_CODES));
+const KNOWN_PROCEDURE_TYPES = new Set<string>(
+  Object.values(PROCEDURE_TYPE_CODES),
+);
 
 export function isKnownProcedureType(type: string): type is ProcedureTypeCode {
   return KNOWN_PROCEDURE_TYPES.has(type);
@@ -40,12 +44,24 @@ export function isKnownProcedureType(type: string): type is ProcedureTypeCode {
 type FlattenedValidationError = ReturnType<ZodError['flatten']>;
 
 type ParseSuccess<T> = { ok: true; data: T };
-type ParseFailure = { ok: false; status: 400; error: string; details?: FlattenedValidationError };
+type ParseFailure = {
+  ok: false;
+  status: 400;
+  error: string;
+  details?: FlattenedValidationError;
+};
 
-export type ParseCreateRecordResult = ParseSuccess<CreateProcedureRecordInput> | ParseFailure;
-export type ParseAddPaymentResult = ParseSuccess<AddProcedurePaymentInput> | ParseFailure;
+export type ParseCreateRecordResult =
+  | ParseSuccess<CreateProcedureRecordInput>
+  | ParseFailure;
+export type ParseAddPaymentResult =
+  | ParseSuccess<AddProcedurePaymentInput>
+  | ParseFailure;
 
-export function parseCreateRecord(type: string, body: unknown): ParseCreateRecordResult {
+export function parseCreateRecord(
+  type: string,
+  body: unknown,
+): ParseCreateRecordResult {
   if (!isKnownProcedureType(type)) {
     return { ok: false, status: 400, error: `Unknown procedure type: ${type}` };
   }
@@ -121,7 +137,10 @@ export function parseCreateRecord(type: string, body: unknown): ParseCreateRecor
           details: parsed.error.flatten(),
         };
       }
-      return { ok: true, data: mapCourseSubscriptionCreateToInput(parsed.data) };
+      return {
+        ok: true,
+        data: mapCourseSubscriptionCreateToInput(parsed.data),
+      };
     }
     case PROCEDURE_TYPE_CODES.MEMBER_CREDIT: {
       const parsed = createMemberCreditRecordSchema.safeParse(body);
@@ -135,9 +154,19 @@ export function parseCreateRecord(type: string, body: unknown): ParseCreateRecor
       }
       return { ok: true, data: mapMemberCreditCreateToInput(parsed.data) };
     }
+    case PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION:
+      return {
+        ok: false,
+        status: 400,
+        error: 'Event subscription deadlines are created by the event subscribe page',
+      };
     default: {
       const _exhaustive: never = type;
-      return { ok: false, status: 400, error: `No create validator for procedure type: ${_exhaustive}` };
+      return {
+        ok: false,
+        status: 400,
+        error: `No create validator for procedure type: ${_exhaustive}`,
+      };
     }
   }
 }
@@ -151,12 +180,17 @@ function normalizePaymentBody(body: unknown): unknown {
   };
 }
 
-export function parseAddPayment(type: string, body: unknown): ParseAddPaymentResult {
+export function parseAddPayment(
+  type: string,
+  body: unknown,
+): ParseAddPaymentResult {
   if (!isKnownProcedureType(type)) {
     return { ok: false, status: 400, error: `Unknown procedure type: ${type}` };
   }
 
-  const parsed = addProcedurePaymentSchema.safeParse(normalizePaymentBody(body));
+  const parsed = addProcedurePaymentSchema.safeParse(
+    normalizePaymentBody(body),
+  );
   if (!parsed.success) {
     return {
       ok: false,
@@ -170,6 +204,7 @@ export function parseAddPayment(type: string, body: unknown): ParseAddPaymentRes
   const mapped: AddProcedurePaymentInput = {
     amount: data.amount,
     paymentDate: data.paymentDate,
+    installmentId: data.installmentId,
     notes: data.description?.trim() || data.notes?.trim() || null,
     operatorId: data.operatorId,
     operatorPassword: data.operatorPassword,
@@ -180,9 +215,11 @@ export function parseAddPayment(type: string, body: unknown): ParseAddPaymentRes
     debtExpire: data.debtExpire,
     payWith: data.payWith,
     createReceipt: data.createReceipt ?? data.taxDoc,
-    receiptDocumentType: data.receiptDocumentType ?? data.taxDocument?.documentType ?? 'Invoice',
+    receiptDocumentType:
+      data.receiptDocumentType ?? data.taxDocument?.documentType ?? 'Invoice',
     receiptNumber: data.receiptNumber ?? data.taxDocument?.documentNumber,
-    receiptAnnotations: data.receiptAnnotations ?? data.taxDocument?.causal ?? null,
+    receiptAnnotations:
+      data.receiptAnnotations ?? data.taxDocument?.causal ?? null,
     serviceName: data.serviceName,
     taxDocument: data.taxDocument,
   };

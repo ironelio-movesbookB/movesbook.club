@@ -23,10 +23,15 @@ import {
   legacyLanguageCodeFromId,
   normalizeLegacyLanguageCode,
 } from './legacyLanguageCode';
-import { languageIdForLegacyUser } from './promocodeSenderLanguage';
 import { coercePublicOrigin } from '@/lib/siteUrl';
 import { resolveInviteExpiryDate, userOwnsOrReceivedPromocode } from './childPromocode';
 import { incrementInviteStat } from './promocodeMonthlyStatsService';
+import { buildInviteLandingUrl } from '@/lib/promocodes/inviteLanding';
+import { getInviteEmailCopy, inviteEmailSubject } from '@/lib/promocodes/promocodeInviteEmailCopy';
+import { loadInviteSenderEmailAssets } from '@/lib/promocodes/inviteLandingService';
+import { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
+
+export { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
 
 export type SendInvitePreview = {
   emailAddress: string;
@@ -40,6 +45,9 @@ export type SendInvitePreview = {
   advPage: string;
   registerUrl: string;
   inviteSenderUsername: string | null;
+  senderDisplayName: string;
+  senderPhotoUrl: string | null;
+  senderBannerUrl: string | null;
 };
 
 type QueryFn = <T>(sql: string, params?: unknown[]) => Promise<T>;
@@ -55,16 +63,7 @@ function connectionQuery(connection: Connection): QueryFn {
   };
 }
 
-function isBlankHtml(value: string): boolean {
-  const text = value
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return text.length === 0;
-}
-
-async function getLegacyLanguageCode(languageId: string): Promise<string> {
+export async function getLegacyLanguageCode(languageId: string): Promise<string> {
   const table = await getLanguageValuesTable();
   if (!table) return legacyLanguageCodeFromId(languageId);
 
@@ -146,6 +145,14 @@ async function resolveHelpHtmlPage(
   return { id: resolvedId, content };
 }
 
+export async function loadInviteHelpDocumentHtml(
+  htmlPageId: string,
+  languageId: string
+): Promise<string> {
+  const helpPage = await resolveHelpHtmlPage(runQuery, htmlPageId, languageId);
+  return sanitizeInviteEmailBodyHtml(helpPage?.content ?? '');
+}
+
 /** Strip CKEditor/legacy artifacts that appear as a lone "?" before invite text. */
 export function sanitizeInviteEmailBodyHtml(html: string): string {
   let out = String(html ?? '').trim();
@@ -187,7 +194,7 @@ async function fetchHelpPageLangId(helpPageId: string, query: QueryFn = runQuery
 }
 
 /** PHP: LanguageParagraph[lang_name] + help_html_pages content (no separator). */
-async function buildPromocodeInviteEmailBody(params: {
+export async function buildPromocodeInviteEmailBody(params: {
   htmlPageId: string;
   languageId: string;
 }): Promise<{ body: string; resolvedHtmlPageId: string }> {
@@ -198,7 +205,7 @@ async function buildPromocodeInviteEmailBody(params: {
   const paragraphText = await loadPromocodeInviteLanguageParagraph(params.languageId);
   const helpPage = await resolveHelpHtmlPage(runQuery, params.htmlPageId, params.languageId);
   const helpLangId = helpPage ? await fetchHelpPageLangId(helpPage.id) : null;
-  const needsLegacy = isBlankHtml(paragraphText) || helpLangId === 1;
+  const needsLegacy = isBlankInviteHtml(paragraphText) || helpLangId === 1;
 
   if (!needsLegacy) return built;
 
@@ -231,6 +238,33 @@ export function buildRegisterUrl(
   return `${publicOrigin}/users/quickRegister?${params.toString()}`;
 }
 
+/** Public invite page shown before registration. */
+export function buildInvitePageUrl(
+  origin: string,
+  email: string,
+  promocode: string,
+  languageName: string,
+  options: { isStaff: boolean; inviterUsername?: string | null },
+): string {
+  return buildInviteLandingUrl(origin, {
+    promocode,
+    inviter: options.isStaff ? null : options.inviterUsername,
+    inviteByMovesbook: options.isStaff,
+    lang: languageName || null,
+    userEmail: email || null,
+  });
+}
+
+export const INVITE_PROMO_BANNER_PICTURE_PATH = '/images/banner_picture.jpg';
+
+function toAbsoluteInviteAssetUrl(origin: string, url: string | null | undefined): string {
+  const trimmed = url?.trim() ?? '';
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const base = coercePublicOrigin(origin).replace(/\/$/, '');
+  return trimmed.startsWith('/') ? `${base}${trimmed}` : `${base}/${trimmed}`;
+}
+
 export function buildInviteEmailHtml(data: {
   senderName: string;
   message: string;
@@ -239,45 +273,102 @@ export function buildInviteEmailHtml(data: {
   advPage: string;
   registrationUrl: string;
   expiresAt?: string | null;
+  languageCode?: string | null;
+  assetOrigin?: string;
+  bannerUrl?: string | null;
+  photoUrl?: string | null;
+  displayName?: string | null;
 }): string {
-  const otherInfoLink = (() => {
-    const url = data.otherInfo.trim();
-    if (!url) return '';
-    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    return `<a href="${href}" target="_blank">${escapeHtml(url)}</a>`;
-  })();
+  const copy = getInviteEmailCopy(data.languageCode);
+  const displayName = data.displayName?.trim() || data.senderName;
+  const assetOrigin = data.assetOrigin?.trim() || data.registrationUrl;
+  const bannerAbs = toAbsoluteInviteAssetUrl(assetOrigin, data.bannerUrl);
+  const photoAbs = toAbsoluteInviteAssetUrl(assetOrigin, data.photoUrl);
+  const promoBannerPictureAbs = toAbsoluteInviteAssetUrl(assetOrigin, INVITE_PROMO_BANNER_PICTURE_PATH);
 
-  const advPageLink = (() => {
-    const url = data.advPage.trim();
-    if (!url) return '';
-    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    return `<a href="${href}" target="_blank">${escapeHtml(url)}</a>`;
-  })();
+  const linkHtml = (url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;text-decoration:underline;">${escapeHtml(trimmed)}</a>`;
+  };
+
+  const headerBg = bannerAbs
+    ? `background-image:linear-gradient(rgba(15,23,42,0.55), rgba(15,23,42,0.78)), url('${bannerAbs.replace(/'/g, '%27')}');background-size:cover;background-position:center;`
+    : 'background:linear-gradient(135deg,#312e81 0%,#1e40af 50%,#0369a1 100%);';
+
+  const photoBlock = photoAbs
+    ? `<img src="${photoAbs}" alt="" width="96" height="96" style="display:block;width:96px;height:96px;border-radius:999px;border:3px solid rgba(255,255,255,0.85);object-fit:cover;" />`
+    : '';
 
   return `
-<div style="background-color:#fff;border:1px solid #E5E5E5;padding:10px;font-family:Arial,sans-serif;color:#333;">
-  <p><span style="font-weight:bold;">This mail is sent from :</span> ${escapeHtml(data.senderName)}</p>
-  <div style="margin-bottom:10px;">
-    <span style="font-weight:bold;">Message :</span>
-    <div style="margin-top:6px;">${data.message}</div>
+<div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+  <div style="max-width:640px;margin:0 auto;padding:16px 12px 32px;">
+    <div style="border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 8px 30px rgba(15,23,42,0.12);">
+      <div style="padding:28px 24px;color:#fff;${headerBg}">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            ${photoBlock ? `<td width="110" valign="middle" style="padding-right:16px;">${photoBlock}</td>` : ''}
+            <td valign="middle">
+              <div style="font-size:13px;opacity:0.9;margin-bottom:4px;">${escapeHtml(copy.mailFrom)}: ${escapeHtml(data.senderName)}</div>
+              <div style="font-size:28px;font-weight:800;line-height:1.2;">${escapeHtml(displayName)}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:24px 22px 8px;">
+        <div style="border-radius:12px;background:linear-gradient(90deg,#7d0e1f 0%,#b42318 100%);color:#fff;padding:20px 18px;margin-bottom:20px;">
+          <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">${escapeHtml(copy.officialInvite)}</div>
+          <div style="font-size:22px;font-weight:700;margin-top:6px;line-height:1.3;">${escapeHtml(copy.joinTitle)}</div>
+          <div style="margin-top:10px;font-size:14px;">
+            ${escapeHtml(copy.promotionalCode)}:
+            <span style="display:inline-block;margin-left:6px;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,0.18);font-weight:700;">${escapeHtml(data.promocode)}</span>
+          </div>
+        </div>
+        ${
+          promoBannerPictureAbs
+            ? `<div style="margin:-4px 0 20px;line-height:0;">
+          <img src="${promoBannerPictureAbs}" alt="" width="596" style="display:block;width:100%;max-width:100%;height:auto;border:0;" />
+        </div>`
+            : ''
+        }
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700;font-size:14px;color:#334155;margin-bottom:8px;">${escapeHtml(copy.message)}</div>
+          <div style="font-size:15px;line-height:1.55;color:#1e293b;">${data.message}</div>
+        </div>
+        <p style="margin:0 0 18px;font-size:14px;color:#334155;">
+          ${escapeHtml(copy.regards)} <strong style="color:#7d0e1f;">${escapeHtml(displayName)}</strong>
+        </p>
+        ${
+          data.otherInfo.trim() || data.advPage.trim()
+            ? `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:18px;background:#f8fafc;">
+          ${
+            data.otherInfo.trim()
+              ? `<p style="margin:0 0 10px;font-size:14px;"><strong>${escapeHtml(copy.otherInfo)}:</strong> ${linkHtml(data.otherInfo) || escapeHtml(data.otherInfo)}</p>`
+              : ''
+          }
+          ${
+            data.advPage.trim()
+              ? `<p style="margin:0;font-size:14px;"><strong>${escapeHtml(copy.visitAlso)}:</strong> ${linkHtml(data.advPage)}</p>`
+              : ''
+          }
+        </div>`
+            : ''
+        }
+        ${data.expiresAt ? `<p style="font-size:13px;color:#475569;margin:0 0 18px;"><strong>${escapeHtml(copy.expiresOn)}:</strong> ${escapeHtml(data.expiresAt)}</p>` : ''}
+        <p style="margin:28px 0 16px;text-align:center;">
+          <a href="${data.registrationUrl}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;background:#7d0e1f;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 32px;border-radius:10px;">
+            ${escapeHtml(copy.openInvitation)}
+          </a>
+        </p>
+        <p style="text-align:center;font-size:12px;color:#64748b;line-height:1.5;margin:0 0 8px;">
+          ${escapeHtml(copy.copyInviteLink)}:<br/>
+          <a href="${data.registrationUrl}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;word-break:break-all;">${escapeHtml(data.registrationUrl)}</a>
+        </p>
+      </div>
+    </div>
   </div>
-  <p><span style="font-weight:bold;">Regards, </span><b style="color:#861320">${escapeHtml(data.senderName)}</b></p>
-  <div style="margin:20px 0;padding:15px;border:1px solid #818181;border-radius:4px;background:#fff">
-    <div style="margin-bottom:15px;">
-      <label style="font-weight:bold;display:inline-block;width:100px;">Promocode:</label>
-      <span style="padding:5px 10px;background:#f5f5f5;border:1px solid #ddd;border-radius:3px;">${escapeHtml(data.promocode)}</span>
-    </div>
-    <div style="margin-bottom:15px;">
-      <label style="font-weight:bold;display:inline-block;width:100px;">Other Info:</label>
-      <span style="padding:5px 10px;background:#f5f5f5;border:1px solid #ddd;border-radius:3px;">${otherInfoLink || escapeHtml(data.otherInfo)}</span>
-    </div>
-    <div style="margin-bottom:15px;">
-      <label style="font-weight:bold;display:inline-block;width:100px;">Visit Also:</label>
-      <span style="padding:5px 10px;background:#f5f5f5;border:1px solid #ddd;border-radius:3px;">${advPageLink}</span>
-    </div>
-  </div>
-  ${data.expiresAt ? `<p><span style="font-weight:bold;">Promocode expires on:</span> ${escapeHtml(data.expiresAt)}</p>` : ''}
-  <p><a href="${data.registrationUrl}" target="_blank">Click here to register</a></p>
 </div>`;
 }
 
@@ -327,13 +418,15 @@ export async function loadSendInvitePreview(
     promocodeId,
   });
 
-  const registerUrl = buildRegisterUrl(
+  const registerUrl = buildInvitePageUrl(
     params.origin,
     params.emailAddress,
     params.promocode,
     languageName,
     { isStaff: params.isStaff, inviterUsername: params.inviterUsername }
   );
+
+  const senderAssets = await loadInviteSenderEmailAssets(params.inviterUsername, params.origin);
 
   return {
     emailAddress: params.emailAddress,
@@ -347,6 +440,9 @@ export async function loadSendInvitePreview(
     advPage,
     registerUrl,
     inviteSenderUsername: params.inviterUsername ?? null,
+    senderDisplayName: senderAssets.displayName,
+    senderPhotoUrl: senderAssets.photoUrl,
+    senderBannerUrl: senderAssets.bannerUrl,
   };
 }
 
@@ -544,12 +640,7 @@ export async function sendPromocodeInvite(params: {
 
   await ensurePromocodeInviteLocalizedContent();
 
-  let languageId = params.languageId;
-  if (!params.isStaff && params.senderLegacyUserId) {
-    const senderLanguageId = await languageIdForLegacyUser(params.senderLegacyUserId);
-    if (senderLanguageId) languageId = senderLanguageId;
-  }
-
+  const languageId = params.languageId;
   const languageName = await getLegacyLanguageCode(languageId);
 
   const resolvedLinks = await resolveInviteOtherInfoAndAdvPage({
@@ -569,6 +660,13 @@ export async function sendPromocodeInvite(params: {
       languageId,
     });
     finalMessage = built.body;
+  }
+  if (isBlankInviteHtml(finalMessage)) {
+    return {
+      status: 'error',
+      message:
+        'Invitation body text is empty for the selected language. Add invite text or choose another language.',
+    };
   }
   const intro = params.introMessage?.trim() ?? '';
   if (intro) {
@@ -605,12 +703,17 @@ export async function sendPromocodeInvite(params: {
     }
 
     try {
-      const registrationUrl = buildRegisterUrl(
+      const registrationUrl = buildInvitePageUrl(
         params.origin,
         email,
         params.promocode.trim(),
         languageName,
         { isStaff: params.isStaff, inviterUsername: params.inviterUsername }
+      );
+
+      const senderAssets = await loadInviteSenderEmailAssets(
+        params.inviterUsername ?? null,
+        params.origin
       );
 
       const html = buildInviteEmailHtml({
@@ -621,11 +724,16 @@ export async function sendPromocodeInvite(params: {
         advPage,
         registrationUrl,
         expiresAt: inviteExpiresAt,
+        languageCode: languageName,
+        assetOrigin: params.origin,
+        bannerUrl: senderAssets.bannerUrl,
+        photoUrl: senderAssets.photoUrl,
+        displayName: senderAssets.displayName,
       });
 
       await params.sendEmail({
         to: email,
-        subject: 'Email Invitation',
+        subject: inviteEmailSubject(languageName),
         html,
         replyTo: senderEmail,
       });

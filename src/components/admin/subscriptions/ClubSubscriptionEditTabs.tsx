@@ -2,13 +2,17 @@
 
 export type ClubSubscriptionEditTab =
   | 'setting_subscriptions'
+  | 'price_list'
   | 'purchase_new_accounts'
   | 'identification_cards'
-  | 'special_offer';
+  | 'special_offer'
+  | 'special_upgrade';
 
 const TABS: { key: ClubSubscriptionEditTab; label: string }[] = [
   { key: 'setting_subscriptions', label: 'General' },
+  { key: 'price_list', label: 'Price list' },
   { key: 'special_offer', label: 'Special offer' },
+  { key: 'special_upgrade', label: 'Special Upgrade' },
   { key: 'purchase_new_accounts', label: 'Purchase new accounts' },
   { key: 'identification_cards', label: 'Identification Cards Pricelist' },
 ];

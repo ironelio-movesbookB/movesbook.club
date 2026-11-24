@@ -1,11 +1,61 @@
 'use client';
 
+import { CalendarDays } from 'lucide-react';
 import {
   WallMembersLastLoggedSection,
   WallNextEventSection,
 } from '@/components/dashboard/wallRightColumn/shared';
 import SponsorSlot, { useSectionSponsors } from '@/components/club/sponsors/SponsorSlot';
 import type { SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
+
+/** Month calendar moved from left sidebar Events into the My Club right column. */
+function EventsCalendarBlock() {
+  const now = new Date();
+  const monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = now.getDate();
+  const cells: Array<number | ''> = [
+    ...Array.from({ length: firstDow }, () => '' as const),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push('');
+
+  return (
+    <div className="border border-gray-300 bg-white">
+      <div className="flex items-center gap-2 bg-gray-900 px-3 py-2 text-[11px] font-bold tracking-wide text-white">
+        <CalendarDays className="h-3.5 w-3.5" />
+        <span>EVENTS</span>
+      </div>
+      <div className="bg-teal-600 px-2 py-1.5 text-center text-xs font-bold text-white">
+        {monthLabel}
+      </div>
+      <div className="text-[10px] text-gray-700">
+        <div className="grid grid-cols-7 border-b border-gray-300">
+          {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => (
+            <div key={d} className="border-r border-gray-200 py-1 text-center last:border-r-0">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((v, idx) => (
+            <div
+              key={idx}
+              className={`flex h-7 items-center justify-center border-b border-r border-gray-200 last:border-r-0 ${
+                v === today ? 'bg-teal-600 font-semibold text-white' : ''
+              }`}
+            >
+              {v}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MarqueeText({
   text,
@@ -201,7 +251,11 @@ export default function AthleteMyClubRightSidebar({
 }) {
   return (
     <div className="flex flex-col">
-      <WallNextEventSection />
+      <EventsCalendarBlock />
+
+      <div className="mt-3">
+        <WallNextEventSection />
+      </div>
 
       <div className="mt-3">
         <WallMembersLastLoggedSection />

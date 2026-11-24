@@ -22,14 +22,22 @@ export async function POST(req: NextRequest) {
     const email = String(body?.email || '').trim();
     const message = String(body?.message || '').trim();
     const tableHtml = typeof body?.tableHtml === 'string' ? body.tableHtml : '';
+    const subject =
+      String(body?.subject || '')
+        .trim()
+        .slice(0, 200) || 'Message from Movesbook';
 
     if (!email) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
+    if (!message && !tableHtml) {
+      return NextResponse.json({ success: false, error: 'Enter email and message.' }, { status: 400 });
+    }
 
+    const safeSubject = subject.replace(/</g, '&lt;');
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; padding:20px; color:#222;">
-        <h2 style="margin:0 0 12px;">Message from Movesbook</h2>
+        <h2 style="margin:0 0 12px;">${safeSubject}</h2>
         ${message ? `<p style="white-space:pre-wrap;">${message.replace(/</g, '&lt;')}</p>` : ''}
         ${
           tableHtml
@@ -47,8 +55,9 @@ export async function POST(req: NextRequest) {
 
     await sendIonosEmail({
       to: email,
-      subject: 'Message from Movesbook',
+      subject,
       html: htmlContent,
+      text: message || undefined,
     });
 
     return NextResponse.json({ success: true });

@@ -5,6 +5,9 @@ import {
   excerptFromBody,
   getThreadForUser,
 } from '@/lib/messages/userThreads';
+import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
+import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
+import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 
 export const CLUB_MESSAGE_CATEGORY = 'club_message';
 
@@ -130,35 +133,58 @@ export async function userCanAccessClubMessages(
   return { ok: isClubAdmin || isMember, isClubAdmin, isOwner: Boolean(owned), isMember };
 }
 
+type ClubMessageClub = {
+  id: string;
+  name: string;
+  role: 'admin' | 'staff' | 'member';
+  username: string;
+  logoUrl: string | null;
+};
+
+function clubMetaFromDescription(description: string | null | undefined): {
+  username: string;
+  logoUrl: string | null;
+} {
+  const meta = parseClubDescriptionMeta(description);
+  const logoRaw = meta.logoUrl?.trim() || '';
+  return {
+    username: meta.username?.trim() || '',
+    logoUrl: logoRaw ? resolvePublicImageUrl(logoRaw) : null,
+  };
+}
+
 export async function listAccessibleClubsForMessages(userId: string) {
   const [owned, staff, memberships] = await Promise.all([
     prisma.club.findMany({
       where: { adminId: userId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, description: true },
       orderBy: { name: 'asc' },
     }),
     prisma.clubStaff.findMany({
       where: { userId },
-      select: { club: { select: { id: true, name: true } } },
+      select: { club: { select: { id: true, name: true, description: true } } },
     }),
     prisma.clubMember.findMany({
       where: { memberId: userId },
-      select: { club: { select: { id: true, name: true } } },
+      select: { club: { select: { id: true, name: true, description: true } } },
     }),
   ]);
 
-  const map = new Map<string, { id: string; name: string; role: 'admin' | 'staff' | 'member' }>();
+  const map = new Map<string, ClubMessageClub>();
   for (const c of owned) {
-    map.set(c.id, { id: c.id, name: c.name, role: 'admin' });
+    const meta = clubMetaFromDescription(c.description);
+    map.set(c.id, { id: c.id, name: c.name, role: 'admin', ...meta });
   }
   for (const row of staff) {
     if (!map.has(row.club.id)) {
-      map.set(row.club.id, { id: row.club.id, name: row.club.name, role: 'staff' });
+      const meta = clubMetaFromDescription(row.club.description);
+      map.set(row.club.id, { id: row.club.id, name: row.club.name, role: 'staff', ...meta });
     }
   }
   for (const row of memberships) {
     if (!map.has(row.club.id)) {
-      map.set(row.club.id, { id: row.club.id, name: row.club.name, role: 'member' });
+      const meta = clubMetaFromDescription(row.club.description);
+      map.set(row.club.id, { id: row.club.id, name: row.club.name, role: 'member', ...meta });
     }
   }
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -348,7 +374,7 @@ export async function listClubStaffMessages(params: {
   ]);
   const threadById = new Map(threads.map((t) => [t.id, t]));
   const recipientById = new Map(recipients.map((u) => [u.id, u]));
-  const clubNameById = new Map(clubs.map((c) => [c.id, c.name]));
+  const clubById = new Map(clubs.map((c) => [c.id, c]));
 
   const items = ids
     .map((id) => {
@@ -356,6 +382,7 @@ export async function listClubStaffMessages(params: {
       const meta = metaById.get(id);
       if (!th || !meta) return null;
       const clubId = parseClubIdFromPathStaff(th.pathStaff);
+      const club = clubId ? clubById.get(clubId) : undefined;
       const isCreator = th.userId === v;
       return {
         id: th.id,
@@ -364,7 +391,9 @@ export async function listClubStaffMessages(params: {
         updatedAt: th.updatedAt.toISOString(),
         replyCount: Math.max(0, th._count.messages - 1),
         clubId,
-        clubName: clubId ? clubNameById.get(clubId) || '' : '',
+        clubName: club?.name || '',
+        clubUsername: club?.username || '',
+        clubLogoUrl: club?.logoUrl || null,
         author: toPersonDto(th.user),
         recipient: meta.recipientUserId
           ? toPersonDto(recipientById.get(String(meta.recipientUserId)))
@@ -400,11 +429,15 @@ export async function createClubStaffMessage(params: {
   }
 
   await ensureClubMessageColumns();
+  const safeBody = sanitizeRichHtml(params.body);
+  if (!safeBody.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').trim() && !/<img\b/i.test(safeBody)) {
+    throw new Error('Message body required');
+  }
   const thread = await createThreadWithFirstMessage({
     userId: params.userId,
     kind: 'SUPPORT',
     subject: params.subject?.trim() || 'Message',
-    body: params.body,
+    body: safeBody,
     supportCategory: CLUB_MESSAGE_CATEGORY,
     pathStaff: clubMessagePathStaff(params.clubId),
   });

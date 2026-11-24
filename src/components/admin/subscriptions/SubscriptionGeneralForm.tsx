@@ -8,7 +8,6 @@ import {
   getInfoVersionCopySourceOptions,
 } from '@/lib/admin/subscriptionInfoVersionCopy';
 import SubscriptionLanguageTabs from './SubscriptionLanguageTabs';
-import SubscriptionPricingPresentation from './SubscriptionPricingPresentation';
 import RegistrationVersionSloganBlock from '@/components/register/RegistrationVersionSloganBlock';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import {
@@ -236,87 +235,7 @@ export default function SubscriptionGeneralForm({
           </div>
         </div>
 
-        <div className="border border-gray-300">
-          <div className="bg-[#5bc0de] text-white px-3 py-1.5 text-xs font-bold">
-            1th subscription {row.name}
-          </div>
-          <p className="border-b border-gray-200 bg-[#f9fcfe] px-3 py-1.5 text-xs text-gray-600">
-            Shown during registration when the user subscribes for the first time
-          </p>
-          <div className="p-3 flex flex-wrap gap-6">
-            <FieldInput
-              label="Days durations :"
-              value={general.firstSubscriptionDays}
-              onChange={(v) => update({ firstSubscriptionDays: Number(v) || 0 })}
-              highlight
-            />
-            <FieldInput
-              label="Price 1th subscription :"
-              value={general.firstSubscriptionPrice}
-              onChange={(v) => update({ firstSubscriptionPrice: Number(v) || 0 })}
-              highlight
-            />
-            <FieldInput
-              label="Discount with promocode:"
-              value={general.firstSubscriptionPromoDiscount}
-              onChange={(v) => update({ firstSubscriptionPromoDiscount: Number(v) || 0 })}
-            />
-          </div>
-        </div>
-
-        <div className="border border-gray-300">
-          <div className="bg-[#5bc0de] text-white px-3 py-1.5 text-xs font-bold">
-            Standard or renewal
-          </div>
-          <p className="border-b border-gray-200 bg-[#f9fcfe] px-3 py-1.5 text-xs text-gray-600">
-            Shown when the user renews an already existing subscription
-          </p>
-          <div className="p-3 flex flex-wrap gap-6">
-            <FieldInput
-              label="Days durations :"
-              value={general.renewalDays}
-              onChange={(v) => update({ renewalDays: Number(v) || 0 })}
-              highlight
-            />
-            <FieldInput
-              label="Price for the renewal :"
-              value={general.renewalPrice}
-              onChange={(v) => update({ renewalPrice: Number(v) || 0 })}
-              highlight
-            />
-            <FieldInput
-              label="Discount with promocode:"
-              value={general.renewalPromoDiscount}
-              onChange={(v) => update({ renewalPromoDiscount: Number(v) || 0 })}
-            />
-          </div>
-        </div>
-
-        <div className="border border-gray-300">
-          <div className="bg-[#5bc0de] text-white px-3 py-1.5 text-xs font-bold">
-            Triple subscription
-          </div>
-          <p className="border-b border-gray-200 bg-[#f9fcfe] px-3 py-1.5 text-xs text-gray-600">
-            Optional extra discount — displayed under the standard cost during registration (duration
-            is 3× the active scenario)
-          </p>
-          <div className="p-3 flex flex-wrap gap-6">
-            <FieldInput
-              label="Discount Triple Duration %"
-              value={general.tripleDurationDiscount}
-              onChange={(v) => update({ tripleDurationDiscount: Number(v) || 0 })}
-              highlight
-            />
-            <FieldInput
-              label="Price :"
-              value={general.tripleDurationPrice}
-              onChange={(v) => update({ tripleDurationPrice: Number(v) || 0 })}
-              highlight
-            />
-          </div>
-        </div>
-
-        <SubscriptionPricingPresentation general={general} />
+        {/* 1th subscription, renewal, triple subscription and the pricing preview are in the "Price list" tab. */}
 
         <div className="border border-gray-300">
           <div className="px-3 py-2 text-sm text-gray-700 bg-[#f5f5f5] border-b border-gray-200">

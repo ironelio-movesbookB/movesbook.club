@@ -4,12 +4,14 @@ import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   getProcedureDefinition,
   getProcedureTypology,
+  procedureTypologyFor,
   type ProcedureDefinition,
 } from '@/lib/procedures/registry';
 import type {
   ProcedurePaymentDto,
   ProcedureReceiptDto,
   ProcedureRecordDto,
+  ExpenseInvoiceImage,
   ProcedureTypeCode,
 } from '@/lib/procedures/types';
 
@@ -20,15 +22,21 @@ export type ProcedureRecordView = {
   memberImage: string | null;
   typology: string;
   procedureType: string;
+  expenseDirection?: "IN" | "OUT";
+  isRecurrent?: boolean;
+  isRecurringOccurrence?: boolean;
   primaryLabel: string;
   secondaryLabel: string;
   recordDate: string;
   paydate: string | null;
   expireDate: string | null;
+  expenseExpirationDate?: string | null;
   createdAt: string;
   value: number;
   pay: number;
   rest: number;
+  expenseId?: string | null;
+  expenseInvoice?: ExpenseInvoiceImage | null;
   notes: string;
   operatorId: string | null;
   operatorName: string;
@@ -38,6 +46,8 @@ export type ProcedureRecordView = {
 export type ProcedurePaymentView = {
   id: string;
   recordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberName: string;
   typology: string;
   primaryLabel: string;
@@ -52,6 +62,9 @@ export type ProcedurePaymentView = {
   payMode: string | null;
 };
 
+/** Payment/receipt lists also carry the club name (payer on OUT receipts). */
+export type ClubPaginatedResult<T> = PaginatedResult<T> & { clubName?: string };
+
 export type ProcedureReceiptView = {
   id: string;
   recordId: string;
@@ -63,6 +76,8 @@ export type ProcedureReceiptView = {
   documentNumber: string;
   cost: number;
   paymentIn: number;
+  /** Balance still open on the record after this receipt's payment. */
+  residual: number | null;
   annotations: string;
   operatorName: string;
 };
@@ -74,6 +89,7 @@ export type ListParams = {
   memberId?: string;
   includePaid?: boolean;
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';
@@ -87,7 +103,10 @@ export type PaginatedResult<T> = {
   clubId?: string;
 };
 
-function metaString(metadata: Record<string, unknown> | null | undefined, key: string): string {
+function metaString(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): string {
   const value = metadata?.[key];
   return value != null ? String(value).trim() : '';
 }
@@ -96,15 +115,36 @@ function apiBase(code: ProcedureTypeCode): string {
   return `/api/club/procedures/${code}`;
 }
 
-function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): ProcedureRecordView {
+function mapRecord(
+  def: ProcedureDefinition,
+  record: ProcedureRecordDto,
+): ProcedureRecordView {
   const metadata = record.metadata;
+  const invoice = metadata?.expenseInvoice;
+  const expenseRecurrence = metadata?.expenseRecurrence;
+  const hasExpenseSchedule =
+    expenseRecurrence != null &&
+    typeof expenseRecurrence === 'object' &&
+    (expenseRecurrence as Record<string, unknown>).enabled === true;
   return {
     id: record.id,
     userId: record.memberId,
     memberName: record.memberName,
     memberImage: record.memberImage ?? null,
-    typology: getProcedureTypology(def.code),
+    typology: procedureTypologyFor(def.code, metadata),
     procedureType: record.procedureTypeCode,
+    expenseDirection:
+      def.code === "expense"
+        ? metaString(metadata, "expenseDirection") === "IN"
+          ? "IN"
+          : "OUT"
+        : undefined,
+    isRecurringOccurrence:
+      def.code === "expense" && metadata?.isRecurringOccurrence === true,
+    isRecurrent:
+      def.code === "expense" &&
+      (metadata?.isRecurringOccurrence === true ||
+        (hasExpenseSchedule && metadata?.recurrentActivated !== true)),
     primaryLabel: metaString(metadata, def.metadataKeys.primary) || '-',
     secondaryLabel: def.metadataKeys.secondary
       ? metaString(metadata, def.metadataKeys.secondary) || '-'
@@ -114,10 +154,23 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
     paydate: record.dueDate ?? record.recordDate,
     // Never fall back to the record date: an absent expiration must stay visibly absent.
     expireDate: record.dueDate,
+    expenseExpirationDate:
+      metaString(metadata, "expenseExpirationDate") || null,
     createdAt: record.createdAt,
     value: record.totalAmount,
     pay: record.paidAmount,
     rest: record.balanceAmount,
+    expenseId: metaString(metadata, 'expenseId') || null,
+    expenseInvoice:
+      invoice &&
+      typeof invoice === 'object' &&
+      typeof (invoice as Record<string, unknown>).name === 'string' &&
+      typeof (invoice as Record<string, unknown>).url === 'string'
+        ? {
+            name: String((invoice as Record<string, unknown>).name),
+            url: String((invoice as Record<string, unknown>).url),
+          }
+        : null,
     notes: record.notes ?? '',
     operatorId: record.operatorId,
     operatorName: record.operatorName,
@@ -125,10 +178,15 @@ function mapRecord(def: ProcedureDefinition, record: ProcedureRecordDto): Proced
   };
 }
 
-function mapPayment(def: ProcedureDefinition, payment: ProcedurePaymentDto): ProcedurePaymentView {
+function mapPayment(
+  def: ProcedureDefinition,
+  payment: ProcedurePaymentDto,
+): ProcedurePaymentView {
   return {
     id: payment.id,
     recordId: payment.procedureRecordId,
+    cancelledAt: payment.cancelledAt,
+    reversalOfId: payment.reversalOfId,
     memberName: payment.memberName,
     typology: payment.typology,
     primaryLabel: payment.serviceName ?? '-',
@@ -144,7 +202,10 @@ function mapPayment(def: ProcedureDefinition, payment: ProcedurePaymentDto): Pro
   };
 }
 
-function mapReceipt(def: ProcedureDefinition, receipt: ProcedureReceiptDto): ProcedureReceiptView {
+function mapReceipt(
+  def: ProcedureDefinition,
+  receipt: ProcedureReceiptDto,
+): ProcedureReceiptView {
   return {
     id: receipt.id,
     recordId: receipt.procedureRecordId,
@@ -156,6 +217,7 @@ function mapReceipt(def: ProcedureDefinition, receipt: ProcedureReceiptDto): Pro
     documentNumber: receipt.documentNumber ?? '',
     cost: receipt.amount,
     paymentIn: receipt.paymentAmount,
+    residual: receipt.residualDebt ?? null,
     annotations: receipt.annotations ?? '',
     operatorName: receipt.operatorName,
   };
@@ -165,12 +227,16 @@ function buildQuery(params?: ListParams & { view?: string }): string {
   const def = params?.pageSize;
   const page = params?.page ?? 1;
   const pageSize = def ?? 25;
-  const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  const qs = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
   if (params?.view) qs.set('view', params.view);
   if (params?.recordId) qs.set('recordId', params.recordId);
   if (params?.memberId) qs.set('memberId', params.memberId);
   if (params?.includePaid) qs.set('includePaid', 'true');
   if (params?.search) qs.set('search', params.search);
+  if (params?.expenseName) qs.set('expenseName', params.expenseName);
   if (params?.fromDate) qs.set('fromDate', params.fromDate);
   if (params?.toDate) qs.set('toDate', params.toDate);
   if (params?.orderBy) qs.set('orderBy', params.orderBy);
@@ -193,9 +259,11 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       return clubApiFetch<T>(`${base}/form-options`);
     },
 
-    async fetchRecords(params?: ListParams): Promise<PaginatedResult<ProcedureRecordView>> {
+    async fetchRecords(
+      params?: ListParams,
+    ): Promise<PaginatedResult<ProcedureRecordView>> {
       const res = await clubApiFetch<PaginatedResult<ProcedureRecordDto>>(
-        `${base}/records?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
+        `${base}/records?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`,
       );
       return {
         items: res.items.map((r) => mapRecord(def, r)),
@@ -207,9 +275,11 @@ export function createProcedureClient(code: ProcedureTypeCode) {
     },
     //------------------------------------------------------------------------------------------------
 
-    async fetchDeadlines(params?: ListParams): Promise<PaginatedResult<ProcedureRecordView>> {
+    async fetchDeadlines(
+      params?: ListParams,
+    ): Promise<PaginatedResult<ProcedureRecordView>> {
       const res = await clubApiFetch<PaginatedResult<ProcedureRecordDto>>(
-        `${base}/records?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize, view: 'deadlines' })}`
+        `${base}/records?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize, view: 'deadlines' })}`,
       );
       return {
         items: res.items.map((r) => mapRecord(def, r)),
@@ -220,7 +290,9 @@ export function createProcedureClient(code: ProcedureTypeCode) {
     },
 
     async fetchRecord(id: string): Promise<{ record: ProcedureRecordView }> {
-      const res = await clubApiFetch<{ record: ProcedureRecordDto }>(`${base}/records/${id}`);
+      const res = await clubApiFetch<{ record: ProcedureRecordDto }>(
+        `${base}/records/${id}`,
+      );
       return { record: mapRecord(def, res.record) };
     },
 
@@ -229,10 +301,13 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       input: {
         recordDate?: string;
         dueDate?: string | null;
+        expenseExpirationDate?: string | null;
+        adminPassword?: string;
         notes?: string;
         operatorId?: string;
         totalAmount?: number;
-      }
+        activateRecurrent?: boolean;
+      },
     ): Promise<void> {
       await clubApiFetch(`${base}/records/${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -240,16 +315,24 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       });
     },
 
-    async createRecord(body: Record<string, unknown>): Promise<{ recordId: string }> {
-      const result = await clubApiFetch<{ recordId: string }>(`${base}/records`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
+    async createRecord(
+      body: Record<string, unknown>,
+    ): Promise<{ recordId: string }> {
+      const result = await clubApiFetch<{ recordId: string }>(
+        `${base}/records`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        },
+      );
       return { recordId: result.recordId };
     },
 
-    async deleteRecord(id: string): Promise<void> {
-      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async deleteRecord(id: string, adminPassword: string): Promise<void> {
+      await clubApiFetch(`${base}/records?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ adminPassword }),
+      });
     },
 
     async addPayment(
@@ -257,6 +340,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
       input: {
         amountPaid: number;
         paymentDate: string;
+        installmentId?: string;
         notes?: string;
         description?: string;
         payMode?: string;
@@ -273,13 +357,14 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         receiptAnnotations?: string;
         serviceName?: string;
         taxDocument?: Record<string, unknown>;
-      }
+      },
     ): Promise<void> {
       await clubApiFetch(`${base}/records/${recordId}`, {
         method: 'POST',
         body: JSON.stringify({
           amount: input.amountPaid,
           paymentDate: input.paymentDate,
+          installmentId: input.installmentId,
           description: input.description ?? input.notes ?? null,
           notes: input.description ?? input.notes ?? null,
           payMode: input.payMode ?? null,
@@ -294,27 +379,31 @@ export function createProcedureClient(code: ProcedureTypeCode) {
           createReceipt: input.createReceipt ?? input.taxDoc ?? false,
           receiptDocumentType: input.receiptDocumentType ?? 'Invoice',
           receiptNumber: input.receiptNumber,
-          receiptAnnotations: input.receiptAnnotations ?? input.description ?? input.notes,
+          receiptAnnotations:
+            input.receiptAnnotations ?? input.description ?? input.notes,
           serviceName: input.serviceName,
         }),
       });
     },
 
-    async fetchPayments(params?: ListParams): Promise<PaginatedResult<ProcedurePaymentView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedurePaymentDto>>(
-        `${base}/payments?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
+    async fetchPayments(
+      params?: ListParams,
+    ): Promise<ClubPaginatedResult<ProcedurePaymentView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedurePaymentDto>>(
+        `${base}/payments?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`,
       );
       return {
         items: res.items.map((p) => mapPayment(def, p)),
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 
     async updatePayment(
       id: string,
-      input: { paymentDate?: string; notes?: string; operatorId?: string }
+      input: { paymentDate?: string; notes?: string; operatorId?: string },
     ): Promise<void> {
       await clubApiFetch(`${base}/payments/${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -323,18 +412,23 @@ export function createProcedureClient(code: ProcedureTypeCode) {
     },
 
     async deletePayment(id: string): Promise<void> {
-      await clubApiFetch(`${base}/payments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await clubApiFetch(`${base}/payments/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
     },
 
-    async fetchReceipts(params?: ListParams): Promise<PaginatedResult<ProcedureReceiptView>> {
-      const res = await clubApiFetch<PaginatedResult<ProcedureReceiptDto>>(
-        `${base}/receipts?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`
+    async fetchReceipts(
+      params?: ListParams,
+    ): Promise<ClubPaginatedResult<ProcedureReceiptView>> {
+      const res = await clubApiFetch<ClubPaginatedResult<ProcedureReceiptDto>>(
+        `${base}/receipts?${buildQuery({ ...params, pageSize: params?.pageSize ?? pageSize })}`,
       );
       return {
         items: res.items.map((r) => mapReceipt(def, r)),
         total: res.total,
         page: res.page,
         pageSize: res.pageSize,
+        clubName: res.clubName,
       };
     },
 
@@ -346,7 +440,7 @@ export function createProcedureClient(code: ProcedureTypeCode) {
         annotations?: string;
         /** Re-send with `true` after the API rejects a duplicate document type + number. */
         confirmDuplicate?: boolean;
-      }
+      },
     ): Promise<void> {
       await clubApiFetch(`${base}/receipts/${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -355,7 +449,9 @@ export function createProcedureClient(code: ProcedureTypeCode) {
     },
 
     async deleteReceipt(id: string): Promise<void> {
-      await clubApiFetch(`${base}/receipts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await clubApiFetch(`${base}/receipts/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
     },
   };
 }

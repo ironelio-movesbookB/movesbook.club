@@ -203,19 +203,23 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
       byOption: {
         Running: {
           extra: [
-            field('Event', [
-              '100m',
-              '200m',
-              '400m',
-              '800m',
-              '1500m',
-              '5000m',
-              '10000m',
-              'Marathon',
-              'Hurdles',
-              'Steeplechase',
-              'Relay',
-            ]),
+            field(
+              'Event',
+              [
+                '100m',
+                '200m',
+                '400m',
+                '800m',
+                '1500m',
+                '5000m',
+                '10000m',
+                'Marathon',
+                'Hurdles',
+                'Steeplechase',
+                'Relay',
+              ],
+              true,
+            ),
             field('Personal best'),
             field('Season best'),
           ],
@@ -223,14 +227,14 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
         },
         Jump: {
           extra: [
-            field('Event', ['Long Jump', 'High Jump', 'Triple Jump', 'Pole Vault']),
+            field('Event', ['Long Jump', 'High Jump', 'Triple Jump', 'Pole Vault'], true),
             field('Takeoff foot / Dominant side', RIGHT_LEFT),
           ],
           stats: [statGroup('Jump', ['Personal Best', 'Season Best', 'Attempts'])],
         },
         Throwing: {
           extra: [
-            field('Event', ['Shot Put', 'Discus', 'Javelin', 'Hammer']),
+            field('Event', ['Shot Put', 'Discus', 'Javelin', 'Hammer'], true),
             field('Throwing hand', RIGHT_LEFT),
           ],
           stats: [statGroup('Throwing', ['Personal Best', 'Season Best', 'Throws'])],
@@ -260,8 +264,8 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     ...INDIVIDUAL,
     extra: [
       field('Discipline', ['Canoe', 'Kayak', 'SUP']),
-      field('Distance', ['200m', '500m', '1000m', 'Slalom']),
-      field('Boat class', ['C1', 'C2', 'K1', 'K2', 'K4']),
+      field('Distance', ['200m', '500m', '1000m', 'Slalom'], true),
+      field('Boat class', ['C1', 'C2', 'K1', 'K2', 'K4'], true),
     ],
     stats: stats(['Races', 'Wins', 'Best Time']),
   },
@@ -269,7 +273,11 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     ...INDIVIDUAL,
     extra: [
       field('Discipline', ['Alpine', 'Cross-Country', 'Ski Jump', 'Freestyle', 'Snowboard']),
-      field('Speciality', ['Slalom', 'Giant Slalom', 'Super-G', 'Downhill', 'Combined', 'Other']),
+      field(
+        'Speciality',
+        ['Slalom', 'Giant Slalom', 'Super-G', 'Downhill', 'Combined', 'Other'],
+        true,
+      ),
     ],
     stats: stats(['Races', 'Wins', 'Podiums', 'FIS Points']),
   },
@@ -390,6 +398,8 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
         'Forced Fumbles',
       ]),
       statGroup('Special Teams Stats', ['FG Made/Att', 'FG%', 'Punt Average']),
+      // Soccer Cards Y/R → American Football discipline
+      statGroup('Discipline', ['Penalties / Flags', 'Ejections']),
     ],
   },
   'Beach Volley': {
@@ -404,6 +414,7 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     extra: [
       field('FIVB / World ranking'),
       field('Partner history'),
+      field('Handedness', RIGHT_LEFT),
       field('Spike reach'),
       field('Block reach'),
       field('Surface', ['Sand']),
@@ -426,7 +437,6 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     extra: [
       field('Throwing speed km/h'),
       field('Playing phase', ['Offense', 'Defense Specialist', 'Both']),
-      field('EHF ranking'),
     ],
     stats: stats([
       'Goals Scored',
@@ -437,6 +447,7 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
       'Blocks',
       'Saves % (GK)',
       '2-Minute Suspensions',
+      'EHF Ranking',
     ]),
   },
   'Table Tennis': {
@@ -542,19 +553,26 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
       field('UWW ranking'),
       field('Weight class (exact)'),
       field('Record W-L'),
-      field('Finishing (Pin, Decision, Tech Fall %)'),
+      field('Pin'),
+      field('Decision'),
+      field('Tech Fall %'),
     ],
     stats: stats(['Wins/Losses', 'Wins by Fall / Pin', 'Technical Superiority Wins']),
   },
   Triathlon: {
     footHand: false,
     currentTeam: 'National team / Sponsor team',
-    role: 'Distance',
-    roleOptions: ['Sprint', 'Olympic', '70.3', 'Ironman', 'XTERRA'],
+    // Distance is multicheck (extra), not a single Role select.
+    role: false,
     subRole: 'Strength',
     subRoleOptions: ['Swimmer', 'Biker', 'Runner'],
     jersey: false,
     extra: [
+      field(
+        'Distance',
+        ['Supersprint', 'Sprint', 'Olympic', '70.3', 'Ironman', 'XTERRA'],
+        true,
+      ),
       field('World Triathlon / PTO ranking'),
       field('Swim split'),
       field('T1'),
@@ -603,6 +621,9 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     jersey: 'Shirt number',
     extra: [
       field('Shooting accuracy %'),
+      field('Intercepts'),
+      field('Deflections'),
+      field('Rebounds'),
       field('Centre pass receives'),
       field('World Netball ranking'),
     ],
@@ -627,10 +648,11 @@ const PROFILES: Record<EntitySportOption, AthleteSportProfile> = {
     subRoleOptions: ['Attacking', 'Retriever', 'Control'],
     jersey: false,
     extra: [
+      // Layout (2-col): PSA | Best ranking · Racket | String tension · Tournament tier
       field('PSA world ranking'),
+      field('Best world ranking'),
       field('Racket'),
       field('String tension'),
-      field('Best world ranking'),
       field('Tournament tier', ['Platinum', 'Gold', 'Silver', 'Bronze', 'Challenger']),
     ],
     stats: stats(['Win/Loss Record', 'Titles', 'Best Finish', 'Highest Ranking']),

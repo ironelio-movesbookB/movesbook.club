@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
     // Group translations by key
     const translationsMap: Record<string, any> = {};
     const categoriesSet = new Set<string>();
-    const registeredLongTextKeys = new Set(listRegisteredLongTextKeys());
+    let registeredLongTextKeys = new Set<string>();
+    try {
+      registeredLongTextKeys = new Set(listRegisteredLongTextKeys());
+    } catch {
+      registeredLongTextKeys = new Set();
+    }
 
     for (const trans of dbTranslations) {
       if (!translationsMap[trans.key]) {
@@ -30,18 +35,22 @@ export async function GET(request: NextRequest) {
           category: trans.category || 'general',
           descriptionEn: `Translation for ${trans.key}`,
           isDeleted: trans.isDeleted || false,
+          isLongText: Boolean(trans.isLongText),
           values: {},
         };
       }
-      
+
       // Use language string directly (not language.code)
       translationsMap[trans.key].values[trans.language] = trans.value;
-      
+
       // Update isDeleted if ANY translation for this key is deleted
       if (trans.isDeleted) {
         translationsMap[trans.key].isDeleted = true;
       }
-      
+      if (trans.isLongText) {
+        translationsMap[trans.key].isLongText = true;
+      }
+
       // Add category to set
       if (trans.category) {
         categoriesSet.add(trans.category);
@@ -50,14 +59,20 @@ export async function GET(request: NextRequest) {
 
     const translations = Object.values(translationsMap).map((trans: any) => {
       const hasLongValue = Object.values(trans.values as Record<string, string>).some(
-        (val) => typeof val === 'string' && val.length > LONG_TEXT_THRESHOLD
+        (val) => typeof val === 'string' && val.length > LONG_TEXT_THRESHOLD,
       );
+      let fileRegistered = false;
+      try {
+        fileRegistered = isRegisteredLongTextKey(trans.key);
+      } catch {
+        fileRegistered = false;
+      }
       const isLongText =
         Boolean(trans.isLongText) ||
         registeredLongTextKeys.has(trans.key) ||
         KNOWN_LONG_TEXT_KEY_SET.has(trans.key) ||
         hasLongValue ||
-        isRegisteredLongTextKey(trans.key);
+        fileRegistered;
       return {
         ...trans,
         isLongText,

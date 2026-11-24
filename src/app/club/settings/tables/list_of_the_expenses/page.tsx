@@ -9,19 +9,138 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ChevronUp,
+  AlarmClock,
+  BarChart3,
+  Bell,
+  Book,
+  Bookmark,
+  Briefcase,
+  Camera,
+  CircleDollarSign,
+  ClipboardList,
+  Clock3,
+  Cloud,
+  Contact,
+  Copy,
+  CreditCard,
+  Eye,
+  File,
+  Filter,
+  Globe2,
+  GraduationCap,
+  Hand,
+  HeartHandshake,
+  HelpCircle,
+  Hourglass,
+  Info,
+  Landmark,
+  Laptop,
+  LayoutGrid,
+  Lightbulb,
+  Link,
   Loader2,
+  MapPin,
+  Medal,
+  Megaphone,
+  Monitor,
+  MoonStar,
+  MousePointer2,
   Pencil,
+  Paperclip,
+  PlaySquare,
   Plus,
+  Printer,
+  Receipt,
   Search,
+  ScanFace,
+  Send,
+  Settings,
+  ShoppingCart,
+  SlidersHorizontal,
+  Smartphone,
+  Sparkles,
+  Store,
+  Sun,
+  Tag,
+  Ticket,
   Trash2,
+  Trophy,
+  User,
+  UserPlus,
+  Users,
+  WalletCards,
+  Wand2,
   X
 } from 'lucide-react';
 import TablesTabs from '@/components/club-settings/TablesTabs';
+
+const EXPENSE_ICON_OPTIONS = [
+  { value: 'sliders', label: 'Controls', Icon: SlidersHorizontal },
+  { value: 'eye', label: 'View', Icon: Eye },
+  { value: 'bell', label: 'Notifications', Icon: Bell },
+  { value: 'alarm', label: 'Alarm', Icon: AlarmClock },
+  { value: 'heartHandshake', label: 'Handshake', Icon: HeartHandshake },
+  { value: 'wand', label: 'Magic wand', Icon: Wand2 },
+  { value: 'sparkles', label: 'Sparkles', Icon: Sparkles },
+  { value: 'trophy', label: 'Trophy', Icon: Trophy },
+  { value: 'settings', label: 'Settings', Icon: Settings },
+  { value: 'printer', label: 'Printer', Icon: Printer },
+  { value: 'cloud', label: 'Cloud', Icon: Cloud },
+  { value: 'send', label: 'Send', Icon: Send },
+  { value: 'tag', label: 'Tag', Icon: Tag },
+  { value: 'pin', label: 'Pin', Icon: MapPin },
+  { value: 'file', label: 'File', Icon: File },
+  { value: 'copy', label: 'Copy', Icon: Copy },
+  { value: 'bookmark', label: 'Bookmark', Icon: Bookmark },
+  { value: 'grid', label: 'Grid', Icon: LayoutGrid },
+  { value: 'contact', label: 'Contact', Icon: Contact },
+  { value: 'scanFace', label: 'Face scan', Icon: ScanFace },
+  { value: 'user', label: 'User', Icon: User },
+  { value: 'users', label: 'Users', Icon: Users },
+  { value: 'userPlus', label: 'Add user', Icon: UserPlus },
+  { value: 'clock', label: 'Clock', Icon: Clock3 },
+  { value: 'globe', label: 'Globe', Icon: Globe2 },
+  { value: 'shoppingCart', label: 'Shopping cart', Icon: ShoppingCart },
+  { value: 'info', label: 'Information', Icon: Info },
+  { value: 'help', label: 'Help', Icon: HelpCircle },
+  { value: 'chart', label: 'Chart', Icon: BarChart3 },
+  { value: 'megaphone', label: 'Megaphone', Icon: Megaphone },
+  { value: 'link', label: 'Link', Icon: Link },
+  { value: 'paperclip', label: 'Attachment', Icon: Paperclip },
+  { value: 'hourglass', label: 'Hourglass', Icon: Hourglass },
+  { value: 'play', label: 'Video', Icon: PlaySquare },
+  { value: 'store', label: 'Store', Icon: Store },
+  { value: 'walletCards', label: 'Wallet', Icon: WalletCards },
+  { value: 'hand', label: 'Hand', Icon: Hand },
+  { value: 'pointer', label: 'Pointer', Icon: MousePointer2 },
+  { value: 'filter', label: 'Filter', Icon: Filter },
+  { value: 'lightbulb', label: 'Lightbulb', Icon: Lightbulb },
+  { value: 'landmark', label: 'Landmark', Icon: Landmark },
+  { value: 'card', label: 'Card', Icon: CreditCard },
+  { value: 'briefcase', label: 'Briefcase', Icon: Briefcase },
+  { value: 'graduation', label: 'Graduation', Icon: GraduationCap },
+  { value: 'dollar', label: 'Money', Icon: CircleDollarSign },
+  { value: 'receipt', label: 'Receipt', Icon: Receipt },
+  { value: 'ticket', label: 'Ticket', Icon: Ticket },
+  { value: 'medal', label: 'Medal', Icon: Medal },
+  { value: 'smartphone', label: 'Phone', Icon: Smartphone },
+  { value: 'monitor', label: 'Monitor', Icon: Monitor },
+  { value: 'laptop', label: 'Laptop', Icon: Laptop },
+  { value: 'camera', label: 'Camera', Icon: Camera },
+  { value: 'moon', label: 'Night', Icon: MoonStar },
+  { value: 'sun', label: 'Day', Icon: Sun },
+  { value: 'book', label: 'Book', Icon: Book },
+  { value: 'clipboard', label: 'Clipboard', Icon: ClipboardList }
+] as const;
+
+type ExpenseIconName = (typeof EXPENSE_ICON_OPTIONS)[number]['value'];
 
 type ExpenseChild = {
   id: string;
   name: string;
   parentId: string;
+  icon: ExpenseIconName | null;
+  color: string | null;
   created: string | null;
   modified: string | null;
 };
@@ -30,6 +149,8 @@ type ExpenseGroup = {
   id: string;
   name: string;
   parentId: string;
+  icon: ExpenseIconName | null;
+  color: string | null;
   created: string | null;
   modified: string | null;
   children: ExpenseChild[];
@@ -40,9 +161,11 @@ type ExpenseDraft = {
   name: string;
   parentId: string;
   isSubExpense: boolean;
+  icon: ExpenseIconName | null;
+  color: string | null;
 };
 
-type FieldErrors = Partial<Record<'name' | 'parentId', string>>;
+type FieldErrors = Partial<Record<'name' | 'parentId' | 'icon' | 'color', string>>;
 type PageItem = number | 'ellipsis-left' | 'ellipsis-right';
 type SortKey = 'name' | 'modified';
 type SortDirection = 'asc' | 'desc';
@@ -204,14 +327,14 @@ export default function ClubTablesListOfExpensesPage() {
   const isExpanded = (id: string) => expandAll || expandedIds.has(id);
 
   const openAddParentModal = () => {
-    setDraft({ name: '', parentId: '0', isSubExpense: false });
+    setDraft({ name: '', parentId: '0', isSubExpense: false, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
   };
 
   const openAddSubModal = (parentId: string) => {
-    setDraft({ name: '', parentId, isSubExpense: true });
+    setDraft({ name: '', parentId, isSubExpense: true, icon: null, color: '#0f766e' });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
@@ -222,7 +345,9 @@ export default function ClubTablesListOfExpensesPage() {
       id: item.id,
       name: item.name,
       parentId: item.parentId,
-      isSubExpense
+      isSubExpense,
+      icon: item.icon,
+      color: item.color
     });
     setFieldErrors({});
     setError(null);
@@ -257,7 +382,9 @@ export default function ClubTablesListOfExpensesPage() {
         body: JSON.stringify({
           id: draft.id,
           name: draft.name.trim(),
-          parentId: draft.isSubExpense ? draft.parentId : '0'
+          parentId: draft.isSubExpense ? draft.parentId : '0',
+          icon: draft.icon,
+          color: draft.color
         })
       });
 
@@ -408,7 +535,22 @@ export default function ClubTablesListOfExpensesPage() {
                       >
                         {isExpanded(group.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
-                      <span className="truncate font-semibold text-gray-950">{group.name}</span>
+                      <ExpenseIconView name={group.icon} className="h-4 w-4 shrink-0 text-gray-500" />
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                        style={{ backgroundColor: group.color ?? '#0f766e' }}
+                        title={`Chart color ${group.color ?? 'default'}`}
+                        aria-hidden="true"
+                      />
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                        style={{ backgroundColor: group.color ?? '#0f766e' }}
+                        title={`Chart color ${group.color ?? 'default'}`}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate font-semibold text-gray-950">
+                        {group.name}
+                      </span>
                       {group.children.length > 0 && (
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                           {group.children.length}
@@ -435,7 +577,24 @@ export default function ClubTablesListOfExpensesPage() {
                           key={child.id}
                           className="grid grid-cols-[1fr_9rem_8rem] items-center gap-2 rounded-md border border-amber-200/80 bg-amber-50 px-3 py-3"
                         >
-                          <span className="truncate text-sm font-medium text-gray-900">{child.name}</span>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ExpenseIconView name={child.icon} className="h-4 w-4 shrink-0 text-gray-500" />
+                            <span
+                              className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                              style={{ backgroundColor: child.color ?? '#0f766e' }}
+                              title={`Chart color ${child.color ?? 'default'}`}
+                              aria-hidden="true"
+                            />
+                            <span
+                              className="h-3.5 w-3.5 shrink-0 rounded-sm border border-black/15"
+                              style={{ backgroundColor: child.color ?? '#0f766e' }}
+                              title={`Chart color ${child.color ?? 'default'}`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate text-sm font-medium text-gray-900">
+                              {child.name}
+                            </span>
+                          </div>
                           <span className="text-sm text-gray-600">{formatDate(child.modified || child.created)}</span>
                           <div className="flex justify-end gap-2">
                             <IconButton label="Edit sub-expense" onClick={() => openEditModal(child, true)} icon={<Pencil className="h-4 w-4" />} />
@@ -459,7 +618,7 @@ export default function ClubTablesListOfExpensesPage() {
 
       {draft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" role="dialog" aria-modal="true">
-          <form onSubmit={saveDraft} className="w-full max-w-xl rounded-md bg-white shadow-xl">
+          <form onSubmit={saveDraft} className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-md bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-950">
                 {draft.id
@@ -471,7 +630,7 @@ export default function ClubTablesListOfExpensesPage() {
               </button>
             </div>
 
-            <div className="px-5 py-5">
+            <div className="space-y-5 px-5 py-5">
               <Field
                 label={draft.isSubExpense ? 'Sub category' : 'Name'}
                 value={draft.name}
@@ -482,6 +641,43 @@ export default function ClubTablesListOfExpensesPage() {
                   setFieldErrors((current) => ({ ...current, name: undefined }));
                 }}
               />
+              <ExpenseIconPicker
+                selectedIcon={draft.icon}
+                error={fieldErrors.icon}
+                onSelect={(icon) => {
+                  setDraft((current) => current ? { ...current, icon } : current);
+                  setFieldErrors((current) => ({ ...current, icon: undefined }));
+                }}
+                onClear={() => setDraft((current) => current ? { ...current, icon: null } : current)}
+              />
+              <div className="space-y-2">
+                <label htmlFor="expense-chart-color" className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  Chart color
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="expense-chart-color"
+                    type="color"
+                    value={draft.color ?? '#0f766e'}
+                    onChange={(event) =>
+                      setDraft((current) => current ? { ...current, color: event.target.value } : current)
+                    }
+                    className="h-9 w-12 cursor-pointer rounded border border-gray-300 bg-white p-1"
+                    aria-label="Choose chart color for this expense category"
+                  />
+                  <span className="text-sm text-gray-700">{draft.color ?? 'Default chart color'}</span>
+                  {draft.color && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft((current) => current ? { ...current, color: null } : current)}
+                      className="text-xs font-semibold text-gray-600 underline underline-offset-2 hover:text-gray-950"
+                    >
+                      Use default
+                    </button>
+                  )}
+                </div>
+                {fieldErrors.color && <p className="text-xs text-red-600">{fieldErrors.color}</p>}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
@@ -524,6 +720,66 @@ export default function ClubTablesListOfExpensesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ExpenseIconView({ name, className }: { name: ExpenseIconName | null; className: string }) {
+  const option = EXPENSE_ICON_OPTIONS.find((item) => item.value === name);
+  if (!option) return null;
+  const Icon = option.Icon;
+  return <Icon aria-hidden="true" className={className} />;
+}
+
+function ExpenseIconPicker({
+  selectedIcon,
+  error,
+  onSelect,
+  onClear
+}: {
+  selectedIcon: ExpenseIconName | null;
+  error?: string;
+  onSelect: (icon: ExpenseIconName) => void;
+  onClear: () => void;
+}) {
+  const selectedOption = EXPENSE_ICON_OPTIONS.find((item) => item.value === selectedIcon);
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-xs font-semibold uppercase tracking-wide text-gray-600">Expense icon</legend>
+      <div className="grid grid-cols-8 gap-2">
+        {EXPENSE_ICON_OPTIONS.map(({ value, label, Icon }) => {
+          const selected = selectedIcon === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onSelect(value)}
+              aria-label={label}
+              aria-pressed={selected}
+              title={label}
+              className={`flex aspect-square min-w-0 items-center justify-center rounded-md border transition ${
+                selected
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Icon aria-hidden="true" className="h-5 w-5" />
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex min-h-5 items-center justify-between gap-3">
+        <span className="text-xs text-gray-500">
+          {selectedOption ? `${selectedOption.label} selected` : 'No icon selected'}
+        </span>
+        {selectedIcon && (
+          <button type="button" onClick={onClear} className="text-xs font-semibold text-gray-600 hover:text-gray-950">
+            Clear
+          </button>
+        )}
+      </div>
+      {error && <span className="block text-xs font-medium text-red-600">{error}</span>}
+    </fieldset>
   );
 }
 

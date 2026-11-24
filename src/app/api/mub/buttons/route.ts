@@ -24,9 +24,12 @@ export async function POST(request: NextRequest) {
 
     await prismaConnect();
     const parsed = parseMubPageRequest(request);
-    const resolved = await resolveMubPageQuery(parsed, userId, 'write');
+    const resolved = await resolveMubPageQuery(request, parsed, userId, 'write');
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      return NextResponse.json(
+        { error: resolved.error, code: resolved.code },
+        { status: resolved.status },
+      );
     }
 
     const body = (await request.json()) as {
@@ -63,9 +66,12 @@ export async function DELETE(request: NextRequest) {
 
     await prismaConnect();
     const parsed = parseMubPageRequest(request);
-    const resolved = await resolveMubPageQuery(parsed, userId, 'write');
+    const resolved = await resolveMubPageQuery(request, parsed, userId, 'write');
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      return NextResponse.json(
+        { error: resolved.error, code: resolved.code },
+        { status: resolved.status },
+      );
     }
 
     const buttonId = new URL(request.url).searchParams.get('id');

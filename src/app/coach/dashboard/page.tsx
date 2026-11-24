@@ -38,7 +38,8 @@ import RightSidebar from '@/components/dashboard/RightSidebar';
 import DisplayOptionsToolbar from '@/app/my-page/components/DisplayOptionsToolbar';
 import ManagedEntityDashboardBanner from '@/components/dashboard/ManagedEntityDashboardBanner';
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import { getManagedEntityProfilePath } from '@/lib/dashboard/managedEntityDashboardLabels';
 import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useDashboardBannerProfile } from '@/hooks/useDashboardBannerProfile';
@@ -48,6 +49,7 @@ import {
   useManagedEntityCreation,
 } from '@/hooks/useManagedEntityCreation';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -79,6 +81,7 @@ function CoachDashboardContent() {
   const { bannerProfile, setBannerProfile } = useDashboardBannerProfile(!loading && !!user);
   const [showChangeBannerModal, setShowChangeBannerModal] = useState(false);
   const [coachingGroups, setCoachingGroups] = useState<any[]>([]);
+  const [coachingGroupsLoaded, setCoachingGroupsLoaded] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'my-page' | 'my-entity'>('my-page');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -86,6 +89,7 @@ function CoachDashboardContent() {
   const [expandedActionsPlanner, setExpandedActionsPlanner] = useState(true);
   const [showWorkoutSection, setShowWorkoutSection] = useState(false);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
+  const [showClubStaffMessages, setShowClubStaffMessages] = useState(false);
   /** My Coaching Group tab visible only after opening a group from the sidebar (hidden on My Page). */
   const [myEntityTabVisible, setMyEntityTabVisible] = useState(false);
 
@@ -117,6 +121,8 @@ function CoachDashboardContent() {
       }
     } catch (error) {
       console.error('Error loading coaching groups:', error);
+    } finally {
+      setCoachingGroupsLoaded(true);
     }
   }, []);
 
@@ -205,11 +211,12 @@ function CoachDashboardContent() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (!coachingGroupsLoaded) return;
     if (isEntityWorkspaceSession('coach')) return;
     if (!hasFormGroup && activeTab === 'my-entity') {
       setActiveTab('my-page');
     }
-  }, [hasFormGroup, activeTab]);
+  }, [coachingGroupsLoaded, hasFormGroup, activeTab]);
 
   useEffect(() => {
     if (showWorkoutSection) {
@@ -218,6 +225,16 @@ function CoachDashboardContent() {
       setShowLeftSidebar(true);
     }
   }, [showWorkoutSection, setShowLeftSidebar]);
+
+  const activeCoachingGroup = selectedGroupId
+    ? formCreatedGroups.find((g) => g.id === selectedGroupId) ?? null
+    : null;
+  const bannerCoachingGroup = activeCoachingGroup ?? formCreatedGroups[0] ?? null;
+  const showEntityBanner = activeTab === 'my-entity' && Boolean(selectedGroupId) && Boolean(bannerCoachingGroup);
+  const entityVisual = useEntityVisual(
+    showEntityBanner ? bannerCoachingGroup?.id : null,
+    bannerCoachingGroup?.description,
+  );
 
   if (loading || !user) {
     return null;
@@ -230,10 +247,6 @@ function CoachDashboardContent() {
     setActiveTab('my-entity');
   };
 
-  const activeCoachingGroup = selectedGroupId
-    ? formCreatedGroups.find((g) => g.id === selectedGroupId) ?? null
-    : null;
-  const bannerCoachingGroup = activeCoachingGroup ?? formCreatedGroups[0] ?? null;
   const dashboardShellActiveTab: 'my-page' | 'my-entity' =
     activeTab === 'my-entity' &&
     selectedGroupId &&
@@ -278,8 +291,16 @@ function CoachDashboardContent() {
               coverBannerAlignment={
                 bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
               }
+              entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
+              entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
+              entityEdit={
+                showEntityBanner && bannerCoachingGroup
+                  ? { kind: 'coach', entityId: bannerCoachingGroup.id }
+                  : null
+              }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               showSponsored={dashboardShellActiveTab === 'my-page'}
+              avatarImagePath={bannerProfile?.image}
               activeTab={dashboardShellActiveTab}
               showWorkoutSection={showWorkoutSection}
               onWorkoutsToggle={() => setShowWorkoutSection((v) => !v)}
@@ -308,7 +329,13 @@ function CoachDashboardContent() {
                 onSuggestMovesbookClick={() => router.push('/users/notification_by_promocode')}
                 onMyFeedbacksStaffClick={() => {
                   setActiveTab('my-page');
+                  setShowClubStaffMessages(false);
                   setShowStaffFeedbacks(true);
+                }}
+                onClubStaffMessagesClick={() => {
+                  setActiveTab('my-page');
+                  setShowStaffFeedbacks(false);
+                  setShowClubStaffMessages(true);
                 }}
               />
             </div>
@@ -324,6 +351,19 @@ function CoachDashboardContent() {
             />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
+            ) : showClubStaffMessages ? (
+              <div className="w-full">
+                <div className="px-1 pt-2">
+                  <h1 className="text-xl font-bold text-orange-600">
+                    Messages among Staff and members
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-1 mb-2">
+                    All clubs and teams you belong to. Club logo and username appear on the right of
+                    each message.
+                  </p>
+                </div>
+                <ClubStaffMessagesPanel showClubBadge />
+              </div>
             ) : (
               <>
             {activeTab === 'my-page' && (

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClubAuthContext, procedureService } from '@/lib/procedures';
 import { parseArchiveListFilters } from '@/lib/procedures/parseArchiveListFilters';
 import { isKnownProcedureType, parseCreateRecord } from '@/lib/procedures/validators';
+import { verifyOperatorPassword } from '@/lib/procedures/operatorAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,10 +85,24 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
+    const body = (await request.json().catch(() => null)) as { adminPassword?: string } | null;
+    if (!body?.adminPassword?.trim()) {
+      return NextResponse.json({ error: 'Club/team administrator code is required' }, { status: 400 });
+    }
+    if (!(await verifyOperatorPassword(auth.ctx.userId, body.adminPassword))) {
+      return NextResponse.json({ error: 'Club/team administrator code is incorrect' }, { status: 401 });
+    }
+
     await procedureService.softDeleteRecord(auth.ctx, params.type, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: message === 'Record not found' ? 404 : 500 });
+    const status =
+      message === 'Record not found'
+        ? 404
+        : message === 'Unknown procedure type'
+          ? 400
+          : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

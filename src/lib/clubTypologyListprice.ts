@@ -48,6 +48,13 @@ export function text(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+/** DATE column → "YYYY-MM-DD" (Prisma returns DATE as a UTC-midnight Date); invalid or zero dates → "". */
+export function dateText(value: unknown): string {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
+  const match = text(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match && match[1] !== '0000-00-00' ? match[1] : '';
+}
+
 export function yesNo(value: unknown, fallback: 'Y' | 'N' = 'N'): 'Y' | 'N' {
   if (value === 'Y' || value === 'y' || value === true || value === 1 || value === '1') {
     return 'Y';
@@ -102,7 +109,7 @@ export function mapDbRowToListpriceForm(row: Record<string, unknown>): TypologyL
     searchKeyword: text(row.search_keyword),
     cost: text(row.cost),
     discount: text(row.discount),
-    expiryDate: text(row.expiry_date),
+    expiryDate: dateText(row.expiry_date),
     installnment: text(row.installnment) || '1',
     firstCostInstallnment: text(row.first_cost_installnment),
     daysRecursion: text(row.days_recursion),
@@ -133,7 +140,7 @@ export function buildListpriceDbValues(form: TypologyListpriceForm): Record<stri
     search_keyword: text(form.searchKeyword),
     cost: text(form.cost),
     discount: text(form.discount),
-    expiry_date: text(form.expiryDate) || null,
+    expiry_date: dateText(form.expiryDate) || null,
     installnment: text(form.installnment),
     first_cost_installnment: text(form.firstCostInstallnment),
     days_recursion: text(form.daysRecursion),

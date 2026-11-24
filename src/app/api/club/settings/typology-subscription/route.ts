@@ -299,7 +299,7 @@ async function ensureLocalTypologyTable(): Promise<string> {
       created DATETIME DEFAULT CURRENT_TIMESTAMP,
       modified DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_typology_user_club (user_id, club_id)
-    )
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   return tableName;
@@ -317,7 +317,7 @@ async function ensureLocalAreaTable(userIds: string[], clubId: string | null): P
       modified DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_club_setting_areas_user_club (user_id, club_id),
       INDEX idx_club_setting_areas_area (area)
-    )
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   const userId = userIds[userIds.length - 1] ?? '';

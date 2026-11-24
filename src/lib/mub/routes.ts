@@ -38,12 +38,18 @@ export function mubPageUrl(opts: MubPageUrlOptions = {}): string {
   return query ? `${base}?${query}` : base;
 }
 
+/** User-app staff builder (reached through the gear + Super Admin password). */
+export const MUB_STAFF_PAGE_PATH = '/users/mub_staff_page';
+/** Admin-panel staff builder (Super Admin logged in with username + password). */
+export const MUB_ADMIN_PAGE_PATH = '/admin/mub';
+
 /** Super Admin / staff template builder — stays on STAFF scope (never user MUB URLs). */
 export function mubStaffPageUrl(opts: {
   role: string;
   category?: MubCategory | null;
+  basePath?: string;
 }): string {
   const params = new URLSearchParams({ role: opts.role });
   if (opts.category) params.set('category', MUB_CATEGORY_PATH[opts.category]);
-  return `/users/mub_staff_page?${params.toString()}`;
+  return `${opts.basePath ?? MUB_STAFF_PAGE_PATH}?${params.toString()}`;
 }

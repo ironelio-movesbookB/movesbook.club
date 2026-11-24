@@ -20,9 +20,14 @@ function writeKeys(keys: string[]): void {
   const dir = path.dirname(FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const unique = Array.from(new Set(keys.map((k) => k.trim()).filter(Boolean))).sort((a, b) =>
-    a.localeCompare(b)
+    a.localeCompare(b),
   );
-  fs.writeFileSync(FILE, JSON.stringify(unique, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(FILE, JSON.stringify(unique, null, 2), 'utf8');
+  } catch (error) {
+    // Production deploys may not allow writing under process.cwd()/data.
+    console.warn('Could not write long-text-keys.json:', error);
+  }
 }
 
 export function listRegisteredLongTextKeys(): string[] {

@@ -176,7 +176,12 @@ export function filterLongTexts(keys: TranslationKey[]): TranslationKey[] {
     'InfoReps',
     'IdentificationDevicesInfo',
     'SuggestMovesbookIntro',
+    'SuggestMovesbookInviteDefault',
     'Payment_info',
+    'Activation_email_subject',
+    'Activation_email',
+    'Activate_account',
+    'Payment_successfully',
   ]);
   return keys.filter((key) => {
     if (key.isLongText) return true;

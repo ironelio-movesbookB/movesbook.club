@@ -4,8 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   normalizePaymentTypeValue,
   OTHERS_PAYMENT_OPTION,
+  PAY_MODE_TONE_COLOR,
+  PAYMENT_TYPE_OPTIONS,
+  payModeTone,
   splitPaymentMethodsForForm,
 } from '@/lib/procedures/payModes';
+
+function toneStyle(value: string) {
+  return { color: PAY_MODE_TONE_COLOR[payModeTone(value)] };
+}
 
 type Props = {
   value: string;
@@ -16,6 +23,14 @@ type Props = {
   id?: string;
   /** When true, include an empty "select" option. */
   allowEmpty?: boolean;
+  /**
+   * When set, the list is only these method values (the ones ticked for members).
+   * Null keeps the usual defaults-plus-Others list.
+   */
+  allowedMethods?: string[] | null;
+  extraOptions?: { value: string; label: string }[];
+  /** Shown greyed out and not selectable. */
+  disabledMethods?: string[];
 };
 
 /**
@@ -29,11 +44,33 @@ export default function PaymentModeSelect({
   className,
   id,
   allowEmpty = true,
+  allowedMethods,
+  extraOptions = [],
+  disabledMethods = [],
 }: Props) {
-  const normalizedValue = normalizePaymentTypeValue(value) || value;
+  const optionProps = (method: string) =>
+    disabledMethods.includes(method)
+      ? { disabled: true, style: { color: '#9ca3af' } }
+      : { style: toneStyle(method) };
+  const locked = Array.isArray(allowedMethods);
+  const normalizedValue = locked ? value : normalizePaymentTypeValue(value) || value;
+  const lockedOptions = useMemo(() => {
+    if (!locked) return [];
+    const allowed = new Set(allowedMethods);
+    const known: { value: string; label: string }[] = PAYMENT_TYPE_OPTIONS.filter((option) =>
+      allowed.has(option.value),
+    ).map((option) => ({
+      value: option.value,
+      label: option.label,
+    }));
+    for (const extra of extraOptions) {
+      if (!known.some((option) => option.value === extra.value)) known.push(extra);
+    }
+    return known;
+  }, [locked, allowedMethods, extraOptions]);
   const { defaults, others } = useMemo(
-    () => splitPaymentMethodsForForm(defaultPaymentMethods),
-    [defaultPaymentMethods],
+    () => (locked ? { defaults: [], others: [] } : splitPaymentMethodsForForm(defaultPaymentMethods)),
+    [defaultPaymentMethods, locked],
   );
 
   const valueInOthers = Boolean(
@@ -65,19 +102,33 @@ export default function PaymentModeSelect({
       id={id}
       disabled={disabled}
       className={className}
+      style={toneStyle(selectValue)}
       value={selectValue}
       onChange={(e) => handleChange(e.target.value)}
     >
-      {allowEmpty ? <option value="">select</option> : null}
-      {defaults.map((m) => (
-        <option key={m.value} value={m.value}>
-          {m.label}
+      {allowEmpty ? <option value="" style={toneStyle('')}>select</option> : null}
+      {locked
+        ? lockedOptions.map((m) => (
+            <option key={m.value} value={m.value} {...optionProps(m.value)}>
+              {m.label}
+            </option>
+          ))
+        : null}
+      {!locked
+        ? defaults.map((m) => (
+            <option key={m.value} value={m.value} {...optionProps(m.value)}>
+              {m.label}
+            </option>
+          ))
+        : null}
+      {!locked && others.length > 0 ? (
+        <option value={OTHERS_PAYMENT_OPTION} style={toneStyle('')}>
+          Others
         </option>
-      ))}
-      {others.length > 0 ? <option value={OTHERS_PAYMENT_OPTION}>Others</option> : null}
-      {showOthers
+      ) : null}
+      {!locked && showOthers
         ? others.map((m) => (
-            <option key={`other-${m.value}`} value={m.value}>
+            <option key={`other-${m.value}`} value={m.value} {...optionProps(m.value)}>
               {m.label}
             </option>
           ))

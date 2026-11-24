@@ -1,4 +1,5 @@
 import { UserCircle, HelpCircle, Settings, Home, Menu, ChevronRight } from 'lucide-react';
+import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useRouter } from 'next/navigation';
 import MyPageFastMenu from '@/components/my-page/MyPageFastMenu';
 import MubBannerStripControl from '@/components/mub/MubBannerStripControl';
@@ -10,6 +11,8 @@ interface PersonalBannerProps {
 
 export default function PersonalBanner({ user, currentTab }: PersonalBannerProps) {
   const router = useRouter();
+  const { showCentralToolbar } = useDisplayLayoutOptions();
+  if (!showCentralToolbar) return null;
   return (
     <div className="mb-6 flex-shrink-0 px-4">
       <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg relative">

@@ -51,6 +51,11 @@ const publicApiRoutes = [
   '/api/admin/promocodes/change-code',
   /** Outcome audio for <audio src> — no Authorization header on GET */
   '/api/outcome-messages',
+  /**
+   * Uploaded files (sponsor PDFs, banners, logos, …). Browser <a href>/<img src> have no
+   * Authorization header; member-medical paths stay gated inside the route handler.
+   */
+  '/api/media',
   /** Public read APIs (editorial news, shared OGP groups, etc.) */
   '/api/public/',
   /** OGP News sponsored cards placement — loaded by the news grid without an Authorization header */
@@ -68,13 +73,38 @@ const publicApiRoutes = [
   '/api/subscriptions/version-settings',
   /** External cron: sponsor contract/payment reminders (secret header) */
   '/api/club/sponsors/reminders',
+  /** External cron: create due recurrent expense records (secret header) */
+  '/api/club/expenses/recurrent',
   /** Registration payment page / success page (account not active yet, no token) */
   '/api/registration-payments',
+  /** Member pay link from the club payment module (no login required) */
+  '/api/club-member-payments',
 ];
 
 /** Public share links (read-only workout day / session). */
 function isPublicSharedWorkoutApi(pathname: string): boolean {
   return /^\/api\/workouts\/(days|sessions)\/[^/]+\/shared$/.test(pathname);
+}
+
+/** QR / shared member profile. GET with mode=view only; edits stay authenticated. */
+function isPublicMemberProfileView(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  if (request.nextUrl.searchParams.get('mode') !== 'view') return false;
+  return /^\/api\/clubs\/[^/]+\/members\/[^/]+\/profile\/?$/.test(request.nextUrl.pathname);
+}
+
+/** Personal member photos are not medical files. The QR view page loads them without a club login. */
+function isPublicMemberPhoto(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  return request.nextUrl.pathname.startsWith('/api/media/uploads/member-photos/');
+}
+
+/** Documents folder Get-link / shared page — no Authorization header on public preview. */
+function isPublicClubDocumentsFolderApi(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  return /^\/api\/clubs\/[^/]+\/documents-folder\/public\/?$/.test(
+    request.nextUrl.pathname,
+  );
 }
 
 export function middleware(request: NextRequest) {
@@ -114,7 +144,10 @@ export function middleware(request: NextRequest) {
     if (
       !token &&
       !publicApiRoutes.some((route) => pathname.startsWith(route)) &&
-      !isPublicSharedWorkoutApi(pathname)
+      !isPublicSharedWorkoutApi(pathname) &&
+      !isPublicMemberProfileView(request) &&
+      !isPublicMemberPhoto(request) &&
+      !isPublicClubDocumentsFolderApi(request)
     ) {
       return NextResponse.json(
         { error: 'Unauthorized' },

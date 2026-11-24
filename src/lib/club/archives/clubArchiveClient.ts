@@ -18,6 +18,7 @@ export type ArchiveType =
   | 'subscriptions'
   | 'product-sales'
   | 'product-sales-unified'
+  | 'product-sale-lines'
   | 'credits'
   | 'cash-movements'
   | 'deadlines'
@@ -46,12 +47,16 @@ export type ArchiveFetchParams = {
   expandDeadlines?: boolean;
   /** Scope to a single member (e.g. "Member selected" vs "All members" toggle). */
   memberId?: string;
+  /** Archive of sellings: keep only rows that include this shop product. */
+  productId?: string;
   /** Club to load; required for correct Archive of Members when admin owns several clubs. */
   clubId?: string;
   /** Team workspace id (Team Admin Archive of Users). */
   teamId?: string;
   /** Scope to the record selected in the archive we came from ("Record selected"). */
   recordId?: string;
+  /** Filter unified deadline archive to one procedure type. */
+  procedureType?: string;
   /** Filter by sport. */
   sport?: string;
   /** Filter by group of training. */
@@ -66,7 +71,7 @@ export type ArchiveFetchParams = {
 
 export async function fetchClubArchive(
   type: ArchiveType,
-  params?: ArchiveFetchParams
+  params?: ArchiveFetchParams,
 ): Promise<ArchiveListResult> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set('page', String(params.page));
@@ -79,9 +84,11 @@ export async function fetchClubArchive(
   if (params?.includePaid) qs.set('includePaid', '1');
   if (params?.expandDeadlines) qs.set('expandDeadlines', '1');
   if (params?.memberId) qs.set('memberId', params.memberId);
+  if (params?.productId) qs.set('productId', params.productId);
   if (params?.clubId) qs.set('clubId', params.clubId);
   if (params?.teamId) qs.set('teamId', params.teamId);
   if (params?.recordId) qs.set('recordId', params.recordId);
+  if (params?.procedureType) qs.set("procedureType", params.procedureType);
   if (params?.sport) qs.set('sport', params.sport);
   if (params?.groupTrained) qs.set('groupTrained', params.groupTrained);
   if (params?.memberGroupId) qs.set('memberGroupId', params.memberGroupId);
@@ -94,8 +101,12 @@ export async function fetchClubArchive(
   return clubApiFetch<ArchiveListResult>(url);
 }
 
-export async function fetchCompanies(): Promise<{ id: string; name: string }[]> {
-  const res = await clubApiFetch<{ companies: { id: string; name: string }[] }>('/api/club/companies');
+export async function fetchCompanies(): Promise<
+  { id: string; name: string }[]
+> {
+  const res = await clubApiFetch<{ companies: { id: string; name: string }[] }>(
+    '/api/club/companies',
+  );
   return res.companies;
 }
 
@@ -107,6 +118,7 @@ export type InstallmentRow = {
   paymentDate: string;
   expireDate: string | null;
   createdAt?: string | null;
+  activateRecurrent?: boolean;
   description: string | null;
 };
 
@@ -114,10 +126,10 @@ const BASE = '/api/club/procedures';
 
 export async function fetchInstallments(
   procedureType: string,
-  recordId: string
+  recordId: string,
 ): Promise<InstallmentRow[]> {
   const res = await clubApiFetch<{ items: InstallmentRow[] }>(
-    `${BASE}/${procedureType}/records/${recordId}/installments`
+    `${BASE}/${procedureType}/records/${recordId}/installments`,
   );
   return res.items;
 }
@@ -131,11 +143,11 @@ export async function createInstallment(
     paymentDate: string;
     expireDate?: string | null;
     description?: string | null;
-  }
+  },
 ): Promise<InstallmentRow> {
   const res = await clubApiFetch<{ installment: InstallmentRow }>(
     `${BASE}/${procedureType}/records/${recordId}/installments`,
-    { method: 'POST', body: JSON.stringify(body) }
+    { method: 'POST', body: JSON.stringify(body) },
   );
   return res.installment;
 }
@@ -150,11 +162,12 @@ export async function updateInstallment(
     paymentDate: string;
     expireDate: string | null;
     description: string | null;
-  }>
+    activateRecurrent: boolean;
+  }>,
 ): Promise<InstallmentRow> {
   const res = await clubApiFetch<{ installment: InstallmentRow }>(
     `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}`,
-    { method: 'PUT', body: JSON.stringify(body) }
+    { method: 'PUT', body: JSON.stringify(body) },
   );
   return res.installment;
 }
@@ -162,22 +175,23 @@ export async function updateInstallment(
 export async function deleteInstallment(
   procedureType: string,
   recordId: string,
-  installmentId: string
+  installmentId: string,
 ): Promise<void> {
   await clubApiFetch(
     `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}`,
-    { method: 'DELETE' }
+    { method: 'DELETE' },
   );
 }
 
-/** Archive of the Deadlines: delete one deadline (refused when it is already paid). */
+/** Archive of the Deadlines: delete one deadline after administrator confirmation. */
 export async function deleteArchiveDeadline(
   procedureType: string,
   recordId: string,
-  installmentId: string
+  installmentId: string,
+  adminPassword: string,
 ): Promise<{ deleted: 'deadline' | 'record' }> {
   return clubApiFetch<{ deleted: 'deadline' | 'record' }>(
     `${BASE}/${procedureType}/records/${recordId}/installments?id=${encodeURIComponent(installmentId)}&mode=archive`,
-    { method: 'DELETE' }
+    { method: 'DELETE', body: JSON.stringify({ adminPassword }) },
   );
 }

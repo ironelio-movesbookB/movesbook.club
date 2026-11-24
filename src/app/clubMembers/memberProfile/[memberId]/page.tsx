@@ -32,6 +32,7 @@ const CLUB_TABS: TabMeta[] = [
   { id: 'settings', label: 'Settings', clubScoped: true },
   { id: 'messages-staff', label: 'Alert posted', clubScoped: true },
   { id: 'notes-coach', label: 'Coach notes', clubScoped: true },
+  { id: 'administration', label: 'Administration', clubScoped: true },
   { id: 'presences', label: 'Presences', clubScoped: true },
   { id: 'stats', label: 'Stats', clubScoped: true },
 ];
@@ -55,6 +56,9 @@ function tabVisibleForViewer(tab: TabMeta, data: MemberProfileBundle): boolean {
       if (data.viewer.isClubAdmin) return true;
       return Boolean(v.parents);
     }
+    case 'administration':
+      // Club/Team Admin page: archives + current subscription (admin-only).
+      return Boolean(data.viewer.isClubAdmin);
     case 'settings':
       return Boolean(v.settings);
     case 'messages-staff':
@@ -118,7 +122,11 @@ function ClubMemberProfilePageContent() {
         : isTeamWorkspace
           ? `${path}${path.includes('?') ? '&' : '?'}teamId=${encodeURIComponent(workspaceId)}`
           : withSelectedClubId(path);
-      const res = await fetch(withQs, { headers: getAuthHeaders() });
+      const requestUrl =
+        mode === 'view'
+          ? `${withQs}${withQs.includes('?') ? '&' : '?'}mode=view`
+          : withQs;
+      const res = await fetch(requestUrl, { headers: getAuthHeaders() });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(typeof json.error === 'string' ? json.error : 'Failed to load profile');
@@ -130,7 +138,7 @@ function ClubMemberProfilePageContent() {
     } finally {
       setLoading(false);
     }
-  }, [memberId, workspaceId, isCoachWorkspace, isTeamWorkspace, teamIdParam]);
+  }, [memberId, workspaceId, isCoachWorkspace, isTeamWorkspace, teamIdParam, mode]);
 
   useEffect(() => {
     void load();
@@ -168,6 +176,16 @@ function ClubMemberProfilePageContent() {
       data.user.username
     : 'Member';
 
+  const canLeaveViewMode = Boolean(
+    data &&
+      (data.viewer.isClubAdmin ||
+        data.viewer.isSelf ||
+        data.viewer.canEditOwner ||
+        data.viewer.canEditClubScoped ||
+        data.viewer.canEditContactsActivitiesReferences ||
+        data.viewer.canEditMemberSignature),
+  );
+
   const modeSwitchHref = workspaceId
     ? `/clubMembers/memberProfile/${encodeURIComponent(memberId)}?${profileQuery(
         workspaceId,
@@ -179,16 +197,20 @@ function ClubMemberProfilePageContent() {
   return (
     <div className="w-full p-4 md:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => router.push('/clubMembers/memberList')}
-          className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {st('Back to Archive of Members')}
-        </button>
+        {data?.viewer.isClubAdmin ? (
+          <button
+            type="button"
+            onClick={() => router.push('/clubMembers/memberList')}
+            className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {st('Back to Archive of Members')}
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          {isCoachWorkspace ? null : mode === 'edit' ? (
+          {isCoachWorkspace || !canLeaveViewMode ? null : mode === 'edit' ? (
             <Link
               href={modeSwitchHref}
               className="rounded bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-800"
@@ -216,10 +238,15 @@ function ClubMemberProfilePageContent() {
         </div>
       ) : error ? (
         <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}{' '}
-          <Link href="/clubMembers/memberList" className="underline">
-            {st('Return to archive')}
-          </Link>
+          {error}
+          {mode === 'view' ? null : (
+            <>
+              {' '}
+              <Link href="/clubMembers/memberList" className="underline">
+                {st('Return to archive')}
+              </Link>
+            </>
+          )}
         </div>
       ) : data ? (
         <>
@@ -342,24 +369,26 @@ function ClubMemberProfilePageContent() {
               </ScrollArrowsRow>
             </nav>
 
-            <div className="p-4 md:p-6">
-              <div
-                className={`mb-4 px-3 py-2 font-semibold text-white ${
-                  activeMeta?.id === 'pay-for' ? 'text-lg' : 'text-sm'
-                } ${activeMeta?.clubScoped ? 'bg-sky-700' : 'bg-[#2f6fb5]'}`}
-              >
-                {activeMeta?.label ? st(activeMeta.label) : null}
-                {activeMeta?.clubScoped ? (
-                  <>
-                    {' · '}
-                    <span className={activeMeta?.id === 'pay-for' ? 'text-xl' : 'text-base'}>
-                      {data.clubName}
-                    </span>
-                  </>
-                ) : (
-                  ` · ${st('shared profile')}`
-                )}
-              </div>
+            <div className={activeTab === 'administration' ? 'p-0 md:p-0' : 'p-4 md:p-6'}>
+              {activeTab === 'administration' ? null : (
+                <div
+                  className={`mb-4 px-3 py-2 font-semibold text-white ${
+                    activeMeta?.id === 'pay-for' ? 'text-lg' : 'text-sm'
+                  } ${activeMeta?.clubScoped ? 'bg-sky-700' : 'bg-[#2f6fb5]'}`}
+                >
+                  {activeMeta?.label ? st(activeMeta.label) : null}
+                  {activeMeta?.clubScoped ? (
+                    <>
+                      {' · '}
+                      <span className={activeMeta?.id === 'pay-for' ? 'text-xl' : 'text-base'}>
+                        {data.clubName}
+                      </span>
+                    </>
+                  ) : (
+                    ` · ${st('shared profile')}`
+                  )}
+                </div>
+              )}
 
               <ClubMemberProfileEditor
                 data={data}

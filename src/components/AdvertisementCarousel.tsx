@@ -57,7 +57,7 @@ export default function AdvertisementCarousel() {
   }, []);
 
   return (
-    <div className="relative w-full h-64 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl overflow-hidden shadow-lg">
+    <div className="relative mb-4 h-80 w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg sm:h-96">
       {/* Background Image */}
       <div className="absolute inset-0 bg-black bg-opacity-30"></div>
       

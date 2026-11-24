@@ -25,12 +25,25 @@ type StatisticsMetricContextValue = {
 
 const StatisticsMetricContext = createContext<StatisticsMetricContextValue | null>(null);
 
-export function StatisticsMetricProvider({ children }: { children: ReactNode }) {
-  const [metric, setMetric] = useState<StatsChartMetric>('users');
+export function StatisticsMetricProvider({
+  children,
+  initialMetric = 'users',
+  incomeLabel = 'Income',
+  formatIncome = formatEuro,
+}: {
+  children: ReactNode;
+  /** Defaults to 'users'. Club expense statistics start on 'income' (the € amount). */
+  initialMetric?: StatsChartMetric;
+  /** Label shown in tooltips for the 'income' metric. */
+  incomeLabel?: string;
+  /** Formatter for the 'income' metric. */
+  formatIncome?: (value: number) => string;
+}) {
+  const [metric, setMetric] = useState<StatsChartMetric>(initialMetric);
 
   const formatMetricValue = useCallback(
-    (value: number) => (metric === 'income' ? formatEuro(value) : formatCount(value)),
-    [metric],
+    (value: number) => (metric === 'income' ? formatIncome(value) : formatCount(value)),
+    [metric, formatIncome],
   );
 
   const sliceValue = useCallback(
@@ -44,11 +57,11 @@ export function StatisticsMetricProvider({ children }: { children: ReactNode }) 
       metric,
       setMetric,
       isIncome: metric === 'income',
-      metricLabel: metric === 'income' ? 'Income' : 'Users',
+      metricLabel: metric === 'income' ? incomeLabel : 'Users',
       formatMetricValue,
       sliceValue,
     }),
-    [formatMetricValue, metric, sliceValue],
+    [formatMetricValue, incomeLabel, metric, sliceValue],
   );
 
   return (

@@ -84,6 +84,7 @@ function validateDraft(draft: CategoryDraft): FieldErrors {
   } else if (draft.name.trim().length > 250) {
     errors.name = 'Category name must be 250 characters or fewer.';
   }
+
   return errors;
 }
 
@@ -204,14 +205,22 @@ export default function ClubTablesCategoryPage() {
   const isExpanded = (id: string) => expandAll || expandedIds.has(id);
 
   const openAddParentModal = () => {
-    setDraft({ name: '', parentId: '0', isSubCategory: false });
+    setDraft({
+      name: '',
+      parentId: '0',
+      isSubCategory: false
+    });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
   };
 
   const openAddSubModal = (parentId: string) => {
-    setDraft({ name: '', parentId, isSubCategory: true });
+    setDraft({
+      name: '',
+      parentId,
+      isSubCategory: true
+    });
     setFieldErrors({});
     setError(null);
     setSuccess(null);
@@ -247,19 +256,17 @@ export default function ClubTablesCategoryPage() {
       setError(null);
       setSuccess(null);
 
+      const formData = new FormData();
+      if (draft.id) formData.append('id', draft.id);
+      formData.append('name', draft.name.trim());
+      formData.append('parentId', draft.isSubCategory ? draft.parentId : '0');
+      formData.append('isSubCategory', draft.isSubCategory ? '1' : '0');
+
       const token = localStorage.getItem('token');
       const response = await fetch(API_PATH, {
         method: draft.id ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          id: draft.id,
-          name: draft.name.trim(),
-          parentId: draft.isSubCategory ? draft.parentId : '0',
-          isSubCategory: draft.isSubCategory
-        })
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData
       });
 
       const data = await response.json().catch(() => ({}));
@@ -286,9 +293,7 @@ export default function ClubTablesCategoryPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const confirmDelete = async () => {
+  };  const confirmDelete = async () => {
     if (!deleteTarget) return;
 
     try {
@@ -479,7 +484,7 @@ export default function ClubTablesCategoryPage() {
               </button>
             </div>
 
-            <div className="px-5 py-5">
+            <div className="px-5 py-5 space-y-4">
               <Field
                 label={draft.isSubCategory ? 'Sub category' : 'Name'}
                 value={draft.name}
@@ -490,9 +495,8 @@ export default function ClubTablesCategoryPage() {
                   setFieldErrors((current) => ({ ...current, name: undefined }));
                 }}
               />
-            </div>
 
-            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
+            </div>            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
               <button type="button" onClick={closeModal} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 Cancel
               </button>
@@ -609,7 +613,7 @@ function SortHeader({
     >
       <span>{label}</span>
       <span className={`text-[10px] ${active ? 'text-gray-950' : 'text-gray-300'}`}>
-        {active ? direction === 'asc' ? '▲' : '▼' : '↕'}
+        {active ? direction === 'asc' ? 'â–²' : 'â–¼' : 'â†•'}
       </span>
     </button>
   );

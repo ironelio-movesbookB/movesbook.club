@@ -7,12 +7,13 @@ import {
   validateArchiveDateRange,
   type ArchiveListFilterParams,
   type ArchiveListFilterValues,
+  type ArchiveOrderBy,
 } from '@/components/procedures/ArchiveListToolbar';
 
 /** Draft + applied filter state shared by every procedure/club archive list. */
-export function useArchiveListFilters() {
-  const [draft, setDraft] = useState<ArchiveListFilterValues>(emptyArchiveFilterValues);
-  const [applied, setApplied] = useState<ArchiveListFilterParams>({});
+export function useArchiveListFilters(defaultOrderBy: ArchiveOrderBy = 'recent') {
+  const [draft, setDraft] = useState<ArchiveListFilterValues>(() => emptyArchiveFilterValues(defaultOrderBy));
+  const [applied, setApplied] = useState<ArchiveListFilterParams>(() => ({ orderBy: defaultOrderBy }));
   const [dateRangeError, setDateRangeError] = useState('');
 
   const onChange = useCallback((patch: Partial<ArchiveListFilterValues>) => {
@@ -32,10 +33,10 @@ export function useArchiveListFilters() {
   }, [draft]);
 
   const clear = useCallback(() => {
-    setDraft(emptyArchiveFilterValues());
-    setApplied({});
+    setDraft(emptyArchiveFilterValues(defaultOrderBy));
+    setApplied({ orderBy: defaultOrderBy });
     setDateRangeError('');
-  }, []);
+  }, [defaultOrderBy]);
 
   return { draft, applied, dateRangeError, onChange, apply, clear };
 }

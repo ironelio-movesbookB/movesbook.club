@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -11,6 +11,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type SensorDescriptor,
+  type SensorOptions,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -21,19 +23,27 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, Copy, GripVertical, Pencil, X } from 'lucide-react';
-import type { PackageItem, PackageSettingsView } from '@/types/adminPackageSettings';
+import type { PackageCatalog, PackageItem, PackageSection, PackageSettingsView } from '@/types/adminPackageSettings';
+import { PACKAGE_SECTIONS } from '@/types/adminPackageSettings';
 import {
-  addGlobalPackageItem,
+  addPackageItem,
+  copyPackageSectionToAthleteAccounts,
+  ensurePackageSettingsLoaded,
+  getAthleteAccountPackages,
   getGlobalPackages,
   getPackageEditHref,
   getPackageSettingsHref,
+  getPackageViewMode,
   getTiersForUserType,
   PACKAGE_TYPE_CONFIGS,
-  removeGlobalPackageItem,
-  reorderGlobalPackages,
+  removePackageItem,
+  reorderPackagesInSection,
+  saveAthleteAccountPackages,
   saveGlobalPackages,
+  setPackageViewMode,
   updatePackageTiersForUserType,
 } from '@/lib/admin/packageSettingsMock';
+import type { PackageViewMode } from '@/types/adminPackageSettings';
 import {
   buildCopyAllSettingsWarning,
   buildCopySinglePackageWarning,
@@ -44,6 +54,7 @@ import {
 import { getPackageDisplayTitle } from '@/lib/admin/packageSettingsLang';
 import SubscriptionSystemDashboardHeader from './SubscriptionSystemDashboardHeader';
 import MovesbookLanguageTabs from './MovesbookLanguageTabs';
+import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 
 type PackageSettingsPanelProps = {
   initialData: PackageSettingsView;
@@ -109,8 +120,14 @@ function SortablePackageRow({
     onCopyPackage(row.id, Number(rowCopyTarget) as PackageSettingsView['userTypeId']);
   };
 
+  const greyed = !row.published;
   return (
-    <tr ref={setNodeRef} style={style} className={index % 2 === 0 ? 'bg-white' : 'bg-[#f5f5f5]'}>
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={greyed ? 'bg-gray-300 text-gray-500' : index % 2 === 0 ? 'bg-white' : 'bg-[#f5f5f5]'}
+      title={greyed ? 'Unpublished — shown grey here and hidden on the registration form' : undefined}
+    >
       <td className="border border-gray-300 px-2 py-2 text-center w-10">
         <button
           type="button"
@@ -122,8 +139,16 @@ function SortablePackageRow({
           <GripVertical className="h-4 w-4" />
         </button>
       </td>
-      <td className="border border-gray-300 px-3 py-2 text-gray-800">
-        {getPackageDisplayTitle(row.titlesByLang, lang)}
+      <td className={`border border-gray-300 px-3 py-2 ${greyed ? 'text-gray-500' : 'text-gray-800'}`}>
+        {row.kind === 'separator' ? (
+          <span className="font-bold" style={{ color: greyed ? undefined : row.titleColor }}>
+            {row.icon ? `${row.icon} ` : ''}
+            {getPackageDisplayTitle(row.titlesByLang, lang)}
+            <span className="ml-2 text-[10px] font-semibold uppercase text-gray-500">Separator</span>
+          </span>
+        ) : (
+          getPackageDisplayTitle(row.titlesByLang, lang)
+        )}
       </td>
       <td className="border border-gray-300 px-2 py-2 text-center">
         <TierCheck
@@ -133,10 +158,14 @@ function SortablePackageRow({
       </td>
       {tiers.map((tier) => (
         <td key={tier.key} className="border border-gray-300 px-2 py-2 text-center">
-          <TierCheck
-            checked={userTiers[tier.key] ?? false}
-            onChange={() => onToggleTier(row.id, tier.key)}
-          />
+          {row.kind === 'separator' ? (
+            <span className="text-gray-400">—</span>
+          ) : (
+            <TierCheck
+              checked={userTiers[tier.key] ?? false}
+              onChange={() => onToggleTier(row.id, tier.key)}
+            />
+          )}
         </td>
       ))}
       <td className="border border-gray-300 px-2 py-2 text-center align-top">
@@ -192,15 +221,20 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
   const router = useRouter();
   const config = PACKAGE_TYPE_CONFIGS.find((c) => c.id === initialData.userTypeId)!;
   const [data, setData] = useState(initialData);
+  const [athletePackages, setAthletePackages] = useState<PackageItem[]>([]);
+  const [viewMode, setViewMode] = useState<PackageViewMode>('standard');
   const [saving, setSaving] = useState(false);
   const [copyAllTarget, setCopyAllTarget] = useState<string>('');
+  const [sectionCopy, setSectionCopy] = useState<PackageSection | null>(null);
+
+  useEffect(() => {
+    ensurePackageSettingsLoaded();
+    setAthletePackages(getAthleteAccountPackages());
+    setData((prev) => ({ ...prev, packages: getGlobalPackages() }));
+    setViewMode(getPackageViewMode());
+  }, []);
 
   const copyTargetOptions = getPackageCopyTargetOptions(data.userTypeId);
-
-  const sortedPackages = useMemo(
-    () => [...data.packages].sort((a, b) => a.sortOrder - b.sortOrder),
-    [data.packages],
-  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -209,25 +243,42 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
 
   const refreshFromGlobal = () => {
     setData((prev) => ({ ...prev, packages: getGlobalPackages() }));
+    setAthletePackages(getAthleteAccountPackages());
   };
 
-  const updatePackagePublished = (id: number, published: boolean) => {
-    const packages = data.packages.map((row) =>
-      row.id === id ? { ...row, published } : row,
-    );
+  const listFor = (catalog: PackageCatalog) =>
+    catalog === 'athlete_accounts' ? athletePackages : data.packages;
+
+  const saveList = (catalog: PackageCatalog, packages: PackageItem[]) => {
+    if (catalog === 'athlete_accounts') {
+      saveAthleteAccountPackages(packages);
+      setAthletePackages(packages);
+      return;
+    }
     saveGlobalPackages(packages);
     setData((prev) => ({ ...prev, packages }));
   };
 
-  const toggleTier = (packageItemId: number, tierKey: string) => {
-    const row = data.packages.find((p) => p.id === packageItemId);
+  const updatePackagePublished = (id: number, published: boolean) => {
+    const row = [...data.packages, ...athletePackages].find((item) => item.id === id);
     if (!row) return;
+    const catalog = row.catalog ?? 'packages';
+    saveList(
+      catalog,
+      listFor(catalog).map((item) => (item.id === id ? { ...item, published } : item)),
+    );
+  };
+
+  const toggleTier = (packageItemId: number, tierKey: string) => {
+    const row = [...data.packages, ...athletePackages].find((p) => p.id === packageItemId);
+    if (!row) return;
+    const catalog = row.catalog ?? 'packages';
     const current = getTiersForUserType(row, data.userTypeId);
     const next = { ...current, [tierKey]: !current[tierKey] };
     updatePackageTiersForUserType(packageItemId, data.userTypeId, next);
-    setData((prev) => ({
-      ...prev,
-      packages: prev.packages.map((p) =>
+    saveList(
+      catalog,
+      listFor(catalog).map((p) =>
         p.id === packageItemId
           ? {
               ...p,
@@ -235,7 +286,7 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
             }
           : p,
       ),
-    }));
+    );
   };
 
   const handleLangChange = (nextLang: string) => {
@@ -249,28 +300,54 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
   };
 
   const handleDelete = (id: number) => {
-    removeGlobalPackageItem(id);
+    removePackageItem(id);
     refreshFromGlobal();
   };
 
-  const handleAddNew = () => {
-    const item = addGlobalPackageItem();
+  const handleAddNew = (catalog: PackageCatalog, section: PackageSection) => {
+    const item = addPackageItem({ catalog, section, kind: 'package' });
     router.push(getPackageEditHref(data.userTypeId, item.id, data.lang));
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleAddSeparator = (catalog: PackageCatalog, section: PackageSection) => {
+    const item = addPackageItem({ catalog, section, kind: 'separator' });
+    router.push(getPackageEditHref(data.userTypeId, item.id, data.lang));
+  };
+
+  const handleDragEnd = (
+    catalog: PackageCatalog,
+    section: PackageSection,
+    rows: PackageItem[],
+    event: DragEndEvent,
+  ) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    const ids = sortedPackages.map((p) => p.id);
+    const ids = rows.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(Number(active.id)), ids.indexOf(Number(over.id)));
-    reorderGlobalPackages(reordered);
+    reorderPackagesInSection(catalog, section, reordered);
     refreshFromGlobal();
+  };
+
+  const handleCopySection = (section: PackageSection) => {
+    setSectionCopy(section);
+  };
+
+  const confirmCopySection = () => {
+    if (!sectionCopy) return;
+    copyPackageSectionToAthleteAccounts(sectionCopy);
+    refreshFromGlobal();
+    setSectionCopy(null);
+  };
+
+  const handleViewMode = (mode: PackageViewMode) => {
+    setViewMode(mode);
+    setPackageViewMode(mode);
   };
 
   const handleSave = async () => {
     setSaving(true);
     saveGlobalPackages(data.packages);
+    saveAthleteAccountPackages(athletePackages);
     await new Promise((r) => setTimeout(r, 300));
     setSaving(false);
   };
@@ -296,7 +373,7 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
     targetUserTypeId: PackageSettingsView['userTypeId'],
   ) => {
     const targetConfig = PACKAGE_TYPE_CONFIGS.find((c) => c.id === targetUserTypeId);
-    const row = data.packages.find((p) => p.id === itemId);
+    const row = [...data.packages, ...athletePackages].find((p) => p.id === itemId);
     if (!targetConfig || !row) return;
 
     const confirmed = window.confirm(
@@ -339,6 +416,17 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
                 {pkg.label}
               </button>
             ))}
+            <label className="ml-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
+              View mode
+              <select
+                value={viewMode}
+                onChange={(e) => handleViewMode(e.target.value as PackageViewMode)}
+                className="border border-gray-800 bg-white px-2 py-1.5 text-sm font-normal"
+              >
+                <option value="standard">Standard blue</option>
+                <option value="black">Black</option>
+              </select>
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -364,68 +452,60 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
               <Copy className="h-4 w-4" />
               Copy
             </button>
-            <button
-              type="button"
-              onClick={handleAddNew}
-              className="border border-gray-800 bg-black px-5 py-2 text-sm font-bold text-white hover:bg-[#333]"
-            >
-              Add New
-            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-[#e6e6e6] border-b border-gray-300">
-                  <th className="border border-gray-300 px-2 py-2 w-10" />
-                  <th className="border border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[280px]">
-                    List of packages
-                  </th>
-                  <th className="border border-gray-300 px-3 py-2 text-center font-bold text-gray-800 w-20">
-                    Publish
-                  </th>
-                  {config.tiers.map((tier) => (
-                    <th
-                      key={tier.key}
-                      className="border border-gray-300 px-2 py-2 text-center font-bold text-gray-800 w-20"
-                    >
-                      {tier.label}
-                    </th>
-                  ))}
-                  <th className="border border-gray-300 px-2 py-2 w-28 text-center font-bold text-gray-800">
-                    Copy
-                  </th>
-                  <th className="border border-gray-300 px-2 py-2 w-12">Edit</th>
-                  <th className="border border-gray-300 px-2 py-2 w-12">Remove</th>
-                </tr>
-              </thead>
-              <SortableContext
-                items={sortedPackages.map((p) => p.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <tbody>
-                  {sortedPackages.map((row, index) => (
-                    <SortablePackageRow
-                      key={row.id}
-                      row={row}
-                      index={index}
-                      lang={data.lang}
-                      userTypeId={data.userTypeId}
-                      userTypeLabel={config.label}
-                      tiers={config.tiers}
-                      onTogglePublish={updatePackagePublished}
-                      onToggleTier={toggleTier}
-                      onDelete={handleDelete}
-                      onCopyPackage={handleCopySinglePackage}
-                    />
-                  ))}
-                </tbody>
-              </SortableContext>
-            </table>
-          </DndContext>
-        </div>
+        <PackageCatalogBlock
+          title="Packages infos"
+          catalog="packages"
+          packages={data.packages}
+          lang={data.lang}
+          userTypeId={data.userTypeId}
+          userTypeLabel={config.label}
+          tiers={config.tiers}
+          sensors={sensors}
+          showCopyToAthlete
+          onCopySection={handleCopySection}
+          onAddNew={handleAddNew}
+          onAddSeparator={handleAddSeparator}
+          onDragEnd={handleDragEnd}
+          onTogglePublish={updatePackagePublished}
+          onToggleTier={toggleTier}
+          onDelete={handleDelete}
+          onCopyPackage={handleCopySinglePackage}
+        />
+
+        <PackageCatalogBlock
+          title="Athlete Accounts Packages"
+          catalog="athlete_accounts"
+          packages={athletePackages}
+          lang={data.lang}
+          userTypeId={data.userTypeId}
+          userTypeLabel={config.label}
+          tiers={config.tiers}
+          sensors={sensors}
+          onAddNew={handleAddNew}
+          onAddSeparator={handleAddSeparator}
+          onDragEnd={handleDragEnd}
+          onTogglePublish={updatePackagePublished}
+          onToggleTier={toggleTier}
+          onDelete={handleDelete}
+          onCopyPackage={handleCopySinglePackage}
+        />
+
+        <PromocodeConfirmModal
+          open={sectionCopy !== null}
+          title="Copy to Athlete Accounts Packages"
+          message={
+            sectionCopy
+              ? `Copy the whole ${PACKAGE_SECTIONS.find((entry) => entry.key === sectionCopy)?.label ?? sectionCopy} section from Packages infos into the same section of Athlete Accounts Packages? Existing rows in that athlete section will be replaced.`
+              : ''
+          }
+          confirmLabel="Copy"
+          cancelLabel="Cancel"
+          onClose={() => setSectionCopy(null)}
+          onConfirm={confirmCopySection}
+        />
 
         <div className="flex justify-center gap-3 py-6 bg-gray-50 border-t border-gray-200">
           <button
@@ -444,6 +524,158 @@ export default function PackageSettingsPanel({ initialData }: PackageSettingsPan
           </Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PackageCatalogBlock({
+  title,
+  catalog,
+  packages,
+  lang,
+  userTypeId,
+  userTypeLabel,
+  tiers,
+  sensors,
+  showCopyToAthlete = false,
+  onCopySection,
+  onAddNew,
+  onAddSeparator,
+  onDragEnd,
+  onTogglePublish,
+  onToggleTier,
+  onDelete,
+  onCopyPackage,
+}: {
+  title: string;
+  catalog: PackageCatalog;
+  packages: PackageItem[];
+  lang: string;
+  userTypeId: PackageSettingsView['userTypeId'];
+  userTypeLabel: string;
+  tiers: { key: string; label: string }[];
+  sensors: SensorDescriptor<SensorOptions>[];
+  showCopyToAthlete?: boolean;
+  onCopySection?: (section: PackageSection) => void;
+  onAddNew: (catalog: PackageCatalog, section: PackageSection) => void;
+  onAddSeparator: (catalog: PackageCatalog, section: PackageSection) => void;
+  onDragEnd: (
+    catalog: PackageCatalog,
+    section: PackageSection,
+    rows: PackageItem[],
+    event: DragEndEvent,
+  ) => void;
+  onTogglePublish: (id: number, published: boolean) => void;
+  onToggleTier: (id: number, tierKey: string) => void;
+  onDelete: (id: number) => void;
+  onCopyPackage: (itemId: number, targetUserTypeId: PackageSettingsView['userTypeId']) => void;
+}) {
+  return (
+    <div className="border-t-4 border-[#333]">
+      <div className="bg-[#7a1f2e] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white">
+        {title}
+      </div>
+      {PACKAGE_SECTIONS.map((section) => {
+        const rows = packages
+          .filter((row) => (row.section ?? 'training') === section.key)
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+        return (
+          <div key={`${catalog}-${section.key}`} className="border-b border-gray-300">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-[#e6e6e6] px-4 py-2">
+              <h3 className="text-sm font-bold text-gray-900">{section.label}</h3>
+              <div className="flex flex-wrap gap-2">
+                {showCopyToAthlete && onCopySection ? (
+                  <button
+                    type="button"
+                    onClick={() => onCopySection(section.key)}
+                    className="border border-gray-800 bg-white px-3 py-1 text-xs font-bold text-gray-900 hover:bg-gray-100"
+                  >
+                    Copy to Athlete Accounts Packages
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onAddSeparator(catalog, section.key)}
+                  className="border border-gray-800 bg-[#5bc0de] px-3 py-1 text-xs font-bold text-white hover:bg-[#31b0d5]"
+                >
+                  Add separator
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAddNew(catalog, section.key)}
+                  className="border border-gray-800 bg-black px-3 py-1 text-xs font-bold text-white hover:bg-[#333]"
+                >
+                  Add New
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => onDragEnd(catalog, section.key, rows, event)}
+              >
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-[#f7f7f7]">
+                      <th className="border border-gray-300 px-2 py-2 w-10" />
+                      <th className="border border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[280px]">
+                        List of packages
+                      </th>
+                      <th className="border border-gray-300 px-3 py-2 text-center font-bold text-gray-800 w-20">
+                        Publish
+                      </th>
+                      {tiers.map((tier) => (
+                        <th
+                          key={tier.key}
+                          className="border border-gray-300 px-2 py-2 text-center font-bold text-gray-800 w-20"
+                        >
+                          {tier.label}
+                        </th>
+                      ))}
+                      <th className="border border-gray-300 px-2 py-2 w-28 text-center font-bold text-gray-800">
+                        Copy
+                      </th>
+                      <th className="border border-gray-300 px-2 py-2 w-12">Edit</th>
+                      <th className="border border-gray-300 px-2 py-2 w-12">Remove</th>
+                    </tr>
+                  </thead>
+                  <SortableContext items={rows.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                    <tbody>
+                      {rows.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={tiers.length + 5}
+                            className="border border-gray-300 px-3 py-4 text-center text-xs text-gray-500"
+                          >
+                            No packages in {section.label}.
+                          </td>
+                        </tr>
+                      ) : (
+                        rows.map((row, index) => (
+                          <SortablePackageRow
+                            key={row.id}
+                            row={row}
+                            index={index}
+                            lang={lang}
+                            userTypeId={userTypeId}
+                            userTypeLabel={userTypeLabel}
+                            tiers={tiers}
+                            onTogglePublish={onTogglePublish}
+                            onToggleTier={onToggleTier}
+                            onDelete={onDelete}
+                            onCopyPackage={onCopyPackage}
+                          />
+                        ))
+                      )}
+                    </tbody>
+                  </SortableContext>
+                </table>
+              </DndContext>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
