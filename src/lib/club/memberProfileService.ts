@@ -36,49 +36,6 @@ import type {
   OwnerProfileData,
   ParentData,
 } from '@/lib/club/memberProfileTypes';
-import {
-  archiveStatusToAthleteStatus,
-  athleteStatusToArchiveStatus,
-  normalizeMemberArchiveStatus,
-  roleValueForMemberArchiveStatus,
-} from '@/lib/club/memberArchiveStatus';
-import { listTeamMemberGroups } from '@/lib/club/teamMemberLists';
-import {
-  UNRESTRICTED_RENAME_QUOTA,
-  namesDifferForRename,
-} from '@/lib/club/clubMemberRenameQuota';
-import {
-  incrementMemberRenamesUsed,
-  resolveRenameQuotaForEntity,
-} from '@/lib/club/clubMemberRenameQuota.server';
-
-/** Enforce rename quota when first/last name changes; consume one rename on success. */
-async function consumeMemberRenameIfNeeded(opts: {
-  kind: 'club' | 'team';
-  entityId: string;
-  description: string | null | undefined;
-  createdAt?: Date | string | null;
-  viewerUserId: string;
-  before: { firstName?: string | null; lastName?: string | null };
-  after: { firstName?: string | null; lastName?: string | null };
-}): Promise<{ ok: true } | { error: string; status: number }> {
-  if (!namesDifferForRename(opts.before, opts.after)) return { ok: true };
-
-  const quota = await resolveRenameQuotaForEntity({
-    description: opts.description,
-    createdAt: opts.createdAt,
-    viewerUserId: opts.viewerUserId,
-  });
-  if (!quota.canRename) {
-    return {
-      error:
-        'No residual renamings available. Purchase new available slots to unlock more renames (10% of slots purchased).',
-      status: 403,
-    };
-  }
-  await incrementMemberRenamesUsed(prisma, { kind: opts.kind, id: opts.entityId });
-  return { ok: true };
-}
 
 /** Each phone can be linked to WhatsApp or Telegram, not both (WhatsApp wins on legacy data). */
 function oneMessengerPerPhone(address: OwnerProfileData['address']): OwnerProfileData['address'] {
@@ -87,65 +44,6 @@ function oneMessengerPerPhone(address: OwnerProfileData['address']): OwnerProfil
     phoneTelegram: address.phoneTelegram && !address.phoneWhatsapp,
     mobile1Telegram: address.mobile1Telegram && !address.mobile1Whatsapp,
     mobile2Telegram: address.mobile2Telegram && !address.mobile2Whatsapp,
-  };
-}
-
-function applyAthleteStatusFromMembershipRole(
-  clubScoped: ClubMemberScopedData,
-  role: string | null | undefined,
-): void {
-  clubScoped.otherDetails.athleteStatus = archiveStatusToAthleteStatus(
-    normalizeMemberArchiveStatus(role),
-  );
-}
-
-async function loadClubMemberGroupOptions(
-  clubId: string,
-  memberId: string,
-): Promise<{
-  memberGroups: Array<{ id: string; name: string }>;
-  memberPresentGroupIds: string[];
-}> {
-  const groups = await prisma.clubMemberGroup.findMany({
-    where: { clubId },
-    orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      members: { where: { memberId }, select: { memberId: true } },
-    },
-  });
-  return {
-    memberGroups: groups.map((g) => ({ id: g.id, name: g.name })),
-    memberPresentGroupIds: groups.filter((g) => g.members.length > 0).map((g) => g.id),
-  };
-}
-
-async function loadTeamMemberGroupOptions(
-  teamId: string,
-  memberId: string,
-): Promise<{
-  memberGroups: Array<{ id: string; name: string }>;
-  memberPresentGroupIds: string[];
-}> {
-  const groups = await listTeamMemberGroups(teamId);
-  const groupIds = groups.map((g) => g.id);
-  let present: string[] = [];
-  if (groupIds.length > 0) {
-    const links = await prisma.$queryRawUnsafe<{ group_id: string }[]>(
-      `SELECT m.group_id FROM \`team_member_group_members\` m
-       INNER JOIN \`team_member_groups\` g ON g.id = m.group_id
-       WHERE g.team_id = ? AND m.member_id = ?`,
-      teamId,
-      memberId,
-    );
-    present = links.map((r) => String(r.group_id));
-  }
-  return {
-    memberGroups: [...groups]
-      .map((g) => ({ id: g.id, name: g.name }))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-    memberPresentGroupIds: present,
   };
 }
 
@@ -676,19 +574,10 @@ async function loadTeamMemberProfileBundle(opts: {
   clubId: string;
   memberUserId: string;
   viewerUserId: string;
-  /** QR / shared link: anyone with the link may read. Editing stays with the admin or the member. */
-  viewOnly?: boolean;
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const team = await prisma.team.findUnique({
     where: { id: opts.clubId },
-    select: {
-      id: true,
-      name: true,
-      adminId: true,
-      description: true,
-      sport: true,
-      createdAt: true,
-    },
+    select: { id: true, name: true, adminId: true, description: true, sport: true },
   });
   if (!team) return loadCoachAthleteProfileBundle(opts);
 
@@ -717,8 +606,7 @@ async function loadTeamMemberProfileBundle(opts: {
 
   const isClubAdmin = team.adminId === opts.viewerUserId;
   const isSelf = teamMember.athleteId === opts.viewerUserId;
-  const sharedView = Boolean(opts.viewOnly) && !isClubAdmin && !isSelf;
-  if (!isClubAdmin && !isSelf && !sharedView) {
+  if (!isClubAdmin && !isSelf) {
     return { error: 'Access denied', status: 403 };
   }
 
@@ -766,8 +654,6 @@ async function loadTeamMemberProfileBundle(opts: {
     clubScoped.settings.teamSport = normalizeEntitySport(clubScoped.settings.teamSport);
   }
 
-  applyAthleteStatusFromMembershipRole(clubScoped, teamMember.role);
-
   const birthIso = teamMember.athlete.birthdate
     ? teamMember.athlete.birthdate.toISOString().slice(0, 10)
     : ownerStored.personal.dateOfBirth || '';
@@ -814,15 +700,6 @@ async function loadTeamMemberProfileBundle(opts: {
         .filter((q) => q.question)
     : [];
 
-  const renameQuota = await resolveRenameQuotaForEntity({
-    description: team.description,
-    createdAt: team.createdAt,
-    viewerUserId: opts.viewerUserId || team.adminId,
-    persistKind: 'team',
-    persistId: team.id,
-    db: prisma,
-  });
-
   return {
     clubId: team.id,
     workspaceKind: 'team',
@@ -840,7 +717,6 @@ async function loadTeamMemberProfileBundle(opts: {
       canEditClubScoped,
       canEditMemberSignature,
     },
-    renameQuota,
     user: {
       id: teamMember.athlete.id,
       username: teamMember.athlete.username,
@@ -870,7 +746,6 @@ async function loadTeamMemberProfileBundle(opts: {
     vendorCoachOptions: [],
     coachOptions: [],
     clubParentsCatalog: [],
-    ...(await loadTeamMemberGroupOptions(team.id, teamMember.athleteId)),
     customQuestions,
     ...(await mapMemberNotesForBundle(notes, isClubAdmin, clubScoped.visibility)),
   };
@@ -936,7 +811,6 @@ async function loadCoachAthleteProfileBundle(opts: {
       canEditClubScoped: false,
       canEditMemberSignature: false,
     },
-    renameQuota: UNRESTRICTED_RENAME_QUOTA,
     user: {
       id: athlete.id,
       username: athlete.username,
@@ -959,8 +833,6 @@ async function loadCoachAthleteProfileBundle(opts: {
     vendorCoachOptions: [],
     coachOptions: [],
     clubParentsCatalog: [],
-    memberGroups: [],
-    memberPresentGroupIds: [],
     customQuestions: [],
     staffNotes: [],
     coachNotes: [],
@@ -971,12 +843,10 @@ export async function loadMemberProfileBundle(opts: {
   clubId: string;
   memberUserId: string;
   viewerUserId: string;
-  /** QR / shared link: anyone with the link may read. Editing stays with the admin or the member. */
-  viewOnly?: boolean;
 }): Promise<MemberProfileBundle | { error: string; status: number }> {
   const club = await prisma.club.findUnique({
     where: { id: opts.clubId },
-    select: { id: true, name: true, adminId: true, description: true, createdAt: true },
+    select: { id: true, name: true, adminId: true, description: true },
   });
   if (!club) {
     return loadTeamMemberProfileBundle(opts);
@@ -1007,8 +877,7 @@ export async function loadMemberProfileBundle(opts: {
 
   const isClubAdmin = club.adminId === opts.viewerUserId;
   const isSelf = clubMember.memberId === opts.viewerUserId;
-  const sharedView = Boolean(opts.viewOnly) && !isClubAdmin && !isSelf;
-  if (!isClubAdmin && !isSelf && !sharedView) {
+  if (!isClubAdmin && !isSelf) {
     return { error: 'Access denied', status: 403 };
   }
 
@@ -1136,9 +1005,6 @@ export async function loadMemberProfileBundle(opts: {
       clubScoped.otherDetails.membershipTo = archiveDates.to;
     }
   }
-
-  // Athlete status radio mirrors Archive of Users membership role.
-  applyAthleteStatusFromMembershipRole(clubScoped, clubMember.role);
 
   const disallow = Boolean(extras?.disallowClubAdmins);
   const canEditOwner = isSelf || (isClubAdmin && !disallow);
@@ -1303,16 +1169,7 @@ export async function loadMemberProfileBundle(opts: {
     vendorCoachOptions,
     coachOptions,
     clubParentsCatalog,
-    ...(await loadClubMemberGroupOptions(club.id, clubMember.memberId)),
     customQuestions,
-    renameQuota: await resolveRenameQuotaForEntity({
-      description: club.description,
-      createdAt: club.createdAt,
-      viewerUserId: opts.viewerUserId || club.adminId,
-      persistKind: 'club',
-      persistId: club.id,
-      db: prisma,
-    }),
     ...memberNotes,
   };
 }
@@ -1380,29 +1237,6 @@ async function saveTeamMemberSharedProfile(opts: {
 
   if (payload.owner && loaded.viewer.canEditOwner) {
     const owner = payload.owner;
-    const teamRow = await prisma.team.findUnique({
-      where: { id: loaded.clubId },
-      select: { id: true, description: true, createdAt: true },
-    });
-    if (teamRow) {
-      const renameGate = await consumeMemberRenameIfNeeded({
-        kind: 'team',
-        entityId: teamRow.id,
-        description: teamRow.description,
-        createdAt: teamRow.createdAt,
-        viewerUserId: opts.viewerUserId,
-        before: {
-          firstName: loaded.owner.login.firstName || loaded.user.firstName,
-          lastName: loaded.owner.login.lastName || loaded.user.surname,
-        },
-        after: {
-          firstName: owner.login.firstName,
-          lastName: owner.login.lastName,
-        },
-      });
-      if ('error' in renameGate) return renameGate;
-    }
-
     const userUpdate: Record<string, unknown> = {
       firstName: owner.login.firstName || null,
       surname: owner.login.lastName || null,
@@ -1521,11 +1355,6 @@ async function saveTeamMemberSharedProfile(opts: {
       const age = calcAge(loaded.owner.personal.dateOfBirth);
       const underage = age != null && age < 18;
       clubData.otherDetails.userUnderage = underage;
-      if (loaded.viewer.canEditClubScoped) {
-        clubData.otherDetails.athleteStatus = archiveStatusToAthleteStatus(
-          athleteStatusToArchiveStatus(clubData.otherDetails.athleteStatus),
-        );
-      }
       const signatureDataUrl = resolveSignatureDataUrl(clubData, underage);
       await upsertTeamProfile({
         teamMemberId: loaded.clubMemberId,
@@ -1534,75 +1363,10 @@ async function saveTeamMemberSharedProfile(opts: {
         medicalImageUrl: loaded.owner.medical.imageUrl || null,
         medicalPdfUrl: loaded.owner.medical.pdfUrl || null,
       });
-      if (loaded.viewer.canEditClubScoped) {
-        const role = roleValueForMemberArchiveStatus(
-          athleteStatusToArchiveStatus(clubData.otherDetails.athleteStatus),
-        );
-        await prisma.teamMember.update({
-          where: { id: loaded.clubMemberId },
-          data: { role },
-        });
-      }
     }
   }
 
   return { ok: true };
-}
-
-/** Keep Other Club data → Athlete status aligned when archive membership status changes. */
-export async function syncProfileAthleteStatusFromArchive(opts: {
-  workspaceKind: 'club' | 'team';
-  membershipRowId: string;
-  membershipStatus: import('@/lib/club/memberArchiveStatus').MemberArchiveStatus;
-}): Promise<void> {
-  const athleteStatus = archiveStatusToAthleteStatus(opts.membershipStatus);
-  const now = new Date();
-  if (opts.workspaceKind === 'team') {
-    const existing = await getTeamProfile(opts.membershipRowId);
-    const scoped = mergeClubScoped(
-      existing?.profileJson
-        ? (safeJsonParse(existing.profileJson, {}) as Partial<ClubMemberScopedData>)
-        : null,
-    );
-    scoped.otherDetails.athleteStatus = athleteStatus;
-    await upsertTeamProfile({
-      teamMemberId: opts.membershipRowId,
-      profileJson: JSON.stringify(clubScopedForProfileJson(scoped)),
-      signatureDataUrl: existing?.signatureDataUrl || null,
-      medicalImageUrl: existing?.medicalImageUrl || null,
-      medicalPdfUrl: existing?.medicalPdfUrl || null,
-    });
-    return;
-  }
-
-  const existing = await getClubProfile(opts.membershipRowId);
-  const scoped = mergeClubScoped(
-    existing?.profileJson
-      ? (safeJsonParse(existing.profileJson, {}) as Partial<ClubMemberScopedData>)
-      : null,
-  );
-  scoped.otherDetails.athleteStatus = athleteStatus;
-  const profileJson = JSON.stringify(clubScopedForProfileJson(scoped));
-  if (existing) {
-    await prisma.$executeRawUnsafe(
-      `UPDATE club_member_profiles SET profileJson=?, updatedAt=? WHERE clubMemberId=?`,
-      profileJson,
-      now,
-      opts.membershipRowId,
-    );
-  } else {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO club_member_profiles (id, clubMemberId, profileJson, medicalImageUrl, medicalPdfUrl, signatureDataUrl, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?)`,
-      cuid(),
-      opts.membershipRowId,
-      profileJson,
-      null,
-      null,
-      null,
-      now,
-      now,
-    );
-  }
 }
 
 export async function saveMemberProfileBundle(opts: {
@@ -1647,29 +1411,6 @@ export async function saveMemberProfileBundle(opts: {
 
   if (opts.payload.owner && loaded.viewer.canEditOwner) {
     const owner = opts.payload.owner;
-    const clubRow = await prisma.club.findUnique({
-      where: { id: opts.clubId },
-      select: { id: true, description: true, createdAt: true },
-    });
-    if (clubRow) {
-      const renameGate = await consumeMemberRenameIfNeeded({
-        kind: 'club',
-        entityId: clubRow.id,
-        description: clubRow.description,
-        createdAt: clubRow.createdAt,
-        viewerUserId: opts.viewerUserId,
-        before: {
-          firstName: loaded.owner.login.firstName || loaded.user.firstName,
-          lastName: loaded.owner.login.lastName || loaded.user.surname,
-        },
-        after: {
-          firstName: owner.login.firstName,
-          lastName: owner.login.lastName,
-        },
-      });
-      if ('error' in renameGate) return renameGate;
-    }
-
     const userUpdate: Record<string, unknown> = {
       firstName: owner.login.firstName || null,
       surname: owner.login.lastName || null,
@@ -1816,11 +1557,6 @@ export async function saveMemberProfileBundle(opts: {
       const age = calcAge(loaded.owner.personal.dateOfBirth);
       const underage = age != null && age < 18;
       clubData.otherDetails.userUnderage = underage;
-      if (loaded.viewer.canEditClubScoped) {
-        clubData.otherDetails.athleteStatus = archiveStatusToAthleteStatus(
-          athleteStatusToArchiveStatus(clubData.otherDetails.athleteStatus),
-        );
-      }
       const signatureDataUrl = resolveSignatureDataUrl(clubData, underage);
       const profileJson = JSON.stringify(clubScopedForProfileJson(clubData));
       const now = new Date();
@@ -1848,13 +1584,6 @@ export async function saveMemberProfileBundle(opts: {
       }
 
       if (loaded.viewer.canEditClubScoped) {
-        const role = roleValueForMemberArchiveStatus(
-          athleteStatusToArchiveStatus(clubData.otherDetails.athleteStatus),
-        );
-        await prisma.clubMember.update({
-          where: { id: clubMember.id },
-          data: { role },
-        });
         await copyParentDataToTaggedMembers({
           clubId: opts.clubId,
           sourceMemberId: opts.memberUserId,
@@ -1993,7 +1722,6 @@ export async function loadSelfMemberProfileBundle(opts: {
       canEditClubScoped: false,
       canEditMemberSignature: false,
     },
-    renameQuota: UNRESTRICTED_RENAME_QUOTA,
     user: {
       id: user.id,
       username: user.username,
@@ -2016,8 +1744,6 @@ export async function loadSelfMemberProfileBundle(opts: {
     vendorCoachOptions: [],
     coachOptions: [],
     clubParentsCatalog: [],
-    memberGroups: [],
-    memberPresentGroupIds: [],
     customQuestions: [],
     staffNotes: [],
     coachNotes: [],
@@ -2191,47 +1917,6 @@ export async function createMemberNote(opts: {
     now,
   );
   return { id };
-}
-
-export async function updateMemberNote(opts: {
-  clubMemberId: string;
-  noteId: string;
-  title: string;
-  body: string;
-  visibleToMember?: boolean;
-  commentsEnabled?: boolean;
-  imageUrls?: string[];
-  enableFrom?: Date | null;
-  enableTo?: Date | null;
-  showAtLogin?: boolean;
-  showAtLogout?: boolean;
-  store?: MemberNoteStore;
-}): Promise<{ id: string } | { error: string; status: number }> {
-  const store = opts.store ?? 'club';
-  await ensureNotesTable(store);
-  const existing = await getMemberNoteById(opts.clubMemberId, opts.noteId, store);
-  if (!existing) return { error: 'Note not found', status: 404 };
-  if (existing.parentId) {
-    return { error: 'Only root reflections can be edited', status: 400 };
-  }
-  const imageUrlsJson = JSON.stringify(normalizeSupportImageUrls(opts.imageUrls ?? []));
-  const now = new Date();
-  await prisma.$executeRawUnsafe(
-    `UPDATE ${noteTable(store)} SET title=?, body=?, visibleToMember=?, commentsEnabled=?, imageUrlsJson=?, enableFrom=?, enableTo=?, showAtLogin=?, showAtLogout=?, updatedAt=? WHERE id=? AND clubMemberId=? AND parentId IS NULL`,
-    opts.title,
-    opts.body,
-    Boolean(opts.visibleToMember),
-    Boolean(opts.commentsEnabled),
-    imageUrlsJson,
-    opts.enableFrom || null,
-    opts.enableTo || null,
-    Boolean(opts.showAtLogin),
-    Boolean(opts.showAtLogout),
-    now,
-    opts.noteId,
-    opts.clubMemberId,
-  );
-  return { id: opts.noteId };
 }
 
 export async function deleteMemberNotes(opts: {

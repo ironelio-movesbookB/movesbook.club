@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import ShareModal from '@/components/ShareModal';
 import {
   BarChart3,
@@ -20,23 +19,8 @@ type Props = {
   /** Number of checked rows — enables Delete selected when > 0. */
   selectedCount?: number;
   onDeleteSelected?: () => void;
-  /** Optional control shown beside Print, such as an archive-specific paid filter. */
-  paginationTrailing?: ReactNode;
   /** Optional title used in mail / share copy. */
   shareTitle?: string;
-  /** When set, the Statistics button navigates here. Otherwise it stays disabled. */
-  statisticsHref?: string;
-  /** When set, the Statistics button calls this (used if no href is given). */
-  onStatisticsClick?: () => void;
-  /** Replaces the default "mail the page link" Send data action (e.g. receipt PDFs). */
-  onSendData?: () => void;
-  sendDataTitle?: string;
-  /** Replaces the default "share the current page" action. */
-  onShare?: () => void;
-  shareButtonTitle?: string;
-  /** When set, the two view buttons switch the member-photo layout. */
-  photoMode?: 'with' | 'without';
-  onPhotoModeChange?: (mode: 'with' | 'without') => void;
 };
 
 const inactiveBtn =
@@ -72,18 +56,8 @@ export default function ArchiveActionsBar({
   selectedCount = 0,
   onDeleteSelected,
   shareTitle,
-  paginationTrailing,
-  statisticsHref,
-  onStatisticsClick,
-  onSendData,
-  sendDataTitle,
-  onShare,
-  shareButtonTitle,
-  photoMode,
-  onPhotoModeChange,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
-  const statisticsEnabled = Boolean(statisticsHref || onStatisticsClick);
   const canDelete = selectedCount > 0 && typeof onDeleteSelected === 'function';
 
   return (
@@ -97,8 +71,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => (onSendData ? onSendData() : handleSendDataByMail(shareTitle))}
-            title={sendDataTitle ?? 'Send current page link by mail'}
+            onClick={() => handleSendDataByMail(shareTitle)}
+            title="Send current page link by mail"
           >
             <Send className="h-3.5 w-3.5" />
             Send data
@@ -106,8 +80,8 @@ export default function ArchiveActionsBar({
           <button
             type="button"
             className={activeBtn}
-            onClick={() => (onShare ? onShare() : setShareOpen(true))}
-            title={shareButtonTitle ?? 'Share the current page'}
+            onClick={() => setShareOpen(true)}
+            title="Share the current page"
           >
             <Share2 className="h-3.5 w-3.5" />
             Share
@@ -118,27 +92,10 @@ export default function ArchiveActionsBar({
             <ClipboardList className="h-3.5 w-3.5" />
             Totals
           </button>
-          {statisticsEnabled && statisticsHref ? (
-            <Link href={statisticsHref} className={activeBtn} title="Open statistics">
-              <BarChart3 className="h-3.5 w-3.5" />
-              Statistics
-            </Link>
-          ) : statisticsEnabled ? (
-            <button
-              type="button"
-              className={activeBtn}
-              onClick={onStatisticsClick}
-              title="Open statistics"
-            >
-              <BarChart3 className="h-3.5 w-3.5" />
-              Statistics
-            </button>
-          ) : (
-            <button type="button" disabled className={inactiveBtn} title="Not available yet">
-              <BarChart3 className="h-3.5 w-3.5" />
-              Statistics
-            </button>
-          )}
+          <button type="button" disabled className={inactiveBtn} title="Not available yet">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Statistics
+          </button>
           <button
             type="button"
             disabled={!canDelete}
@@ -166,7 +123,6 @@ export default function ArchiveActionsBar({
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">{pagination}</div>
         <div className="flex items-center gap-2">
-          {paginationTrailing}
           <button
             type="button"
             onClick={handlePrint}
@@ -174,37 +130,19 @@ export default function ArchiveActionsBar({
           >
             Print
           </button>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" title="Photo layout (not available yet)">
             <button
               type="button"
-              disabled={!onPhotoModeChange}
-              aria-pressed={photoMode === 'with'}
-              title={onPhotoModeChange ? 'Show the member picture on every row' : 'Photo layout (not available yet)'}
-              onClick={() => onPhotoModeChange?.('with')}
-              className={`rounded p-1.5 ${
-                !onPhotoModeChange
-                  ? 'cursor-not-allowed border-2 border-yellow-400 bg-white text-gray-400'
-                  : photoMode === 'with'
-                    ? 'border-2 border-yellow-400 bg-white text-gray-900'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
+              disabled
+              className="rounded border-2 border-yellow-400 bg-white p-1.5 text-gray-400 cursor-not-allowed"
               aria-label="With photo"
             >
               <PanelLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
-              disabled={!onPhotoModeChange}
-              aria-pressed={photoMode === 'without'}
-              title={onPhotoModeChange ? 'Hide the member picture' : 'Photo layout (not available yet)'}
-              onClick={() => onPhotoModeChange?.('without')}
-              className={`rounded p-1.5 ${
-                !onPhotoModeChange
-                  ? 'cursor-not-allowed border border-gray-300 bg-white text-gray-400'
-                  : photoMode === 'without'
-                    ? 'border-2 border-yellow-400 bg-white text-gray-900'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
+              disabled
+              className="rounded border border-gray-300 bg-white p-1.5 text-gray-400 cursor-not-allowed"
               aria-label="Without photo"
             >
               <LayoutList className="h-4 w-4" />
@@ -213,11 +151,7 @@ export default function ArchiveActionsBar({
         </div>
       </div>
 
-      <ShareModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        gridOnly
-      />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

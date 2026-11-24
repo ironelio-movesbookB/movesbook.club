@@ -19,7 +19,6 @@ import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import { fetchClubArchive } from '@/lib/club/archives/clubArchiveClient';
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import type { ProcedureTypeCode } from '@/lib/procedures/types';
-import { payModeLabel, payModeTone } from '@/lib/procedures/payModes';
 import { clubApiFetch, formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
 import type { Column, Member } from '@/types/clubTable';
 
@@ -30,32 +29,19 @@ const columns: Column[] = [
   { key: 'typology', header: 'Typology' },
   { key: 'service', header: 'Detail' },
   { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
-  // Expenses/credits are paid by the club (OUT); sales/debts are cashed in (IN).
-  { key: 'paymentIn', header: 'Payment IN', render: (v) => (v == null ? '' : formatEuro(v)) },
-  {
-    key: 'paymentOut',
-    header: 'Payment OUT',
-    render: (v) => (v == null ? '' : <span className="text-red-700">{formatEuro(v)}</span>),
-  },
+  { key: 'paid', header: 'Payment IN', render: (v) => formatEuro(v) },
   {
     key: 'originalDebt',
-    header: 'Paid / Total',
+    header: 'OF..',
     render: (_, row) =>
-      `${Number(row.paid ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
+      `${Number(row.residualDebt ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
   },
   { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
-  { key: 'payMod', header: 'Pay mode', render: (v) => (v ? payModeLabel(String(v)) : '-') },
   { key: 'casual', header: 'Notes' },
   { key: 'operator', header: 'Operator' },
   { key: 'edit', header: 'Edit', sortable: false },
   { key: 'delete', header: 'Delete', sortable: false },
 ];
-
-/** Grey = still to be verified; blue = paid outside Movesbook (bank transfer, SEPA, …); others dark green. */
-function paymentRowClassName(row: Member): string {
-  if (row.toBeVerified) return 'text-gray-400';
-  return payModeTone(String(row.payMod ?? '')) === 'external' ? 'text-blue-700' : 'text-green-800';
-}
 
 function recordIdOf(row: Member): string | undefined {
   return row.procedureRecordId ?? row.id;
@@ -246,11 +232,7 @@ function ArchivePaymentsPageInner() {
           Payments to be verified
           <span className="text-xs font-normal text-gray-500">{onlyToBeVerified ? 'On' : 'Off'}</span>
         </label>
-        <p className="text-xs text-gray-500">
-          Grey rows are payments to be verified — click one to confirm it.{' '}
-          <span className="text-blue-700">Blue</span>: paid outside Movesbook (bank transfer, SEPA, CBILL, MAV, payment
-          slip). <span className="text-green-800">Dark green</span>: all other pay modes.
-        </p>
+        <p className="text-xs text-gray-500">Grey rows are payments to be verified — click one to confirm it.</p>
       </div>
       <ProcedureArchiveTable
         columns={columns}
@@ -260,7 +242,7 @@ function ArchivePaymentsPageInner() {
         selectable
         selectOnlyOpenRest={false}
         selectedIds={selectedIds}
-        getRowClassName={(row) => paymentRowClassName(row)}
+        getRowClassName={(row) => (row.toBeVerified ? 'text-gray-400' : 'text-black')}
         onRowClick={(row) => {
           if (!row.id) return;
           setSelectedId(row.id);

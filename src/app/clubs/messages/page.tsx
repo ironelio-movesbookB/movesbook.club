@@ -28,16 +28,11 @@ function ClubMessagesInner() {
       <div className="px-4 pt-4 md:px-6">
         <h1 className="text-xl font-bold text-orange-600">Messages among Staff and members</h1>
         <p className="text-sm text-gray-600 mt-1 mb-2">
-          {clubId
-            ? 'Messages for the selected club only. Paste HTML or pictures in the message body.'
-            : 'All clubs you belong to. Paste HTML or pictures in the message body. Messages are visible only to the sender and the recipient.'}
+          Choose a club, the type of recipient and the recipient, then post your message. Messages are
+          visible only to the sender and the recipient.
         </p>
       </div>
-      <ClubStaffMessagesPanel
-        initialClubId={clubId}
-        lockClubId={Boolean(clubId)}
-        showClubBadge={!clubId}
-      />
+      <ClubStaffMessagesPanel initialClubId={clubId} />
     </div>
   );
 }

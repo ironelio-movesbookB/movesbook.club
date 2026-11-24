@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { getDashboardPathForUserType, isManagedEntityAdminUserType } from '@/utils/dashboardRouting';
+import { getDashboardPathForUserType, isTeamAccountUserType } from '@/utils/dashboardRouting';
 import { filterFormCreatedEntities } from '@/hooks/useManagedEntityCreation';
 import { isEntityWorkspaceSession } from '@/lib/entity/entityDirectAccessSession';
 
@@ -9,7 +9,6 @@ export function useTeamDashboard() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [teams, setTeams] = useState<any[]>([]);
-  const [teamsLoaded, setTeamsLoaded] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'my-page' | 'my-entity'>('my-page');
 
@@ -25,8 +24,6 @@ export function useTeamDashboard() {
       }
     } catch (error) {
       console.error('Error loading teams:', error);
-    } finally {
-      setTeamsLoaded(true);
     }
   }, []);
 
@@ -44,13 +41,13 @@ export function useTeamDashboard() {
   }, []);
 
   useEffect(() => {
-    if (user && !isManagedEntityAdminUserType(user.userType)) {
+    if (user && !isTeamAccountUserType(user.userType)) {
       router.replace(getDashboardPathForUserType(user.userType));
     }
   }, [user, router]);
 
   useEffect(() => {
-    if (user && isManagedEntityAdminUserType(user.userType)) {
+    if (user && isTeamAccountUserType(user.userType)) {
       void loadTeams();
     }
   }, [user, loadTeams]);
@@ -59,12 +56,11 @@ export function useTeamDashboard() {
   const hasFormTeam = formCreatedTeams.length > 0;
 
   useEffect(() => {
-    if (!teamsLoaded) return;
     if (isEntityWorkspaceSession('team')) return;
     if (!hasFormTeam && activeTab === 'my-entity') {
       setActiveTab('my-page');
     }
-  }, [teamsLoaded, hasFormTeam, activeTab]);
+  }, [hasFormTeam, activeTab]);
 
   const handleTeamSelect = (teamId: string) => {
     localStorage.setItem('selectedTeam', teamId);

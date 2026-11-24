@@ -33,18 +33,11 @@ import {
 } from '@/lib/entity/entityDirectAccessSession';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
-import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import { getThemeColorById } from '@/lib/club/memberProfileTypes';
 
 export default function MyPage() {
   const [activeSection, setActiveSection] = useState<
-    | 'workouts'
-    | 'progress'
-    | 'settings'
-    | 'staff-feedbacks'
-    | 'org-feedbacks-mine'
-    | 'org-feedbacks-manage'
-    | 'club-staff-messages'
+    'workouts' | 'progress' | 'settings' | 'staff-feedbacks' | 'org-feedbacks-mine' | 'org-feedbacks-manage'
   >('workouts');
   const {
     showAdBanner,
@@ -276,10 +269,6 @@ export default function MyPage() {
                   setActiveTab('my-page');
                   setActiveSection(scope === 'manage' ? 'org-feedbacks-manage' : 'org-feedbacks-mine');
                 }}
-                onClubStaffMessagesClick={() => {
-                  setActiveTab('my-page');
-                  setActiveSection('club-staff-messages');
-                }}
                 onMyClubClick={() => {
                   if (!hasClubProfile) return;
                   setActiveTab('my-entity');
@@ -323,20 +312,6 @@ export default function MyPage() {
                 scope={activeSection === 'org-feedbacks-manage' ? 'manage' : 'mine'}
                 onClose={() => setActiveSection('workouts')}
               />
-            )}
-            {activeSection === 'club-staff-messages' && (
-              <div className="w-full">
-                <div className="px-1 pt-2">
-                  <h1 className="text-xl font-bold text-orange-600">
-                    Messages among Staff and members
-                  </h1>
-                  <p className="text-sm text-gray-600 mt-1 mb-2">
-                    All clubs and teams you belong to. Club logo and username appear on the right of
-                    each message.
-                  </p>
-                </div>
-                <ClubStaffMessagesPanel showClubBadge />
-              </div>
             )}
             {activeSection === 'workouts' && <WorkoutsSection />}
             {activeSection === 'progress' && <ProgressSection />}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Settings, Menu, MessageSquare, User } from "lucide-react";
 
 import useTopBarSettings from "./hooks/useTopBarSettings";
@@ -9,12 +9,6 @@ import { useChatUnreadCount } from "@/hooks/useChatUnreadCount";
 import ChatUnreadBadge from "@/components/chat/ChatUnreadBadge";
 import ClubAdminMenuDropdown from "@/components/club/topbar/ClubAdminMenuDropdown";
 import { writeClubWorkspaceTab } from "@/lib/club/clubWorkspaceTab";
-import { useClubWorkspace } from "@/contexts/ClubWorkspaceContext";
-import {
-    MEMBER_OVERVIEW_TOGGLE,
-    readMemberOverviewOpen,
-    writeMemberOverviewOpen,
-} from "@/lib/club/memberOverviewVisibility";
 
 import CustomizeMenu from "./components/CustomizeMenu";
 import GeneralSettingsMenu from "./components/GeneralSettingsMenu";
@@ -30,17 +24,6 @@ type TopBarProps = {
 
 export default function TopBar({ onChatPanelClick }: TopBarProps) {
     const router = useRouter();
-    const pathname = usePathname();
-    const workspace = useClubWorkspace();
-    const onMemberOverview = Boolean(pathname?.startsWith("/club/member-overview"));
-    const [overviewOpen, setOverviewOpen] = useState(true);
-
-    useEffect(() => {
-        setOverviewOpen(readMemberOverviewOpen());
-        const onToggle = () => setOverviewOpen(readMemberOverviewOpen());
-        window.addEventListener(MEMBER_OVERVIEW_TOGGLE, onToggle);
-        return () => window.removeEventListener(MEMBER_OVERVIEW_TOGGLE, onToggle);
-    }, []);
 
     const {
         menuData,
@@ -124,29 +107,15 @@ export default function TopBar({ onChatPanelClick }: TopBarProps) {
                     >
                         <Settings size={22} />
                     </button>
-                    <ClubAdminMenuDropdown
-                        variant="insert"
-                        tone="dark"
-                        memberOverview={onMemberOverview}
-                        memberId={workspace.selectedMember?.memberId}
-                    />
+                    <ClubAdminMenuDropdown variant="insert" tone="dark" />
                     <ClubAdminMenuDropdown variant="archive" tone="light" />
                     <button
                         type="button"
                         onClick={() => {
                             writeClubWorkspaceTab('my-entity');
-                            if (!onMemberOverview) {
-                                writeMemberOverviewOpen(true);
-                                router.push('/club/member-overview');
-                                return;
-                            }
-                            writeMemberOverviewOpen(!overviewOpen);
+                            router.push('/club/member-overview');
                         }}
-                        className={`h-[28px] px-3 rounded-sm text-[13px] flex items-center gap-1 ${
-                            onMemberOverview && overviewOpen
-                                ? 'bg-black text-white'
-                                : 'bg-white border border-gray-300 hover:bg-gray-50'
-                        }`}
+                        className="h-[28px] px-3 bg-white border border-gray-300 rounded-sm text-[13px] flex items-center gap-1 hover:bg-gray-50"
                     >
                         <User size={14} />
                         Member Overview
@@ -256,7 +225,9 @@ export default function TopBar({ onChatPanelClick }: TopBarProps) {
 
             {/* HeaderBar shown below HorizontalItemsBar when Help Info is clicked */}
             {showHelpInfo && (
-                <HeaderBar unreadCount={unreadCount} />
+                <HeaderBar
+                    onHelpInfo={toggleHelpInfo}
+                />
             )}
 
             {/* Toast Notifications */}

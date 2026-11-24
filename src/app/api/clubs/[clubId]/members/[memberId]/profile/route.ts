@@ -18,17 +18,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { clubId: string; memberId: string } },
 ) {
-  const viewOnly = request.nextUrl.searchParams.get('mode') === 'view';
   const viewerUserId = getUserId(request);
-  if (!viewerUserId && !viewOnly) {
+  if (!viewerUserId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const result = await loadMemberProfileBundle({
     clubId: params.clubId,
     memberUserId: params.memberId,
-    viewerUserId: viewerUserId || '',
-    viewOnly,
+    viewerUserId,
   });
   if ('error' in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });

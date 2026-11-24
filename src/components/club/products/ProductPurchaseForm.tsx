@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, Package } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
 import ProcedureFormSection, {
   ProcedureFormCell,
   ProcedureFormGrid,
@@ -14,67 +14,20 @@ import TaxDocumentModal, { type TaxDocumentFormValues } from '@/components/proce
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import { fetchCompanies } from '@/lib/club/archives/clubArchiveClient';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
-import PayModeAlert from '@/components/club/PayModeAlert';
-import PaymentLinkChannelModal, {
-  type PaymentLinkChannel,
-  type PaymentLinkResult,
-} from '@/components/club/PaymentLinkChannelModal';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
-import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
-import { PAY_LINK_METHODS } from '@/lib/procedures/payModes';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-import { SELLING_SECTORS, productInSector, productSectorLabel, productSectors } from '@/lib/shop/sectors';
-import { displaySellingNumber } from '@/lib/shop/sellingNumber';
-
-type CatalogProduct = {
-  id: string;
-  name: string;
-  cost: number;
-  sector: string;
-  allowMultipleUnits: boolean;
-  imageUrl?: string | null;
-};
 
 type ProductFormOptions = {
-  products: CatalogProduct[];
-  members: { id: string; name: string; image?: string | null }[];
+  products: { id: string; name: string; cost: number }[];
+  members: { id: string; name: string }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   currentOperatorId: string | null;
-  nextSellingNumber?: string;
 };
 
-type TaggedLine = {
-  productId: string;
-  name: string;
-  quantity: number;
-  price: number;
-  allowMultipleUnits: boolean;
-  sector: string;
-  imageUrl?: string | null;
-};
-
-function Picture({ src, fallback, className }: { src?: string | null; fallback: React.ReactNode; className: string }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  return (
-    <span className={`flex shrink-0 items-center justify-center overflow-hidden bg-gray-100 text-gray-500 ${className}`}>
-      {src && !failed ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
-      ) : (
-        fallback
-      )}
-    </span>
-  );
-}
-
-function ProductPurchaseFormInner() {
+export default function ProductPurchaseForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const rawSector = String(searchParams?.get('sector') ?? '').trim().toLowerCase();
-  const lockedSector = SELLING_SECTORS.find((sector) => sector.toLowerCase() === rawSector) ?? '';
   const def = getProcedureDefinition(PROCEDURE_TYPE_CODES.PRODUCT_SALE)!;
   const client = useMemo(() => createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE), []);
   const defaultPaymentMethods = useClubDefaultPaymentMethods();
@@ -88,8 +41,7 @@ function ProductPurchaseFormInner() {
   const [taxModalOpen, setTaxModalOpen] = useState(false);
 
   const [memberId, setMemberId] = useState('');
-  const [sectorFilter, setSectorFilter] = useState(lockedSector);
-  const [lines, setLines] = useState<TaggedLine[]>([]);
+  const [productId, setProductId] = useState('');
   const [companyId, setCompanyId] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [operatorPassword, setOperatorPassword] = useState('');
@@ -105,8 +57,6 @@ function ProductPurchaseFormInner() {
   const [payMode, setPayMode] = useState('cash');
   const [taxDoc, setTaxDoc] = useState(true);
   const [taxDocument, setTaxDocument] = useState<TaxDocumentFormValues | null>(null);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const linkRecordId = useRef<string | null>(null);
 
   useEffect(() => {
     Promise.all([client.fetchFormOptions<ProductFormOptions>(), fetchCompanies()])
@@ -122,153 +72,55 @@ function ProductPurchaseFormInner() {
   }, [client]);
 
   const selectedMember = options?.members.find((m) => m.id === memberId);
+  const selectedProduct = options?.products.find((p) => p.id === productId);
   const selectedCompany = companies.find((c) => c.id === companyId);
-  const visibleProducts = useMemo(() => {
-    const catalog = options?.products ?? [];
-    if (!sectorFilter) return catalog;
-    return catalog.filter((product) => productInSector(product.sector, sectorFilter));
-  }, [options, sectorFilter]);
-
-  const taggedTotal = useMemo(
-    () => lines.reduce((sum, line) => sum + line.price * line.quantity, 0),
-    [lines],
-  );
-
-  useEffect(() => {
-    setValue(taggedTotal ? String(Math.round(taggedTotal * 100) / 100) : '');
-  }, [taggedTotal]);
-
   const total = Number(value) || 0;
   const paid = pay === '' ? 0 : Number(pay);
   const rest = Math.max(0, total - paid);
-  const sectorName = [...new Set(lines.flatMap((line) => productSectors(line.sector)))].join(' - ') || 'Shop';
-  const productNames = lines.map((line) => line.name).join(', ');
 
-  function tagProduct(product: CatalogProduct) {
-    setLines((current) => {
-      const existing = current.find((line) => line.productId === product.id);
-      if (existing) {
-        if (!existing.allowMultipleUnits) return current;
-        return current.map((line) =>
-          line.productId === product.id ? { ...line, quantity: line.quantity + 1 } : line,
-        );
-      }
-      return [
-        ...current,
-        {
-          productId: product.id,
-          name: product.name,
-          quantity: 1,
-          price: product.cost,
-          allowMultipleUnits: product.allowMultipleUnits,
-          sector: sectorFilter || productSectors(product.sector).join(' - '),
-          imageUrl: product.imageUrl,
-        },
-      ];
-    });
-  }
-
-  function setQuantity(productId: string, quantity: number) {
-    setLines((current) =>
-      current
-        .map((line) => {
-          if (line.productId !== productId) return line;
-          const next = Math.max(0, Math.floor(quantity));
-          if (!line.allowMultipleUnits) return { ...line, quantity: next > 0 ? 1 : 0 };
-          return { ...line, quantity: next };
-        })
-        .filter((line) => line.quantity > 0),
-    );
-  }
+  useEffect(() => {
+    if (selectedProduct) setValue(String(selectedProduct.cost));
+  }, [selectedProduct]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     if (!memberId) return setError('Please select a user.');
-    if (lines.length === 0) return setError('Tag at least one product.');
+    if (!productId) return setError('Please select a product.');
     if (!operatorId) return setError('Please select an operator.');
     if (!operatorPassword.trim()) return setError('Operator password is required.');
     if (paid > total) return setError('Payment cannot exceed total.');
 
-    if (paid > 0 && PAY_LINK_METHODS.includes(payMode)) {
-      setLinkOpen(true);
-      return;
-    }
-
     setSaving(true);
     try {
-      await client.createRecord(recordPayload(paid));
+      await client.createRecord({
+        memberId,
+        totalAmount: total,
+        initialPayment: paid,
+        recordDate: movementDate,
+        paymentDate: paydate,
+        causal,
+        notes: causal,
+        productId,
+        productName: selectedProduct?.name,
+        operatorId,
+        operatorPassword,
+        payMode,
+        movementTime,
+        taxDoc,
+        taxDocument: taxDocument ?? undefined,
+        companyId,
+        companyName: selectedCompany?.name,
+        createReceipt: Boolean(taxDoc && taxDocument && paid > 0),
+        receiptNumber: taxDocument?.documentNumber,
+        receiptAnnotations: taxDocument?.causal || undefined,
+      });
       router.push(def.routes.records);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
-  }
-
-  function recordPayload(payNow: number) {
-    return {
-      memberId,
-      totalAmount: total,
-      initialPayment: payNow,
-      recordDate: movementDate,
-      paymentDate: paydate,
-      causal,
-      notes: causal,
-      productId: lines[0]?.productId,
-      productName: productNames,
-      sectorName,
-      sellingNumber: options?.nextSellingNumber,
-      products: lines.map((line) => ({
-        productId: line.productId,
-        name: line.name,
-        quantity: line.quantity,
-        price: line.price,
-      })),
-      operatorId,
-      operatorPassword,
-      payMode,
-      movementTime,
-      taxDoc,
-      taxDocument: taxDocument ?? undefined,
-      companyId,
-      companyName: selectedCompany?.name,
-      createReceipt: Boolean(taxDoc && taxDocument && payNow > 0),
-      receiptNumber: taxDocument?.documentNumber,
-      receiptAnnotations: taxDocument?.causal || undefined,
-    };
-  }
-
-  /** The sale and its deadline are saved unpaid; the link pays the "Pay" amount later. */
-  async function sendPaymentLink(channel: PaymentLinkChannel, email: string): Promise<PaymentLinkResult> {
-    if (!linkRecordId.current) {
-      const created = await client.createRecord(recordPayload(0));
-      linkRecordId.current = created.recordId;
-    }
-    return clubApiFetch<PaymentLinkResult>('/api/club/member-online-payments', {
-      method: 'POST',
-      body: JSON.stringify({
-        memberUserId: memberId,
-        amountEur: paid,
-        description: causal.trim() || productNames || 'Product',
-        payMode,
-        procedureType: PROCEDURE_TYPE_CODES.PRODUCT_SALE,
-        operatorId,
-        paymentDate: paydate,
-        lines: [{ recordId: linkRecordId.current, amount: paid }],
-        channel,
-        email,
-        receipt:
-          taxDoc && taxDocument
-            ? {
-                documentType: taxDocument.documentType,
-                documentNumber: taxDocument.documentNumber,
-                annotations: taxDocument.causal,
-                serviceName: productNames,
-              }
-            : null,
-      }),
-    });
   }
 
   if (loading) return <div className="p-6 text-gray-600">Loading form...</div>;
@@ -278,27 +130,13 @@ function ProductPurchaseFormInner() {
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
         <ProcedureFormSection title="Movement data">
           <ProcedureFormGrid>
-            <ProcedureFormCell label="Selling No.">
-              <input
-                className={`${procedureReadonlyInputClass} font-semibold`}
-                value={displaySellingNumber(options?.nextSellingNumber) || '-'}
-                readOnly
-              />
-            </ProcedureFormCell>
             <ProcedureFormCell label="User Selected">
-              <div className="flex items-center gap-2">
-                <Picture
-                  src={selectedMember?.image}
-                  fallback={<span className="text-sm font-semibold">{selectedMember?.name.charAt(0).toUpperCase() || '?'}</span>}
-                  className="h-10 w-10 rounded-full"
-                />
-                <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-                  <option value="">Select user</option>
-                  {options?.members.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
+              <select className={procedureInputClass} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+                <option value="">Select user</option>
+                {options?.members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
             </ProcedureFormCell>
             <ProcedureFormCell label="Date">
               <input type="date" className={procedureInputClass} value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
@@ -311,65 +149,19 @@ function ProductPurchaseFormInner() {
 
         <ProcedureFormSection title="Payment">
           <ProcedureFormGrid>
-            <ProcedureFormCell label="Sector">
-              <select
-                className={procedureInputClass}
-                value={sectorFilter}
-                disabled={Boolean(lockedSector)}
-                onChange={(e) => setSectorFilter(e.target.value)}
-              >
-                <option value="">All</option>
-                {SELLING_SECTORS.map((sector) => (
-                  <option key={sector} value={sector}>{sector}</option>
+            <ProcedureFormCell label="Product">
+              <select className={procedureInputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
+                <option value="">Select product</option>
+                {options?.products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </ProcedureFormCell>
-            <ProcedureFormCell label="Products">
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded border border-gray-200 bg-white p-2">
-                {visibleProducts.length === 0 && (
-                  <p className="px-1 py-2 text-sm text-gray-500">No products in this sector.</p>
-                )}
-                {visibleProducts.map((product) => {
-                  const tagged = lines.some((line) => line.productId === product.id);
-                  return (
-                    <label key={product.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        checked={tagged}
-                        onChange={() => {
-                          if (tagged) setQuantity(product.id, 0);
-                          else tagProduct(product);
-                        }}
-                      />
-                      <Picture src={product.imageUrl} fallback={<Package size={14} />} className="h-8 w-8 rounded" />
-                      <span className="min-w-0 flex-1 truncate">{product.name}</span>
-                      <span className="shrink-0 text-xs text-gray-500">{productSectorLabel(product.sector)}</span>
-                      <span className="shrink-0 font-medium">€{product.cost.toFixed(2)}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </ProcedureFormCell>
             <ProcedureFormCell label="Value">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={procedureInputClass}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-              />
+              <input type="number" min="0" step="0.01" className={procedureInputClass} value={value} onChange={(e) => setValue(e.target.value)} />
             </ProcedureFormCell>
             <ProcedureFormCell label="Pay">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={procedureHighlightInputClass}
-                style={{ backgroundColor: '#fff984' }}
-                value={pay}
-                onChange={(e) => setPay(e.target.value)}
-              />
+              <input type="number" min="0" step="0.01" className={procedureHighlightInputClass} value={pay} onChange={(e) => setPay(e.target.value)} />
             </ProcedureFormCell>
             <ProcedureFormCell label="Date">
               <input type="date" readOnly className={procedureReadonlyInputClass} value={paydate} />
@@ -378,45 +170,6 @@ function ProductPurchaseFormInner() {
               <input type="text" className={procedureInputClass} value={causal} onChange={(e) => setCausal(e.target.value)} />
             </ProcedureFormCell>
           </ProcedureFormGrid>
-
-          {lines.length > 0 && (
-            <div className="mt-4 overflow-hidden rounded border border-gray-200">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2">Tagged product</th>
-                    <th className="px-3 py-2">Qty</th>
-                    <th className="px-3 py-2">Price</th>
-                    <th className="px-3 py-2">Line</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <tr key={line.productId} className="border-t border-gray-100">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Picture src={line.imageUrl} fallback={<Package size={16} />} className="h-12 w-12 rounded-lg" />
-                          <span>{line.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={1}
-                          className="w-20 rounded border border-gray-200 px-2 py-1"
-                          value={line.quantity}
-                          onChange={(e) => setQuantity(line.productId, Number(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-3 py-2">€{line.price.toFixed(2)}</td>
-                      <td className="px-3 py-2">€{(line.price * line.quantity).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
           <div className="mt-4 grid grid-cols-3 gap-2 text-sm bg-gray-50 p-3 rounded">
             <div>Total: <strong>€{total.toFixed(2)}</strong></div>
             <div>Paid: <strong>€{paid.toFixed(2)}</strong></div>
@@ -457,7 +210,6 @@ function ProductPurchaseFormInner() {
               </div>
             </ProcedureFormCell>
           </ProcedureFormGrid>
-          <PayModeAlert className="mt-3" />
         </ProcedureFormSection>
 
         <ProcedureFormSection title="Company" titleClassName="text-green-800">
@@ -482,20 +234,6 @@ function ProductPurchaseFormInner() {
         </div>
       </form>
 
-      <PaymentLinkChannelModal
-        open={linkOpen}
-        memberUserId={memberId}
-        memberName={selectedMember?.name}
-        amountEur={paid}
-        onClose={() => setLinkOpen(false)}
-        sendLink={sendPaymentLink}
-        onSent={(notice) => {
-          setLinkOpen(false);
-          window.alert(notice);
-          router.push(def.routes.records);
-        }}
-      />
-
       <TaxDocumentModal
         open={taxModalOpen}
         memberName={selectedMember?.name ?? ''}
@@ -507,13 +245,5 @@ function ProductPurchaseFormInner() {
         onSave={(v) => { setTaxDocument(v); setTaxDoc(true); }}
       />
     </>
-  );
-}
-
-export default function ProductPurchaseForm() {
-  return (
-    <Suspense fallback={<div className="p-6 text-gray-600">Loading form...</div>}>
-      <ProductPurchaseFormInner />
-    </Suspense>
   );
 }

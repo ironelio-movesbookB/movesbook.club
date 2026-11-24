@@ -5,31 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
 import PaymentForm from '@/components/procedures/PaymentForm';
 import { createProcedureClient } from '@/lib/club/procedureClient';
-import { fetchOtherSettings } from '@/lib/club/otherSettingsClient';
 import { formatDate, formatEuro } from '@/lib/club/servicePurchasesClient';
-import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import { getProcedureDefinition, getProcedureTabs } from '@/lib/procedures/registry';
-import { PROCEDURE_TYPE_CODES, type ProcedureTypeCode } from '@/lib/procedures/types';
+import type { ProcedureTypeCode } from '@/lib/procedures/types';
 import type { ProcedureRecordView } from '@/lib/club/procedureClient';
-import type { PaymentFormValues } from '@/components/procedures/types';
 
 type Props = {
   procedureCode: ProcedureTypeCode;
 };
-
-function MemberPicture({ name, src }: { name: string; src: string | null }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-teal-100 text-lg font-semibold text-teal-800">
-      {src && !failed ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
-      ) : (
-        name.trim().charAt(0).toUpperCase() || '?'
-      )}
-    </span>
-  );
-}
 
 export default function ProcedurePaymentDetail({ procedureCode }: Props) {
   const params = useParams();
@@ -39,9 +22,6 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
   const client = useMemo(() => createProcedureClient(procedureCode), [procedureCode]);
 
   const [record, setRecord] = useState<ProcedureRecordView | null>(null);
-  const [operators, setOperators] = useState<{ id: string; name: string }[]>([]);
-  const [defaultOperatorId, setDefaultOperatorId] = useState<string | null>(null);
-  const [passwordRequired, setPasswordRequired] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -50,27 +30,22 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
     try {
       const res = await client.fetchRecord(id);
       setRecord(res.record);
-      if (procedureCode === PROCEDURE_TYPE_CODES.PRODUCT_SALE) {
-        const options = await client.fetchFormOptions<{
-          operators: { id: string; name: string }[];
-          currentOperatorId: string | null;
-        }>();
-        setOperators(options.operators ?? []);
-        setDefaultOperatorId(options.currentOperatorId);
-        const settings = await fetchOtherSettings().catch(() => null);
-        const status = settings?.operatorPassStatus?.trim().toLowerCase() ?? 'yes';
-        setPasswordRequired(['yes', 'y', '1', 'true', 't'].includes(status));
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
-  }, [client, id, procedureCode]);
+  }, [client, id]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  async function handleSubmit(values: PaymentFormValues) {
+  async function handleSubmit(values: {
+    amountPaid: number;
+    paymentDate: string;
+    notes: string;
+    createReceipt: boolean;
+    receiptNumber: string;
+  }) {
     setError('');
     setSuccess('');
 
@@ -85,15 +60,10 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
         amountPaid: values.amountPaid,
         paymentDate: values.paymentDate,
         notes: values.notes,
-        payMode: values.payMode,
-        operatorId: values.operatorId,
-        operatorPassword: values.operatorPassword,
         createReceipt: values.createReceipt,
-        receiptDocumentType:
-          typeof values.taxDocument?.documentType === 'string' ? values.taxDocument.documentType : 'Invoice',
+        receiptDocumentType: 'Invoice',
         receiptNumber: values.receiptNumber || undefined,
         receiptAnnotations: values.notes,
-        taxDocument: values.taxDocument,
         serviceName: record?.primaryLabel,
       });
       setSuccess('Payment saved successfully.');
@@ -118,11 +88,7 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
         error={!record ? error : undefined}
       >
         {record && (
-          <div className="mb-4 flex items-center gap-3 rounded border border-gray-200 bg-gray-50 p-4 text-sm">
-            {procedureCode === PROCEDURE_TYPE_CODES.PRODUCT_SALE && (
-              <MemberPicture name={record.memberName} src={resolvePublicImageUrl(record.memberImage)} />
-            )}
-            <div>
+          <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-4 text-sm">
             <p>
               <strong>{record.memberName}</strong> — {record.primaryLabel}
             </p>
@@ -131,7 +97,6 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
               <span className="font-semibold text-red-700">{formatEuro(record.rest)}</span>
             </p>
             <p className="text-gray-500">Record date: {formatDate(record.paydate)}</p>
-            </div>
           </div>
         )}
 
@@ -143,16 +108,6 @@ export default function ProcedurePaymentDetail({ procedureCode }: Props) {
             success={success}
             onSubmit={handleSubmit}
             onCancel={() => router.push(def.routes.deadlines)}
-            sellingPayment={
-              procedureCode === PROCEDURE_TYPE_CODES.PRODUCT_SALE
-                ? {
-                    memberName: record.memberName,
-                    operators,
-                    defaultOperatorId,
-                    passwordRequired,
-                  }
-                : undefined
-            }
           />
         )}
 

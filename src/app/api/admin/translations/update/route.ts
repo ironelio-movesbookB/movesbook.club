@@ -3,15 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { registerLongTextKey } from '@/lib/languages/longTextKeysRegistry';
 import { LONG_TEXT_THRESHOLD } from '@/constants/language.constants';
 
-function safeRegisterLongTextKey(key: string): void {
-  try {
-    registerLongTextKey(key);
-  } catch (error) {
-    // File registry is optional (prod FS may be read-only); DB isLongText is source of truth.
-    console.warn('long-text-keys.json register skipped:', error);
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -42,26 +33,15 @@ export async function POST(request: NextRequest) {
       if (!key || !translations) {
         return NextResponse.json(
           { success: false, error: 'Missing required fields (key, translations)' },
-          { status: 400 },
+          { status: 400 }
         );
       }
 
       console.log(`Bulk updating translations for key: ${key} with category: ${category || 'general'}`);
       const results = [];
       const translationCategory = category || 'general';
-      const hasLongValue = Object.values(translations as Record<string, string>).some(
-        (val) => typeof val === 'string' && val.length > LONG_TEXT_THRESHOLD,
-      );
-      const markLongText = isLongText === true || hasLongValue;
 
       for (const [languageCode, value] of Object.entries(translations)) {
-        const text = typeof value === 'string' ? value : '';
-        // Skip blank languages on create/update so we do not flood empty rows,
-        // but always keep English (required for Long Texts).
-        if (!text.trim() && languageCode !== 'en' && !markLongText) {
-          results.push({ languageCode, success: true, skipped: true });
-          continue;
-        }
         try {
           await prisma.translation.upsert({
             where: {
@@ -71,17 +51,15 @@ export async function POST(request: NextRequest) {
               },
             },
             update: {
-              value: text,
+              value: (value as string) || '',
               category: translationCategory,
-              ...(markLongText ? { isLongText: true } : {}),
             },
             create: {
               key,
               language: languageCode,
-              value: text,
+              value: (value as string) || '',
               category: translationCategory,
               isDeleted: false,
-              isLongText: markLongText,
             },
           });
 
@@ -93,28 +71,18 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (markLongText) {
-        // Ensure at least one row carries isLongText even if only EN was written earlier.
-        await prisma.translation.updateMany({
-          where: { key: String(key) },
-          data: { isLongText: true },
-        });
-        safeRegisterLongTextKey(String(key));
-      }
-
-      const okCount = results.filter((r) => r.success).length;
-      if (okCount === 0) {
-        return NextResponse.json(
-          { success: false, error: 'Failed to save any language translations' },
-          { status: 500 },
-        );
+      const hasLongValue = Object.values(translations as Record<string, string>).some(
+        (val) => typeof val === 'string' && val.length > LONG_TEXT_THRESHOLD
+      );
+      if (isLongText === true || hasLongValue) {
+        registerLongTextKey(String(key));
       }
 
       return NextResponse.json({
         success: true,
-        message: `Updated ${okCount} language(s)`,
+        message: `Updated ${results.filter((r) => r.success).length} language(s)`,
         results,
-        isLongText: markLongText,
+        isLongText: isLongText === true || hasLongValue,
       });
     }
 
@@ -124,12 +92,9 @@ export async function POST(request: NextRequest) {
     if (!key || !languageCode) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields (key, languageCode)' },
-        { status: 400 },
+        { status: 400 }
       );
     }
-
-    const markLongText =
-      isLongText === true || (typeof value === 'string' && value.length > LONG_TEXT_THRESHOLD);
 
     const translation = await prisma.translation.upsert({
       where: {
@@ -141,7 +106,6 @@ export async function POST(request: NextRequest) {
       update: {
         value: value || '',
         category: 'general',
-        ...(markLongText ? { isLongText: true } : {}),
       },
       create: {
         key,
@@ -149,16 +113,11 @@ export async function POST(request: NextRequest) {
         value: value || '',
         category: 'general',
         isDeleted: false,
-        isLongText: markLongText,
       },
     });
 
-    if (markLongText) {
-      await prisma.translation.updateMany({
-        where: { key: String(key) },
-        data: { isLongText: true },
-      });
-      safeRegisterLongTextKey(String(key));
+    if (isLongText === true || (typeof value === 'string' && value.length > LONG_TEXT_THRESHOLD)) {
+      registerLongTextKey(String(key));
     }
 
     return NextResponse.json({
@@ -169,7 +128,7 @@ export async function POST(request: NextRequest) {
     console.error('Error updating translation:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to update translation' },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

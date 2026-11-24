@@ -421,7 +421,7 @@ function MyClubContent() {
                     onAddMembers={() => setShowAddMemberModal(true)}
                   />
                 )}
-                {activeSection === 'members' && <MembersSection members={members} clubId={clubId} />}
+                {activeSection === 'members' && <MembersSection members={members} />}
                 {activeSection === 'workouts' && <ClubWorkouts />}
                 {activeSection === 'analytics' && <AnalyticsSection />}
               </>
@@ -548,7 +548,7 @@ export default function MyClub() {
   );
 }
 
-function MembersSection({ members, clubId }: { members: ClubMember[]; clubId: string }) {
+function MembersSection({ members }: { members: ClubMember[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 flex-1 flex flex-col">
       <div className="flex items-center justify-between mb-8">
@@ -576,12 +576,7 @@ function MembersSection({ members, clubId }: { members: ClubMember[]; clubId: st
                     {member.member.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1">
-                    <Link
-                      href={`/clubMembers/memberProfile/${encodeURIComponent(member.member.id)}?clubId=${encodeURIComponent(clubId)}&mode=edit`}
-                      className="font-bold text-gray-900 text-lg hover:text-blue-700 hover:underline"
-                    >
-                      {member.member.name}
-                    </Link>
+                    <h4 className="font-bold text-gray-900 text-lg">{member.member.name}</h4>
                     <p className="text-sm text-gray-600">@{member.member.username}</p>
                     <p className="text-sm text-gray-500">{member.member.email}</p>
                     <div className="flex items-center gap-2 mt-2">

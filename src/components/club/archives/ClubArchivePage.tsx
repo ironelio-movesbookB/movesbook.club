@@ -31,20 +31,9 @@ type Props = {
   headerAction?: ReactNode;
   /** Bump to force a reload (e.g. after adding a member). */
   refreshKey?: number;
-  getRowClassName?: (row: Member) => string;
-  /** Enables the with-photo / without-photo buttons in the archive toolbar. */
-  photoMode?: 'with' | 'without';
-  onPhotoModeChange?: (mode: 'with' | 'without') => void;
   onEditItem?: (item: Member) => void;
   onDeleteItem?: (item: Member) => void;
   bordered?: boolean;
-  /** Hide the "Filter · …" title for a tighter toolbar (Administration). */
-  compactFilters?: boolean;
-  /**
-   * Cap the table body height to roughly this many rows and scroll vertically
-   * (Administration shows 5 rows on screen).
-   */
-  maxVisibleRows?: number;
 };
 
 function ClubArchivePageInner({
@@ -62,19 +51,13 @@ function ClubArchivePageInner({
   memberId: memberIdProp,
   headerAction,
   refreshKey = 0,
-  getRowClassName,
-  photoMode,
-  onPhotoModeChange,
   onEditItem,
   onDeleteItem,
   bordered = false,
-  compactFilters = false,
-  maxVisibleRows,
 }: Props) {
   const searchParams = useSearchParams();
   const memberIdFromUrl = searchParams?.get('memberId') || null;
   const memberId = memberIdProp || memberIdFromUrl;
-  const productId = searchParams?.get('productId') || undefined;
   const filters = useArchiveListFilters();
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -95,7 +78,6 @@ function ClubArchivePageInner({
         clubId: clubId || undefined,
         teamId: teamId || undefined,
         memberId: memberId || undefined,
-        productId,
         ...filters.applied,
       });
       setTotal(res.total);
@@ -151,7 +133,6 @@ function ClubArchivePageInner({
     clubId,
     teamId,
     memberId,
-    productId,
     onEditItem,
     onDeleteItem,
     refreshKey,
@@ -163,7 +144,7 @@ function ClubArchivePageInner({
 
   useEffect(() => {
     setPage(1);
-  }, [filters.applied, memberId, archiveType, productId]);
+  }, [filters.applied, memberId]);
 
   function handleDeleteSelected() {
     if (!onDeleteItem) return;
@@ -189,16 +170,17 @@ function ClubArchivePageInner({
     />
   );
 
-  const body = (
-    <>
-      {compactFilters && error ? (
-        <p className="mb-2 text-sm text-red-600">{error}</p>
-      ) : null}
-      {compactFilters && headerAction ? (
-        <div className="mb-2 flex justify-end">{headerAction}</div>
-      ) : null}
+  return (
+    <ProcedureArchiveShell
+      title={title}
+      activeTab=""
+      tabs={[]}
+      headerAction={headerAction}
+      error={error || undefined}
+      footerHint={footerHint}
+    >
       <ArchiveListToolbar
-        title={compactFilters ? 'Filter' : `Filter · ${title}`}
+        title={`Filter · ${title}`}
         values={filters.draft}
         onChange={filters.onChange}
         onApply={() => {
@@ -210,82 +192,44 @@ function ClubArchivePageInner({
         }}
         dateRangeError={filters.dateRangeError}
         hideFilters={!showFilters}
-        compact={compactFilters}
         pagination={pagination}
-        photoMode={photoMode}
-        onPhotoModeChange={onPhotoModeChange}
         selectedCount={onDeleteItem ? selectedIds.size : undefined}
         onDeleteSelected={onDeleteItem ? handleDeleteSelected : undefined}
       />
-      <div
-        className={
-          maxVisibleRows && maxVisibleRows > 0
-            ? 'overflow-auto border border-teal-900/20'
+      <ProcedureArchiveTable
+        bordered={bordered}
+        columns={columns}
+        rows={data}
+        loading={loading}
+        emptyMessage={emptyMessage}
+        selectable={selectable || !!onDeleteItem}
+        selectOnlyOpenRest={false}
+        selectedIds={selectable || onDeleteItem ? selectedIds : undefined}
+        onToggleSelect={
+          selectable || onDeleteItem
+            ? (row) => {
+                if (!row.id) return;
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(row.id!)) next.delete(row.id!);
+                  else next.add(row.id!);
+                  return next;
+                });
+              }
             : undefined
         }
-        style={
-          maxVisibleRows && maxVisibleRows > 0
-            ? // header ~40px + row ~41px each
-              { maxHeight: `${40 + maxVisibleRows * 41}px` }
+        onToggleSelectAll={
+          selectable || onDeleteItem
+            ? (checked) => {
+                if (!checked) {
+                  setSelectedIds(new Set());
+                  return;
+                }
+                setSelectedIds(new Set(data.map((r) => r.id).filter(Boolean) as string[]));
+              }
             : undefined
         }
-      >
-        <ProcedureArchiveTable
-          bordered={bordered}
-          columns={columns}
-          rows={data}
-          getRowClassName={getRowClassName}
-          loading={loading}
-          emptyMessage={emptyMessage}
-          selectable={selectable || !!onDeleteItem}
-          selectOnlyOpenRest={false}
-          selectedIds={selectable || onDeleteItem ? selectedIds : undefined}
-          onToggleSelect={
-            selectable || onDeleteItem
-              ? (row) => {
-                  if (!row.id) return;
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(row.id!)) next.delete(row.id!);
-                    else next.add(row.id!);
-                    return next;
-                  });
-                }
-              : undefined
-          }
-          onToggleSelectAll={
-            selectable || onDeleteItem
-              ? (checked) => {
-                  if (!checked) {
-                    setSelectedIds(new Set());
-                    return;
-                  }
-                  setSelectedIds(new Set(data.map((r) => r.id).filter(Boolean) as string[]));
-                }
-              : undefined
-          }
-        />
-      </div>
-      {compactFilters && footerHint ? (
-        <p className="mt-2 text-xs text-gray-500">{footerHint}</p>
-      ) : null}
-    </>
-  );
-
-  if (compactFilters) {
-    return <div>{body}</div>;
-  }
-
-  return (
-    <ProcedureArchiveShell
-      title={title}
-      activeTab=""
-      tabs={[]}
-      headerAction={headerAction}
-      error={error || undefined}
-      footerHint={footerHint}
-    >
-      {body}
+      />
     </ProcedureArchiveShell>
   );
 }

@@ -6,7 +6,7 @@ export const SPONSOR_SECTIONS = [
   { key: 'shared_calendar', label: 'Shared calendar' },
   { key: 'online_payments', label: 'Online payments' },
   { key: 'events_page', label: 'Events page' },
-  { key: 'fee_payments', label: 'Digital Payments' },
+  { key: 'fee_payments', label: 'Fee payments' },
   { key: 'members_app', label: 'Members app' },
   { key: 'online_shop', label: 'Online shop' },
   { key: 'email_medical_expiry', label: 'Email: medical certificate expiry' },
@@ -35,10 +35,6 @@ export type SponsorContract = {
   notes: string;
   pdfName: string | null;
   pdfUrl: string | null;
-  invoiceNumber: string;
-  invoiceDate: string;
-  invoiceName: string | null;
-  invoiceUrl: string | null;
   createdAt: string;
 };
 
@@ -49,13 +45,8 @@ export type SponsorPayment = {
   reminderDays: number;
   note: string;
   paidAt: string | null;
-  payMode: string;
-  operatorUsername: string;
-  annotations: string;
   createdAt: string;
 };
-
-export const SPONSOR_DEADLINE_INTERVALS = [7, 15, 30, 60, 90, 120, 150, 180] as const;
 
 export type SponsorProfile = {
   name: string;

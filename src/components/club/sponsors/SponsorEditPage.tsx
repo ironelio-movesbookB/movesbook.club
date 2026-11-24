@@ -14,7 +14,6 @@ import {
   secondaryButton,
 } from '@/components/club/sponsors/sponsorUi';
 import {
-  SPONSOR_DEADLINE_INTERVALS,
   SPONSOR_SECTIONS,
   addDaysYmd,
   contractStatusOf,
@@ -23,13 +22,11 @@ import {
   type Sponsor,
   type SponsorContract,
   type SponsorMediaKind,
-  type SponsorPayment,
   type SponsorPlacements,
   type SponsorProfile,
   type SponsorStats,
 } from '@/lib/club/sponsors/sponsorConstants';
 import { sponsorApi, sponsorReportPath } from '@/lib/club/sponsors/sponsorClient';
-import { PAYMENT_TYPE_OPTIONS } from '@/lib/procedures/payModes';
 
 type Tab = 'profile' | 'contract' | 'payments' | 'media' | 'visibility' | 'stats';
 
@@ -182,13 +179,6 @@ export default function SponsorEditPage({ id }: { id: string }) {
           key={sponsor.updatedAt}
           initial={sponsor}
           submitLabel="Save profile"
-          bannerUrl={sponsor.bannerUrl}
-          onLoadBanner={async (file) => {
-            const body = new FormData();
-            body.append('kind', 'banner');
-            body.append('file', file);
-            await run('/media', { method: 'POST', body }, 'Banner loaded from local');
-          }}
           onSubmit={async (profile) => {
             await run('', { method: 'PATCH', body: JSON.stringify({ profile }) }, 'Profile saved');
           }}
@@ -237,16 +227,11 @@ function ProfileTab({
   initial,
   submitLabel,
   onSubmit,
-  bannerUrl,
-  onLoadBanner,
 }: {
   initial: SponsorProfile;
   submitLabel: string;
   onSubmit: (profile: SponsorProfile) => Promise<void>;
-  bannerUrl?: string | null;
-  onLoadBanner?: (file: File) => Promise<void>;
 }) {
-  const bannerInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<SponsorProfile>(() => ({
     name: initial.name,
     visible: initial.visible,
@@ -259,7 +244,6 @@ function ProfileTab({
     address: initial.address,
   }));
   const [saving, setSaving] = useState(false);
-  const [loadingBanner, setLoadingBanner] = useState(false);
   const set = <K extends keyof SponsorProfile>(key: K, value: SponsorProfile[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -287,52 +271,15 @@ function ProfileTab({
               <option value="0">Hidden</option>
             </select>
           </Field>
-          <div className="md:col-span-2">
-            <span className={labelClass}>Banner landing URL</span>
-            <div className="flex flex-wrap items-stretch gap-2">
-              <input
-                className={`${inputClass} min-w-0 flex-1`}
-                placeholder="https://www.sponsor-website.com"
-                value={form.landingUrl}
-                onChange={(e) => set('landingUrl', e.target.value)}
-              />
-              {onLoadBanner ? (
-                <>
-                  <input
-                    ref={bannerInput}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = '';
-                      if (!file) return;
-                      setLoadingBanner(true);
-                      try {
-                        await onLoadBanner(file);
-                      } finally {
-                        setLoadingBanner(false);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className={secondaryButton}
-                    disabled={loadingBanner}
-                    title="Load the sponsor banner image from your computer"
-                    onClick={() => bannerInput.current?.click()}
-                  >
-                    {loadingBanner ? 'Loading…' : 'Load from local'}
-                  </button>
-                </>
-              ) : null}
-            </div>
-            <span className="mt-1 block text-xs text-gray-500">
-              Website opened when people click the logo or banner. Use <strong>Load from local</strong> to upload the
-              banner image from your computer
-              {bannerUrl ? ' (banner already set — you can replace it).' : '.'}
-            </span>
-          </div>
+          <Field label="Banner landing URL" className="md:col-span-2">
+            <input
+              className={inputClass}
+              placeholder="https://www.sponsor-website.com"
+              value={form.landingUrl}
+              onChange={(e) => set('landingUrl', e.target.value)}
+            />
+            <span className="mt-1 block text-xs text-gray-500">Page opened when people click the logo or banner.</span>
+          </Field>
         </div>
       </Card>
 
@@ -351,13 +298,7 @@ function ProfileTab({
             <input type="email" className={inputClass} value={form.email} onChange={(e) => set('email', e.target.value)} />
           </Field>
           <Field label="Phone">
-            <input
-              className={inputClass}
-              placeholder="+39 …"
-              value={form.phone}
-              onChange={(e) => set('phone', e.target.value)}
-            />
-            <span className="mt-1 block text-xs text-gray-500">Shown on the public sponsor report.</span>
+            <input className={inputClass} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           </Field>
           <Field label="Address">
             <input className={inputClass} value={form.address} onChange={(e) => set('address', e.target.value)} />
@@ -376,15 +317,7 @@ function ProfileTab({
 
 // ---------- contracts ----------
 
-type ContractForm = {
-  startDate: string;
-  endDate: string;
-  value: string;
-  reminderDays: string;
-  notes: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-};
+type ContractForm = { startDate: string; endDate: string; value: string; reminderDays: string; notes: string };
 
 function emptyContractForm(sponsor: Sponsor): ContractForm {
   const last = sponsor.contracts[0];
@@ -395,8 +328,6 @@ function emptyContractForm(sponsor: Sponsor): ContractForm {
     value: last ? String(last.value) : '',
     reminderDays: last ? String(last.reminderDays) : '30',
     notes: '',
-    invoiceNumber: '',
-    invoiceDate: '',
   };
 }
 
@@ -404,22 +335,16 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ContractForm>(() => emptyContractForm(sponsor));
   const [pdf, setPdf] = useState<File | null>(null);
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const pdfInput = useRef<HTMLInputElement>(null);
-  const invoiceInput = useRef<HTMLInputElement>(null);
   const rowPdfInput = useRef<HTMLInputElement>(null);
-  const rowInvoiceInput = useRef<HTMLInputElement>(null);
   const [pdfTarget, setPdfTarget] = useState<string | null>(null);
-  const [invoiceTarget, setInvoiceTarget] = useState<string | null>(null);
 
   const resetForm = (s: Sponsor) => {
     setEditingId(null);
     setForm(emptyContractForm(s));
     setPdf(null);
-    setInvoiceFile(null);
     if (pdfInput.current) pdfInput.current.value = '';
-    if (invoiceInput.current) invoiceInput.current.value = '';
   };
 
   const uploadPdf = (contractId: string, file: File) => {
@@ -428,30 +353,19 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
     return run(`/contracts/${contractId}/pdf`, { method: 'POST', body }, 'Signed PDF uploaded');
   };
 
-  const uploadInvoice = (contractId: string, file: File) => {
-    const body = new FormData();
-    body.append('file', file);
-    return run(`/contracts/${contractId}/invoice`, { method: 'POST', body }, 'Invoice uploaded');
-  };
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const payload = JSON.stringify({
-      ...form,
-      value: Number(form.value) || 0,
-      reminderDays: Number(form.reminderDays) || 0,
-    });
+    const payload = JSON.stringify({ ...form, value: Number(form.value) || 0, reminderDays: Number(form.reminderDays) || 0 });
     const before = new Set(sponsor.contracts.map((c) => c.id));
     const updated = editingId
       ? await run(`/contracts/${editingId}`, { method: 'PATCH', body: payload }, 'Contract saved')
       : await run('/contracts', { method: 'POST', body: payload }, 'Contract added');
-    if (updated) {
+    if (updated && pdf) {
       const targetId = editingId ?? updated.contracts.find((c) => !before.has(c.id))?.id;
-      if (targetId && pdf) await uploadPdf(targetId, pdf);
-      if (targetId && invoiceFile) await uploadInvoice(targetId, invoiceFile);
-      resetForm(updated);
+      if (targetId) await uploadPdf(targetId, pdf);
     }
+    if (updated) resetForm(updated);
     setSaving(false);
   };
 
@@ -463,15 +377,6 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
       value: String(c.value),
       reminderDays: String(c.reminderDays),
       notes: c.notes,
-      invoiceNumber: c.invoiceNumber || '',
-      invoiceDate: c.invoiceDate || '',
-    });
-    setPdf(null);
-    setInvoiceFile(null);
-    if (pdfInput.current) pdfInput.current.value = '';
-    if (invoiceInput.current) invoiceInput.current.value = '';
-    window.requestAnimationFrame(() => {
-      document.getElementById('sponsor-contract-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
 
@@ -493,7 +398,7 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
         </Card>
       ) : null}
 
-      <form id="sponsor-contract-form" onSubmit={submit}>
+      <form onSubmit={submit}>
         <Card
           title={editingId ? 'Edit contract' : sponsor.contracts.length ? 'Renew contract' : 'New contract'}
           actions={
@@ -551,39 +456,8 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                 ref={pdfInput}
                 type="file"
                 accept="application/pdf,.pdf"
-                className="hidden"
-                onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className={secondaryButton} onClick={() => pdfInput.current?.click()}>
-                  Load from local
-                </button>
-                <span className="text-sm text-gray-600">{pdf ? pdf.name : 'No file selected'}</span>
-              </div>
-            </Field>
-            <Field label="Number of your invoice">
-              <input
-                className={inputClass}
-                value={form.invoiceNumber}
-                onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })}
-                placeholder="Invoice number"
-              />
-            </Field>
-            <Field label="Date of invoice">
-              <input
-                type="date"
-                className={inputClass}
-                value={form.invoiceDate}
-                onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })}
-              />
-            </Field>
-            <Field label="Picture of invoice">
-              <input
-                ref={invoiceInput}
-                type="file"
-                accept="application/pdf,.pdf,image/*"
                 className="block w-full text-sm"
-                onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
               />
             </Field>
           </div>
@@ -611,18 +485,6 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
             setPdfTarget(null);
           }}
         />
-        <input
-          ref={rowInvoiceInput}
-          type="file"
-          accept="application/pdf,.pdf,image/*"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (file && invoiceTarget) await uploadInvoice(invoiceTarget, file);
-            e.target.value = '';
-            setInvoiceTarget(null);
-          }}
-        />
         {sponsor.contracts.length === 0 ? (
           <p className="text-sm text-gray-500">No contracts yet.</p>
         ) : (
@@ -634,7 +496,6 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                   <th className="py-2 pr-3">Value</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Signed PDF</th>
-                  <th className="py-2 pr-3">Invoice</th>
                   <th className="py-2" />
                 </tr>
               </thead>
@@ -652,13 +513,7 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                     <td className="py-2 pr-3">
                       {c.pdfUrl ? (
                         <div className="flex items-center gap-2">
-                          <a
-                            href={c.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-700 hover:underline"
-                            title="Open PDF"
-                          >
+                          <a href={c.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">
                             {c.pdfName || 'contract.pdf'}
                           </a>
                           <button
@@ -681,51 +536,13 @@ function ContractTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                             rowPdfInput.current?.click();
                           }}
                         >
-                          Load from local
-                        </button>
-                      )}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <div className="text-xs text-gray-600">
-                        {c.invoiceNumber ? <div>No. {c.invoiceNumber}</div> : null}
-                        {c.invoiceDate ? <div>{formatYmd(c.invoiceDate)}</div> : null}
-                      </div>
-                      {c.invoiceUrl ? (
-                        <div className="mt-1 flex items-center gap-2">
-                          <a href={c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">
-                            {c.invoiceName || 'invoice'}
-                          </a>
-                          <button
-                            type="button"
-                            className="text-xs text-red-600 hover:underline"
-                            onClick={() =>
-                              window.confirm('Remove the invoice file?') &&
-                              run(`/contracts/${c.id}/invoice`, { method: 'DELETE' }, 'Invoice removed')
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-blue-700 hover:underline"
-                          onClick={() => {
-                            setInvoiceTarget(c.id);
-                            rowInvoiceInput.current?.click();
-                          }}
-                        >
-                          Upload invoice
+                          Upload PDF
                         </button>
                       )}
                     </td>
                     <td className="space-x-2 whitespace-nowrap py-2 text-right">
-                      <button
-                        type="button"
-                        className={editingId === c.id ? primaryButton : secondaryButton}
-                        onClick={() => edit(c)}
-                      >
-                        {editingId === c.id ? 'Editing…' : 'Edit'}
+                      <button type="button" className={secondaryButton} onClick={() => edit(c)}>
+                        Edit
                       </button>
                       <button
                         type="button"
@@ -761,21 +578,7 @@ function Info({ label, value }: { label: string; value: string }) {
 // ---------- payments ----------
 
 function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
-  const [form, setForm] = useState({ amount: '', dueDate: todayYmd(), reminderDays: '7', note: 'Sponsoring' });
-  const [gen, setGen] = useState({
-    open: false,
-    count: '3',
-    firstAmount: '',
-    firstDate: todayYmd(),
-    intervalDays: '90',
-  });
-  const [settle, setSettle] = useState<{
-    payment: SponsorPayment;
-    mode: 'whole' | 'partial';
-    paidAmount: string;
-    payMode: string;
-    annotations: string;
-  } | null>(null);
+  const [form, setForm] = useState({ amount: '', dueDate: todayYmd(), reminderDays: '7', note: '' });
   const [saving, setSaving] = useState(false);
   const today = todayYmd();
   const paid = sponsor.payments.filter((p) => p.paidAt).reduce((s, p) => s + p.amount, 0);
@@ -788,57 +591,11 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
       '/payments',
       {
         method: 'POST',
-        body: JSON.stringify({
-          ...form,
-          amount: Number(form.amount) || 0,
-          reminderDays: Number(form.reminderDays) || 0,
-        }),
+        body: JSON.stringify({ ...form, amount: Number(form.amount) || 0, reminderDays: Number(form.reminderDays) || 0 }),
       },
-      'Deadline added',
+      'Payment added',
     );
-    if (ok) setForm({ amount: '', dueDate: form.dueDate, reminderDays: form.reminderDays, note: 'Sponsoring' });
-    setSaving(false);
-  };
-
-  const submitGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const ok = await run(
-      '/payments/generate',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          count: Number(gen.count) || 0,
-          firstAmount: Number(gen.firstAmount) || 0,
-          firstDate: gen.firstDate,
-          intervalDays: Number(gen.intervalDays) || 30,
-        }),
-      },
-      'Deadlines generated',
-    );
-    if (ok) setGen((g) => ({ ...g, open: false }));
-    setSaving(false);
-  };
-
-  const submitSettle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!settle) return;
-    setSaving(true);
-    const ok = await run(
-      `/payments/${settle.payment.id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          settleMode: settle.mode,
-          paidAmount: Number(settle.paidAmount) || 0,
-          payMode: settle.payMode,
-          annotations: settle.annotations,
-          paymentDate: todayYmd(),
-        }),
-      },
-      settle.mode === 'whole' ? 'Deadline collected' : 'Partial payment recorded',
-    );
-    if (ok) setSettle(null);
+    if (ok) setForm({ amount: '', dueDate: form.dueDate, reminderDays: form.reminderDays, note: '' });
     setSaving(false);
   };
 
@@ -850,154 +607,8 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
         <SmallStat label="To collect" value={formatSponsorEuro(due)} tone={due > 0 ? 'text-amber-600' : undefined} />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={secondaryButton}
-          onClick={() =>
-            setGen({
-              open: true,
-              count: '3',
-              firstAmount: sponsor.currentContract ? String(Math.round((sponsor.currentContract.value / 5) * 100) / 100) : '',
-              firstDate: todayYmd(),
-              intervalDays: '90',
-            })
-          }
-        >
-          Generate deadlines
-        </button>
-      </div>
-
-      {gen.open ? (
-        <form onSubmit={submitGenerate}>
-          <Card
-            title="Generate deadlines"
-            actions={
-              <button type="button" className={secondaryButton} onClick={() => setGen((g) => ({ ...g, open: false }))}>
-                Cancel
-              </button>
-            }
-          >
-            <div className="grid gap-4 md:grid-cols-4">
-              <Field label="Generate number of deadlines *">
-                <input
-                  type="number"
-                  min="1"
-                  max="36"
-                  className={inputClass}
-                  value={gen.count}
-                  onChange={(e) => setGen({ ...gen, count: e.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Value first deadline (€) *">
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  className={inputClass}
-                  value={gen.firstAmount}
-                  onChange={(e) => setGen({ ...gen, firstAmount: e.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Date first deadline *">
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={gen.firstDate}
-                  onChange={(e) => setGen({ ...gen, firstDate: e.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Next ones every *">
-                <select
-                  className={inputClass}
-                  value={gen.intervalDays}
-                  onChange={(e) => setGen({ ...gen, intervalDays: e.target.value })}
-                >
-                  {SPONSOR_DEADLINE_INTERVALS.map((d) => (
-                    <option key={d} value={d}>
-                      {d} days
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <p className="mt-3 text-xs text-gray-500">
-              Remaining deadlines split the rest of the contract value equally. Dates can be edited later.
-            </p>
-            <div className="mt-4 flex justify-end">
-              <button type="submit" className={primaryButton} disabled={saving}>
-                {saving ? 'Generating…' : 'Generate'}
-              </button>
-            </div>
-          </Card>
-        </form>
-      ) : null}
-
-      {settle ? (
-        <form onSubmit={submitSettle}>
-          <Card
-            title={settle.mode === 'whole' ? 'Mark as paid — whole' : 'Mark as paid — partial'}
-            actions={
-              <button type="button" className={secondaryButton} onClick={() => setSettle(null)}>
-                Cancel
-              </button>
-            }
-          >
-            <p className="mb-3 text-sm text-gray-600">
-              Deadline {formatSponsorEuro(settle.payment.amount)} due {formatYmd(settle.payment.dueDate)}
-            </p>
-            <div className="grid gap-4 md:grid-cols-3">
-              {settle.mode === 'partial' ? (
-                <Field label="Value paid (€) *">
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    max={settle.payment.amount}
-                    className={inputClass}
-                    value={settle.paidAmount}
-                    onChange={(e) => setSettle({ ...settle, paidAmount: e.target.value })}
-                    required
-                  />
-                </Field>
-              ) : null}
-              <Field label="Pay mode *">
-                <select
-                  className={inputClass}
-                  value={settle.payMode}
-                  onChange={(e) => setSettle({ ...settle, payMode: e.target.value })}
-                  required
-                >
-                  <option value="">Select pay mode</option>
-                  {PAYMENT_TYPE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Annotations" className={settle.mode === 'partial' ? undefined : 'md:col-span-2'}>
-                <input
-                  className={inputClass}
-                  value={settle.annotations}
-                  onChange={(e) => setSettle({ ...settle, annotations: e.target.value })}
-                />
-              </Field>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button type="submit" className={primaryButton} disabled={saving}>
-                {saving ? 'Saving…' : 'Confirm'}
-              </button>
-            </div>
-          </Card>
-        </form>
-      ) : null}
-
       <form onSubmit={submit}>
-        <Card title="New deadline">
+        <Card title="New payment tranche">
           <div className="grid gap-4 md:grid-cols-4">
             <Field label="Amount (€) *">
               <input
@@ -1035,15 +646,15 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
           </div>
           <div className="mt-4 flex justify-end">
             <button type="submit" className={primaryButton} disabled={saving}>
-              {saving ? 'Saving…' : 'Add deadline/s'}
+              {saving ? 'Saving…' : 'Add payment'}
             </button>
           </div>
         </Card>
       </form>
 
-      <Card title="Deadlines">
+      <Card title="Payment tranches">
         {sponsor.payments.length === 0 ? (
-          <p className="text-sm text-gray-500">No deadlines yet.</p>
+          <p className="text-sm text-gray-500">No payments yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -1060,27 +671,7 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                 {sponsor.payments.map((p) => (
                   <tr key={p.id}>
                     <td className="py-2 pr-3">
-                      <input
-                        type="date"
-                        className={`${inputClass} max-w-[11rem]`}
-                        value={p.dueDate}
-                        disabled={Boolean(p.paidAt)}
-                        onChange={(e) =>
-                          run(
-                            `/payments/${p.id}`,
-                            {
-                              method: 'PATCH',
-                              body: JSON.stringify({
-                                amount: p.amount,
-                                dueDate: e.target.value,
-                                reminderDays: p.reminderDays,
-                                note: p.note,
-                              }),
-                            },
-                            'Deadline date updated',
-                          )
-                        }
-                      />
+                      {formatYmd(p.dueDate)}
                       {p.reminderDays > 0 && !p.paidAt ? (
                         <div className="text-xs text-gray-500">Reminder {p.reminderDays} days before</div>
                       ) : null}
@@ -1089,10 +680,7 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                     <td className="py-2 pr-3 text-gray-600">{p.note || '—'}</td>
                     <td className="py-2 pr-3">
                       {p.paidAt ? (
-                        <span className="font-semibold text-green-700">
-                          Collected on {formatYmd(p.paidAt)}
-                          {p.payMode ? <span className="block text-xs font-normal text-gray-500">{p.payMode}</span> : null}
-                        </span>
+                        <span className="font-semibold text-green-700">Paid on {formatYmd(p.paidAt)}</span>
                       ) : p.dueDate < today ? (
                         <span className="font-semibold text-red-700">Overdue</span>
                       ) : (
@@ -1100,60 +688,25 @@ function PaymentsTab({ sponsor, run }: { sponsor: Sponsor; run: RunFn }) {
                       )}
                     </td>
                     <td className="space-x-2 whitespace-nowrap py-2 text-right">
-                      {p.paidAt ? (
-                        <button
-                          type="button"
-                          className={secondaryButton}
-                          onClick={() =>
-                            run(
-                              `/payments/${p.id}`,
-                              { method: 'PATCH', body: JSON.stringify({ settleMode: 'unpaid' }) },
-                              'Deadline reopened',
-                            )
-                          }
-                        >
-                          Mark as not paid
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={secondaryButton}
-                            onClick={() =>
-                              setSettle({
-                                payment: p,
-                                mode: 'whole',
-                                paidAmount: String(p.amount),
-                                payMode: '',
-                                annotations: '',
-                              })
-                            }
-                          >
-                            Mark as paid
-                          </button>
-                          <button
-                            type="button"
-                            className={secondaryButton}
-                            onClick={() =>
-                              setSettle({
-                                payment: p,
-                                mode: 'partial',
-                                paidAmount: '',
-                                payMode: '',
-                                annotations: '',
-                              })
-                            }
-                          >
-                            Partial
-                          </button>
-                        </>
-                      )}
+                      <button
+                        type="button"
+                        className={secondaryButton}
+                        onClick={() =>
+                          run(
+                            `/payments/${p.id}`,
+                            { method: 'PATCH', body: JSON.stringify({ paid: !p.paidAt }) },
+                            p.paidAt ? 'Payment marked as not paid' : 'Payment marked as paid',
+                          )
+                        }
+                      >
+                        {p.paidAt ? 'Mark as not paid' : 'Mark as paid'}
+                      </button>
                       <button
                         type="button"
                         className={dangerButton}
                         onClick={() =>
-                          window.confirm('Delete this deadline?') &&
-                          run(`/payments/${p.id}`, { method: 'DELETE' }, 'Deadline deleted')
+                          window.confirm('Delete this payment?') &&
+                          run(`/payments/${p.id}`, { method: 'DELETE' }, 'Payment deleted')
                         }
                       >
                         Delete
@@ -1258,7 +811,7 @@ function MediaCard({
       />
       <div className="mt-3 flex gap-2">
         <button type="button" className={primaryButton} disabled={busy} onClick={() => input.current?.click()}>
-          {busy ? 'Uploading…' : url ? 'Replace' : 'Load from local'}
+          {busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
         </button>
         {url ? (
           <button

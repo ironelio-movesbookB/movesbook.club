@@ -6,14 +6,9 @@ import { Bell, ChevronDown, Radio, Shield, Star, User } from 'lucide-react';
 import {
   CLUB_ADMIN_ARCHIVE_GROUPS,
   CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS,
-  MEMBER_OVERVIEW_OMIT_INSERT_LABELS,
-  memberOverviewInsertLabel,
-  appendMemberIdToPath,
+  type ClubAdminArchiveItem,
   type ClubAdminInsertItem,
 } from '@/lib/club/clubAdminMenus';
-import ClubAdminArchiveGroupsNav, {
-  CLUB_SUBMENU_BG,
-} from '@/components/club/ClubAdminArchiveGroupsNav';
 import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 
 function InsertLeading({ item }: { item: ClubAdminInsertItem }) {
@@ -45,23 +40,29 @@ function InsertLeading({ item }: { item: ClubAdminInsertItem }) {
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
 }
 
+function ArchiveLeading({ item }: { item: ClubAdminArchiveItem }) {
+  if (item.kind === 'affiliate') {
+    return (
+      <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center text-white">
+        <Shield className="h-4 w-4 opacity-95" strokeWidth={1.5} />
+        <Star className="pointer-events-none absolute h-2 w-2 fill-white text-white" strokeWidth={0} />
+      </span>
+    );
+  }
+  if (item.kind === 'child' || item.kind === 'group' || item.kind === 'overview') return null;
+  const Icon = item.Icon;
+  return <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />;
+}
+
 type Variant = 'insert' | 'archive';
 
 type Props = {
   variant: Variant;
   /** Dark filled button (Insert) vs outlined (Archive). */
   tone?: 'dark' | 'light';
-  /** Member Overview uses a shorter insert menu and keeps the current member selected. */
-  memberOverview?: boolean;
-  memberId?: string | null;
 };
 
-export default function ClubAdminMenuDropdown({
-  variant,
-  tone = 'dark',
-  memberOverview = false,
-  memberId = null,
-}: Props) {
+export default function ClubAdminMenuDropdown({ variant, tone = 'dark' }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -76,16 +77,12 @@ export default function ClubAdminMenuDropdown({
   }, [open]);
 
   const label = variant === 'insert' ? 'Insert data' : 'Archive data';
-  const insertGroups =
-    CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS.map((group) =>
-      group.filter((item) => !memberOverview || !MEMBER_OVERVIEW_OMIT_INSERT_LABELS.has(item.label)),
-    ).filter((group) => group.length > 0);
+  const groups = variant === 'insert' ? CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS : CLUB_ADMIN_ARCHIVE_GROUPS;
 
   const go = (path: string) => {
     writeClubWorkspaceTab('my-entity');
     setOpen(false);
-    const next = memberOverview && memberId ? appendMemberIdToPath(path, memberId) : path;
-    router.push(next);
+    router.push(path);
   };
 
   const btnClass =
@@ -101,41 +98,53 @@ export default function ClubAdminMenuDropdown({
       </button>
 
       {open ? (
-        <div
-          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-h-[70vh] w-[320px] overflow-y-auto rounded-sm border border-gray-600 shadow-xl ${
-            variant === 'archive' ? 'bg-[#2a2a2a]' : ''
-          }`}
-          style={variant === 'insert' ? { background: CLUB_SUBMENU_BG } : undefined}
-        >
-          {variant === 'archive' ? (
-            <ClubAdminArchiveGroupsNav groups={CLUB_ADMIN_ARCHIVE_GROUPS} onNavigate={go} />
-          ) : (
-            insertGroups.map((group, gi) => (
-              <div key={gi} className={gi > 0 ? 'border-t border-gray-600/70' : ''}>
-                {group.map((item, ii) => {
-                  const path = 'path' in item && item.path ? item.path : undefined;
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 max-h-[70vh] w-[320px] overflow-y-auto rounded-sm border border-gray-600 bg-[#2a2a2a] shadow-xl">
+          {groups.map((group, gi) => (
+            <div key={gi} className={gi > 0 ? 'border-t border-gray-600/70' : ''}>
+              {group.map((item, ii) => {
+                const rowBorder = ii < group.length - 1 ? 'border-b border-gray-600/50' : '';
+
+                if (variant === 'archive' && item.kind === 'group') {
+                  const GroupIcon = item.Icon;
                   return (
-                    <button
+                    <div
                       key={item.label}
-                      type="button"
-                      disabled={!path}
-                      onClick={() => {
-                        if (path) go(path);
-                      }}
-                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] disabled:cursor-default disabled:opacity-80 ${
-                        ii < group.length - 1 ? 'border-b border-gray-600/50' : ''
-                      }`}
+                      className={`flex w-full items-center gap-2 py-2 pl-3 pr-2 text-[13px] font-semibold text-white ${rowBorder}`}
                     >
-                      <InsertLeading item={item as ClubAdminInsertItem} />
-                      <span className="min-w-0 leading-snug">
-                        {memberOverview ? memberOverviewInsertLabel(item.label) : item.label}
-                      </span>
-                    </button>
+                      <GroupIcon className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2} />
+                      <span className="min-w-0 leading-snug">{item.label}</span>
+                    </div>
                   );
-                })}
-              </div>
-            ))
-          )}
+                }
+
+                const path = 'path' in item && item.path ? item.path : undefined;
+                const isChild = variant === 'archive' && item.kind === 'child';
+                const leading: ReactNode =
+                  variant === 'insert' ? (
+                    <InsertLeading item={item as ClubAdminInsertItem} />
+                  ) : isChild ? null : (
+                    <ArchiveLeading item={item as ClubAdminArchiveItem} />
+                  );
+
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    disabled={!path}
+                    onClick={() => {
+                      if (path) go(path);
+                    }}
+                    className={`flex w-full items-center gap-2 py-2 pr-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-[#333] disabled:cursor-default disabled:opacity-80 ${
+                      isChild ? 'pl-12' : 'pl-3'
+                    } ${rowBorder}`}
+                  >
+                    {leading}
+                    <span className="min-w-0 leading-snug">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       ) : null}
     </div>

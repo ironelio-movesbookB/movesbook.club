@@ -1,9 +1,6 @@
-import { mkdir, unlink, writeFile } from 'fs/promises';
-import { extname, join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { getServerPublicDir } from '@/lib/serverPublicDir';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,12 +14,6 @@ type AuthorizedContext = {
 type ExpensePayload = {
   name: string;
   parentId: string;
-  icon: string | null;
-  iconProvided: boolean;
-  color: string | null;
-  colorProvided: boolean;
-  removeImage: boolean;
-  image: File | null;
 };
 
 type ExpenseRow = {
@@ -30,9 +21,6 @@ type ExpenseRow = {
   user_id?: string | number | bigint | null;
   name?: string | null;
   parent_id?: string | number | bigint | null;
-  icon?: string | null;
-  color?: string | null;
-  image_url?: string | null;
   created?: string | Date | null;
   modified?: string | Date | null;
 };
@@ -44,25 +32,9 @@ const EXPENSE_COLUMN_DEFINITIONS: Record<string, string> = {
   user_id: 'VARCHAR(191) NOT NULL',
   name: 'VARCHAR(250) NOT NULL',
   parent_id: 'BIGINT NOT NULL DEFAULT 0',
-  icon: 'VARCHAR(50) NULL',
-  color: 'VARCHAR(7) NULL',
-  image_url: 'VARCHAR(255) NULL',
   created: 'DATETIME DEFAULT CURRENT_TIMESTAMP',
   modified: 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
 };
-
-const EXPENSE_IMAGE_DIR = ['img', 'expenses'];
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
-const ALLOWED_ICONS = new Set([
-  'sliders', 'eye', 'bell', 'alarm', 'heartHandshake', 'wand', 'sparkles', 'trophy', 'settings', 'printer',
-  'cloud', 'send', 'tag', 'pin', 'file', 'copy', 'bookmark', 'grid', 'contact', 'scanFace', 'user', 'users',
-  'userPlus', 'clock', 'globe', 'shoppingCart', 'info', 'help', 'chart', 'megaphone', 'link', 'paperclip',
-  'hourglass', 'play', 'store', 'walletCards', 'hand', 'pointer', 'filter', 'lightbulb', 'landmark', 'card',
-  'briefcase', 'graduation', 'dollar', 'receipt', 'ticket', 'medal', 'smartphone', 'monitor', 'laptop',
-  'camera', 'moon', 'sun', 'book', 'clipboard', 'banknote', 'building', 'bus', 'document', 'health',
-  'shopping', 'utensils', 'tools', 'wallet'
-]);
 
 function text(value: unknown): string {
   return String(value ?? '').trim();
@@ -72,61 +44,6 @@ function normalizeParentId(value: unknown): string {
   const raw = text(value);
   if (!raw || raw === '0') return '0';
   return raw;
-}
-
-function normalizeExpenseImagePath(value: unknown): string | null {
-  const image = text(value);
-  if (!image) return null;
-  if (/^https?:\/\//i.test(image)) return image;
-  if (image.startsWith('/api/media/img/expenses/')) return image;
-  if (image.startsWith('/img/expenses/')) return `/api/media${image}`;
-  if (image.startsWith('img/expenses/')) return `/api/media/${image}`;
-  return null;
-}
-
-function getExpenseImageDiskPath(value: unknown): string | null {
-  const imagePath = normalizeExpenseImagePath(value);
-  if (!imagePath || !imagePath.startsWith('/api/media/img/expenses/')) return null;
-  return join(getServerPublicDir(), 'img', 'expenses', imagePath.slice('/api/media/img/expenses/'.length));
-}
-
-function normalizeImageExtension(fileName: string): '.png' | '.jpg' | '.gif' | '.webp' | null {
-  const extension = extname(fileName).toLowerCase();
-  if (!ALLOWED_EXTENSIONS.has(extension)) return null;
-  if (extension === '.png') return '.png';
-  if (extension === '.gif') return '.gif';
-  if (extension === '.webp') return '.webp';
-  return '.jpg';
-}
-
-function hasValidImageSignature(buffer: Buffer, extension: '.png' | '.jpg' | '.gif' | '.webp'): boolean {
-  if (extension === '.png') return buffer.length > 8 && buffer[0] === 0x89 && buffer.toString('ascii', 1, 4) === 'PNG';
-  if (extension === '.jpg') return buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  if (extension === '.gif') return buffer.length > 6 && buffer.toString('ascii', 0, 3) === 'GIF';
-  return buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
-}
-
-async function saveExpenseImage(file: File): Promise<{ path: string } | { error: string }> {
-  const extension = normalizeImageExtension(file.name);
-  if (!extension || file.size > MAX_IMAGE_BYTES) return { error: 'Only PNG, JPG, GIF, or WEBP images up to 5MB are allowed.' };
-  const buffer = Buffer.from(await file.arrayBuffer());
-  if (!hasValidImageSignature(buffer, extension)) return { error: 'The selected file is not a valid image.' };
-
-  const uploadDir = join(getServerPublicDir(), ...EXPENSE_IMAGE_DIR);
-  await mkdir(uploadDir, { recursive: true });
-  const fileName = `Expense_${Date.now()}_${Math.round(Math.random() * 1_000_000)}${extension}`;
-  await writeFile(join(uploadDir, fileName), buffer, { flag: 'wx' });
-  return { path: `/img/expenses/${fileName}` };
-}
-
-async function deleteExpenseImage(value: unknown) {
-  const diskPath = getExpenseImageDiskPath(value);
-  if (!diskPath) return;
-  try {
-    await unlink(diskPath);
-  } catch {
-    // Missing old images should not block the table update.
-  }
 }
 
 function isTopLevel(parentId: string): boolean {
@@ -270,20 +187,9 @@ async function getAuthorizedContext(request: NextRequest) {
 
 function parsePayload(body: unknown): ExpensePayload {
   const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
-  const formData = body instanceof FormData ? body : null;
-  const iconValue = formData ? formData.get('icon') : data.icon;
-  const colorValue = formData ? formData.get('color') : data.color;
-  const removeImageValue = formData ? formData.get('removeImage') : data.removeImage;
-  const imageValue = formData ? formData.get('image') : data.image;
   return {
-    name: text(formData ? formData.get('name') : data.name),
-    parentId: normalizeParentId(formData ? formData.get('parentId') : data.parentId),
-    icon: iconValue == null || text(iconValue) === '' ? null : text(iconValue),
-    iconProvided: formData ? formData.has('icon') : Object.prototype.hasOwnProperty.call(data, 'icon'),
-    color: colorValue == null || text(colorValue) === '' ? null : text(colorValue),
-    colorProvided: formData ? formData.has('color') : Object.prototype.hasOwnProperty.call(data, 'color'),
-    removeImage: removeImageValue === '1' || removeImageValue === 'true' || removeImageValue === true || removeImageValue === 1,
-    image: imageValue instanceof File && imageValue.size > 0 ? imageValue : null
+    name: text(data.name),
+    parentId: normalizeParentId(data.parentId)
   };
 }
 
@@ -295,15 +201,6 @@ function validatePayload(payload: ExpensePayload): Record<string, string> {
   } else if (payload.name.length > 250) {
     fieldErrors.name = 'Expense name must be 250 characters or fewer.';
   }
-  if (payload.icon && !ALLOWED_ICONS.has(payload.icon)) {
-    fieldErrors.icon = 'Please choose a valid expense icon.';
-  }
-  if (payload.color && !/^#[0-9a-f]{6}$/i.test(payload.color)) {
-    fieldErrors.color = 'Please choose a valid color.';
-  }
-  if (payload.image && (!normalizeImageExtension(payload.image.name) || payload.image.size > MAX_IMAGE_BYTES)) {
-    fieldErrors.image = 'Only PNG, JPG, GIF, or WEBP images up to 5MB are allowed.';
-  }
 
   return fieldErrors;
 }
@@ -314,9 +211,6 @@ function normalizeExpense(row: ExpenseRow) {
     id: String(row.id),
     name: text(row.name),
     parentId,
-    icon: ALLOWED_ICONS.has(text(row.icon)) ? text(row.icon) : null,
-    color: /^#[0-9a-f]{6}$/i.test(text(row.color)) ? text(row.color) : null,
-    imageUrl: normalizeExpenseImagePath(row.image_url),
     created: toIsoDate(row.created),
     modified: toIsoDate(row.modified)
   };
@@ -379,7 +273,7 @@ async function assertOwnedExpense(
 ): Promise<ReturnType<typeof normalizeExpense> | null> {
   const userPlaceholders = context.userIds.map(() => '?').join(',');
   const rows = await prisma.$queryRawUnsafe<ExpenseRow[]>(
-    `SELECT id, user_id, name, parent_id, icon, color, image_url, created, modified
+    `SELECT id, user_id, name, parent_id, created, modified
      FROM \`${tableName}\`
      WHERE id = ?
        AND user_id IN (${userPlaceholders})
@@ -421,7 +315,7 @@ export async function GET(request: NextRequest) {
     const tableName = await ensureExpensesTable();
     const userPlaceholders = context.userIds.map(() => '?').join(',');
     const rows = await prisma.$queryRawUnsafe<ExpenseRow[]>(
-      `SELECT id, user_id, name, parent_id, icon, color, image_url, created, modified
+      `SELECT id, user_id, name, parent_id, created, modified
        FROM \`${tableName}\`
        WHERE user_id IN (${userPlaceholders})
        ORDER BY parent_id ASC, id DESC`,
@@ -448,10 +342,7 @@ export async function POST(request: NextRequest) {
     if ('error' in context) return context.error;
 
     const tableName = await ensureExpensesTable();
-    const body = request.headers.get('content-type')?.includes('multipart/form-data')
-      ? await request.formData()
-      : await request.json();
-    const payload = parsePayload(body);
+    const payload = parsePayload(await request.json());
     const fieldErrors = validatePayload(payload);
     if (Object.keys(fieldErrors).length > 0) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors }, { status: 400 });
@@ -474,21 +365,12 @@ export async function POST(request: NextRequest) {
     const storageUserId = context.legacyUserId ?? context.userId;
     const parentIdValue = isTopLevel(payload.parentId) ? 0 : payload.parentId;
 
-    const uploaded = payload.image ? await saveExpenseImage(payload.image) : null;
-    if (uploaded && 'error' in uploaded) {
-      return NextResponse.json({ error: uploaded.error, fieldErrors: { image: uploaded.error } }, { status: 400 });
-    }
-    const imageUrl = uploaded && 'path' in uploaded ? uploaded.path : null;
-
     await prisma.$executeRawUnsafe(
-      `INSERT INTO \`${tableName}\` (user_id, name, parent_id, icon, color, image_url)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO \`${tableName}\` (user_id, name, parent_id)
+       VALUES (?, ?, ?)`,
       storageUserId,
       payload.name,
-      parentIdValue,
-      payload.icon,
-      payload.color,
-      imageUrl
+      parentIdValue
     );
 
     const idRows = await prisma.$queryRawUnsafe<{ id: bigint | number | string }[]>(
@@ -514,11 +396,8 @@ export async function PUT(request: NextRequest) {
     if ('error' in context) return context.error;
 
     const tableName = await ensureExpensesTable();
-    const body = request.headers.get('content-type')?.includes('multipart/form-data')
-      ? await request.formData()
-      : await request.json();
-    const bodyData = body instanceof FormData ? Object.fromEntries(body.entries()) : body as Record<string, unknown>;
-    const id = text(bodyData?.id);
+    const body = await request.json();
+    const id = text((body as Record<string, unknown>)?.id);
     if (!id) {
       return NextResponse.json({ error: 'Expense id is required' }, { status: 400 });
     }
@@ -528,8 +407,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    const parsedPayload = parsePayload(body);
-    const payload = { ...parsedPayload, parentId: bodyData?.parentId == null ? existing.parentId : parsedPayload.parentId };
+    const payload = parsePayload({
+      ...(body as Record<string, unknown>),
+      parentId: (body as Record<string, unknown>)?.parentId ?? existing.parentId
+    });
 
     const fieldErrors = validatePayload(payload);
     if (Object.keys(fieldErrors).length > 0) {
@@ -557,35 +438,18 @@ export async function PUT(request: NextRequest) {
       }, { status: 409 });
     }
 
-    const uploaded = payload.image ? await saveExpenseImage(payload.image) : null;
-    if (uploaded && 'error' in uploaded) {
-      return NextResponse.json({ error: uploaded.error, fieldErrors: { image: uploaded.error } }, { status: 400 });
-    }
-    const nextIcon = payload.iconProvided ? payload.icon : (existing.icon ?? null);
-    const nextColor = payload.colorProvided ? payload.color : (existing.color ?? null);
-    const nextImageUrl = uploaded && 'path' in uploaded
-      ? uploaded.path
-      : payload.removeImage ? null : existing.imageUrl;
-
     await prisma.$executeRawUnsafe(
       `UPDATE \`${tableName}\`
        SET name = ?,
-           icon = ?,
-           color = ?,
-           image_url = ?,
            modified = CURRENT_TIMESTAMP
        WHERE id = ?`,
       payload.name,
-      nextIcon,
-      nextColor,
-      nextImageUrl,
       id
     );
-    if (uploaded || payload.removeImage) await deleteExpenseImage(existing.imageUrl);
 
     return NextResponse.json({
       success: true,
-      item: { id, name: payload.name, parentId: payload.parentId, icon: nextIcon, color: nextColor, imageUrl: normalizeExpenseImagePath(nextImageUrl) }
+      item: { id, ...payload }
     });
   } catch (error) {
     console.error('PUT /api/club/settings/tables/expenses:', error);
@@ -604,8 +468,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Expense id is required' }, { status: 400 });
     }
 
-    const existing = await assertOwnedExpense(tableName, context, id);
-    if (!existing) {
+    if (!(await assertOwnedExpense(tableName, context, id))) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
@@ -613,7 +476,6 @@ export async function DELETE(request: NextRequest) {
       `DELETE FROM \`${tableName}\` WHERE id = ?`,
       id
     );
-    await deleteExpenseImage(existing.imageUrl);
 
     return NextResponse.json({ success: true });
   } catch (error) {

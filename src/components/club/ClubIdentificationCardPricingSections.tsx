@@ -55,69 +55,6 @@ function VerticalTabButton({
   );
 }
 
-function ThirdPartyPriceGrid({
-  quantities,
-  totals,
-  enabled,
-  editable = false,
-  onToggleEnabled,
-  onTotalChange,
-}: {
-  quantities: number[];
-  totals: number[];
-  enabled?: boolean[];
-  editable?: boolean;
-  onToggleEnabled?: (index: number) => void;
-  onTotalChange?: (index: number, raw: string) => void;
-}) {
-  const columns = `96px 16px repeat(${quantities.length}, 56px)`;
-  return (
-    <div className="space-y-2">
-      <div className="grid items-end gap-2" style={{ gridTemplateColumns: columns }}>
-        <span />
-        <span />
-        {quantities.map((qty) => (
-          <div
-            key={qty}
-            className="border border-gray-600 bg-[#c0392b] py-1 text-center text-[10px] font-bold text-white"
-          >
-            {qty}
-          </div>
-        ))}
-      </div>
-      {editable && enabled && onToggleEnabled ? (
-        <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
-          <span className="text-[10px] font-medium leading-tight">Enable to displaying to the user</span>
-          <span />
-          {enabled.map((on, i) => (
-            <div key={`en-${i}`} className="flex justify-center">
-              <input
-                type="checkbox"
-                checked={on}
-                onChange={() => onToggleEnabled(i)}
-                className="h-4 w-4"
-              />
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
-        <span className="text-xs font-medium">Total Price</span>
-        <span className="text-xs font-bold">€</span>
-        {totals.map((total, i) => (
-          <input
-            key={`total-${quantities[i] ?? i}`}
-            readOnly={!editable}
-            value={total}
-            onChange={(e) => onTotalChange?.(i, e.target.value)}
-            className="w-full border border-gray-400 bg-yellow-300 px-1 py-0.5 text-center text-xs font-semibold"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function DevicePriceGridHorizontal({
   grid,
   mode,
@@ -144,23 +81,20 @@ function DevicePriceGridHorizontal({
     });
   };
 
-  const columns = `96px 16px repeat(${grid.quantities.length}, 56px)`;
   return (
     <div className="space-y-2 py-2">
-      <div className="grid items-end gap-2" style={{ gridTemplateColumns: columns }}>
-        <span />
-        <span />
+      <div className="flex items-end gap-2 pl-[80px]">
         {grid.quantities.map((qty) => (
           <div
             key={qty}
-            className="border border-gray-600 bg-[#c0392b] py-1 text-center text-[10px] font-bold text-white"
+            className="w-14 border border-gray-600 bg-[#c0392b] py-1 text-center text-[10px] font-bold text-white"
           >
             {qty}
           </div>
         ))}
       </div>
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
-        <span className="text-xs">Price</span>
+      <div className="flex items-center gap-2">
+        <span className="w-[70px] shrink-0 text-xs">Price</span>
         <span className="text-xs font-bold">€</span>
         {grid.unitPrices.map((price, i) => (
           <input
@@ -168,19 +102,19 @@ function DevicePriceGridHorizontal({
             readOnly={!editable}
             value={price}
             onChange={(e) => updateUnitPrice(i, e.target.value)}
-            className="w-full border border-gray-400 bg-[#fffacd] px-1 py-0.5 text-center text-xs"
+            className="w-14 border border-gray-400 bg-[#fffacd] px-1 py-0.5 text-center text-xs"
           />
         ))}
       </div>
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: columns }}>
-        <span className="text-xs">Total Price</span>
+      <div className="flex items-center gap-2">
+        <span className="w-[70px] shrink-0 text-xs">Total Price</span>
         <span className="text-xs font-bold">€</span>
         {grid.totalPrices.map((price, i) => (
           <input
             key={`t-${i}`}
             readOnly
             value={price}
-            className="w-full border border-gray-400 bg-yellow-300 px-1 py-0.5 text-center text-xs font-semibold"
+            className="w-14 border border-gray-400 bg-yellow-300 px-1 py-0.5 text-center text-xs font-semibold"
           />
         ))}
       </div>
@@ -414,20 +348,69 @@ export default function ClubIdentificationCardPricingSections({
           reviewThirdPartyRows.length === 0 ? (
             <p className="text-xs text-gray-700">No packs available for this device type.</p>
           ) : (
-            <ThirdPartyPriceGrid
-              quantities={reviewThirdPartyRows.map((row) => row.qty)}
-              totals={reviewThirdPartyRows.map((row) => row.total)}
-            />
+            <>
+              <div className="mb-2 flex items-end gap-2 pl-[100px]">
+                {reviewThirdPartyRows.map((row) => (
+                  <div
+                    key={row.qty}
+                    className="w-14 bg-[#c0392b] py-1 text-center text-[10px] font-bold text-white"
+                  >
+                    {row.qty}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-[90px] text-xs font-medium">Total Price</span>
+                <span className="text-xs">€</span>
+                {reviewThirdPartyRows.map((row) => (
+                  <input
+                    key={row.qty}
+                    readOnly
+                    value={row.total}
+                    className="w-14 border border-gray-400 bg-yellow-300 px-1 py-0.5 text-center text-xs"
+                  />
+                ))}
+              </div>
+            </>
           )
         ) : (
-          <ThirdPartyPriceGrid
-            quantities={activeThirdParty.quantities}
-            totals={activeThirdParty.totals}
-            enabled={activeThirdParty.enabled}
-            editable
-            onToggleEnabled={toggleThirdPartyEnabled}
-            onTotalChange={updateThirdPartyTotal}
-          />
+          <>
+            <div className="mb-2 flex items-end gap-2 pl-[100px]">
+              {activeThirdParty.quantities.map((qty) => (
+                <div
+                  key={qty}
+                  className="w-14 bg-[#c0392b] py-1 text-center text-[10px] font-bold text-white"
+                >
+                  {qty}
+                </div>
+              ))}
+            </div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="w-[90px] text-xs font-medium">Enable to displaying to the user</span>
+              {activeThirdParty.enabled.map((on, i) => (
+                <div key={`en-${i}`} className="flex w-14 justify-center">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggleThirdPartyEnabled(i)}
+                    className="h-4 w-4"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-[90px] text-xs font-medium">Total Price</span>
+              <span className="text-xs">€</span>
+              {activeThirdParty.totals.map((total, i) => (
+                <input
+                  key={i}
+                  value={total}
+                  onChange={(e) => updateThirdPartyTotal(i, e.target.value)}
+                  className="w-14 border border-gray-400 bg-yellow-300 px-1 py-0.5 text-center text-xs"
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

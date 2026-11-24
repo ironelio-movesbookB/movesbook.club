@@ -124,16 +124,11 @@ export async function resetPrismaClient(): Promise<void> {
 
 /**
  * Await before DB work. Singleflight $connect() for the current client instance.
- * If connect fails (e.g. MySQL briefly down), clear the cached promise so the
- * next request can retry instead of forever reusing a rejected connect.
  */
 export function prismaConnect(): Promise<void> {
   const client = getClient();
   if (!globalForPrisma.prismaConnectPromise) {
-    globalForPrisma.prismaConnectPromise = client.$connect().catch((err) => {
-      globalForPrisma.prismaConnectPromise = undefined;
-      throw err;
-    });
+    globalForPrisma.prismaConnectPromise = client.$connect();
   }
   return globalForPrisma.prismaConnectPromise;
 }

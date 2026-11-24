@@ -16,9 +16,7 @@ import ClubSocialSubmenu from '@/components/club/ClubSocialSubmenu';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
 import { canManageClubWebsite } from '@/lib/club/clubWebsitePermissions';
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
-import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
-import EntityImageFileInput from '@/lib/entity/EntityImageFileInput';
-import { useEntityImageInput, useEntityVisual } from '@/lib/entity/useEntityVisual';
+import { resolveManagedEntityDisplayImageUrl } from '@/lib/entity/resolveManagedEntityDisplayImage';
 import { useAuth } from '@/hooks/useAuth';
 import MubSidebarBar from '@/components/mub/MubSidebarBar';
 
@@ -60,15 +58,17 @@ export default function SidebarClubMyEntityTop({
   personName,
   club,
   userCountry,
+  userImageUrl,
   userType,
   onClubYoutubeSaved,
   onClubBootstrapped,
+  onChangeLogo,
   onChatClick,
-  onMessagesClick,
 }: {
   personName: string;
   club: ClubEntity | null;
   userCountry?: string | null;
+  userImageUrl?: string | null;
   userType: string;
   onClubYoutubeSaved?: (clubId: string, url: string | null) => void;
   onClubBootstrapped?: (club: {
@@ -76,27 +76,25 @@ export default function SidebarClubMyEntityTop({
     name?: string;
     youtubeChannelUrl?: string | null;
   }) => void;
+  onChangeLogo?: () => void;
   onChatClick?: () => void;
-  onMessagesClick?: () => void;
 }) {
   const { t } = useLanguage();
   const { user } = useAuth();
   const canManageClub = canManageClubWebsite(user?.id, userType, club);
-  const logoInputRef = useEntityImageInput();
-  const entityVisual = useEntityVisual(club?.id, club?.description);
-  const logoUrl = entityVisual.logoUrl || resolvePublicImageUrl(club?.imageUrl);
-  const entityEdit = canManageClub && club?.id ? { kind: 'club' as const, entityId: club.id } : null;
   const { locality, country: fallbackCountry } = parseLocalityAndCountry(club?.location);
   const clubMeta = parseClubDescriptionMeta(club?.description);
   const clubType =
     clubMeta.category?.trim() ||
     (club?.description?.trim().startsWith('{') ? '' : club?.description?.trim()) ||
     '';
+  const logoUrl = resolveManagedEntityDisplayImageUrl({
+    description: club?.description,
+    imageUrl: club?.imageUrl,
+    userImageUrl,
+  });
   const country = userCountry ?? fallbackCountry;
-  /**
-   * Official MY CLUB menu: after Club Info, DarkSidebar renders flat rows —
-   * My Club Dashboard → Section Social → Club page for visitors → …
-   */
+  /** Official MY CLUB menu: dashboard, social and visitors rows move below Club Info (DarkSidebar). */
   const officialClubLayout = isClubAccountUserType(userType);
 
   return (
@@ -133,18 +131,13 @@ export default function SidebarClubMyEntityTop({
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-200/90 via-sky-300/80 to-slate-700/90" />
               )}
             </div>
-            {entityEdit ? (
-              <>
-                <EntityImageFileInput edit={entityEdit} asset="logo" inputRef={logoInputRef} />
-                <button
-                  type="button"
-                  onClick={() => logoInputRef.current?.click()}
-                  className="mt-1 text-left text-[11px] text-white underline underline-offset-2 decoration-white/80 hover:text-white/90"
-                >
-                  Change Logo
-                </button>
-              </>
-            ) : null}
+            <button
+              type="button"
+              onClick={onChangeLogo}
+              className="mt-1 text-left text-[11px] text-white underline underline-offset-2 decoration-white/80 hover:text-white/90"
+            >
+              Change Logo
+            </button>
           </div>
 
           <div className="flex-1 min-w-0 space-y-2 text-xs leading-snug">
@@ -198,9 +191,7 @@ export default function SidebarClubMyEntityTop({
           </div>
         </div>
 
-        {officialClubLayout ? null : (
-          <ClubSocialSubmenu onChatClick={onChatClick} onMessagesClick={onMessagesClick} />
-        )}
+        {officialClubLayout ? null : <ClubSocialSubmenu onChatClick={onChatClick} />}
 
         {officialClubLayout ? (
           <ClubMyClubInfoSubmenu clubId={club?.id} />

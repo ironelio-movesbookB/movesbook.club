@@ -1,5 +1,4 @@
-import { fetchTranslationValues } from './infoRepsLongText';
-import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
+import { fetchLongTextTranslation } from './infoRepsLongText';
 
 /** DB / Language settings → Long texts key (Settings → Language → Long texts → Management). */
 export const PAYMENT_INFO_TRANSLATION_KEY = 'Payment_info' as const;
@@ -25,42 +24,6 @@ export const PAYMENT_INFO_DEFAULT_EN = `<h3>TYPES OF AUTOMATIC PAYMENTS</h3>
 <p><strong>YES (Automatic but managed by you): Standing Order / Scheduled Transfer.</strong><br>Your bank sends the funds on the exact date you choose (e.g., for rent).</p>
 <p><strong>NO (Manual and One-off): CBILL, MAV, F24, and Checks.</strong><br>These all require manual action for every single payment.<br>At most, online banking allows you to "schedule" the payment a few days in advance so it goes through on the due date, but the process ends there and does not repeat automatically for the next cycle.</p>`;
 
-export const PAYMENT_INFO_DEFAULT_IT = `<h3>TIPI DI PAGAMENTI AUTOMATICI</h3>
-<h4>SEPA</h4>
-<p><strong>1. Addebito diretto SEPA (SDD)</strong><br>– È un vero accordo di pagamento automatico con un creditore. Autorizzi un’azienda (fornitore di energia, palestra, operatore telefonico, ecc.) a prelevare fondi dal tuo conto corrente alla scadenza della fattura o della rata. Come funziona: firmi un mandato di autorizzazione una sola volta. Da quel momento l’azienda richiede ogni mese (o ogni due mesi) l’importo dovuto alla tua banca, che effettua automaticamente il pagamento alla data di scadenza. Uso tipico: utenze, abbonamenti ricorrenti, rate di finanziamenti.</p>
-<p><strong>2. Bonifico SEPA programmato o permanente</strong><br>– Se invece di far prelevare i fondi da un’azienda vuoi far sì che sia la tua banca a inviare un importo in una data specifica, stai usando un bonifico SEPA programmato. Bonifico programmato: imposti oggi un singolo bonifico con data di esecuzione futura (es. “paga il 30 del mese prossimo”). Ordine permanente (o bonifico ricorrente): imposti un pagamento automatico ripetuto (es. “invia 500 € al proprietario per l’affitto il 1° di ogni mese”).</p>
-<h4>CBILL</h4>
-<p>A differenza dell’addebito diretto SEPA, CBILL è un servizio per pagare bollettini e avvisi della Pubblica Amministrazione (pagoPA) o di aziende private direttamente dall’home banking. È l’evoluzione digitale del bollettino postale: inserisci i codici manualmente (o scansionando un QR code) e autorizzi un pagamento una tantum. Puoi comunque ottenere un pagamento “in una data specifica” in due modi:</p>
-<p><strong>1. Programmare il pagamento (se la banca lo consente)</strong><br>Quando inserisci un codice CBILL o pagoPA nell’home banking, alcune banche permettono di cambiare la data di esecuzione prima della conferma finale. Come funziona: se oggi è il 23 settembre e la scadenza è il 30, puoi inserire i dati oggi e scegliere il 30 settembre come data di addebito. La banca tiene il pagamento in coda e lo invia automaticamente quel giorno. Nota: non tutte le app bancarie offrono questa opzione per CBILL/pagoPA.</p>
-<p><strong>2. Attivare l’addebito diretto SEPA (per i pagamenti futuri)</strong><br>Se vuoi che una bolletta sia pagata automaticamente ogni mese senza fare nulla, CBILL non è lo strumento giusto. Cerca l’opzione “Addebito diretto” (o SDD / SEPA) sulla bolletta. Di solito trovi un QR code o un link per attivare i pagamenti automatici delle fatture future.</p>
-<h4>MAV</h4>
-<p>Come il sistema CBILL, il MAV (<em>Pagamento Mediante Avviso</em>) è un bollettino di pagamento singolo e manuale. Viene emesso con un codice identificativo di 17 cifre e una data di scadenza; la banca non preleva mai automaticamente i fondi alla scadenza se non autorizzi tu il pagamento ogni volta. Come pagare un MAV in una data specifica? Inserendo i dati MAV via home banking (codice numerico e importo), molte banche consentono di impostare una “data di esecuzione” differita. Esempio: se oggi ricevi un MAV per le tasse universitarie con scadenza il 30 del mese, puoi inserire i dati ora e scegliere il 30 come data di elaborazione. La banca tiene l’operazione in sospeso e la esegue automaticamente quel giorno.</p>
-<h4>F24</h4>
-<p>Il modello F24 è il modulo ufficiale usato in Italia per pagare la maggior parte di tasse, tributi e contributi previdenziali (IRPEF, IMU, IVA, INPS, ecc.). Essendo obblighi verso lo Stato o gli enti locali, non esiste un prelievo automatico continuo dal conto. Ogni volta che scade un pagamento, viene generato un F24 specifico con codici tributo e importi da autorizzare personalmente. Proprio perché le scadenze fiscali sono rigide, puoi programmare il pagamento in una data futura. Come pagare un F24 “in una data specifica”? Ci sono due canali principali: Via home banking: compilando l’F24 sul sito della banca, quasi tutti gli istituti permettono di scegliere la data valuta o di esecuzione. Puoi inserire i dati giorni prima e impostare la scadenza fiscale come data di addebito. Via i servizi online dell’Agenzia delle Entrate (Fisconline/Entratel): se tu (o il commercialista) invii l’F24 dal sito dell’Agenzia, viene richiesto un IBAN e puoi indicare la data esatta in cui lo Stato preleverà i fondi. Molti commercialisti inviano gli F24 a inizio mese, programmando l’addebito automatico per il 16 (scadenza fiscale comune).</p>
-<h4>ASSEGNO\\BOLLETTINO DI PAGAMENTO</h4>
-<p>In realtà questo termine inglese unisce due concetti cartacei tradizionali: l’assegno e il bollettino di pagamento. Se lo trovi (su un sito estero o in un software di fatturazione), indica un pagamento manuale inviando un assegno bancario insieme a un foglio di accompagnamento. Come per i bollettini italiani (CBILL, MAV o F24), non c’è automazione. Come funziona un “Check Payment Slip”? Emissione: un’azienda estera ti invia una fattura con un bollettino (sezione staccabile) in basso. Azione manuale: compili un assegno fisico, lo metti in busta con il bollettino e lo spedisci al creditore. Tempistiche: il pagamento avviene solo quando il creditore riceve la busta e incassa fisicamente l’assegno; non puoi impostare una data di addebito automatico dal conto.</p>
-<h3>RIEPILOGO DELLE OPZIONI DI PAGAMENTO AUTOMATICO</h3>
-<p>In sintesi: come impostare pagamenti “automatici” per scadenze specifiche?<br>Se l’obiettivo è far pagare una bolletta automaticamente alla scadenza—senza doverci pensare ogni mese—ecco la guida definitiva agli strumenti analizzati:</p>
-<p><strong>SÌ (Automatico e ricorrente): Addebito diretto SEPA (SDD).</strong><br>È l’unico metodo vero che autorizza un’azienda a prelevare automaticamente i fondi alla scadenza (es. utenze o abbonamenti).</p>
-<p><strong>SÌ (Automatico ma gestito da te): Ordine permanente / Bonifico programmato.</strong><br>La tua banca invia i fondi nella data esatta che scegli (es. affitto).</p>
-<p><strong>NO (Manuale e una tantum): CBILL, MAV, F24 e assegni.</strong><br>Tutti richiedono un’azione manuale per ogni singolo pagamento.<br>Al massimo l’home banking permette di “programmare” il pagamento alcuni giorni prima così che parta alla scadenza, ma il processo termina lì e non si ripete automaticamente al ciclo successivo.</p>`;
-
-function paymentInfoFallback(language: string): string {
-  return normalizeToolsLanguage(language) === 'it'
-    ? PAYMENT_INFO_DEFAULT_IT
-    : PAYMENT_INFO_DEFAULT_EN;
-}
-
 export async function fetchPaymentInfoText(language: string): Promise<string> {
-  const lang = normalizeToolsLanguage(language);
-  const values = await fetchTranslationValues(PAYMENT_INFO_TRANSLATION_KEY);
-  const localized = values?.[lang]?.trim();
-  if (localized) return localized;
-  if (lang !== 'en') {
-    const builtIn = paymentInfoFallback(lang);
-    if (builtIn !== PAYMENT_INFO_DEFAULT_EN) return builtIn;
-  }
-  const en = values?.en?.trim();
-  if (en) return en;
-  return PAYMENT_INFO_DEFAULT_EN;
+  return fetchLongTextTranslation(PAYMENT_INFO_TRANSLATION_KEY, language, PAYMENT_INFO_DEFAULT_EN);
 }

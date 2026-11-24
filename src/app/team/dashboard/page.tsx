@@ -15,8 +15,7 @@ import RightSidebar from '@/components/dashboard/RightSidebar';
 import DisplayOptionsToolbar from '@/app/my-page/components/DisplayOptionsToolbar';
 import ManagedEntityDashboardBanner from '@/components/dashboard/ManagedEntityDashboardBanner';
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
-import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
-import { useEntityVisual } from '@/lib/entity/useEntityVisual';
+import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import { getManagedEntityProfilePath } from '@/lib/dashboard/managedEntityDashboardLabels';
 import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useDashboardBannerProfile } from '@/hooks/useDashboardBannerProfile';
@@ -29,11 +28,9 @@ import {
   useEntityDirectAccessLockedForKind,
 } from '@/hooks/useEntityDirectAccessGuard';
 import { clearEntityCompanyLoginSession, isEntityWorkspaceSession } from '@/lib/entity/entityDirectAccessSession';
-import { getDashboardPathForUserType, isTeamAccountUserType } from '@/utils/dashboardRouting';
 import { useEntityWorkspaceDashboardNav } from '@/hooks/useEntityWorkspaceDashboardNav';
 import { writeClubWorkspaceTab } from '@/lib/club/clubWorkspaceTab';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
-import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 
 function TeamDashboardContent() {
   const router = useRouter();
@@ -71,7 +68,6 @@ function TeamDashboardContent() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showWorkoutSection, setShowWorkoutSection] = useState(false);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
-  const [showClubStaffMessages, setShowClubStaffMessages] = useState(false);
   /** My Team tab visible only after opening a team from the sidebar (hidden on My Page). */
   const [myEntityTabVisible, setMyEntityTabVisible] = useState(false);
 
@@ -103,14 +99,10 @@ function TeamDashboardContent() {
   });
 
   const handleMyPageTabClick = useCallback(() => {
-    if (user && !isTeamAccountUserType(user.userType)) {
-      router.push(getDashboardPathForUserType(user.userType));
-      return;
-    }
     clearEntityCompanyLoginSession();
     hideMyEntityTab();
     setActiveTab('my-page');
-  }, [hideMyEntityTab, router, setActiveTab, user]);
+  }, [hideMyEntityTab, setActiveTab]);
 
   const handleTabChange = useCallback(
     (tab: 'my-page' | 'my-entity') => {
@@ -161,12 +153,6 @@ function TeamDashboardContent() {
     ? formCreatedTeams.find((team) => team.id === selectedTeamId) ?? null
     : null;
   const bannerTeam = activeTeam ?? formCreatedTeams[0] ?? null;
-  const showEntityBanner =
-    activeTab === 'my-entity' && Boolean(selectedTeamId) && Boolean(bannerTeam);
-  const entityVisual = useEntityVisual(
-    showEntityBanner ? bannerTeam?.id : null,
-    bannerTeam?.description,
-  );
   const dashboardShellActiveTab: 'my-page' | 'my-entity' =
     activeTab === 'my-entity' &&
     selectedTeamId &&
@@ -216,16 +202,8 @@ function TeamDashboardContent() {
               coverBannerAlignment={
                 bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
               }
-              entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
-              entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
-              entityEdit={
-                showEntityBanner && bannerTeam
-                  ? { kind: 'team', entityId: bannerTeam.id }
-                  : null
-              }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               showSponsored={dashboardShellActiveTab === 'my-page'}
-              avatarImagePath={bannerProfile?.image}
               activeTab={dashboardShellActiveTab}
               showWorkoutSection={showWorkoutSection}
               onWorkoutsToggle={() => setShowWorkoutSection((v) => !v)}
@@ -237,12 +215,7 @@ function TeamDashboardContent() {
           {showLeftSidebar && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start">
               <DarkSidebar
-                userType={
-                  activeTab === 'my-entity' && user && !isTeamAccountUserType(user.userType)
-                    ? 'TEAM'
-                    : user?.userType || ''
-                }
-                entityTabLabel={activeTab === 'my-entity' ? 'My Team' : undefined}
+                userType={user?.userType || ''}
                 entities={teams}
                 selectedEntityId={selectedTeamId}
                 clubMyClubTabVisible={myEntityTabVisible || entityDirectAccessLocked}
@@ -264,13 +237,7 @@ function TeamDashboardContent() {
                 onSuggestMovesbookClick={() => router.push('/users/notification_by_promocode')}
                 onMyFeedbacksStaffClick={() => {
                   setActiveTab('my-page');
-                  setShowClubStaffMessages(false);
                   setShowStaffFeedbacks(true);
-                }}
-                onClubStaffMessagesClick={() => {
-                  setActiveTab('my-page');
-                  setShowStaffFeedbacks(false);
-                  setShowClubStaffMessages(true);
                 }}
               />
             </div>
@@ -286,19 +253,6 @@ function TeamDashboardContent() {
             />
             {showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
-            ) : showClubStaffMessages ? (
-              <div className="w-full">
-                <div className="px-1 pt-2">
-                  <h1 className="text-xl font-bold text-orange-600">
-                    Messages among Staff and members
-                  </h1>
-                  <p className="text-sm text-gray-600 mt-1 mb-2">
-                    All clubs and teams you belong to. Club logo and username appear on the right of
-                    each message.
-                  </p>
-                </div>
-                <ClubStaffMessagesPanel showClubBadge />
-              </div>
             ) : (
               <>
             {activeTab === 'my-page' && (

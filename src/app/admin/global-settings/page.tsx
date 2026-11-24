@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
-import Link from 'next/link';
 import AdminFoodDatabasePanel from '@/components/admin/AdminFoodDatabasePanel';
 
 const USER_TYPES = [
@@ -131,17 +130,9 @@ function UserTypesPanel() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/global-settings/subscription-modalities"
-            className="bg-[#d9534f] hover:bg-[#c9302c] text-white px-4 py-2 text-sm font-bold shadow-sm"
-          >
-            Modality of subscription available
-          </Link>
-          <button className="bg-[#333] hover:bg-black text-white px-4 py-2 text-sm font-bold shadow-sm bg-gradient-to-b from-[#444] to-[#222]">
-            New User Typology
-          </button>
-        </div>
+        <button className="bg-[#333] hover:bg-black text-white px-4 py-2 text-sm font-bold shadow-sm bg-gradient-to-b from-[#444] to-[#222]">
+          New User Typology
+        </button>
       </div>
 
       <div className="border border-gray-200 mb-6 p-4 bg-[#fafafa]">

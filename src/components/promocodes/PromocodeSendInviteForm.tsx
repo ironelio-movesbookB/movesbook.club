@@ -8,7 +8,6 @@ import PromocodeInviteCKEditor4 from '@/components/promocodes/PromocodeInviteCKE
 import { notifyPromocodeInviteSentOpener } from '@/lib/promocodes/promocodeInviteEvents';
 import { getCke4Window } from '@/lib/ckeditor4Legacy';
 import type { SendInvitePreview } from '@/lib/promocodes/sendInviteService';
-import { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
 import { promocodeLanguageFlagUrl, PROMOCODE_NO_FLAG_IMAGE } from '@/components/promocodes/promocodeImageUrls';
 import PromocodeAssetImage from '@/components/promocodes/PromocodeAssetImage';
 import './send-invite.css';
@@ -36,11 +35,6 @@ export default function PromocodeSendInviteForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load invitation preview');
       const loaded = data as SendInvitePreview;
-      if (isBlankInviteHtml(loaded.emailBodyHtml ?? '')) {
-        throw new Error(
-          'Invitation body text is empty for the selected language. Choose a language with invite text or add content under Settings → Language (Long text).'
-        );
-      }
       setPreview(loaded);
       setEmailContent(loaded.emailBodyHtml);
       setOtherInfo(loaded.otherInfo);
@@ -69,12 +63,6 @@ export default function PromocodeSendInviteForm() {
         typeof window !== 'undefined' && getCke4Window().CKEDITOR?.instances.email_content
           ? getCke4Window().CKEDITOR!.instances.email_content.getData()
           : emailContent;
-
-      if (isBlankInviteHtml(latestHtml)) {
-        showAlert('Please enter invitation body text before sending.');
-        setSending(false);
-        return;
-      }
 
       const res = await promocodesFetch('/api/admin/promocodes/send-invite', {
         method: 'POST',
@@ -126,32 +114,9 @@ export default function PromocodeSendInviteForm() {
     return { width: `${len}ch`, minWidth: `${len}ch` } as const;
   };
 
-  const bannerUrl = preview.senderBannerUrl;
-  const photoUrl = preview.senderPhotoUrl;
-
   return (
     <>
       <div>
-        {(bannerUrl || photoUrl || preview.senderDisplayName) && (
-          <div
-            className="si-invite-hero"
-            style={
-              bannerUrl
-                ? {
-                    backgroundImage: `linear-gradient(rgba(15,23,42,.55), rgba(15,23,42,.75)), url(${bannerUrl})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }
-                : undefined
-            }
-          >
-            {photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="" className="si-invite-hero-photo" />
-            ) : null}
-            <div className="si-invite-hero-name">{preview.senderDisplayName}</div>
-          </div>
-        )}
         <div className="sd-legend-content">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <PromocodeAssetImage
@@ -175,7 +140,7 @@ export default function PromocodeSendInviteForm() {
         <div className="si-fields-block">
           <div className="si-field-row si-field-row-promo">
             <label className="si-label" htmlFor="url_1">
-              Promotional code
+              Promocode
             </label>
             <input
               type="text"

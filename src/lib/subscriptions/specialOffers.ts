@@ -9,8 +9,6 @@ export type SpecialOfferLangMap = Record<string, string>;
 export type SpecialOfferSettings = {
   versionId: number;
   enabled: boolean;
-  /** Short code shown in admin/all Check column for Special Offer rows. */
-  offerCode: string;
   titleByLang: SpecialOfferLangMap;
   descriptionByLang: SpecialOfferLangMap;
   /** Languages where the "Still free" counter is shown. */
@@ -108,15 +106,6 @@ export async function ensureSpecialOfferTables(): Promise<void> {
       `ALTER TABLE subscription_special_offers ADD COLUMN flashBelow INT NOT NULL DEFAULT 0`,
     );
   }
-  const codeColumn = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
-    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscription_special_offers' AND COLUMN_NAME = 'offerCode'`,
-  );
-  if (Number(codeColumn[0]?.c ?? 0) === 0) {
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE subscription_special_offers ADD COLUMN offerCode VARCHAR(32) NOT NULL DEFAULT ''`,
-    );
-  }
   tablesEnsured = true;
 }
 
@@ -133,7 +122,6 @@ type OfferRow = {
   maxSubscriptions: number;
   counterStart: number;
   flashBelow?: number | null;
-  offerCode?: string | null;
   logoUrl: string | null;
 };
 
@@ -183,7 +171,6 @@ function rowToSettings(row: OfferRow): SpecialOfferSettings {
   return {
     versionId: Number(row.versionId),
     enabled: Boolean(Number(row.enabled)),
-    offerCode: String(row.offerCode || '').trim(),
     titleByLang: parseJson<SpecialOfferLangMap>(row.titlesJson, {}),
     descriptionByLang: parseJson<SpecialOfferLangMap>(row.descriptionsJson, {}),
     counterLangs: parseJson<string[]>(row.counterLangsJson, []),
@@ -201,7 +188,6 @@ function emptySettings(versionId: number): SpecialOfferSettings {
   return {
     versionId,
     enabled: false,
-    offerCode: '',
     titleByLang: {},
     descriptionByLang: {},
     counterLangs: [],
@@ -295,24 +281,20 @@ export async function saveSpecialOffer(input: Partial<SpecialOfferSettings> & { 
     throw new Error('"Counter will flash when less of" cannot be more than the maximum number of allowed subscriptions');
   }
   const logoUrl = typeof input.logoUrl === 'string' ? input.logoUrl.trim().slice(0, 512) : '';
-  const offerCode = String(input.offerCode || '')
-    .trim()
-    .slice(0, 32);
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO subscription_special_offers
-       (versionId, enabled, offerCode, titlesJson, descriptionsJson, counterLangsJson, validFrom, validTo,
+       (versionId, enabled, titlesJson, descriptionsJson, counterLangsJson, validFrom, validTo,
         costEuro, maxSubscriptions, counterStart, flashBelow, logoUrl)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
-       enabled = VALUES(enabled), offerCode = VALUES(offerCode), titlesJson = VALUES(titlesJson),
+       enabled = VALUES(enabled), titlesJson = VALUES(titlesJson),
        descriptionsJson = VALUES(descriptionsJson), counterLangsJson = VALUES(counterLangsJson),
        validFrom = VALUES(validFrom), validTo = VALUES(validTo), costEuro = VALUES(costEuro),
        maxSubscriptions = VALUES(maxSubscriptions), counterStart = VALUES(counterStart),
        flashBelow = VALUES(flashBelow), logoUrl = VALUES(logoUrl)`,
     input.versionId,
     input.enabled ? 1 : 0,
-    offerCode,
     JSON.stringify(titleByLang),
     JSON.stringify(descriptionByLang),
     JSON.stringify(counterLangs),

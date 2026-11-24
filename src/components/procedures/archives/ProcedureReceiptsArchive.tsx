@@ -7,16 +7,13 @@ import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import {
   DeleteRowButton,
   EditRowButton,
-  PrintRowButton,
   usePasswordGate,
 } from '@/components/procedures/ArchiveRowActions';
-import { printAcceptanceReceipt } from '@/components/procedures/printAcceptanceReceipt';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
 import { buildProcedureColumns } from '@/components/procedures/configs/buildColumns';
 import EditReceiptModal from '@/components/club/archives/EditReceiptModal';
-import SendReceiptPdfModal from '@/components/procedures/SendReceiptPdfModal';
 import { createProcedureClient, type ProcedureReceiptView } from '@/lib/club/procedureClient';
 import {
   getProcedureDefinition,
@@ -34,8 +31,7 @@ type Props = {
 function toReceiptRow(
   receipt: ProcedureReceiptView,
   onEdit: (receipt: ProcedureReceiptView) => void,
-  onDelete: (id: string) => void,
-  onPrint?: (receipt: ProcedureReceiptView) => void
+  onDelete: (id: string) => void
 ): Member {
   return {
     id: receipt.id,
@@ -49,7 +45,6 @@ function toReceiptRow(
     paid: receipt.paymentIn,
     casual: receipt.annotations,
     operator: receipt.operatorName,
-    print: onPrint ? <PrintRowButton onClick={() => onPrint(receipt)} /> : undefined,
     edit: <EditRowButton onClick={() => onEdit(receipt)} />,
     delete: <DeleteRowButton onClick={() => onDelete(receipt.id)} />,
   };
@@ -62,7 +57,6 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
   const scope = useArchiveScope();
   const filters = useArchiveListFilters();
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
-  const isOut = def.metadataKeys.direction === 'OUT';
 
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -72,7 +66,6 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
   const [pageSize, setPageSize] = useState(client.pageSize);
   const [total, setTotal] = useState(0);
   const [editTarget, setEditTarget] = useState<ProcedureReceiptView | null>(null);
-  const [sendPdfIds, setSendPdfIds] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,25 +78,6 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
         ...filters.applied,
       });
       setTotal(res.total);
-      const printReceipt = isOut
-        ? (receipt: ProcedureReceiptView) => {
-            const opened = printAcceptanceReceipt({
-              clubName: res.clubName,
-              recipientName: receipt.memberName,
-              amount: receipt.paymentIn,
-              paymentDate: receipt.receiptDate,
-              detail: receipt.primaryLabel,
-              notes: receipt.annotations,
-              operatorName: receipt.operatorName,
-              typology: receipt.typology,
-              documentType: receipt.documentType,
-              documentNumber: receipt.documentNumber,
-              totalAmount: receipt.cost,
-              residualAmount: receipt.residual,
-            });
-            if (!opened) setError('Allow pop-ups for this site to print the receipt.');
-          }
-        : undefined;
       setData(
         res.items.map((receipt) =>
           toReceiptRow(
@@ -117,8 +91,7 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
                 }
-              }),
-            printReceipt
+              })
           )
         )
       );
@@ -128,7 +101,7 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [client, isOut, page, pageSize, scope.filters, filters.applied, requestPassword]);
+  }, [client, page, pageSize, scope.filters, filters.applied, requestPassword]);
 
   useEffect(() => {
     load();
@@ -163,11 +136,7 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
         <ArchiveScopeRadios state={scope} name="receiptsScope" onChange={() => setPage(1)} />
       }
       error={error}
-      footerHint={
-        isOut
-          ? 'Print the receipt for the recipient to sign for acceptance of the payment · Edit and Delete ask for your password.'
-          : 'Check rows to delete selected · Edit and Delete ask for your password.'
-      }
+      footerHint="Check rows to delete selected · Edit and Delete ask for your password."
     >
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.receipts}`}
@@ -183,14 +152,6 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
-        sendDataTitle="Mail the PDF of the checked receipts"
-        onSendData={() => {
-          if (selectedIds.size === 0) {
-            setError('Check one or more receipts to send their PDF.');
-            return;
-          }
-          setSendPdfIds(Array.from(selectedIds));
-        }}
         pagination={
           <ProcedurePagination
             page={page}
@@ -230,8 +191,6 @@ function ProcedureReceiptsArchiveInner({ procedureCode, activeTab }: Props) {
       />
 
       {passwordModal}
-
-      {sendPdfIds && <SendReceiptPdfModal receiptIds={sendPdfIds} onClose={() => setSendPdfIds(null)} />}
 
       {editTarget && (
         <EditReceiptModal

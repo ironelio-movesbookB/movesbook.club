@@ -23,18 +23,6 @@ export type PaymentTypeValue = (typeof PAYMENT_TYPE_OPTIONS)[number]['value'];
 /** No longer offered on forms; kept so older payments still show their label. */
 const RETIRED_PAYMENT_TYPES = [{ value: 'f24', label: 'F24 form **', legacyCode: '12' }] as const;
 
-/** Desk operator shares the member pay URL instead of taking cash on the form. */
-export const SHARE_ONLINE_PAY_MODES: readonly PaymentTypeValue[] = [
-  'credit_card',
-  'debit_card',
-  'paypal',
-  'satispay',
-];
-
-export function isShareOnlinePayMode(mode: string): boolean {
-  return mode === 'stripe' || SHARE_ONLINE_PAY_MODES.includes(mode as PaymentTypeValue);
-}
-
 /** Methods that can receive the "Send payment module" message. */
 export const SEND_PAYMENT_MODULE_METHODS: readonly PaymentTypeValue[] = [
   'credit_card',
@@ -56,83 +44,6 @@ export const TO_BE_VERIFIED_METHODS: readonly PaymentTypeValue[] = [
   'payment_slip',
   'bank_transfer',
 ];
-
-/** Red methods: the buyer gets a pay link and the payment is recorded when they pay. */
-export const PAY_LINK_METHODS: readonly string[] = [
-  'prepaid_card',
-  'credit_card',
-  'debit_card',
-  'paypal',
-  'satispay',
-  'multisafepay',
-  'apple_pay',
-  'google_pay',
-  'stripe',
-];
-
-/** Blue methods: the member pays outside Movesbook and the club must verify it. */
-export const EXTERNAL_VERIFY_METHODS: readonly string[] = [
-  'bank_transfer',
-  'sepa',
-  'cbill',
-  'mav',
-  'payment_slip',
-];
-
-export type PayModeTone = 'link' | 'external' | 'plain';
-
-export function payModeTone(value: string | null | undefined): PayModeTone {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 'plain';
-  const normalized = raw.toLowerCase() === 'stripe' ? 'stripe' : normalizePaymentTypeValue(raw);
-  if (normalized && PAY_LINK_METHODS.includes(normalized)) return 'link';
-  if (normalized && EXTERNAL_VERIFY_METHODS.includes(normalized)) return 'external';
-  return 'plain';
-}
-
-/** Inline colors: `<option>` elements ignore most utility classes. */
-export const PAY_MODE_TONE_COLOR: Record<PayModeTone, string> = {
-  link: '#dc2626',
-  external: '#1d4ed8',
-  plain: '#111827',
-};
-
-/** Pay-link methods with a connected gateway: cards and wallets go through Stripe Checkout. */
-export function payLinkProviderForMethod(method: string | null | undefined): 'stripe' | 'paypal' | null {
-  const value = String(method ?? '').trim();
-  if (value === 'paypal') return 'paypal';
-  if (
-    value === 'stripe' ||
-    value === 'credit_card' ||
-    value === 'debit_card' ||
-    value === 'prepaid_card' ||
-    value === 'satispay' ||
-    value === 'apple_pay' ||
-    value === 'google_pay'
-  ) {
-    return 'stripe';
-  }
-  return null;
-}
-
-/** Greyed out when any checked deadline belongs to a procedure in NO_RECURRING_PAY_MODE_PROCEDURES. */
-export const RECURRING_ONLY_PAY_MODES: readonly PaymentTypeValue[] = ['sepa', 'cbill', 'mav'];
-
-/** Purchases of services and products, and debts (procedure code and archive typology label). */
-export const NO_RECURRING_PAY_MODE_PROCEDURES = [
-  'service_sale',
-  'product_sale',
-  'member_debt',
-  'SERVICES',
-  'PURCHASE PRODUCTS',
-  'MEMBER DEBTS',
-];
-
-export function blockedPayModesFor(kinds: (string | null | undefined)[]): string[] {
-  return kinds.some((kind) => NO_RECURRING_PAY_MODE_PROCEDURES.includes(String(kind ?? '')))
-    ? [...RECURRING_ONLY_PAY_MODES]
-    : [];
-}
 
 /** Only these methods allow marking the first deadline as Paid on the member Settings. */
 export const PAID_AT_FIRST_DEADLINE_METHODS: readonly PaymentTypeValue[] = [
@@ -186,7 +97,6 @@ const LEGACY_ALIASES: Record<string, PaymentTypeValue> = {
 
 export function payModeLabel(value: string | null | undefined): string {
   if (!value) return '-';
-  if (value === 'stripe') return 'Stripe';
   const found =
     PAYMENT_TYPE_OPTIONS.find((o) => o.value === value) ??
     RETIRED_PAYMENT_TYPES.find((o) => o.value === value);

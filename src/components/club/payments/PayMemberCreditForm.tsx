@@ -57,12 +57,8 @@ export default function PayMemberCreditForm() {
   const [memberId, setMemberId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
-  const [creditDate, setCreditDate] = useState(() => {
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${today.getFullYear()}-${month}-${day}`;
-  });
+  // PHP starts empty; user picks a date.
+  const [creditDate, setCreditDate] = useState('');
   const [causal, setCausal] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [openPaymentAfterSave, setOpenPaymentAfterSave] = useState(false);
@@ -184,7 +180,7 @@ export default function PayMemberCreditForm() {
       )}
 
       <div className="border-b border-gray-200 px-4 py-4">
-        <div className="flex items-start gap-[30px]">
+        <div className="flex items-start gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3 pt-2">
             <span className="w-36 shrink-0 text-right text-[13px] text-gray-800">
               {payTarget === 'member' ? 'Select a Member' : 'Select an Employee'}
@@ -218,7 +214,7 @@ export default function PayMemberCreditForm() {
             )}
           </div>
 
-          <div className="flex w-[120px] shrink-0 justify-center pt-1">
+          <div className="flex w-[120px] shrink-0 flex-col items-center">
             <div className="relative flex h-[72px] w-[72px] items-center justify-center overflow-hidden border border-gray-400 bg-white">
               {personLoading && (
                 <span className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">

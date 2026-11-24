@@ -19,7 +19,6 @@ import {
   MEMBER_SETTINGS_INSTALLMENT_KEYS,
   type ClubMemberScopedData,
   type MemberSettingsDeadlines,
-  type MemberSettingsInstallmentKey,
 } from '@/lib/club/memberProfileTypes';
 import {
   MEMBER_SETTINGS_INSTALLMENT_LABELS,
@@ -83,34 +82,11 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function todayIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
-async function paidKeysFromInstallments(
-  tx: Prisma.TransactionClient | typeof prisma,
-  recordId: string,
-): Promise<MemberSettingsInstallmentKey[]> {
-  const rows = await tx.procedureInstallment.findMany({
-    where: { procedureRecordId: recordId },
-    select: { description: true, balance: true },
-  });
-  const byLabel = new Map(
-    rows.map((row) => [String(row.description ?? '').trim(), decimalToNumber(row.balance as never)]),
-  );
-  return MEMBER_SETTINGS_INSTALLMENT_KEYS.filter((key) => {
-    const label = INSTALLMENT_LABELS[key];
-    if (!byLabel.has(label)) return false;
-    return (byLabel.get(label) ?? 0) <= 0.005;
-  });
-}
-
 /**
  * Files the member Settings installments in the Archive of the Deadlines (one Membership record).
- * Paying any deadline (or "Create deadlines") copies every installment with an amount into the archive.
- * Each Paid tick records only the pending balance for that installment in the Archive of Payments /
- * Cash movements — partial archive payments are respected.
+ * "Create deadlines" files every installment with an amount; the first payment "Paid" tick files
+ * that installment and records its payment in the Archive of the Payments.
+ * Installments already filed are never rewritten — edits go through the archive payment forms.
  */
 export async function syncMemberSettingsDeadlines(opts: {
   /** Club id, or the team id in a Team workspace. */
@@ -123,8 +99,11 @@ export async function syncMemberSettingsDeadlines(opts: {
 }): Promise<MemberSettingsDeadlines> {
   const { football } = opts;
   const createAll = football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS;
-  const methodOk = paymentMethodIn(PAID_AT_FIRST_DEADLINE_METHODS, football.paymentMethod);
-  const today = todayIso();
+  const firstPaid =
+    football.firstPayment?.status === 'Paid' &&
+    paymentMethodIn(PAID_AT_FIRST_DEADLINE_METHODS, football.paymentMethod);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   const existing = opts.previous.recordId
     ? await prisma.procedureRecord.findFirst({
@@ -139,28 +118,12 @@ export async function syncMemberSettingsDeadlines(opts: {
     : null;
   // A record deleted from the archive starts over on the next save.
   const state: MemberSettingsDeadlines = existing
-    ? {
-        ...opts.previous,
-        generated: [...opts.previous.generated],
-        paidKeys: [...opts.previous.paidKeys],
-      }
+    ? { ...opts.previous, generated: [...opts.previous.generated] }
     : emptyMemberSettingsDeadlines();
 
-  if (existing) {
-    state.paidKeys = await paidKeysFromInstallments(prisma, existing.id);
-    state.firstPaidRecorded = state.paidKeys.includes('firstPayment');
-    for (const key of state.paidKeys) {
-      football[key] = { ...football[key], status: 'Paid' };
-    }
-  }
-
-  const keysMarkedPaid = MEMBER_SETTINGS_INSTALLMENT_KEYS.filter(
-    (key) => football[key]?.status === 'Paid' && methodOk && !state.paidKeys.includes(key),
-  );
-  // First/next Paid tick (or Create deadlines) files every installment that has an amount.
-  const fileAll = createAll || keysMarkedPaid.length > 0;
-
-  const wanted = MEMBER_SETTINGS_INSTALLMENT_KEYS.filter((key) => fileAll)
+  const wanted = MEMBER_SETTINGS_INSTALLMENT_KEYS.filter(
+    (key) => createAll || (key === 'firstPayment' && firstPaid),
+  )
     .map((key) => ({
       key,
       amount: parseAmount(football[key]?.amount),
@@ -169,19 +132,10 @@ export async function syncMemberSettingsDeadlines(opts: {
     .filter((row) => row.amount > 0);
 
   const missing = wanted.filter((row) => !state.generated.includes(row.key));
-  const keysToPay = keysMarkedPaid.filter(
-    (key) =>
-      state.generated.includes(key) || missing.some((row) => row.key === key),
-  );
-
-  if (missing.length === 0 && keysToPay.length === 0) {
-    // One-shot Create Deadlines trigger — clear even when everything was already filed.
-    if (createAll) football.paymentStatus = 'Pending';
-    return {
-      ...state,
-      firstPaidRecorded: state.paidKeys.includes('firstPayment'),
-    };
-  }
+  const firstFiled =
+    state.generated.includes('firstPayment') || missing.some((row) => row.key === 'firstPayment');
+  const payFirst = firstPaid && !state.firstPaidRecorded && firstFiled;
+  if (missing.length === 0 && !payFirst) return state;
 
   const procedureType = await procedureService.getProcedureTypeByCode(
     PROCEDURE_TYPE_CODES.MEMBERSHIP,
@@ -190,7 +144,7 @@ export async function syncMemberSettingsDeadlines(opts: {
   if (opts.workspaceKind === 'team') await allowTeamProcedureRecords();
   const payMode = normalizePaymentTypeValue(football.paymentMethod) || null;
   const toBeVerified =
-    keysToPay.length > 0 &&
+    payFirst &&
     Boolean(football.paymentToBeVerified) &&
     paymentMethodIn(TO_BE_VERIFIED_METHODS, payMode);
   if (toBeVerified) await ensurePaymentVerificationColumn();
@@ -241,51 +195,46 @@ export async function syncMemberSettingsDeadlines(opts: {
       });
     }
 
-    for (const key of keysToPay) {
+    if (payFirst) {
       const installment = await tx.procedureInstallment.findFirst({
-        where: { procedureRecordId: id, description: INSTALLMENT_LABELS[key] },
+        where: { procedureRecordId: id, description: INSTALLMENT_LABELS.firstPayment },
         orderBy: { createdAt: 'asc' },
       });
-      // Only the pending balance — respects partial payments already made from the archive.
-      const pending = installment
-        ? roundMoney(decimalToNumber(installment.balance as never))
-        : 0;
-      if (!installment || pending <= 0) continue;
-
-      const record = await tx.procedureRecord.findUniqueOrThrow({
-        where: { id },
-        select: { balanceAmount: true, paidAmount: true },
-      });
-      const balanceAfter = roundMoney(decimalToNumber(record.balanceAmount) - pending);
-      const paymentDate =
-        isoDateOrNull(football[key]?.date) ?? today;
-      const payment = await tx.procedurePayment.create({
-        data: {
-          procedureRecordId: id,
-          amount: pending,
-          balanceAfter,
-          paymentDate: toDateOnly(paymentDate),
-          operatorId: opts.operatorId,
-          payMode,
-          notes: INSTALLMENT_LABELS[key],
-        },
-        select: { id: true },
-      });
-      if (toBeVerified) await setPaymentToBeVerified(payment.id, true, tx);
-      await tx.procedureInstallment.update({
-        where: { id: installment.id },
-        data: {
-          balance: 0,
-          paid: roundMoney(decimalToNumber(installment.paid as never) + pending),
-        },
-      });
-      await tx.procedureRecord.update({
-        where: { id },
-        data: {
-          paidAmount: roundMoney(decimalToNumber(record.paidAmount) + pending),
-          balanceAmount: balanceAfter,
-        },
-      });
+      const amount = installment ? roundMoney(decimalToNumber(installment.balance as never)) : 0;
+      if (installment && amount > 0) {
+        const record = await tx.procedureRecord.findUniqueOrThrow({
+          where: { id },
+          select: { balanceAmount: true, paidAmount: true },
+        });
+        const balanceAfter = roundMoney(decimalToNumber(record.balanceAmount) - amount);
+        const payment = await tx.procedurePayment.create({
+          data: {
+            procedureRecordId: id,
+            amount,
+            balanceAfter,
+            paymentDate: toDateOnly(isoDateOrNull(football.firstPayment?.date) ?? today),
+            operatorId: opts.operatorId,
+            payMode,
+            notes: INSTALLMENT_LABELS.firstPayment,
+          },
+          select: { id: true },
+        });
+        if (toBeVerified) await setPaymentToBeVerified(payment.id, true, tx);
+        await tx.procedureInstallment.update({
+          where: { id: installment.id },
+          data: {
+            balance: 0,
+            paid: roundMoney(decimalToNumber(installment.paid as never) + amount),
+          },
+        });
+        await tx.procedureRecord.update({
+          where: { id },
+          data: {
+            paidAmount: roundMoney(decimalToNumber(record.paidAmount) + amount),
+            balanceAmount: balanceAfter,
+          },
+        });
+      }
     }
 
     // Record-level expire date = next open deadline (or the last one once all are paid).
@@ -301,23 +250,12 @@ export async function syncMemberSettingsDeadlines(opts: {
     return id;
   });
 
-  const paidKeys = await paidKeysFromInstallments(prisma, recordId);
-  for (const key of paidKeys) {
-    football[key] = { ...football[key], status: 'Paid' };
-  }
-
-  // Dropdown/button trigger is one-shot — restore a normal status after filing.
-  if (createAll) {
-    football.paymentStatus = 'Pending';
-  }
-
   return {
     recordId,
     generated: MEMBER_SETTINGS_INSTALLMENT_KEYS.filter(
       (key) => state.generated.includes(key) || missing.some((row) => row.key === key),
     ),
-    paidKeys,
-    firstPaidRecorded: paidKeys.includes('firstPayment'),
+    firstPaidRecorded: state.firstPaidRecorded || payFirst,
     generatedAt: state.generatedAt || new Date().toISOString(),
   };
 }

@@ -145,7 +145,6 @@ export default function PaymentSettingsPanel() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           testMode: settings.testMode,
-          memberPaymentMode: settings.memberPaymentMode,
           stripe: {
             enabled: settings.stripe.enabled,
             mode: settings.stripe.mode,
@@ -211,46 +210,9 @@ export default function PaymentSettingsPanel() {
         </label>
       </section>
 
-      <section
-        className={`rounded border-2 p-4 ${settings.memberPaymentMode === 'live' ? 'border-green-500 bg-green-50' : 'border-amber-400 bg-amber-50'}`}
-      >
-        <h2 className="text-base font-bold text-gray-900">Club and team member payments</h2>
-        <p className="mt-1 text-sm text-gray-700">
-          Clubs and teams save a test pair and a live pair. This choice decides which pair is used
-          when a member pays them. They see the status on their payment page and cannot change it.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-2 font-semibold">
-            <input
-              type="radio"
-              name="member-payment-mode"
-              checked={settings.memberPaymentMode !== 'live'}
-              onChange={() => setSettings({ ...settings, memberPaymentMode: 'test' })}
-            />
-            Test mode
-          </label>
-          <label className="flex items-center gap-2 font-semibold">
-            <input
-              type="radio"
-              name="member-payment-mode"
-              checked={settings.memberPaymentMode === 'live'}
-              onChange={() => setSettings({ ...settings, memberPaymentMode: 'live' })}
-            />
-            Live mode
-          </label>
-        </div>
-        <span
-          className={`mt-3 inline-block rounded px-2 py-0.5 text-xs font-bold text-white ${settings.memberPaymentMode === 'live' ? 'bg-green-700' : 'bg-amber-600'}`}
-        >
-          {settings.memberPaymentMode === 'live'
-            ? 'LIVE — member payments use each club’s live keys'
-            : 'TEST MODE — member payments use each club’s test keys'}
-        </span>
-      </section>
-
       <section className="space-y-3 rounded border border-gray-300 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-bold text-[#635bff]">Stripe (credit cards and Klarna)</h2>
+          <h2 className="text-base font-bold text-[#635bff]">Stripe (credit cards)</h2>
           <label className="flex items-center gap-2 text-sm font-semibold">
             <input
               type="checkbox"
@@ -260,11 +222,6 @@ export default function PaymentSettingsPanel() {
             Offer Stripe on the payment page
           </label>
         </div>
-        <p className="text-sm text-gray-600">
-          When Stripe is offered, the registration payment page also shows Installment payment.
-          That option uses Klarna. Turn Klarna on in the Stripe dashboard for the same mode as the keys below
-          (test or live). The member pays in 3, 6 or 12 parts. Stripe pays the full subscription amount.
-        </p>
         <div className="flex gap-4 text-sm">
           <span className="font-semibold text-gray-700">Keys in use:</span>
           {(['test', 'live'] as const).map((mode) => (

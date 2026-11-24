@@ -31,8 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       ...filters,
     });
 
-    // clubName: the payer printed on OUT receipts signed for acceptance.
-    return NextResponse.json({ ...result, clubName: auth.ctx.club.name });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('GET procedure receipts:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

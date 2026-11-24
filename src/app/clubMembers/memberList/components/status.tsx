@@ -2,9 +2,6 @@
 
 import { Info } from 'lucide-react';
 import type { ClubMemberCapacityStats } from '@/lib/club/clubMemberCapacity';
-import { getAddAvailableSlotsButtonLabels } from '@/constants/memberArchiveSlotsLongText';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
 
 type ClubMemberArchiveHeaderProps = {
   capacity: ClubMemberCapacityStats;
@@ -36,56 +33,32 @@ export default function ClubMemberArchiveHeader({
   onPurchaseMembers,
   onStatusAccounts,
 }: ClubMemberArchiveHeaderProps) {
-  const { currentLanguage } = useLanguage();
-  const language = normalizeToolsLanguage(currentLanguage);
-  const addSlotsLabels = getAddAvailableSlotsButtonLabels(language);
-  const residualLabel = capacity.unlimited
-    ? language === 'it'
-      ? 'Illimitati'
-      : 'Unlimited'
+  const availableLabel = capacity.unlimited
+    ? 'Unlimited'
     : String(capacity.availableSlots ?? 0);
-
-  const cardTitles =
-    language === 'it'
-      ? {
-          current: 'Membri attuali',
-          total: 'Posti totali disponibili',
-          added: 'Membri aggiunti',
-          residual: 'Posti residuali',
-          statusAccounts: 'Stato account',
-          expiration: 'Data di scadenza dell’abbonamento:',
-        }
-      : {
-          current: 'Current Members',
-          total: 'Total available slots',
-          added: 'Members added',
-          residual: 'Residual slots',
-          statusAccounts: 'Status accounts',
-          expiration: 'Expiration date of the Subscription:',
-        };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title={cardTitles.current}
+            title="Current Members"
             value={String(capacity.currentMembers)}
             gradient="from-emerald-500 to-emerald-600"
           />
           <StatCard
-            title={cardTitles.total}
+            title="Members purchased"
             value={String(capacity.membersPurchased)}
             gradient="from-sky-500 to-blue-600"
           />
           <StatCard
-            title={cardTitles.added}
+            title="Members added"
             value={String(capacity.membersAdded)}
             gradient="from-violet-500 to-purple-600"
           />
           <StatCard
-            title={cardTitles.residual}
-            value={residualLabel}
+            title="Available Slots"
+            value={availableLabel}
             gradient="from-fuchsia-400 to-purple-500"
           />
         </div>
@@ -95,24 +68,21 @@ export default function ClubMemberArchiveHeader({
             <button
               type="button"
               onClick={onPurchaseMembers}
-              className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-left text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
+              className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
             >
-              <span className="block leading-tight">{addSlotsLabels.title}</span>
-              <span className="mt-0.5 block text-[11px] font-medium leading-snug opacity-95">
-                {addSlotsLabels.subtitle}
-              </span>
+              Purchase members
             </button>
             <button
               type="button"
               onClick={onStatusAccounts}
               className="rounded-md border border-red-900 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-bold text-white shadow hover:from-red-600 hover:to-red-800"
             >
-              {cardTitles.statusAccounts}
+              Status accounts
             </button>
           </div>
           <p className="flex items-start gap-1 text-sm font-semibold text-red-600">
             <span>
-              {cardTitles.expiration}{' '}
+              Expiration date of the Subscription:{' '}
               {capacity.subscriptionExpirationLabel || '—'}
             </span>
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

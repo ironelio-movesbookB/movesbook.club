@@ -18,10 +18,6 @@ import {
 } from '@/lib/club/sponsors/sponsorConstants';
 import { SPONSOR_PUBLIC_TEXTS, SPONSOR_TEXTS_CATEGORY } from '@/lib/club/sponsors/sponsorPublicTexts';
 import { ensureSponsorTables, getSponsorStatsById } from '@/lib/club/sponsors/sponsorService';
-import { getSponsorKitSettings } from '@/lib/club/sponsors/sponsorKitSettingsService';
-import type { SponsorHeaderStyle } from '@/lib/club/sponsors/sponsorKitSettings';
-import { getWebsiteSettings } from '@/lib/club/website/websiteService';
-import { websitePath } from '@/lib/club/website/websiteConstants';
 
 export type SponsorOrgCard = PublicOrgCard;
 
@@ -30,32 +26,12 @@ const orgCard = publicOrgCard;
 const resolveLanguage = resolvePublicLanguage;
 const loadTexts = (language: string) => loadPublicTexts(SPONSOR_PUBLIC_TEXTS, SPONSOR_TEXTS_CATEGORY, language);
 
-function headerOf(s: SponsorHeaderStyle): SponsorHeaderStyle {
-  return { useBanner: s.useBanner, gradientFrom: s.gradientFrom, gradientTo: s.gradientTo };
-}
-
-/** Club Info website, or the published Movesbook presentation page when that is empty. */
-async function orgCardWithWebsite(org: Awaited<ReturnType<typeof findOrg>> & object): Promise<SponsorOrgCard> {
-  const card = orgCard(org);
-  if (card.website) return card;
-  try {
-    const { settings, saved } = await getWebsiteSettings({ kind: org.kind, id: org.id });
-    if (saved && settings.enabled && settings.slug) {
-      return { ...card, website: websitePath(settings.slug) };
-    }
-  } catch {
-    /* keep empty */
-  }
-  return card;
-}
-
 // ---------- sponsorship kit ----------
 
 export type SponsorKitData = {
   language: string;
   texts: Record<string, string>;
   org: SponsorOrgCard;
-  header: SponsorHeaderStyle;
   community: { members: number; staff: number; groups: number; years: number };
   demographics: {
     male: number;
@@ -112,14 +88,12 @@ export async function getSponsorKit(orgId: string, requestedLang: string | null)
         });
   const people = members.map((m) => ('member' in m ? m.member : m.athlete));
 
-  const [staff, groups, texts, kitSettings, orgWithSite] = await Promise.all([
+  const [staff, groups, texts] = await Promise.all([
     org.kind === 'club'
       ? prisma.clubStaff.count({ where: { clubId: org.id } })
       : prisma.teamStaff.count({ where: { teamId: org.id } }),
     org.kind === 'club' ? prisma.clubMemberGroup.count({ where: { clubId: org.id } }) : Promise.resolve(0),
     loadTexts(language),
-    getSponsorKitSettings({ kind: org.kind, id: org.id }),
-    orgCardWithWebsite(org),
   ]);
 
   const now = new Date();
@@ -165,8 +139,7 @@ export async function getSponsorKit(orgId: string, requestedLang: string | null)
   return {
     language,
     texts,
-    org: orgWithSite,
-    header: headerOf(kitSettings),
+    org: orgCard(org),
     community: {
       members: people.length,
       staff,
@@ -198,15 +171,7 @@ export type SponsorReportData = {
   language: string;
   texts: Record<string, string>;
   org: SponsorOrgCard;
-  header: SponsorHeaderStyle;
-  sponsor: {
-    name: string;
-    logoUrl: string | null;
-    bannerUrl: string | null;
-    landingUrl: string;
-    phone: string;
-    email: string;
-  };
+  sponsor: { name: string; logoUrl: string | null; bannerUrl: string | null; landingUrl: string };
   placements: SponsorPlacements;
   contract: { startDate: string; endDate: string } | null;
   stats: SponsorStats;
@@ -228,12 +193,10 @@ export async function getSponsorReport(
       logo_path: string | null;
       banner_path: string | null;
       landing_url: string;
-      phone: string;
-      email: string;
       placements_json: string | null;
     }>
   >(
-    `SELECT id, workspace_id, name, logo_path, banner_path, landing_url, phone, email, placements_json
+    `SELECT id, workspace_id, name, logo_path, banner_path, landing_url, placements_json
      FROM org_sponsors WHERE report_token = ? LIMIT 1`,
     token,
   );
@@ -260,10 +223,6 @@ export async function getSponsorReport(
       notes: '',
       pdfName: null,
       pdfUrl: null,
-      invoiceNumber: '',
-      invoiceDate: '',
-      invoiceName: null,
-      invoiceUrl: null,
       createdAt: '',
     })),
   );
@@ -279,25 +238,20 @@ export async function getSponsorReport(
   }
 
   const language = await resolveLanguage(requestedLang, org.ownerId);
-  const [texts, stats, kitSettings, orgWithSite] = await Promise.all([
+  const [texts, stats] = await Promise.all([
     loadTexts(language),
     getSponsorStatsById(row.id, from <= to ? from : to, from <= to ? to : from),
-    getSponsorKitSettings({ kind: org.kind, id: org.id }),
-    orgCardWithWebsite(org),
   ]);
 
   return {
     language,
     texts,
-    org: orgWithSite,
-    header: headerOf(kitSettings),
+    org: orgCard(org),
     sponsor: {
       name: row.name,
       logoUrl: row.logo_path ? toMediaApiPath(row.logo_path) : null,
       bannerUrl: row.banner_path ? toMediaApiPath(row.banner_path) : null,
       landingUrl: row.landing_url,
-      phone: row.phone || '',
-      email: row.email || '',
     },
     placements,
     contract: current ? { startDate: current.startDate, endDate: current.endDate } : null,

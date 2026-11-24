@@ -170,15 +170,6 @@ export function useTranslationEditor(): UseTranslationEditorReturn {
     }
 
     const isLongText = Boolean(options?.isLongText);
-    const englishRaw = String(newKeyTranslations.en || '')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .trim();
-    if (!englishRaw) {
-      alert('Please enter the English text before saving.');
-      return;
-    }
-
     const existing = allKeys.find((k) => k.key === newKeyName);
     if (existing && !(options?.allowUpdateExisting && isLongText)) {
       alert('This variable name already exists. Please use a different name.');
@@ -186,21 +177,13 @@ export function useTranslationEditor(): UseTranslationEditorReturn {
     }
 
     try {
-      // Save to database (only non-empty languages + always English)
-      const translationsToSave: Record<string, string> = {};
-      for (const [code, value] of Object.entries(newKeyTranslations)) {
-        const text = String(value || '');
-        if (code === 'en' || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()) {
-          translationsToSave[code] = text;
-        }
-      }
-
+      // Save to database
       const response = await fetch('/api/admin/translations/update', {
         method: 'POST',
         headers: getJsonAuthHeaders(),
         body: JSON.stringify({
-          key: newKeyName.trim(),
-          translations: translationsToSave,
+          key: newKeyName,
+          translations: newKeyTranslations,
           category: newKeyCategory,
           isLongText,
         }),

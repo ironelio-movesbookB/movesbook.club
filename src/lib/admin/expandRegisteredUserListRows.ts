@@ -44,8 +44,6 @@ export type RegisteredUserListRow = {
   /** Membership purchased in "Special offer" mode. */
   specialOffer?: boolean;
   specialOfferTitle?: string;
-  /** Column E shows the offer price because no payment was saved for this membership. */
-  offerPrice?: boolean;
 };
 
 type ClubEntity = {

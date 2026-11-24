@@ -1,17 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  CalendarCheck,
-  CalendarDays,
-  CreditCard,
-  FileText,
-  HeartHandshake,
-  ShoppingBag,
-  Stethoscope,
-  UserPlus,
-  type LucideIcon,
-} from 'lucide-react';
 import PublicLinkBanner from '@/components/club/sponsors/PublicLinkBanner';
 import {
   dangerButton,
@@ -33,17 +22,6 @@ import {
 } from '@/lib/club/website/websiteConstants';
 
 type SettingsResponse = { settings: WebsiteSettings; saved: boolean };
-
-const SECTION_ICONS: Record<WebsiteSectionKey, LucideIcon> = {
-  registrations: UserPlus,
-  documents: FileText,
-  shop: ShoppingBag,
-  events: CalendarCheck,
-  medical_visit: Stethoscope,
-  calendar: CalendarDays,
-  sponsors: HeartHandshake,
-  online_payments: CreditCard,
-};
 
 const SOCIAL_LABELS: Record<(typeof WEBSITE_SOCIALS)[number], string> = {
   facebook: 'Facebook',
@@ -252,12 +230,6 @@ export default function WebsiteSettingsPage() {
               <div key={s.key} className="space-y-2 px-4 py-3">
                 <label className="flex items-center gap-3">
                   <Toggle checked={value.enabled} onChange={(v) => setSection(s.key, { enabled: v })} />
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
-                    {(() => {
-                      const Icon = SECTION_ICONS[s.key];
-                      return <Icon className="h-4 w-4" />;
-                    })()}
-                  </span>
                   <span className="text-sm font-semibold text-gray-800">{s.label}</span>
                 </label>
                 {value.enabled ? (
@@ -321,23 +293,7 @@ export default function WebsiteSettingsPage() {
                 onChange={(e) => set('donationText', e.target.value)}
               />
             </label>
-            <label className="block md:col-span-3">
-              <span className={labelClass}>Promotional image (optional)</span>
-              <input
-                className={inputClass}
-                value={form.donationImage}
-                maxLength={500}
-                placeholder="https://… or /img/your-image.jpg (empty = standard illustration)"
-                onChange={(e) => set('donationImage', e.target.value)}
-              />
-            </label>
           </div>
-        ) : null}
-        {form.donationEnabled ? (
-          <p className="mt-2 text-xs text-gray-500">
-            With the box on, the 5x1000 block appears on the website as soon as the tax code is saved (the text is
-            optional).
-          </p>
         ) : null}
       </Card>
 

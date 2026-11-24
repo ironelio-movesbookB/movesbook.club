@@ -7,9 +7,7 @@ import ProcedureArchiveTable from '@/components/procedures/ProcedureArchiveTable
 import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
-import ArchiveScopeRadios, {
-  useArchiveScope,
-} from '@/components/procedures/ArchiveScopeRadios';
+import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import { archiveScopeQuery } from '@/lib/club/archives/archiveScope';
 import {
   DeleteRowButton,
@@ -50,9 +48,7 @@ function DeadLinePageInner() {
   const [pageSize, setPageSize] = useState(SERVICE_SALE_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [displayAlsoPaid, setDisplayAlsoPaid] = useState(false);
-  const [editTarget, setEditTarget] = useState<ServiceSalePurchase | null>(
-    null,
-  );
+  const [editTarget, setEditTarget] = useState<ServiceSalePurchase | null>(null);
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
 
   const load = useCallback(async () => {
@@ -86,11 +82,7 @@ function DeadLinePageInner() {
             dateEnd: p.lastPaymentDate ?? undefined,
           };
 
-          row.edit = (
-            <EditRowButton
-              onClick={() => requestPassword(() => setEditTarget(p))}
-            />
-          );
+          row.edit = <EditRowButton onClick={() => requestPassword(() => setEditTarget(p))} />;
 
           row.delete = (
             <DeleteRowButton
@@ -100,9 +92,7 @@ function DeadLinePageInner() {
                     await deleteDeadline(p.id);
                     load();
                   } catch (err) {
-                    setError(
-                      err instanceof Error ? err.message : 'Delete failed',
-                    );
+                    setError(err instanceof Error ? err.message : 'Delete failed');
                   }
                 })
               }
@@ -110,7 +100,7 @@ function DeadLinePageInner() {
           );
 
           return row;
-        }),
+        })
       );
       setCheckedIds(new Set());
     } catch (e) {
@@ -118,14 +108,7 @@ function DeadLinePageInner() {
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    pageSize,
-    displayAlsoPaid,
-    scope.filters,
-    filters.applied,
-    requestPassword,
-  ]);
+  }, [page, pageSize, displayAlsoPaid, scope.filters, filters.applied, requestPassword]);
 
   useEffect(() => {
     load();
@@ -137,7 +120,7 @@ function DeadLinePageInner() {
 
   const checkedRows = useMemo(
     () => data.filter((r) => r.id && checkedIds.has(r.id)),
-    [data, checkedIds],
+    [data, checkedIds]
   );
 
   const canPaySelected =
@@ -162,7 +145,7 @@ function DeadLinePageInner() {
       return;
     }
     setCheckedIds(
-      new Set(data.filter((r) => r.id && (r.rest ?? 0) > 0).map((r) => r.id!)),
+      new Set(data.filter((r) => r.id && (r.rest ?? 0) > 0).map((r) => r.id!))
     );
   }
 
@@ -174,7 +157,7 @@ function DeadLinePageInner() {
     }
     if (!sameMemberAndOpenRest(checkedRows)) {
       setSelectionError(
-        'Checked deadlines must belong to the same member and all have Rest > 0.',
+        'Checked deadlines must belong to the same member and all have Rest > 0.'
       );
       return;
     }
@@ -201,23 +184,16 @@ function DeadLinePageInner() {
 
   // A row clicked here scopes the sibling archives; otherwise keep the scope we arrived with.
   const selectedMemberId = useMemo(
-    () =>
-      selectedId
-        ? (data.find((r) => r.id === selectedId)?.userId ?? null)
-        : null,
-    [data, selectedId],
+    () => (selectedId ? data.find((r) => r.id === selectedId)?.userId ?? null : null),
+    [data, selectedId]
   );
   const outgoingQuery = archiveScopeQuery(
     selectedId ?? scope.recordId,
-    selectedMemberId ?? scope.memberId,
+    selectedMemberId ?? scope.memberId
   );
 
   const tabs: ProcedureTab[] = [
-    {
-      id: 'historical',
-      label: 'Historical',
-      href: `/clubs/archive_service_list${outgoingQuery}`,
-    },
+    { id: 'historical', label: 'Historical', href: `/clubs/archive_service_list${outgoingQuery}` },
     {
       id: 'deadline',
       label: 'Archive of Deadlines',
@@ -229,16 +205,8 @@ function DeadLinePageInner() {
       onClick: handlePaySelected,
       disabled: !canPaySelected,
     },
-    {
-      id: 'payments',
-      label: 'Payments',
-      href: `/clubs/service_payments${outgoingQuery}`,
-    },
-    {
-      id: 'receipts',
-      label: 'Receipts',
-      href: `/clubs/service_receipts${outgoingQuery}`,
-    },
+    { id: 'payments', label: 'Payments', href: `/clubs/service_payments${outgoingQuery}` },
+    { id: 'receipts', label: 'Receipts', href: `/clubs/service_receipts${outgoingQuery}` },
   ];
 
   return (
@@ -246,35 +214,22 @@ function DeadLinePageInner() {
       title="Archive of Deadlines (Services)"
       activeTab="deadline"
       tabs={tabs}
-      headerAction={
-        <button
-          type="button"
-          onClick={() => router.push("/clubs/archive_deadlines")}
-          className="rounded border-2 border-yellow-400 bg-teal-900 px-3 py-1.5 text-sm font-bold text-white hover:bg-teal-950"
-        >
-          Back to Archive Deadlines
-        </button>
-      }
       tabsTrailing={
         <div className="flex items-center gap-4">
-          <ArchiveScopeRadios
-            state={scope}
-            name="deadlinesScope"
-            onChange={() => setPage(1)}
-          />
+          <ArchiveScopeRadios state={scope} name="deadlinesScope" onChange={() => setPage(1)} />
           <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-teal-700 focus:ring-teal-600"
-              checked={displayAlsoPaid}
-              onChange={(e) => {
-                setDisplayAlsoPaid(e.target.checked);
-                setPage(1);
-                setSelectedId(null);
-                setSelectionError('');
-              }}
-            />
-            Display also paid
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-teal-700 focus:ring-teal-600"
+            checked={displayAlsoPaid}
+            onChange={(e) => {
+              setDisplayAlsoPaid(e.target.checked);
+              setPage(1);
+              setSelectedId(null);
+              setSelectionError('');
+            }}
+          />
+          Display also paid
           </label>
         </div>
       }
@@ -325,9 +280,7 @@ function DeadLinePageInner() {
         onRowDoubleClick={(row) => {
           if (!row.id) return;
           if ((row.rest ?? 0) <= 0) {
-            setSelectionError(
-              'Payment is not possible because this deadline is already paid.',
-            );
+            setSelectionError('Payment is not possible because this deadline is already paid.');
             return;
           }
           router.push(`/clubs/payment_detail/${row.id}`);

@@ -390,66 +390,58 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
               onClick={() => toggleSection('club')}
               className="w-full bg-[#058592] px-4 py-2 font-bold text-sm text-white flex items-center justify-between hover:bg-[#046c76] transition cursor-move"
             >
-              <span>Purchase options</span>
+              <span>Club options</span>
               <Triangle className="w-4 h-4 text-white fill-[#ff8d00] rotate-180" />
             </button>
             
             {openSections.club && (
               <div className="bg-[#2b2b2b] mt-1 space-y-1">
-                 <Link href="/admin/payments" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
-                    <PoundSterling className="w-4 h-4 text-white" />
-                    <span>List of payments</span>
-                 </Link>
-
-                 <Link href="/admin/deadlines" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
-                    <PoundSterling className="w-4 h-4 text-white" />
-                    <span>Archive of Deadlines</span>
-                 </Link>
-
                  {/* Club accounts */}
                  <Link href="/admin/club-accounts" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <UserCircle className="w-4 h-4 text-white" />
                     <span>Club accounts</span>
                  </Link>
-
-                 {[
-                   { id: 'coach_member_accounts', label: "Coach's Members Accounts", audience: 'coach' },
-                   { id: 'team_member_accounts', label: "Team Member's Accounts", audience: 'team' },
-                   { id: 'club_member_accounts', label: "Club Members' Accounts", audience: 'club' },
-                 ].map((section) => (
-                   <div key={section.id} className="space-y-1">
-                    <button
-                      onClick={() => toggleSubSection(section.id)}
+    
+                 {/* Accounts */}
+                 <div className="space-y-1">
+                    <button 
+                      onClick={() => toggleSubSection('club_accounts')}
                       className="w-[90%] ml-auto flex items-center justify-between px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white"
                     >
                        <div className="flex items-center gap-3">
                           <UserCircle className="w-4 h-4 text-white" />
-                          <span>{section.label}</span>
+                          <span>Accounts</span>
                        </div>
-                       <Triangle className={`w-3 h-3 text-white fill-white transition-transform ${openSubSections[section.id] ? 'rotate-180' : ''}`} />
+                       <Triangle className={`w-3 h-3 text-white fill-white transition-transform ${openSubSections['club_accounts'] ? 'rotate-180' : ''}`} />
                     </button>
-                    {openSubSections[section.id] && (
+                    {openSubSections['club_accounts'] && (
                       <div className="w-[80%] ml-auto space-y-1">
-                         <Link href={`/admin/accounts/price-list?audience=${section.audience}`} className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
+                         <Link href="/admin/accounts/price-list" className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
                            Price list
                          </Link>
-                         <Link href={`/admin/accounts/requests?audience=${section.audience}`} className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
+                         <Link href="/admin/accounts/requests" className="block px-3 py-2 bg-[#333] border border-[#aeaeae] text-xs text-white hover:bg-[#222]">
                            Requests of accounts
                          </Link>
                       </div>
                     )}
-                   </div>
-                 ))}
-
+                 </div>
+    
+                 {/* Identification cards */}
+                 <Link href="/admin/identification-cards" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
+                    <ShoppingBasket className="w-4 h-4 text-white" />
+                    <span>Identification cards</span>
+                 </Link>
+    
                  {/* Products purchased */}
                  <Link href="/admin/products-purchased" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <ShoppingBasket className="w-4 h-4 text-white" />
                     <span>Products purchased</span>
                  </Link>
-
+    
+                 {/* Order purchased */}
                  <Link href="/admin/orders" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                     <Truck className="w-4 h-4 text-white" />
-                    <span>Identification Cards</span>
+                    <span>Order purchased</span>
                  </Link>
     
                  {/* Hardware Subtabs */}
@@ -516,6 +508,12 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                 <Link href="/admin/membership/structure" className="flex items-center gap-3 px-3 py-2 bg-black border border-[#aeaeae] hover:bg-[#1a1a1a] transition text-sm text-white">
                    <Settings className="w-4 h-4 text-white" />
                    <span>Structure of subscriptions</span>
+                </Link>
+    
+                {/* List of payments */}
+                <Link href="/admin/payments" className="flex items-center gap-3 px-3 py-2 bg-[#7d0e1f] border border-[#aeaeae] hover:bg-[#630b18] transition text-sm font-bold text-white uppercase">
+                   <PoundSterling className="w-4 h-4 text-white" />
+                   <span>List of payments</span>
                 </Link>
               </div>
             )}
@@ -1245,17 +1243,6 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
             </Link>
           </div>
         </div>
-
-        {/* Movesbook MUB templates (ID5–ID9) — Super Admin builds them here with his own login */}
-        {isSuperAdmin && (
-          <Link
-            href="/admin/mub"
-            className="mt-1 flex items-center justify-between bg-gradient-to-b from-[#ff6a6a] to-[#c81414] px-4 py-2 text-sm font-bold text-white hover:from-[#ff7474] hover:to-[#b80f0f]"
-          >
-            <span>Most used buttons (MUB)</span>
-            <Settings className="h-4 w-4 text-white" />
-          </Link>
-        )}
 
         {/* Draggable Sections — client-only to avoid dnd-kit aria-describedby hydration mismatch */}
         {isDndMounted ? (

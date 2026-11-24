@@ -29,51 +29,7 @@ export type PreviewRow = {
   title: string;
   detail: string;
   date: string;
-  fields: Record<string, string>;
-  image?: string | null;
-  surname?: string;
-  firstName?: string;
-  gender?: string;
-  memberType?: string;
-  locality?: string;
-  userType?: string;
-  memberId?: string;
-  /** yyyy-mm-dd, used to filter Birth Days and Day Names. */
-  birthdate?: string;
 };
-
-function euro(value: unknown): string {
-  if (value == null || value === '') return '';
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return '';
-  return `€${amount.toFixed(2)}`;
-}
-
-function cell(value: unknown): string {
-  if (value == null) return '';
-  return String(value);
-}
-
-function makePreviewRow(input: {
-  id: string;
-  title: string;
-  detail: string;
-  date: string;
-  fields?: Record<string, string>;
-}): PreviewRow {
-  return {
-    id: input.id,
-    title: input.title,
-    detail: input.detail,
-    date: input.date,
-    fields: {
-      name: input.title,
-      detail: input.detail,
-      date: input.date,
-      ...input.fields,
-    },
-  };
-}
 
 export type DashboardSnapshot = {
   counts: Record<SummaryTileId, number>;
@@ -291,7 +247,7 @@ export async function loadDashboardCounts(ctx: ClubAuthContext): Promise<Record<
     'next-appointments': nextAppointments,
     'payment-overdue': paymentOverdue,
     'present-today': presentToday,
-    'name-days': birthdays,
+    'name-days': 0,
     birthdays,
     'unread-messages': unreadMessages,
   };
@@ -425,74 +381,14 @@ function todayRange(): { fromDate: string; toDate: string } {
 }
 
 function mapArchiveRows(items: Record<string, unknown>[]): PreviewRow[] {
-  return items.slice(0, PREVIEW_LIMIT).map((row, index) => {
-    const title = cell(row.name ?? row.fullName) || '-';
-    const detail = cell(
+  return items.slice(0, PREVIEW_LIMIT).map((row, index) => ({
+    id: String(row.id ?? index),
+    title: String(row.name ?? row.fullName ?? '-'),
+    detail: String(
       row.service ?? row.typology ?? row.course ?? row.casual ?? row.outcome ?? row.status ?? '',
-    );
-    const date = cell(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate).slice(0, 10);
-    return makePreviewRow({
-      id: String(row.id ?? index),
-      title,
-      detail,
-      date,
-      fields: {
-        typology: cell(row.typology),
-        service: cell(row.service) || detail,
-        course: cell(row.course),
-        paymentIn: euro(row.paymentIn),
-        payment: euro(row.paid ?? row.paymentOut ?? row.value),
-        cost: euro(row.value),
-        paid: euro(row.paid),
-        rest: euro(row.rest ?? row.residualDebt),
-        expiration: cell(row.expirationDate).slice(0, 10),
-        lastPayment: cell(row.dateEnd).slice(0, 10),
-        notes: cell(row.casual),
-        operator: cell(row.operator),
-        outcome: cell(row.outcome ?? row.status),
-        hour: cell(row.hour),
-        status: cell(row.status),
-        description: cell(row.casual ?? row.service),
-        valueIn: euro(row.value ?? row.paid),
-        residual: euro(row.rest ?? row.residualDebt),
-      },
-    });
-  });
-}
-
-function displayDateToIso(value: unknown): string {
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value ?? '').trim());
-  if (!match) return '';
-  return `${match[3]}-${match[2]}-${match[1]}`;
-}
-
-function memberDirectoryRow(row: Record<string, unknown>, index: number): PreviewRow {
-  const firstName = String(row.name ?? '').trim();
-  const surname = String(row.surname ?? '').trim();
-  const birthdate = displayDateToIso(row.dateOfBirth);
-  const title =
-    [firstName, surname].filter((part) => part && part !== '-').join(' ') || String(row.fullName ?? '-');
-  return {
-    ...makePreviewRow({ id: String(row.memberId ?? row.id ?? index), title, detail: '', date: birthdate }),
-    memberId: String(row.memberId ?? row.id ?? ''),
-    firstName: firstName && firstName !== '-' ? firstName : '',
-    surname: surname && surname !== '-' ? surname : '',
-    birthdate,
-    image: row.image ? String(row.image) : null,
-    gender: String(row.gender ?? ''),
-    userType: String(row.operator ?? row.typology ?? ''),
-    memberType: String(row.memberType ?? ''),
-    locality: String(row.localCity ?? row.Localcity ?? ''),
-  };
-}
-
-async function previewMemberDirectory(ctx: ClubAuthContext): Promise<PreviewRow[]> {
-  const result = await listClubMembersArchive(ctx, {
-    page: 1,
-    pageSize: 500,
-    membershipStatus: 'member',
-  });
-  return result.items.map(memberDirectoryRow);
+    ),
+    date: String(row.insertDate ?? row.insertDateDisplay ?? row.expirationDate ?? '').slice(0, 10),
+  }));
 }
 
 async function previewMembers(ctx: ClubAuthContext, activeOnly: boolean): Promise<PreviewRow[]> {
@@ -521,18 +417,13 @@ async function previewMembers(ctx: ClubAuthContext, activeOnly: boolean): Promis
       member: { select: { name: true, firstName: true, surname: true } },
     },
   });
-  return rows.map((row) => {
-    const title =
-      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-';
-    const date = row.recordDate.toISOString().slice(0, 10);
-    return makePreviewRow({
-      id: row.id,
-      title,
-      detail: 'Active membership',
-      date,
-      fields: { typology: 'Membership' },
-    });
-  });
+  return rows.map((row) => ({
+    id: row.id,
+    title:
+      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-',
+    detail: 'Active membership',
+    date: row.recordDate.toISOString().slice(0, 10),
+  }));
 }
 
 async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
@@ -549,30 +440,40 @@ async function previewOverdue(ctx: ClubAuthContext): Promise<PreviewRow[]> {
     select: {
       id: true,
       dueDate: true,
-      paidAmount: true,
       balanceAmount: true,
       member: { select: { name: true, firstName: true, surname: true } },
       procedureType: { select: { name: true } },
     },
   });
-  return rows.map((row) => {
-    const title =
-      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-';
-    const date = row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '';
-    return makePreviewRow({
-      id: row.id,
-      title,
-      detail: `${row.procedureType.name} · ${Number(row.balanceAmount).toFixed(2)}`,
-      date,
-      fields: {
-        typology: row.procedureType.name,
-        paymentIn: euro(row.paidAmount),
-        paymentOut: euro(row.balanceAmount),
-        paidTotal: `${euro(row.paidAmount)} / ${euro(row.balanceAmount)}`,
-        rest: euro(row.balanceAmount),
-      },
-    });
-  });
+  return rows.map((row) => ({
+    id: row.id,
+    title:
+      [row.member.firstName, row.member.surname].filter(Boolean).join(' ') || row.member.name || '-',
+    detail: `${row.procedureType.name} · ${Number(row.balanceAmount).toFixed(2)}`,
+    date: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : '',
+  }));
+}
+
+async function previewBirthdays(clubId: string): Promise<PreviewRow[]> {
+  const rows = await prisma.$queryRawUnsafe<
+    { id: string; name: string; firstName: string | null; surname: string | null; birthdate: Date }[]
+  >(
+    `SELECT u.id, u.name, u.firstName, u.surname, u.birthdate
+     FROM club_members_new cm
+     INNER JOIN users_new u ON u.id = cm.memberId
+     WHERE cm.clubId = ?
+       AND u.birthdate IS NOT NULL
+       AND MONTH(u.birthdate) = MONTH(CURDATE())
+       AND DAY(u.birthdate) = DAY(CURDATE())
+     LIMIT ${PREVIEW_LIMIT}`,
+    clubId,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: [row.firstName, row.surname].filter(Boolean).join(' ') || row.name || '-',
+    detail: 'Birthday',
+    date: row.birthdate ? String(row.birthdate).slice(0, 10) : '',
+  }));
 }
 
 async function previewUnread(userId: string): Promise<PreviewRow[]> {
@@ -604,14 +505,12 @@ async function previewUnread(userId: string): Promise<PreviewRow[]> {
       const sender =
         [message.sender.firstName, message.sender.surname].filter(Boolean).join(' ') ||
         message.sender.name;
-      rows.push(
-        makePreviewRow({
-          id: message.id,
-          title: sender,
-          detail: message.content.replace(/\s+/g, ' ').slice(0, 120),
-          date: message.createdAt.toISOString().slice(0, 10),
-        }),
-      );
+      rows.push({
+        id: message.id,
+        title: sender,
+        detail: message.content.replace(/\s+/g, ' ').slice(0, 120),
+        date: message.createdAt.toISOString().slice(0, 10),
+      });
     }
   }
   return rows;
@@ -628,22 +527,12 @@ async function previewProcedure(
       String(meta.courseName ?? meta.serviceName ?? meta.productName ?? meta.debtLabel ?? '').trim() ||
       row.notes ||
       '';
-    return makePreviewRow({
+    return {
       id: row.id,
       title: row.memberName || '-',
       detail,
       date: row.recordDate,
-      fields: {
-        typology: row.procedureTypeCode,
-        cost: euro(row.totalAmount),
-        paid: euro(row.paidAmount),
-        rest: euro(row.balanceAmount),
-        lastPayment: row.lastPaymentDate ?? '',
-        notes: row.notes ?? '',
-        operator: row.operatorName,
-        expiration: row.dueDate ?? '',
-      },
-    });
+    };
   });
 }
 
@@ -654,14 +543,12 @@ async function previewAudio(clubId: string): Promise<PreviewRow[]> {
     take: PREVIEW_LIMIT,
     select: { id: true, content: true, senderName: true, createdAt: true },
   });
-  return rows.map((row) =>
-    makePreviewRow({
-      id: row.id,
-      title: row.senderName || 'Club',
-      detail: row.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120),
-      date: row.createdAt.toISOString().slice(0, 10),
-    }),
-  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.senderName || 'Club',
+    detail: row.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120),
+    date: row.createdAt.toISOString().slice(0, 10),
+  }));
 }
 
 export async function getDashboardPreview(
@@ -674,9 +561,6 @@ export async function getDashboardPreview(
   const items = await safe(sectionId, async () => {
     switch (sectionId) {
       case 'total-members':
-      case 'birthdays':
-      case 'name-days':
-        return previewMemberDirectory(ctx);
       case 'new-members':
         return previewMembers(ctx, false);
       case 'active-members':
@@ -704,6 +588,10 @@ export async function getDashboardPreview(
         return mapArchiveRows(
           (await listReservationsArchive(ctx, { page: 1, pageSize: PREVIEW_LIMIT, ...todayRange() })).items,
         );
+      case 'birthdays':
+        return previewBirthdays(ctx.club.id);
+      case 'name-days':
+        return [];
       case 'unread-messages':
         return previewUnread(ctx.userId);
       case 'memberships':

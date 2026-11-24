@@ -6,11 +6,7 @@ import ServicePaymentForm, {
   type ServicePaymentSubmitValues,
 } from '@/components/club/services/ServicePaymentForm';
 import ProcedureArchiveShell from '@/components/procedures/ProcedureArchiveShell';
-import PaymentFormArchiveView, {
-  type PaymentFormArchiveTab,
-} from '@/components/procedures/PaymentFormArchiveView';
 import { getServiceSaleTabs } from '@/components/procedures/configs/serviceSale';
-import type { ProcedureTab } from '@/components/procedures/types';
 import {
   addPayment,
   fetchFormOptions,
@@ -23,83 +19,12 @@ import {
 } from '@/lib/club/serviceSaleClient';
 import { updateInstallment } from '@/lib/club/archives/clubArchiveClient';
 import { fetchOtherSettings } from '@/lib/club/otherSettingsClient';
-import { createProcedureClient, type ProcedurePaymentView, type ProcedureRecordView } from '@/lib/club/procedureClient';
-import { normalizePaymentTypeValue } from '@/lib/procedures/payModes';
-import { getProcedureTabs } from '@/lib/procedures/registry';
-import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
-
-function toProductPurchase(record: ProcedureRecordView): ServiceSalePurchase {
-  return {
-    id: record.id,
-    userId: record.userId,
-    memberName: record.memberName,
-    memberImage: record.memberImage,
-    typology: record.typology,
-    sectorName: record.secondaryLabel,
-    serviceName: record.primaryLabel,
-    recordDate: record.recordDate,
-    paydate: record.paydate,
-    expireDate: record.expireDate,
-    createdAt: record.createdAt,
-    value: record.value,
-    pay: record.pay,
-    rest: record.rest,
-    notes: record.notes,
-    operatorId: record.operatorId,
-    operatorName: record.operatorName,
-    lastPaymentDate: record.lastPaymentDate,
-  };
-}
-
-function toProductPayment(payment: ProcedurePaymentView): ServiceSalePayment {
-  return {
-    id: payment.id,
-    spId: payment.recordId,
-    memberName: payment.memberName,
-    typology: payment.typology,
-    serviceName: payment.primaryLabel,
-    paymentDate: payment.paymentDate,
-    paid: payment.paid,
-    balance: payment.balance,
-    originalDebt: payment.originalDebt,
-    residualDebt: payment.residualDebt,
-    description: payment.description,
-    operatorId: payment.operatorId,
-    operatorName: payment.operatorName,
-  };
-}
-
-async function loadServiceBundle(recordId: string, extra: string[]) {
-  const [purchaseRes, paymentsRes, extras] = await Promise.all([
-    fetchPurchase(recordId),
-    fetchPaymentsForRecord(recordId, { pageSize: 50 }),
-    Promise.all(extra.map(async (extraId) => (await fetchPurchase(extraId)).purchase)),
-  ]);
-  return { purchaseRes, paymentsRes, extras, productClient: null as ReturnType<typeof createProcedureClient> | null };
-}
-
-async function loadProductBundle(recordId: string, extra: string[]) {
-  const productClient = createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE);
-  const [purchaseRes, paymentsRes, extras] = await Promise.all([
-    productClient.fetchRecord(recordId).then((res) => ({ purchase: toProductPurchase(res.record) })),
-    productClient.fetchPayments({ recordId, pageSize: 50 }).then((res) => ({
-      items: res.items.map(toProductPayment),
-    })),
-    Promise.all(
-      extra.map(async (extraId) => toProductPurchase((await productClient.fetchRecord(extraId)).record)),
-    ),
-  ]);
-  return { purchaseRes, paymentsRes, extras, productClient };
-}
 
 function PaymentDetailPageInner() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = String(params?.id ?? '');
-  const hintedProductSale = searchParams.get('type') === 'product_sale';
-  const [productSale, setProductSale] = useState(hintedProductSale);
-  const procedureCode = productSale ? PROCEDURE_TYPE_CODES.PRODUCT_SALE : 'service_sale';
 
   const extraIds = useMemo(() => {
     const raw = searchParams.get('ids') ?? '';
@@ -123,18 +48,12 @@ function PaymentDetailPageInner() {
   } | null>(null);
   const autoPaid = useRef(false);
   const [scopedRecordIds, setScopedRecordIds] = useState<string[]>([id].filter(Boolean));
-  const [view, setView] = useState<'deadline' | PaymentFormArchiveTab>('deadline');
-
-  useEffect(() => {
-    setProductSale(hintedProductSale);
-  }, [hintedProductSale, id]);
 
   const load = useCallback(async () => {
     try {
-      const [bundle, formOptions, settings] = await Promise.all([
-        hintedProductSale
-          ? loadProductBundle(id, extraIds)
-          : loadServiceBundle(id, extraIds).catch(() => loadProductBundle(id, extraIds)),
+      const [purchaseRes, paymentsRes, formOptions, settings, extras] = await Promise.all([
+        fetchPurchase(id),
+        fetchPaymentsForRecord(id, { pageSize: 50 }),
         fetchFormOptions(),
         fetchOtherSettings().catch(() => ({
           formPayDeadlineStatus: 'Yes',
@@ -142,9 +61,13 @@ function PaymentDetailPageInner() {
           calTaxStatus: false,
           notEnterCustData: false,
         })),
+        Promise.all(
+          extraIds.map(async (extraId) => {
+            const res = await fetchPurchase(extraId);
+            return res.purchase;
+          })
+        ),
       ]);
-      const { purchaseRes, paymentsRes, extras, productClient } = bundle;
-      setProductSale(Boolean(productClient));
 
       const primary = purchaseRes.purchase;
       const validExtras = extras.filter(
@@ -170,19 +93,15 @@ function PaymentDetailPageInner() {
         autoPaid.current = true;
         const defaultOperatorId = formOptions.currentOperatorId ?? formOptions.operators[0]?.id;
         if (defaultOperatorId) {
-          const autoInput = {
+          await addPayment(id, {
             amountPaid: primary.rest,
             paymentDate: new Date().toISOString().slice(0, 10),
             description: 'Auto-payment (deadline form disabled)',
             payMode: 'cash',
             operatorId: defaultOperatorId,
             createReceipt: false,
-          };
-          if (productClient) await productClient.addPayment(id, autoInput);
-          else await addPayment(id, autoInput);
-          const reloaded = productClient
-          ? { purchase: toProductPurchase((await productClient.fetchRecord(id)).record) }
-          : await fetchPurchase(id);
+          });
+          const reloaded = await fetchPurchase(id);
           setPurchase(reloaded.purchase);
           setSuccess(`Payment fully auto-settled (€${primary.rest.toFixed(2)}). Debt set to €0.`);
         }
@@ -190,7 +109,7 @@ function PaymentDetailPageInner() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
-  }, [id, extraIds, hintedProductSale]);
+  }, [id, extraIds]);
 
   useEffect(() => {
     load();
@@ -199,11 +118,7 @@ function PaymentDetailPageInner() {
   async function handleAddToRecordTotal(additionalAmount: number): Promise<void> {
     if (!purchase) return;
     const newTotal = purchase.value + additionalAmount;
-    if (productSale) {
-      await createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE).updateRecord(id, { totalAmount: newTotal });
-    } else {
-      await updatePurchase(id, { totalAmount: newTotal });
-    }
+    await updatePurchase(id, { totalAmount: newTotal });
     setPurchase((prev) =>
       prev ? { ...prev, value: newTotal, rest: prev.rest + additionalAmount } : prev
     );
@@ -215,11 +130,6 @@ function PaymentDetailPageInner() {
 
     setSaving(true);
     try {
-      const productClient = productSale ? createProcedureClient(PROCEDURE_TYPE_CODES.PRODUCT_SALE) : null;
-      const pay = (
-        recordId: string,
-        input: Parameters<typeof addPayment>[1],
-      ) => (productClient ? productClient.addPayment(recordId, input) : addPayment(recordId, input));
       const totalDistributed = values.distributions.reduce((s, d) => s + d.amount, 0);
       if (totalDistributed <= 0) {
         setError('No amount to distribute.');
@@ -238,7 +148,7 @@ function PaymentDetailPageInner() {
           if (dist.amount <= 0) continue;
           const recordId = dist.recordId ?? dist.installmentId;
           const makeReceipt = Boolean(values.createReceipt) && !receiptCreated;
-          await pay(recordId, {
+          await addPayment(recordId, {
             amountPaid: dist.amount,
             paymentDate: values.paymentDate,
             description: values.description,
@@ -263,7 +173,7 @@ function PaymentDetailPageInner() {
         for (const dist of values.distributions) {
           if (dist.amount <= 0) continue;
           const makeReceipt = Boolean(values.createReceipt) && !receiptCreated;
-          await pay(id, {
+          await addPayment(id, {
             amountPaid: dist.amount,
             paymentDate: values.paymentDate,
             description: values.description,
@@ -283,7 +193,7 @@ function PaymentDetailPageInner() {
           });
           if (makeReceipt) receiptCreated = true;
           if (dist.installmentId !== 'current') {
-            await updateInstallment(procedureCode, id, dist.installmentId, {
+            await updateInstallment('service_sale', id, dist.installmentId, {
               paid: dist.newPaid,
               balance: dist.newBalance,
             });
@@ -296,7 +206,7 @@ function PaymentDetailPageInner() {
           : 'Payment saved successfully.'
       );
       // Wait a brief moment to show success message before closing
-      setTimeout(() => router.push(productSale ? '/clubs/archive_deadlines' : '/clubs/dead_line'), 1000);
+      setTimeout(() => router.push('/clubs/dead_line'), 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
     } finally {
@@ -307,21 +217,6 @@ function PaymentDetailPageInner() {
   if ((!purchase || !options) && !error) {
     return <div className="p-6 text-gray-500">Loading...</div>;
   }
-
-  const openRecords = purchase
-    ? [purchase, ...extraPurchases].filter(
-        (record) => record.id === purchase.id || scopedRecordIds.includes(record.id),
-      )
-    : [];
-  const productTabs: ProcedureTab[] = getProcedureTabs(
-    PROCEDURE_TYPE_CODES.PRODUCT_SALE,
-    'deadlines',
-    id,
-    purchase?.userId ?? null,
-  ).map((tab) => {
-    const tabView = tab.id === 'deadlines' ? 'deadline' : (tab.id as PaymentFormArchiveTab);
-    return { id: tabView, label: tab.label, onClick: () => setView(tabView) };
-  });
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
@@ -337,38 +232,32 @@ function PaymentDetailPageInner() {
               }
             : undefined
         }
-        activeTab={productSale ? view : 'deadline'}
-        tabs={
-          productSale
-            ? productTabs
-            : getServiceSaleTabs('deadline', id, scopedRecordIds, null, purchase?.userId ?? null)
-        }
+        activeTab="deadline"
+        tabs={getServiceSaleTabs(
+          'deadline',
+          id,
+          scopedRecordIds,
+          null,
+          purchase?.userId ?? null
+        )}
         error={!purchase ? error : undefined}
       >
-        {productSale && view !== 'deadline' && (
-          <PaymentFormArchiveView
-            procedureCode={PROCEDURE_TYPE_CODES.PRODUCT_SALE}
-            tab={view}
-            records={openRecords}
-          />
-        )}
         {purchase && options && (
-          <div className={productSale && view !== 'deadline' ? 'hidden' : undefined}>
+          <>
             <ServicePaymentForm
               purchase={purchase}
               extraPurchases={extraPurchases}
               payments={payments}
               options={options}
-              procedureType={procedureCode}
+              procedureType="service_sale"
               saving={saving}
               error={error}
               success={success}
               onSubmit={handleSubmit}
-              onCancel={() => router.push(productSale ? '/clubs/archive_deadlines' : '/clubs/dead_line')}
+              onCancel={() => router.push('/clubs/dead_line')}
               onAddToRecordTotal={
                 extraPurchases.length > 0 ? undefined : handleAddToRecordTotal
               }
-              defaultPayMode={normalizePaymentTypeValue(searchParams?.get('payMode')) || undefined}
               operatorPassStatus={otherSettings?.operatorPassStatus ?? 'Yes'}
               notEnterCustData={otherSettings?.notEnterCustData ?? false}
               onSelectedRecordIdsChange={(ids) => {
@@ -383,7 +272,7 @@ function PaymentDetailPageInner() {
                 });
               }}
             />
-          </div>
+          </>
         )}
       </ProcedureArchiveShell>
     </div>

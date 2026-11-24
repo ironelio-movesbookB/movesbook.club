@@ -6,9 +6,7 @@ import AdvertisementCarousel from '@/components/AdvertisementCarousel';
 import ModernNavbar from '@/components/ModernNavbar';
 import SimpleFooter from '@/components/SimpleFooter';
 import ClubDashboardMyPageBanner from '@/app/club/dashboard/components/ClubDashboardMyPageBanner';
-import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
-import { useEntityVisual } from '@/lib/entity/useEntityVisual';
-import { canManageClubWebsite } from '@/lib/club/clubWebsitePermissions';
+import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import { useClubWebsiteSettingsPage } from '@/hooks/useClubWebsiteSettingsPage';
 import { ClubWebsiteSettingsSidebarProvider } from '@/components/club/websiteSettings/ClubWebsiteSettingsSidebarContext';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
@@ -23,7 +21,6 @@ export default function ClubWebsiteSettingsPageShell({
   children: (ctx: ReturnType<typeof useClubWebsiteSettingsPage>) => ReactNode;
 }) {
   const ctx = useClubWebsiteSettingsPage();
-  const entityVisual = useEntityVisual(ctx.activeClub?.id, ctx.activeClub?.description);
   const {
     user,
     loading,
@@ -74,16 +71,8 @@ export default function ClubWebsiteSettingsPageShell({
             coverBannerAlignment={
               bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
             }
-            entityLogoUrl={entityVisual.logoUrl}
-            entityBannerUrl={entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL}
-            entityEdit={
-              canManageClubWebsite(user.id, user.userType, activeClub)
-                ? { kind: 'club', entityId: activeClub.id }
-                : null
-            }
             onCoverCameraClick={() => {}}
             showSponsored={false}
-            personal={false}
           />
         ) : null}
         <main className="min-w-0 flex-1 px-2 pb-4">{body}</main>

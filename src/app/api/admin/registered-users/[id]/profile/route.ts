@@ -233,7 +233,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     version: versionLabel(user.userType),
     username: user.username,
     companyName: officialClubName,
-    e: '—',
+    e: String(planCount),
     entityId: null,
   };
 
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           : versionLabel(user.userType),
       username: clubMeta.username?.trim() || user.username,
       companyName: primaryOwned.name?.trim() || officialClubName,
-      e: '—',
+      e: String(planCount),
       entityId: primaryOwned.id,
     };
   } else if (segment === 'teams' && primaryTeam) {
@@ -280,7 +280,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       version: teamVersion,
       username: teamMeta.username?.trim() || user.username,
       companyName: primaryTeam.name.trim(),
-      e: '—',
+      e: String(planCount),
       entityId: primaryTeam.id,
     };
   } else if (segment === 'groups' && primaryGroup) {
@@ -305,7 +305,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       version: groupVersion,
       username: groupMeta.username?.trim() || user.username,
       companyName: primaryGroup.name.trim(),
-      e: '—',
+      e: String(planCount),
       entityId: primaryGroup.id,
     };
   } else if (segment === 'coaches' && primaryCoaching) {
@@ -327,7 +327,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       version: 'Coach account',
       username: coachMeta.username?.trim() || user.username,
       companyName: primaryCoaching.name.trim(),
-      e: '—',
+      e: String(planCount),
       entityId: primaryCoaching.id,
     };
   } else if (primaryOwned) {
@@ -348,7 +348,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           : versionLabel(user.userType),
       username: clubMeta.username?.trim() || user.username,
       companyName: primaryOwned.name?.trim() || officialClubName,
-      e: '—',
+      e: String(planCount),
       entityId: primaryOwned.id,
     };
   }

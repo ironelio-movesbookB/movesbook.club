@@ -4,12 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Copy, Loader2, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
 import ClubSettingsTypologyTabs from '@/components/club/settings/ClubSettingsTypologyTabs';
-import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
-import {
-  createEmptyListpriceForm,
-  type TypologyListpriceForm,
-  type TypologyListpriceListRow
-} from '@/lib/clubTypologyListprice';
+import type { TypologyListpriceListRow } from '@/lib/clubTypologyListprice';
 
 type TypologyOption = { id: string; name: string };
 const LIST_PATH = '/club/settings/typology_subscription/pricelist';
@@ -25,9 +20,6 @@ export default function ClubTypologyPriceListPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copying, setCopying] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'copy' | 'delete' | null>(null);
-  const [printing, setPrinting] = useState(false);
-  const [printData, setPrintData] = useState<TypologyListpriceForm | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedRow = rows.find((row) => row.id === selectedId) ?? null;
@@ -101,91 +93,6 @@ export default function ClubTypologyPriceListPage() {
     return selectedRow;
   };
 
-  const copySelected = async () => {
-    const row = requireSelection();
-    if (!row) return;
-    setCopying(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/club/settings/typology-listprice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ action: 'copy-listprice', sourceId: row.id })
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Copy failed');
-      await loadRows(selectedTypologyId);
-      if (data?.id) setSelectedId(String(data.id));
-      setConfirmAction(null);
-    } catch (err) {
-      setConfirmAction(null);
-      window.alert(err instanceof Error ? err.message : 'Copy failed');
-    } finally {
-      setCopying(false);
-    }
-  };
-
-  const deleteSelected = async () => {
-    const row = requireSelection();
-    setConfirmAction(null);
-    if (!row) return;
-    const previous = rows;
-    setRows((c) => c.filter((r) => r.id !== row.id));
-    setSelectedId(null);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/club/settings/typology-listprice?id=${encodeURIComponent(row.id)}`,
-        { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} }
-      );
-      if (!response.ok) throw new Error();
-    } catch {
-      setRows(previous);
-      setSelectedId(row.id);
-      window.alert('Unable to delete.');
-    }
-  };
-
-  const confirmSelectedAction = () => {
-    if (confirmAction === 'copy') copySelected();
-    else if (confirmAction === 'delete') deleteSelected();
-  };
-
-  /** Legacy clubsetting_typology_subscription_pricelist_print: all fields of the selected list price. */
-  const printSelected = async () => {
-    const row = requireSelection();
-    if (!row) return;
-    setPrinting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/club/settings/typology-listprice?id=${encodeURIComponent(row.id)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.listprice) throw new Error(data?.error || 'Unable to load the list price.');
-      setPrintData({ ...createEmptyListpriceForm(), ...data.listprice });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Unable to load the list price.');
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  // Open the print dialog once the print sheet is rendered; clear it when printing ends.
-  useEffect(() => {
-    if (!printData) return;
-    const clear = () => setPrintData(null);
-    window.addEventListener('afterprint', clear);
-    const timer = window.setTimeout(() => window.print(), 0);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('afterprint', clear);
-    };
-  }, [printData]);
-
   const typologyLabel = useMemo(
     () => typologies.find((t) => t.id === selectedTypologyId)?.name ?? '',
     [typologies, selectedTypologyId]
@@ -193,7 +100,7 @@ export default function ClubTypologyPriceListPage() {
 
   return (
     <div className="p-4 lg:p-6 print:p-0">
-      <section className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm print:hidden">
+      <section className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
         <ClubSettingsTypologyTabs listPriceTypologyId={selectedTypologyId || null} />
 
         <div className="border-b border-gray-200 px-4 py-4">
@@ -245,23 +152,63 @@ export default function ClubTypologyPriceListPage() {
               icon={Copy}
               label={copying ? 'Copying…' : 'Copy'}
               disabled={!selectedRow || copying}
-              onClick={() => {
-                if (requireSelection()) setConfirmAction('copy');
+              onClick={async () => {
+                const row = requireSelection();
+                if (!row) return;
+                if (!window.confirm('Do you want to copy this item?')) return;
+                setCopying(true);
+                try {
+                  const token = localStorage.getItem('token');
+                  const response = await fetch('/api/club/settings/typology-listprice', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({ action: 'copy-listprice', sourceId: row.id })
+                  });
+                  const data = await response.json().catch(() => null);
+                  if (!response.ok) throw new Error(data?.error || 'Copy failed');
+                  await loadRows(selectedTypologyId);
+                  if (data?.id) setSelectedId(String(data.id));
+                } catch (err) {
+                  window.alert(err instanceof Error ? err.message : 'Copy failed');
+                } finally {
+                  setCopying(false);
+                }
               }}
             />
             <ToolbarButton
               icon={Printer}
-              label={printing ? 'Preparing…' : 'Print'}
-              onClick={printSelected}
-              disabled={!selectedRow || printing}
+              label="Print"
+              onClick={() => {
+                if (requireSelection()) window.print();
+              }}
+              disabled={!selectedRow}
             />
             <ToolbarButton
               icon={Trash2}
               label="Delete"
               danger
               disabled={!selectedRow}
-              onClick={() => {
-                if (requireSelection()) setConfirmAction('delete');
+              onClick={async () => {
+                const row = requireSelection();
+                if (!row || !window.confirm('Delete this list price?')) return;
+                const previous = rows;
+                setRows((c) => c.filter((r) => r.id !== row.id));
+                setSelectedId(null);
+                try {
+                  const token = localStorage.getItem('token');
+                  const response = await fetch(
+                    `/api/club/settings/typology-listprice?id=${encodeURIComponent(row.id)}`,
+                    { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                  );
+                  if (!response.ok) throw new Error();
+                } catch {
+                  setRows(previous);
+                  setSelectedId(row.id);
+                  window.alert('Unable to delete.');
+                }
               }}
             />
             <ToolbarButton icon={X} label="Remove selection" onClick={() => setSelectedId(null)} disabled={!selectedRow} />
@@ -336,92 +283,7 @@ export default function ClubTypologyPriceListPage() {
           )}
         </div>
       </section>
-
-      <PromocodeConfirmModal
-        open={confirmAction !== null}
-        title={confirmAction === 'delete' ? 'Delete' : 'Copy'}
-        message={
-          confirmAction === 'delete'
-            ? `Do you want to delete "${selectedRow?.subscriptionName ?? ''}"? This cannot be undone.`
-            : `Do you want to copy "${selectedRow?.subscriptionName ?? ''}"?`
-        }
-        confirmLabel={confirmAction === 'delete' ? 'Delete' : 'Copy'}
-        destructive={confirmAction === 'delete'}
-        loading={copying}
-        onClose={() => setConfirmAction(null)}
-        onConfirm={confirmSelectedAction}
-      />
-
-      {printData && <ListpricePrintSheet data={printData} typologyName={typologyLabel} />}
     </div>
-  );
-}
-
-/** Print-only sheet; globals.css prints nothing but `.print-area` content. */
-function ListpricePrintSheet({ data, typologyName }: { data: TypologyListpriceForm; typologyName: string }) {
-  const value = (v: string) => v || '-';
-  const flag = (on: boolean) => (on ? '☑' : '☐');
-  return (
-    <div className="print-area hidden p-8 text-sm text-gray-900 print:block">
-      <h1 className="mb-1 text-xl font-bold">Typology of subscription - List price</h1>
-      <p className="mb-6 text-gray-600">{data.subscriptionName}</p>
-      <PrintSection title="Typology">
-        <PrintRow label="Selected typology" value={value(typologyName)} />
-        <PrintRow label="Active" value={flag(data.activeStatus)} />
-      </PrintSection>
-      <PrintSection title="Name and cost">
-        <PrintRow label="Name of subscription" value={value(data.subscriptionName)} />
-        <PrintRow label="Code to find more quickly" value={value(data.searchKeyword)} />
-        <PrintRow label="Cost" value={value(data.cost)} />
-        <PrintRow label="Actual discount" value={data.discount ? `${data.discount} %` : '-'} />
-        <PrintRow label="Expiring date" value={value(data.expiryDate)} />
-      </PrintSection>
-      <PrintSection title="Installments">
-        <PrintRow label="How many?" value={value(data.installnment)} />
-        <PrintRow label="Cost 1st installment" value={value(data.firstCostInstallnment)} />
-        <PrintRow label="Days recursion" value={value(data.daysRecursion)} />
-        <PrintRow label={`${flag(data.fixExpiryDayStatus)} Fix expiring days`} value={value(data.fixExpiryDay)} />
-        <PrintRow label={`${flag(data.conditionRenewalStatus)} Conditions for renewal`} value="" />
-        <PrintRow label={`${flag(data.suspensionAvailableStatus)} Suspension available`} value="" />
-        <PrintRow label="Next discount" value={data.renewalNextDiscount ? `${data.renewalNextDiscount} %` : '-'} />
-        <PrintRow label="Maximum days of suspension" value={value(data.suspensionMaxDays)} />
-      </PrintSection>
-      <PrintSection title="Conditions of sale">
-        <PrintRow label="Duration months" value={value(data.saleDurationMonths)} />
-        <PrintRow label={`${flag(data.saleNumberAccessStatus)} Number of accesses`} value={value(data.saleNumberAccess)} />
-        <PrintRow label="Related to these days" value={value(data.saleRelatedDays)} />
-        <PrintRow label={`${flag(data.saleMaxNumberStatus)} Fix a max number of accesses`} value={value(data.saleMaxNumber)} />
-        <PrintRow label="Cost for each access" value={value(data.saleCostAccess)} />
-        <PrintRow
-          label={`${flag(data.recursiveExpires)} This subscription is recursive - expires the same day that it starts`}
-          value=""
-        />
-        <PrintRow
-          label={`${flag(data.subscriptionPointsStatus)} Enable calc of points for this subscription`}
-          value={data.subscriptionPoints ? `${data.subscriptionPoints} points assigned` : '-'}
-        />
-      </PrintSection>
-    </div>
-  );
-}
-
-function PrintSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5 break-inside-avoid border border-gray-400">
-      <h2 className="border-b border-gray-400 bg-gray-100 px-3 py-1.5 font-semibold">{title}</h2>
-      <table className="w-full border-collapse">
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  );
-}
-
-function PrintRow({ label, value }: { label: string; value: string }) {
-  return (
-    <tr className="border-b border-gray-200 last:border-b-0">
-      <td className="w-1/2 px-3 py-1.5 text-gray-700">{label}</td>
-      <td className="px-3 py-1.5 font-medium">{value}</td>
-    </tr>
   );
 }
 

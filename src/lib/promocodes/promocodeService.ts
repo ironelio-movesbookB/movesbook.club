@@ -40,7 +40,6 @@ import {
 import { attachEntityLogos } from './promocodeAvatars';
 import { fetchModernUserCountries, findModernUserCountry } from './modernUserCountry';
 import { userExistedAtApplyTime } from './promocodeApplyDisplay';
-import { resolveSecondaryCreditAmount } from './resolveSecondaryCreditAmount';
 import type {
   LegacyUserSnippet,
   PaginatedResult,
@@ -274,15 +273,18 @@ async function resolveSecondarySender(
   }
 
   const creditMissing = ['', '0', '0.00', '00'].includes(String(secondarySenderCredit ?? ''));
-  if (creditMissing && secondarySenderUsername && registeredUser) {
-    const resolved = await resolveSecondaryCreditAmount({
-      storedCredit: 0,
-      receiverId: Number(apply.receiver_id ?? 0),
-      receiverVersionName: String(apply.receiver_version ?? ''),
-      promocodeId: Number(apply.promocode_id ?? 0) || undefined,
-    });
-    secondarySenderCredit = resolved;
-    apply = { ...apply, secondary_sender_credit: secondarySenderCredit };
+  if (creditMissing && secondarySenderUsername && registeredUser?.subscriptionSettingId) {
+    const subTable = await getSubscriptionSettingsTable();
+    if (subTable) {
+      const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+        `SELECT credit1 FROM \`${subTable}\` WHERE id = ? LIMIT 1`,
+        registeredUser.subscriptionSettingId
+      );
+      if (rows[0]?.credit1 != null) {
+        secondarySenderCredit = rows[0].credit1;
+        apply = { ...apply, secondary_sender_credit: secondarySenderCredit };
+      }
+    }
   }
 
   return { apply, secondarySender };

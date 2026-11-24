@@ -1,20 +1,5 @@
 export type PackageTypeId = 5 | 6 | 7 | 8 | 9;
 
-export type PackageSection = 'management' | 'social' | 'training' | 'nutrition';
-
-export type PackageCatalog = 'packages' | 'athlete_accounts';
-
-export type PackageKind = 'package' | 'separator';
-
-export type PackageViewMode = 'standard' | 'black';
-
-export const PACKAGE_SECTIONS: { key: PackageSection; label: string }[] = [
-  { key: 'management', label: 'Management' },
-  { key: 'social', label: 'Social' },
-  { key: 'training', label: 'Training' },
-  { key: 'nutrition', label: 'Nutrition' },
-];
-
 export type PackageTierColumn = {
   key: string;
   label: string;
@@ -29,13 +14,6 @@ export type PackageTypeConfig = {
 export type PackageItem = {
   id: number;
   sortOrder: number;
-  section: PackageSection;
-  catalog: PackageCatalog;
-  kind: PackageKind;
-  /** Separator icon (emoji or short text). */
-  icon: string;
-  titleColor: string;
-  backgroundColor: string;
   /** A – title per language */
   titlesByLang: Record<string, string>;
   /** B – short description per language */

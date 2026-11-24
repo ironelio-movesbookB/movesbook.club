@@ -10,7 +10,6 @@ import {
   clubLegalDocumentHref,
   type ClubLegalDocuments,
 } from '@/lib/club/clubLegalDocuments';
-import { documentPublicHref } from '@/lib/club/clubDocumentsFolder';
 
 const CKEditor = dynamic(() => import('@/components/news/CKEditor'), { ssr: false });
 
@@ -20,16 +19,12 @@ function DocumentsEditorContent() {
   const searchParams = useSearchParams();
   const clubIdFromQuery = searchParams?.get('clubId') || '';
   const tabFromQuery = searchParams?.get('tab') ?? null;
-  const docIdFromQuery = searchParams?.get('docId') ?? null;
   const { selectedClubId } = useClubWorkspace();
   const [clubId, setClubId] = useState(clubIdFromQuery || selectedClubId || '');
 
   const [tab, setTab] = useState<TabId>(
     tabFromQuery === 'privacy-policy' ? 'privacy-policy' : 'rules',
   );
-  const [customDocId, setCustomDocId] = useState<string | null>(docIdFromQuery);
-  const [customTitle, setCustomTitle] = useState('');
-  const [customHtml, setCustomHtml] = useState('');
   const [clubName, setClubName] = useState('');
   const [workspaceKind, setWorkspaceKind] = useState<'club' | 'team'>('club');
   const [canEdit, setCanEdit] = useState(false);
@@ -49,13 +44,8 @@ function DocumentsEditorContent() {
   }, [clubIdFromQuery, selectedClubId]);
 
   useEffect(() => {
-    setCustomDocId(docIdFromQuery);
-  }, [docIdFromQuery]);
-
-  useEffect(() => {
     if (tabFromQuery === 'rules' || tabFromQuery === 'privacy-policy') {
       setTab(tabFromQuery);
-      setCustomDocId(null);
     }
   }, [tabFromQuery]);
 
@@ -71,43 +61,6 @@ function DocumentsEditorContent() {
       try {
         setLoading(true);
         setError('');
-
-        if (customDocId) {
-          const res = await fetch(
-            `/api/clubs/${encodeURIComponent(clubId)}/documents-folder/${encodeURIComponent(customDocId)}`,
-            { headers: getAuthHeaders() },
-          );
-          const data = (await res.json()) as {
-            error?: string;
-            title?: string;
-            contentHtml?: string;
-            type?: string;
-            editable?: boolean;
-          };
-          if (!res.ok) throw new Error(data.error || 'Failed to load document');
-          if (cancelled) return;
-          if (data.type === 'pdf') {
-            throw new Error('PDF documents cannot be edited in the rich-text editor.');
-          }
-          setCustomTitle(data.title || 'Document');
-          setCustomHtml(data.contentHtml || '');
-          setCanEdit(Boolean(data.editable));
-          // Still load entity name for breadcrumb.
-          const metaRes = await fetch(
-            `/api/clubs/${encodeURIComponent(clubId)}/documents-folder`,
-            { headers: getAuthHeaders() },
-          );
-          const meta = (await metaRes.json()) as {
-            clubName?: string;
-            workspaceKind?: 'club' | 'team';
-          };
-          if (!cancelled) {
-            setClubName(meta.clubName || '');
-            setWorkspaceKind(meta.workspaceKind === 'team' ? 'team' : 'club');
-          }
-          return;
-        }
-
         const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/legal-documents`, {
           headers: getAuthHeaders(),
         });
@@ -134,7 +87,7 @@ function DocumentsEditorContent() {
     return () => {
       cancelled = true;
     };
-  }, [clubId, customDocId]);
+  }, [clubId]);
 
   const save = async () => {
     if (!clubId || !canEdit) return;
@@ -142,24 +95,6 @@ function DocumentsEditorContent() {
       setSaving(true);
       setMessage('');
       setError('');
-
-      if (customDocId) {
-        const res = await fetch(
-          `/api/clubs/${encodeURIComponent(clubId)}/documents-folder/${encodeURIComponent(customDocId)}`,
-          {
-            method: 'PATCH',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ title: customTitle, contentHtml: customHtml }),
-          },
-        );
-        const data = (await res.json()) as { error?: string; document?: { title?: string; contentHtml?: string } };
-        if (!res.ok) throw new Error(data.error || 'Save failed');
-        if (data.document?.title) setCustomTitle(data.document.title);
-        if (typeof data.document?.contentHtml === 'string') setCustomHtml(data.document.contentHtml);
-        setMessage('Document saved.');
-        return;
-      }
-
       const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/legal-documents`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
@@ -176,41 +111,17 @@ function DocumentsEditorContent() {
     }
   };
 
-  const currentHtml = customDocId
-    ? customHtml
-    : tab === 'rules'
-      ? docs.rulesHtml
-      : docs.privacyPolicyHtml;
+  const currentHtml = tab === 'rules' ? docs.rulesHtml : docs.privacyPolicyHtml;
   const entityWord = workspaceKind === 'team' ? 'team' : 'club';
-  const previewHref = clubId
-    ? customDocId
-      ? documentPublicHref(clubId, customDocId)
-      : clubLegalDocumentHref(clubId, tab)
-    : null;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 lg:px-6">
-      <div className="mb-2 text-xs text-gray-500">
-        Club&apos;s management / General settings /{' '}
-        <Link href="/club/settings/documents" className="text-teal-800 hover:underline">
-          Documents
-        </Link>{' '}
-        / Editor
-      </div>
       <div className="mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">
-          {customDocId ? customTitle || 'Document editor' : 'Documents Editor'}
-        </h1>
+        <h1 className="text-xl font-semibold text-gray-900">Documents Editor</h1>
         <p className="text-sm text-gray-600">
-          {customDocId ? (
-            <>Edit this document from the Documents folder.</>
-          ) : (
-            <>
-              Write the {entityWord} <strong>Rules</strong> and <strong>Privacy policy</strong> shown
-              from My {workspaceKind === 'team' ? 'Team' : 'Club'} overview and the Parents /
-              Signatures tabs.
-            </>
-          )}
+          Write the {entityWord} <strong>Rules</strong> and <strong>Privacy policy</strong> shown
+          from My {workspaceKind === 'team' ? 'Team' : 'Club'} overview and the Parents / Signatures
+          tabs.
           {clubName ? (
             <>
               {' '}
@@ -222,47 +133,27 @@ function DocumentsEditorContent() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {!customDocId ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setTab('rules')}
-              className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                tab === 'rules' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'
-              }`}
-            >
-              Rules
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('privacy-policy')}
-              className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                tab === 'privacy-policy' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'
-              }`}
-            >
-              Privacy policy
-            </button>
-          </>
-        ) : (
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            Title
-            <input
-              value={customTitle}
-              disabled={!canEdit}
-              onChange={(e) => setCustomTitle(e.target.value)}
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
-            />
-          </label>
-        )}
-        <Link
-          href="/club/settings/documents"
-          className="rounded border border-gray-400 px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+        <button
+          type="button"
+          onClick={() => setTab('rules')}
+          className={`rounded px-3 py-1.5 text-sm font-semibold ${
+            tab === 'rules' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'
+          }`}
         >
-          Back to folder
-        </Link>
-        {previewHref ? (
+          Rules
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('privacy-policy')}
+          className={`rounded px-3 py-1.5 text-sm font-semibold ${
+            tab === 'privacy-policy' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'
+          }`}
+        >
+          Privacy policy
+        </button>
+        {clubId ? (
           <Link
-            href={previewHref}
+            href={clubLegalDocumentHref(clubId, tab)}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto rounded border border-gray-400 px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
@@ -287,20 +178,16 @@ function DocumentsEditorContent() {
             <CKEditor
               value={currentHtml}
               readOnly={!canEdit}
-              instanceId={customDocId ? `folder-doc-${customDocId}` : `legal-doc-${tab}`}
-              localeKey={customDocId || tab}
+              instanceId={`legal-doc-${tab}`}
+              localeKey={tab}
               minHeightPx={620}
-              onChange={(html) => {
-                if (customDocId) {
-                  setCustomHtml(html);
-                  return;
-                }
+              onChange={(html) =>
                 setDocs((d) =>
                   tab === 'rules'
                     ? { ...d, rulesHtml: html }
                     : { ...d, privacyPolicyHtml: html },
-                );
-              }}
+                )
+              }
             />
           </div>
           {canEdit ? (

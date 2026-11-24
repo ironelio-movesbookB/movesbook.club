@@ -3,12 +3,8 @@
 import { Camera, Home, Menu, Settings, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { DEFAULT_HERO_BANNER_URL } from '@/lib/profileBannerSequence';
-import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 import SafeCoverImage from '@/components/media/SafeCoverImage';
-import EntityImageFileInput from '@/lib/entity/EntityImageFileInput';
-import { useEntityImageInput, type EntityVisualEdit } from '@/lib/entity/useEntityVisual';
 
 interface ClubDashboardMyPageBannerProps {
   clubName: string;
@@ -27,16 +23,6 @@ interface ClubDashboardMyPageBannerProps {
   showSuggestMovesbook?: boolean;
   /** When false, hides the right-hand SPONSORED column (e.g. My Club tab). */
   showSponsored?: boolean;
-  /** My Page: personal photo and banner, no club or team name. */
-  personal?: boolean;
-  /** Logged-in user profile photo, shown on My Page only. */
-  avatarImagePath?: string | null;
-  /** Selected club/team logo. Used on My Club / My Team, never on My Page. */
-  entityLogoUrl?: string | null;
-  /** Selected club/team banner. Used on My Club / My Team, never on My Page. */
-  entityBannerUrl?: string | null;
-  /** When set, the cover camera uploads this entity's banner instead of the user banner. */
-  entityEdit?: EntityVisualEdit | null;
 }
 
 export default function ClubDashboardMyPageBanner({
@@ -49,39 +35,21 @@ export default function ClubDashboardMyPageBanner({
   onSuggestMovesbookClick,
   showSuggestMovesbook = false,
   showSponsored = true,
-  personal = false,
-  avatarImagePath,
-  entityLogoUrl,
-  entityBannerUrl,
-  entityEdit = null,
 }: ClubDashboardMyPageBannerProps) {
   const router = useRouter();
   const { t } = useLanguage();
-  const { showCentralToolbar } = useDisplayLayoutOptions();
   const displayName = clubName?.trim() || 'Club Magia Avollino Club';
 
-  const entityCoverInputRef = useEntityImageInput();
-  const userCover = coverImageUrl || DEFAULT_HERO_BANNER_URL;
-  const src = personal ? userCover : entityBannerUrl || DEFAULT_HERO_BANNER_URL;
+  const src = coverImageUrl || DEFAULT_HERO_BANNER_URL;
   const alignCenter = coverBannerAlignment === 'center';
   const coverObjectClass = alignCenter ? 'object-cover object-center' : 'object-cover object-top';
   const stripBgPos = alignCenter ? 'center center' : 'center top';
   const stripSrc = src.startsWith('/uploads/') ? DEFAULT_HERO_BANNER_URL : src;
-  const avatarSrc = resolvePublicImageUrl(avatarImagePath);
-  const entityLogoSrc = resolvePublicImageUrl(entityLogoUrl);
-  const thumbSrc = personal ? avatarSrc || userCover : entityLogoSrc;
-  const openCover = () => {
-    if (personal) {
-      onCoverCameraClick();
-      return;
-    }
-    if (entityEdit) entityCoverInputRef.current?.click();
-  };
 
   return (
     <div className="mb-6 flex-shrink-0 px-0">
-      <div className="flex w-full flex-col lg:flex-row shadow-lg overflow-hidden bg-black min-h-[340px] max-h-[420px]">
-        <div className="relative flex-1 min-h-[320px] lg:min-h-[340px] min-w-0">
+      <div className="flex w-full flex-col lg:flex-row shadow-lg overflow-hidden bg-black min-h-[220px] max-h-[280px]">
+        <div className="relative flex-1 min-h-[200px] lg:min-h-[220px] min-w-0">
           <SafeCoverImage
             src={src}
             fill
@@ -90,44 +58,38 @@ export default function ClubDashboardMyPageBanner({
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent pointer-events-none" />
 
-          {!personal && entityEdit ? (
-            <EntityImageFileInput edit={entityEdit} asset="banner" inputRef={entityCoverInputRef} />
-          ) : null}
-          <button
-            type="button"
-            onClick={openCover}
-            disabled={!personal && !entityEdit}
-            className="absolute top-0 left-0 right-0 h-16 flex items-start justify-start p-2 z-10 cursor-pointer disabled:cursor-default"
+          <div
+            className="absolute top-0 left-0 right-0 h-12 flex items-start justify-start p-2 z-10"
             style={{
               background: 'linear-gradient(to bottom, rgba(0,0,0,0.45), transparent)',
             }}
-            title={t('athlete_banner_change_cover')}
-            aria-label={t('athlete_banner_change_cover')}
           >
-            <span className="text-white/95 p-2 rounded bg-black/25 pointer-events-none">
+            <button
+              type="button"
+              onClick={onCoverCameraClick}
+              className="text-white/95 p-2 rounded bg-black/25 hover:bg-black/45 focus:outline-none focus:ring-2 focus:ring-white/60 pointer-events-auto"
+              title={t('athlete_banner_change_cover')}
+              aria-label={t('athlete_banner_change_cover')}
+            >
               <Camera className="w-5 h-5" />
-            </span>
-          </button>
+            </button>
+          </div>
 
           <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-3 p-3 z-10">
             <div className="flex items-end gap-2 min-w-0">
-              <div className={`${personal ? 'w-20 h-20' : 'w-20 h-20'} shrink-0 border-2 border-white shadow-lg overflow-hidden bg-gray-200`}>
-                {thumbSrc ? (
-                  <SafeCoverImage
-                    src={thumbSrc}
-                    width={80}
-                    height={80}
-                    className={`w-full h-full opacity-90 ${personal && !avatarSrc ? (alignCenter ? 'object-cover object-center' : 'object-cover object-top') : 'object-cover object-center'}`}
-                  />
-                ) : null}
+              <div className="w-[72px] h-[54px] shrink-0 border-2 border-white shadow-lg overflow-hidden bg-gray-200">
+                <SafeCoverImage
+                  src={src}
+                  width={72}
+                  height={54}
+                  className={`w-full h-full opacity-90 ${alignCenter ? 'object-cover object-center' : 'object-cover object-top'}`}
+                />
               </div>
               <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
-                {personal ? null : (
-                  <span className="px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[min(12rem,100%)] truncate">
-                    {displayName}
-                  </span>
-                )}
-                {!personal && clubId && onClubProfileClick ? (
+                <span className="px-2 py-0.5 bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide rounded shadow max-w-[min(12rem,100%)] truncate">
+                  {displayName}
+                </span>
+                {clubId && onClubProfileClick ? (
                   <button
                     type="button"
                     onClick={onClubProfileClick}
@@ -189,7 +151,6 @@ export default function ClubDashboardMyPageBanner({
         )}
       </div>
 
-      {showCentralToolbar && (
       <div className="flex-shrink-0">
         <div className="bg-gray-800 overflow-hidden shadow-lg relative h-[52px]">
           <div
@@ -299,7 +260,6 @@ export default function ClubDashboardMyPageBanner({
           </div>
         </div>
       </div>
-      )}
     </div>
   );
 }

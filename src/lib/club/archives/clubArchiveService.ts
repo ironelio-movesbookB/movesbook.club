@@ -6,8 +6,7 @@ import {
   projectInstallmentsOnBalance,
   type InstallmentDto,
 } from '@/lib/procedures/installmentService';
-import { getProcedureDirection, procedureTypologyFor } from '@/lib/procedures/registry';
-import { procedureSubscriber } from '@/lib/procedures/subscriberOverride';
+import { getProcedureTypology } from '@/lib/procedures/registry';
 import { loadToBeVerifiedPaymentIds } from '@/lib/procedures/paymentVerification';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 import type { ClubAuthContext } from '@/lib/procedures/types';
@@ -33,12 +32,8 @@ import {
   type PaginatedArchive,
 } from '@/lib/club/archives/legacyArchiveQueries';
 
-import {
-  loadClubMemberTypeNames,
-  memberTypeIdFromProfileJson,
-} from '@/lib/club/clubMemberTypes';
+import { loadClubMemberTypeNames, memberTypeIdFromProfileJson } from '@/lib/club/clubMemberTypes';
 import { listCoachAthleteLinks } from '@/lib/club/coachMemberLists';
-import { displaySellingNumber } from '@/lib/shop/sellingNumber';
 
 export type { ArchiveQueryParams, PaginatedArchive };
 
@@ -48,16 +43,6 @@ async function clubMemberUserIds(clubId: string): Promise<string[]> {
     select: { memberId: true },
   });
   return rows.map((r) => r.memberId);
-}
-
-function metadataHasProduct(meta: Record<string, unknown>, productId: string): boolean {
-  if (!productId) return true;
-  if (text(meta.productId) === productId) return true;
-  const products = Array.isArray(meta.products) ? meta.products : [];
-  return products.some((line) => {
-    if (!line || typeof line !== 'object') return false;
-    return text((line as Record<string, unknown>).productId) === productId;
-  });
 }
 
 function formatArchiveDate(value: Date | null | undefined): string {
@@ -151,7 +136,7 @@ function mapArchivePersonRow(params: {
 
 export async function listClubMembersArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -223,10 +208,7 @@ export async function listClubMembersArchive(
     });
   } catch (error) {
     // Main added ClubStaff model; local DB may not have `club_staff` yet.
-    console.warn(
-      'listClubMembersArchive: club_staff unavailable, continuing without staff rows',
-      error,
-    );
+    console.warn('listClubMembersArchive: club_staff unavailable, continuing without staff rows', error);
     staffRows = [];
   }
 
@@ -241,10 +223,7 @@ export async function listClubMembersArchive(
           })
         : [];
   } catch (error) {
-    console.warn(
-      'listClubMembersArchive: user_profile_extras unavailable',
-      error,
-    );
+    console.warn('listClubMembersArchive: user_profile_extras unavailable', error);
     extrasRows = [];
   }
   const ownerSportByUser = new Map<string, string>();
@@ -272,10 +251,7 @@ export async function listClubMembersArchive(
 
     let scopedSafe: {
       otherDetails?: { groupTrainedId?: string };
-      settings?: {
-        football?: { teamNames?: string; category?: string };
-        teamSport?: string;
-      };
+      settings?: { football?: { teamNames?: string; category?: string }; teamSport?: string };
     } = {};
     try {
       scopedSafe = row.profile?.profileJson
@@ -338,14 +314,13 @@ export async function listClubMembersArchive(
       casual: 'No',
     }));
 
-  const items: Record<string, unknown>[] = [
-    ...memberItems,
-    ...staffOnlyItems,
-  ].sort((a, b) => {
-    const aDate = String(a.insertDate ?? '');
-    const bDate = String(b.insertDate ?? '');
-    return bDate.localeCompare(aDate);
-  });
+  const items: Record<string, unknown>[] = [...memberItems, ...staffOnlyItems].sort(
+    (a, b) => {
+      const aDate = String(a.insertDate ?? '');
+      const bDate = String(b.insertDate ?? '');
+      return bDate.localeCompare(aDate);
+    },
+  );
   items.forEach((item, i) => {
     item.number = i + 1;
   });
@@ -398,10 +373,7 @@ export async function listTeamMembersArchive(
           })
         : [];
   } catch (error) {
-    console.warn(
-      'listTeamMembersArchive: user_profile_extras unavailable',
-      error,
-    );
+    console.warn('listTeamMembersArchive: user_profile_extras unavailable', error);
     extrasRows = [];
   }
   const ownerSportByUser = new Map<string, string>();
@@ -456,10 +428,7 @@ export async function listCoachAthletesArchive(
 
   const [links, groups] = await Promise.all([
     listCoachAthleteLinks(coachId),
-    prisma.coachingGroup.findMany({
-      where: { coachId },
-      select: { id: true, name: true },
-    }),
+    prisma.coachingGroup.findMany({ where: { coachId }, select: { id: true, name: true } }),
   ]);
   if (links.length === 0) return paginate([], page, pageSize);
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
@@ -483,19 +452,14 @@ export async function listCoachAthletesArchive(
       },
     }),
     prisma.userProfileExtras
-      .findMany({
-        where: { userId: { in: athleteIds } },
-        select: { userId: true, ownerJson: true },
-      })
+      .findMany({ where: { userId: { in: athleteIds } }, select: { userId: true, ownerJson: true } })
       .catch(() => [] as Array<{ userId: string; ownerJson: string }>),
   ]);
   const athleteById = new Map(athletes.map((a) => [a.id, a]));
   const ownerSportByUser = new Map<string, string>();
   for (const ex of extrasRows) {
     try {
-      const owner = JSON.parse(ex.ownerJson || '{}') as {
-        personal?: { mainSport?: string };
-      };
+      const owner = JSON.parse(ex.ownerJson || '{}') as { personal?: { mainSport?: string } };
       const sport = text(owner.personal?.mainSport);
       if (sport) ownerSportByUser.set(ex.userId, sport);
     } catch {
@@ -507,16 +471,13 @@ export async function listCoachAthletesArchive(
   for (const link of links) {
     const athlete = athleteById.get(link.athleteId);
     if (!athlete) continue;
-    const groupNames = link.groupIds
-      .map((id) => groupName.get(id))
-      .filter(Boolean) as string[];
+    const groupNames = link.groupIds.map((id) => groupName.get(id)).filter(Boolean) as string[];
     items.push({
       ...mapArchivePersonRow({
         person: athlete,
         joinedAt: link.joinedAt,
         membershipType: 'Standard',
-        operatorLabel:
-          athlete.userType === 'COACH' ? 'Coach' : 'Athlete trained',
+        operatorLabel: athlete.userType === 'COACH' ? 'Coach' : 'Athlete trained',
         membershipRole: null,
       }),
       number: items.length + 1,
@@ -552,13 +513,7 @@ export async function listClubParentsArchive(
     where: { clubId: ctx.club.id },
     include: {
       member: {
-        select: {
-          id: true,
-          firstName: true,
-          surname: true,
-          name: true,
-          username: true,
-        },
+        select: { id: true, firstName: true, surname: true, name: true, username: true },
       },
       profile: { select: { profileJson: true } },
     },
@@ -592,11 +547,13 @@ export async function listClubParentsArchive(
       const mail = text(p.mainEmail);
       const kinship = text(p.kinship);
       const phone = text(p.phone1) || text(p.phone2);
-      if (!surname && !name && !fiscalCode && !mail && !kinship && !phone)
-        continue;
+      if (!surname && !name && !fiscalCode && !mail && !kinship && !phone) continue;
 
       const localCity =
-        text(p.location) || text(p.residenceLocation) || text(p.country) || '-';
+        text(p.location) ||
+        text(p.residenceLocation) ||
+        text(p.country) ||
+        '-';
 
       items.push({
         id: `${row.memberId}:${slot}`,
@@ -627,7 +584,7 @@ export async function listClubParentsArchive(
 
 export async function listClubOperatorsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -683,10 +640,7 @@ export async function listClubOperatorsArchive(
       );
     }
   } catch (error) {
-    console.warn(
-      'listClubOperatorsArchive: club_staff unavailable, using legacy operators',
-      error,
-    );
+    console.warn('listClubOperatorsArchive: club_staff unavailable, using legacy operators', error);
   }
 
   const staffOperators = await fetchClubStaffOperators(ctx.club.id);
@@ -733,11 +687,7 @@ export async function listClubOperatorsArchive(
       pushItem(
         {
           id: club.admin.id,
-          name: formatName(
-            club.admin.firstName,
-            club.admin.surname,
-            club.admin.name,
-          ),
+          name: formatName(club.admin.firstName, club.admin.surname, club.admin.name),
           image: club.admin.image,
           operator: club.admin.username,
           username: club.admin.username,
@@ -756,21 +706,18 @@ export async function listClubOperatorsArchive(
 
 export async function listClubAffiliationsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryClubMemberSubscriptions(ctx.club.id, params);
 }
 
 export async function listClubSubscriptionsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const table = await findExistingTable([
-    'club_member_subscriptions',
-    'club_member_subscription',
-  ]);
+  const table = await findExistingTable(['club_member_subscriptions', 'club_member_subscription']);
   const items: Record<string, unknown>[] = [];
 
   if (table) {
@@ -788,7 +735,7 @@ export async function listClubSubscriptionsArchive(
       `SELECT id, user_id, start_date, end_date, subscription_name, amount, installments
        FROM \`${table}\` WHERE club_id = ? AND (delete_status IS NULL OR delete_status = 0)
        ORDER BY id DESC LIMIT 500`,
-      ctx.club.id,
+      ctx.club.id
     );
 
     const userIds = rows.map((r) => String(r.user_id ?? '')).filter(Boolean);
@@ -796,13 +743,7 @@ export async function listClubSubscriptionsArchive(
       userIds.length > 0
         ? await prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: {
-              id: true,
-              firstName: true,
-              surname: true,
-              name: true,
-              image: true,
-            },
+            select: { id: true, firstName: true, surname: true, name: true, image: true },
           })
         : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
@@ -829,9 +770,7 @@ export async function listClubSubscriptionsArchive(
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
-async function loadLegacyProductSaleItems(
-  ctx: ClubAuthContext,
-): Promise<Record<string, unknown>[]> {
+async function loadLegacyProductSaleItems(ctx: ClubAuthContext): Promise<Record<string, unknown>[]> {
   const table = await findExistingTable(['archive_seles', 'archive_sele']);
   const items: Record<string, unknown>[] = [];
   if (!table) return items;
@@ -849,7 +788,7 @@ async function loadLegacyProductSaleItems(
     >(
       `SELECT id, user_id, purchase_date, total_amount, sector, status, order_id
        FROM \`${table}\` WHERE delete_status = 0
-       ORDER BY id DESC LIMIT 500`,
+       ORDER BY id DESC LIMIT 500`
     );
 
     const userIds = rows.map((r) => String(r.user_id ?? '')).filter(Boolean);
@@ -857,13 +796,7 @@ async function loadLegacyProductSaleItems(
       userIds.length > 0
         ? await prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: {
-              id: true,
-              firstName: true,
-              surname: true,
-              name: true,
-              image: true,
-            },
+            select: { id: true, firstName: true, surname: true, name: true, image: true },
           })
         : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
@@ -877,9 +810,7 @@ async function loadLegacyProductSaleItems(
         userId: uid || undefined,
         name: user ? formatName(user.firstName, user.surname, user.name) : '-',
         image: user?.image ?? null,
-        insertDate: row.purchase_date
-          ? String(row.purchase_date).slice(0, 10)
-          : '-',
+        insertDate: row.purchase_date ? String(row.purchase_date).slice(0, 10) : '-',
         typology: 'Sellings',
         casual: text(row.sector) || text(row.order_id),
         value: num(row.total_amount),
@@ -892,216 +823,32 @@ async function loadLegacyProductSaleItems(
 
 export async function listUnifiedProductSales(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
-): Promise<PaginatedArchive<Record<string, unknown>>> {
-  const page = params.page ?? 1;
-  const pageSize = params.pageSize ?? 25;
-  const productId = text(params.productId);
-  const items: Record<string, unknown>[] = productId ? [] : await loadLegacyProductSaleItems(ctx);
-
-  try {
-    const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
-      page: 1,
-      pageSize: 500,
-      memberId: params.memberId,
-    });
-    const recordIds = procedure.items.map((row) => row.id);
-    const receipts = recordIds.length
-      ? await prisma.procedureReceipt.findMany({
-          where: { procedureRecordId: { in: recordIds } },
-          select: { procedureRecordId: true, documentNumber: true },
-          orderBy: { createdAt: 'desc' },
-        })
-      : [];
-    const invoiceByRecord = new Map<string, string>();
-    for (const receipt of receipts) {
-      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
-        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
-      }
-    }
-
-    for (const row of procedure.items) {
-      const meta = (row.metadata ?? {}) as Record<string, unknown>;
-      if (productId && !metadataHasProduct(meta, productId)) continue;
-      const products = Array.isArray(meta.products) ? meta.products : [];
-      const purchaseLines = products
-        .map((line) => {
-          if (!line || typeof line !== 'object') return null;
-          const item = line as Record<string, unknown>;
-          const name = text(item.name);
-          const quantity = num(item.quantity);
-          if (!name) return null;
-          return {
-            name,
-            quantity: quantity > 0 ? quantity : 1,
-            productId: text(item.productId) || undefined,
-          };
-        })
-        .filter((line): line is { name: string; quantity: number; productId?: string } => Boolean(line));
-      const productCount = num(meta.productCount) || purchaseLines.reduce((sum, line) => sum + line.quantity, 0);
-      const online = text(meta.source).toLowerCase() === 'online';
-      items.push({
-        id: `proc-${row.id}`,
-        procedureRecordId: row.id,
-        memberId: row.memberId,
-        userId: row.memberId,
-        name: row.memberName,
-        image: row.memberImage,
-        insertDate: row.recordDate,
-        typology: 'PURCHASE PRODUCTS',
-        casual: online ? 'Shop online' : text(meta.sector) || text(meta.sectorName) || 'Shop',
-        description: online ? 'Member' : 'Operator',
-        course: purchaseLines[0]?.name || text(meta.productName) || '-',
-        value: row.totalAmount,
-        paid: row.paidAmount,
-        rest: row.balanceAmount,
-        number: productCount,
-        purchaseLines,
-        category: displaySellingNumber(meta.sellingNumber) || '-',
-        service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
-        operator: online ? '-' : row.operatorName || '-',
-        status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
-        source: 'procedure',
-      });
-    }
-  } catch {
-    // product_sale procedure type may not be seeded yet
-  }
-
-  items.sort((a, b) =>
-    String(b.insertDate).localeCompare(String(a.insertDate)),
-  );
-  return paginate(applyFilters(items, params), page, pageSize);
-}
-
-function sellingListStatus(record: {
-  recordStatus?: string;
-  balanceAmount: number;
-  paidAmount: number;
-  metadata: Record<string, unknown> | null;
-}) {
-  if (record.recordStatus === 'DELETED') return 'Cancelled';
-  const marked = text(record.metadata?.orderStatus).toLowerCase() === 'completed';
-  const settled = record.balanceAmount <= 0 && record.paidAmount > 0;
-  return marked || settled ? 'Completed' : 'Pending';
-}
-
-function soldProductSector(sector: string | null | undefined) {
-  const parts = String(sector ?? '')
-    .split(/[,|/]/)
-    .map((part) => part.trim().toLowerCase())
-    .filter((part) => part === 'shop' || part === 'bar' || part === 'restaurant');
-  if (parts.length === 0) return 'OTHER';
-  return ['shop', 'bar', 'restaurant']
-    .filter((name) => parts.includes(name))
-    .map((name) => name.toUpperCase())
-    .join(', ');
-}
-
-export async function listProductSaleLines(
-  ctx: ClubAuthContext,
   params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const productId = text(params.productId);
-  const items: Record<string, unknown>[] = productId
-    ? []
-    : (await loadLegacyProductSaleItems(ctx)).map((item) => ({
-        ...item,
-        course: '-',
-        description: '',
-        typology: 'Selling',
-        casual: soldProductSector(text(item.casual)),
-        paid: item.value,
-        rest: item.status === 'Paid' ? 0 : item.value,
-        status: item.status === 'Paid' ? 'Completed' : 'Pending',
-        service: '-',
-        operator: '-',
-      }));
+  const items = await loadLegacyProductSaleItems(ctx);
 
   try {
     const procedure = await procedureService.listRecords(ctx, PROCEDURE_TYPE_CODES.PRODUCT_SALE, {
       page: 1,
       pageSize: 500,
       memberId: params.memberId,
-      includeDeleted: true,
     });
-    const recordIds = procedure.items.map((row) => row.id);
-    const receipts = recordIds.length
-      ? await prisma.procedureReceipt.findMany({
-          where: { procedureRecordId: { in: recordIds } },
-          select: { procedureRecordId: true, documentNumber: true },
-          orderBy: { createdAt: 'desc' },
-        })
-      : [];
-    const invoiceByRecord = new Map<string, string>();
-    for (const receipt of receipts) {
-      if (receipt.documentNumber && !invoiceByRecord.has(receipt.procedureRecordId)) {
-        invoiceByRecord.set(receipt.procedureRecordId, receipt.documentNumber);
-      }
-    }
-
-    const productIds = new Set<string>();
     for (const row of procedure.items) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
-      for (const line of Array.isArray(meta.products) ? meta.products : []) {
-        const id = line && typeof line === 'object' ? text((line as Record<string, unknown>).productId) : '';
-        if (id) productIds.add(id);
-      }
-    }
-    const shopProducts = productIds.size
-      ? await prisma.shopProduct.findMany({
-          where: { id: { in: [...productIds] } },
-          select: { id: true, imageUrl: true, sector: true },
-        })
-      : [];
-    const productById = new Map(shopProducts.map((product) => [product.id, product]));
-
-    for (const row of procedure.items) {
-      const meta = (row.metadata ?? {}) as Record<string, unknown>;
-      if (productId && !metadataHasProduct(meta, productId)) continue;
-      const online = text(meta.source).toLowerCase() === 'online';
-      const lines = (Array.isArray(meta.products) ? meta.products : [])
-        .filter((line): line is Record<string, unknown> => Boolean(line) && typeof line === 'object')
-        .map((line) => ({
-          productId: text(line.productId),
-          name: text(line.name) || '-',
-          quantity: num(line.quantity) > 0 ? num(line.quantity) : 1,
-          price: num(line.price),
-        }));
-      if (lines.length === 0) {
-        lines.push({ productId: text(meta.productId), name: text(meta.productName) || '-', quantity: 1, price: row.totalAmount });
-      }
-      const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
-      const paidRatio = subtotal > 0 ? row.totalAmount / subtotal : 1;
-      const saleSector = text(meta.sector) || text(meta.sectorName);
-
-      lines.forEach((line, index) => {
-        if (productId && line.productId !== productId) return;
-        const product = productById.get(line.productId);
-        const value = Math.round(line.price * line.quantity * 100) / 100;
-        items.push({
-          id: `proc-${row.id}-${index}`,
-          procedureRecordId: row.id,
-          memberId: row.memberId,
-          userId: row.memberId,
-          name: row.memberName,
-          image: row.memberImage,
-          description: product?.imageUrl || '',
-          course: line.quantity > 1 ? `${line.name} × ${line.quantity}` : line.name,
-          insertDate: row.recordDate,
-          typology: 'Selling',
-          casual: soldProductSector(product?.sector || (saleSector.includes(' - ') ? '' : saleSector) || 'Shop'),
-          value,
-          paid: Math.round(value * paidRatio * 100) / 100,
-          category: displaySellingNumber(meta.sellingNumber) || '-',
-          service: invoiceByRecord.get(row.id) || text(meta.invoiceNumber) || '-',
-          operator: online ? 'Online shop' : row.operatorName || '-',
-          rest: row.balanceAmount,
-          status: sellingListStatus(row),
-          source: 'procedure',
-        });
+      items.push({
+        id: `proc-${row.id}`,
+        memberId: row.memberId,
+        userId: row.memberId,
+        name: row.memberName,
+        image: null,
+        insertDate: row.recordDate,
+        typology: 'Sellings',
+        casual: text(meta.sector) || text(meta.productName) || row.notes || '-',
+        value: row.totalAmount,
+        status: row.balanceAmount > 0 ? 'Not paid' : 'Paid',
+        source: 'procedure',
       });
     }
   } catch {
@@ -1114,14 +861,14 @@ export async function listProductSaleLines(
 
 export async function listLegacyProductSales(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return listUnifiedProductSales(ctx, params);
 }
 
 export async function listAccessesArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const memberIds = await clubMemberUserIds(ctx.club.id);
   const result = await queryLegacyTableArchive(
@@ -1144,14 +891,14 @@ export async function listAccessesArchive(
     },
     `SELECT id, user_id, date, hour, outcome FROM \`{table}\` ORDER BY date DESC, hour DESC LIMIT 1000`,
     [],
-    params,
+    params
   );
   return result;
 }
 
 export async function listReservationsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['reservations'],
@@ -1162,14 +909,10 @@ export async function listReservationsArchive(
         id: String(row.id),
         memberId: uid || undefined,
         userId: uid || undefined,
-        name:
-          text(row.name) ||
-          (user ? formatName(user.firstName, user.surname, user.name) : '-'),
+        name: text(row.name) || (user ? formatName(user.firstName, user.surname, user.name) : '-'),
         image: user?.image ?? null,
         course: text(row.course_name) || text(row.course) || '-',
-        insertDate: row.date
-          ? String(row.date).slice(0, 10)
-          : text(row.reservation_date).slice(0, 10) || '-',
+        insertDate: row.date ? String(row.date).slice(0, 10) : text(row.reservation_date).slice(0, 10) || '-',
         typology: 'Reservation',
         status: text(row.status) || '-',
       };
@@ -1177,13 +920,13 @@ export async function listReservationsArchive(
     `SELECT id, user_id, name, course_name, course, date, reservation_date, status
      FROM \`{table}\` WHERE club_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id],
-    params,
+    params
   );
 }
 
 export async function listCardAssignmentsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const tables = [
     'card_rfidbadges_pool_allocations',
@@ -1199,19 +942,13 @@ export async function listCardAssignmentsArchive(
     try {
       const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
         `SELECT id, user_id, card_number, badge_number, assigned_date, created, modified
-         FROM \`${table}\` ORDER BY id DESC LIMIT 500`,
+         FROM \`${table}\` ORDER BY id DESC LIMIT 500`
       );
       const userIds = rows.map((r) => String(r.user_id ?? '')).filter(Boolean);
       const users = userIds.length
         ? await prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: {
-              id: true,
-              firstName: true,
-              surname: true,
-              name: true,
-              image: true,
-            },
+            select: { id: true, firstName: true, surname: true, name: true, image: true },
           })
         : [];
       const userMap = new Map(users.map((u) => [u.id, u]));
@@ -1219,9 +956,7 @@ export async function listCardAssignmentsArchive(
         const user = userMap.get(String(row.user_id ?? ''));
         items.push({
           id: `${table}-${row.id}`,
-          name: user
-            ? formatName(user.firstName, user.surname, user.name)
-            : '-',
+          name: user ? formatName(user.firstName, user.surname, user.name) : '-',
           image: user?.image ?? null,
           casual: text(row.card_number) || text(row.badge_number) || '-',
           insertDate: row.assigned_date
@@ -1242,18 +977,14 @@ export async function listCardAssignmentsArchive(
 
 export async function listEventsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['events'],
     (row) => ({
       id: String(row.id),
       name: text(row.title) || text(row.name) || text(row.event_name) || '-',
-      insertDate: row.date
-        ? String(row.date).slice(0, 10)
-        : row.start_date
-          ? String(row.start_date).slice(0, 10)
-          : '-',
+      insertDate: row.date ? String(row.date).slice(0, 10) : row.start_date ? String(row.start_date).slice(0, 10) : '-',
       typology: text(row.typology) || text(row.event_type) || 'Event',
       casual: text(row.description) || '-',
       status: text(row.status) || '-',
@@ -1261,37 +992,33 @@ export async function listEventsArchive(
     `SELECT id, title, name, event_name, date, start_date, typology, event_type, description, status
      FROM \`{table}\` WHERE club_id = ? OR user_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id, ctx.userId],
-    params,
+    params
   );
 }
 
 export async function listPollsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['polls'],
     (row) => ({
       id: String(row.id),
       name: text(row.question) || text(row.title) || text(row.name) || '-',
-      insertDate: row.created
-        ? String(row.created).slice(0, 10)
-        : row.start_date
-          ? String(row.start_date).slice(0, 10)
-          : '-',
+      insertDate: row.created ? String(row.created).slice(0, 10) : row.start_date ? String(row.start_date).slice(0, 10) : '-',
       typology: 'Poll',
       status: text(row.status) || '-',
     }),
     `SELECT id, question, title, name, created, start_date, status
      FROM \`{table}\` WHERE club_id = ? OR user_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id, ctx.userId],
-    params,
+    params
   );
 }
 
 export async function listMarketingContactsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['club_setting_contacts', 'club_setting_contact'],
@@ -1305,19 +1032,15 @@ export async function listMarketingContactsArchive(
     `SELECT id, name, contact_name, email, phone, contact_type, created
      FROM \`{table}\` WHERE club_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id],
-    params,
+    params
   );
 }
 
 export async function listAlertsAssignedArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
-  const tables = [
-    'member_alert_users',
-    'panel_control_alerts',
-    'automatic_alerts',
-  ];
+  const tables = ['member_alert_users', 'panel_control_alerts', 'automatic_alerts'];
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
   const items: Record<string, unknown>[] = [];
@@ -1328,21 +1051,13 @@ export async function listAlertsAssignedArchive(
     try {
       const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
         `SELECT id, user_id, member_id, alert_type, title, message, created, date
-         FROM \`${table}\` ORDER BY id DESC LIMIT 400`,
+         FROM \`${table}\` ORDER BY id DESC LIMIT 400`
       );
-      const userIds = rows
-        .flatMap((r) => [String(r.user_id ?? ''), String(r.member_id ?? '')])
-        .filter(Boolean);
+      const userIds = rows.flatMap((r) => [String(r.user_id ?? ''), String(r.member_id ?? '')]).filter(Boolean);
       const users = userIds.length
         ? await prisma.user.findMany({
             where: { id: { in: Array.from(new Set(userIds)) } },
-            select: {
-              id: true,
-              firstName: true,
-              surname: true,
-              name: true,
-              image: true,
-            },
+            select: { id: true, firstName: true, surname: true, name: true, image: true },
           })
         : [];
       const userMap = new Map(users.map((u) => [u.id, u]));
@@ -1351,16 +1066,10 @@ export async function listAlertsAssignedArchive(
         const user = userMap.get(uid);
         items.push({
           id: `${table}-${row.id}`,
-          name: user
-            ? formatName(user.firstName, user.surname, user.name)
-            : text(row.title) || '-',
+          name: user ? formatName(user.firstName, user.surname, user.name) : text(row.title) || '-',
           image: user?.image ?? null,
           casual: text(row.message) || text(row.alert_type) || '-',
-          insertDate: row.date
-            ? String(row.date).slice(0, 10)
-            : row.created
-              ? String(row.created).slice(0, 10)
-              : '-',
+          insertDate: row.date ? String(row.date).slice(0, 10) : row.created ? String(row.created).slice(0, 10) : '-',
           typology: 'Alert',
         });
       }
@@ -1374,7 +1083,7 @@ export async function listAlertsAssignedArchive(
 
 export async function listAdvertisingCampaignsArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['campaigns'],
@@ -1389,13 +1098,13 @@ export async function listAdvertisingCampaignsArchive(
     `SELECT id, name, title, start_date, end_date, status
      FROM \`{table}\` WHERE club_id = ? OR user_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id, ctx.userId],
-    params,
+    params
   );
 }
 
 export async function listStaffQueriesArchive(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   return queryLegacyTableArchive(
     ['supportcontactmails', 'supportcontactmail'],
@@ -1403,16 +1112,10 @@ export async function listStaffQueriesArchive(
       const user = userMap.get(String(row.user_id ?? ''));
       return {
         id: String(row.id),
-        name: user
-          ? formatName(user.firstName, user.surname, user.name)
-          : text(row.name) || '-',
+        name: user ? formatName(user.firstName, user.surname, user.name) : text(row.name) || '-',
         image: user?.image ?? null,
         casual: text(row.subject) || text(row.message) || '-',
-        insertDate: row.created
-          ? String(row.created).slice(0, 10)
-          : row.date
-            ? String(row.date).slice(0, 10)
-            : '-',
+        insertDate: row.created ? String(row.created).slice(0, 10) : row.date ? String(row.date).slice(0, 10) : '-',
         typology: 'Staff query',
         status: text(row.status) || '-',
       };
@@ -1420,32 +1123,28 @@ export async function listStaffQueriesArchive(
     `SELECT id, user_id, name, subject, message, created, date, status
      FROM \`{table}\` WHERE club_id = ? OR user_id = ? ORDER BY id DESC LIMIT 1000`,
     [ctx.club.id, ctx.userId],
-    params,
+    params
   );
 }
 
 export async function listCashMovements(
   ctx: ClubAuthContext,
   direction: 'all' | 'IN' | 'OUT',
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
   const items: Record<string, unknown>[] = [];
 
-  async function pushPayments(procedureType: string, idPrefix: string) {
+  async function pushPayments(
+    procedureType: string,
+    idPrefix: string,
+    cashDirection: 'IN' | 'OUT'
+  ) {
     const payments = await procedureService
       .listPayments(ctx, procedureType, { page: 1, pageSize: 500 })
-      .catch(() => ({
-        items: [] as Awaited<
-          ReturnType<typeof procedureService.listPayments>
-        >['items'],
-      }));
+      .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
     for (const p of payments.items) {
-      const baseDirection = p.direction ?? getProcedureDirection(procedureType);
-      const cashDirection =
-        p.amount < 0 ? (baseDirection === 'IN' ? 'OUT' : 'IN') : baseDirection;
-      if (direction !== 'all' && cashDirection !== direction) continue;
       items.push({
         id: `${idPrefix}${p.id}`,
         paymentId: p.id,
@@ -1455,12 +1154,10 @@ export async function listCashMovements(
         typology: p.typology,
         service: p.serviceName,
         insertDate: p.paymentDate,
-        paid: Math.abs(p.amount),
+        paid: p.amount,
         rest: p.residualDebt,
         value: p.originalDebt,
         direction: cashDirection,
-        cancelled: Boolean(p.cancelledAt),
-        reversalOfId: p.reversalOfId,
         payMod: p.payMode,
         casual: p.notes,
         operator: p.operatorName,
@@ -1468,97 +1165,23 @@ export async function listCashMovements(
     }
   }
 
-  await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-');
-  await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-');
-  await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-');
-  await pushPayments(PROCEDURE_TYPE_CODES.MEMBERSHIP, 'min-');
-  await pushPayments(PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION, 'cin-');
-  await pushPayments(PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION, 'evin-');
-  await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-');
-
   if (direction === 'all' || direction === 'IN') {
-    try {
-      const { listSponsorArchiveCash } =
-        await import('@/lib/club/sponsors/sponsorService');
-      const sponsorCash = await listSponsorArchiveCash({
-        kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
-        id: ctx.club.id,
-      });
-      items.push(...sponsorCash);
-    } catch {
-      /* sponsor tables may be unavailable */
-    }
-    try {
-      const { listEventArchiveCash } =
-        await import('@/lib/club/events/eventService');
-      const eventCash = await listEventArchiveCash({
-        kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
-        id: ctx.club.id,
-      });
-      items.push(...eventCash);
-    } catch {
-      /* event tables may be unavailable */
-    }
+    await pushPayments(PROCEDURE_TYPE_CODES.SERVICE_SALE, 'in-', 'IN');
+    await pushPayments(PROCEDURE_TYPE_CODES.PRODUCT_SALE, 'pin-', 'IN');
+    await pushPayments(PROCEDURE_TYPE_CODES.MEMBER_DEBT, 'mdin-', 'IN');
   }
 
-  if (direction === 'all' || direction === 'IN') {
-    try {
-      const online = await prisma.$queryRawUnsafe<
-        Array<{
-          id: string;
-          member_name: string;
-          description: string;
-          amount_eur: number | string;
-          provider: string;
-          paid_at: Date | string | null;
-        }>
-      >(
-        `SELECT id, member_name, description, amount_eur, provider, paid_at
-         FROM club_member_online_payments
-         WHERE entity_id = ? AND status = 'paid'
-           AND (settlement_json IS NULL OR settlement_json = '')
-         ORDER BY paid_at DESC
-         LIMIT 500`,
-        ctx.club.id,
-      );
-      for (const row of online) {
-        const paidAt =
-          row.paid_at instanceof Date
-            ? row.paid_at
-            : row.paid_at
-              ? new Date(row.paid_at)
-              : null;
-        const insertDate =
-          paidAt && !Number.isNaN(paidAt.getTime())
-            ? `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}-${String(paidAt.getDate()).padStart(2, '0')}`
-            : '-';
-        items.push({
-          id: `online-${row.id}`,
-          name: row.member_name || '-',
-          typology: 'Payment',
-          service: row.description || '-',
-          insertDate,
-          paid: Number(row.amount_eur) || 0,
-          direction: 'IN',
-          payMod: row.provider === 'paypal' ? 'PayPal' : 'Credit card',
-          casual: row.description || '',
-          operator: 'Online',
-        });
-      }
-    } catch {
-      /* The online-payment table is created the first time a pay link is sent. */
-    }
+  if (direction === 'all' || direction === 'OUT') {
+    await pushPayments(PROCEDURE_TYPE_CODES.EXPENSE, 'out-', 'OUT');
   }
 
-  items.sort((a, b) =>
-    String(b.insertDate).localeCompare(String(a.insertDate)),
-  );
+  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
 export async function listInsertCredits(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -1578,20 +1201,12 @@ export async function listInsertCredits(
     >(`SELECT id, user_id, credit_available, last_annotations, modified, operator_id
        FROM \`${table}\` ORDER BY modified DESC LIMIT 500`);
 
-    const userIds = rows
-      .flatMap((r) => [String(r.user_id ?? ''), String(r.operator_id ?? '')])
-      .filter(Boolean);
+    const userIds = rows.flatMap((r) => [String(r.user_id ?? ''), String(r.operator_id ?? '')]).filter(Boolean);
     const users =
       userIds.length > 0
         ? await prisma.user.findMany({
             where: { id: { in: Array.from(new Set(userIds)) } },
-            select: {
-              id: true,
-              firstName: true,
-              surname: true,
-              name: true,
-              image: true,
-            },
+            select: { id: true, firstName: true, surname: true, name: true, image: true },
           })
         : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
@@ -1601,16 +1216,12 @@ export async function listInsertCredits(
       const operator = userMap.get(String(row.operator_id ?? ''));
       items.push({
         id: String(row.id),
-        name: member
-          ? formatName(member.firstName, member.surname, member.name)
-          : '-',
+        name: member ? formatName(member.firstName, member.surname, member.name) : '-',
         image: member?.image ?? null,
         value: num(row.credit_available),
         paid: num(row.last_annotations),
         insertDate: row.modified ? String(row.modified).slice(0, 10) : '-',
-        operator: operator
-          ? formatName(operator.firstName, operator.surname, operator.name)
-          : '-',
+        operator: operator ? formatName(operator.firstName, operator.surname, operator.name) : '-',
         typology: 'Credit voucher',
       });
     }
@@ -1626,12 +1237,6 @@ const UNIFIED_PROCEDURE_TYPES = [
   PROCEDURE_TYPE_CODES.MEMBER_DEBT,
   PROCEDURE_TYPE_CODES.MEMBERSHIP,
   PROCEDURE_TYPE_CODES.COURSE_SUBSCRIPTION,
-  PROCEDURE_TYPE_CODES.EVENT_SUBSCRIPTION,
-] as const;
-
-const UNIFIED_DEADLINE_PROCEDURE_TYPES = [
-  ...UNIFIED_PROCEDURE_TYPES,
-  PROCEDURE_TYPE_CODES.MEMBER_CREDIT,
 ] as const;
 
 type UnifiedDeadlineRecord = Awaited<
@@ -1641,50 +1246,21 @@ type UnifiedDeadlineRecord = Awaited<
 /** One row per procedure record, with the record's own totals. */
 function deadlineRecordRow(
   procedureType: string,
-  r: UnifiedDeadlineRecord,
+  r: UnifiedDeadlineRecord
 ): Record<string, unknown> {
   const meta = r.metadata ?? {};
   const primary =
-    String(
-      meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? meta.eventName ?? ''
-    ).trim() || '-';
-  const subscriber = procedureSubscriber(meta);
+    String(meta.serviceName ?? meta.productName ?? meta.expenseName ?? meta.debtLabel ?? '').trim() ||
+    '-';
   const secondary = String(meta.sectorName ?? meta.typologyName ?? '').trim() || '';
-  const recurrence = meta.expenseRecurrence;
-  const isScheduledExpense =
-    recurrence !== null &&
-    typeof recurrence === 'object' &&
-    !Array.isArray(recurrence) &&
-    (recurrence as Record<string, unknown>).enabled === true &&
-    meta.recurrentActivated !== true;
   return {
     id: r.id,
     userId: r.memberId,
     memberId: r.memberId,
     name: r.memberName,
-    image: subscriber ? null : r.memberImage,
-    subscriberEmail: subscriber?.email || undefined,
-    typology: procedureTypologyFor(procedureType, meta),
+    image: r.memberImage,
+    typology: getProcedureTypology(procedureType),
     procedureType,
-    direction:
-      procedureType === PROCEDURE_TYPE_CODES.EXPENSE
-        ? String(meta.expenseDirection ?? '').trim().toUpperCase() === 'IN'
-          ? 'IN'
-          : 'OUT'
-        : getProcedureDirection(procedureType),
-    expenseDirection:
-      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
-      String(meta.expenseDirection ?? '').trim().toUpperCase() === 'IN'
-        ? 'IN'
-        : procedureType === PROCEDURE_TYPE_CODES.EXPENSE
-          ? 'OUT'
-          : undefined,
-    isRecurringOccurrence:
-      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
-      meta.isRecurringOccurrence === true,
-    isRecurrent:
-      procedureType === PROCEDURE_TYPE_CODES.EXPENSE &&
-      (meta.isRecurringOccurrence === true || isScheduledExpense),
     procedureRecordId: r.id,
     service: primary,
     course: secondary || undefined,
@@ -1721,7 +1297,7 @@ function deadlineInstallmentRows(
   procedureType: string,
   r: UnifiedDeadlineRecord,
   installments: InstallmentDto[],
-  includePaid: boolean,
+  includePaid: boolean
 ): Record<string, unknown>[] {
   const base = deadlineRecordRow(procedureType, r);
   const source =
@@ -1750,23 +1326,13 @@ function deadlineInstallmentRows(
 /** Archives menu: all typologies in one Deadlines list. */
 export async function listUnifiedDeadlines(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams & {
-    includePaid?: boolean;
-    expandDeadlines?: boolean;
-  } = {},
+  params: ArchiveQueryParams & { includePaid?: boolean; expandDeadlines?: boolean } = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
-  const records: { procedureType: string; record: UnifiedDeadlineRecord }[] =
-    [];
+  const records: { procedureType: string; record: UnifiedDeadlineRecord }[] = [];
 
-  const procedureTypes = params.procedureType
-    ? UNIFIED_DEADLINE_PROCEDURE_TYPES.filter(
-        (type) => type === params.procedureType,
-      )
-    : UNIFIED_DEADLINE_PROCEDURE_TYPES;
-
-  for (const procedureType of procedureTypes) {
+  for (const procedureType of UNIFIED_PROCEDURE_TYPES) {
     const res = await procedureService
       .listRecords(
         ctx,
@@ -1777,7 +1343,7 @@ export async function listUnifiedDeadlines(
           memberId: params.memberId,
           recordId: params.recordId,
         },
-        { onlyWithBalance: !params.includePaid },
+        { onlyWithBalance: !params.includePaid }
       )
       .catch(() => ({ items: [] as UnifiedDeadlineRecord[] }));
 
@@ -1799,39 +1365,20 @@ export async function listUnifiedDeadlines(
         procedureType,
         record,
         installmentsByRecord.get(record.id) ?? [],
-        Boolean(params.includePaid),
-      ),
+        Boolean(params.includePaid)
+      )
     );
   }
 
-  try {
-    const { listSponsorArchiveDeadlines } =
-      await import('@/lib/club/sponsors/sponsorService');
-    let sponsorDeadlines = await listSponsorArchiveDeadlines({
-      kind: ctx.workspaceKind === 'team' ? 'team' : 'club',
-      id: ctx.club.id,
-    });
-    if (!params.includePaid) {
-      sponsorDeadlines = sponsorDeadlines.filter(
-        (row) => Number(row.rest) > 0.005,
-      );
-    }
-    items.push(...sponsorDeadlines);
-  } catch {
-    /* sponsor tables may be unavailable */
-  }
-
   // Stable sort keeps the deadlines of one record together, oldest expire date first.
-  items.sort((a, b) =>
-    String(b.insertDate).localeCompare(String(a.insertDate)),
-  );
+  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
 /** Archives menu: all typologies in one Payments list. */
 export async function listUnifiedPayments(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -1845,14 +1392,9 @@ export async function listUnifiedPayments(
         memberId: params.memberId,
         recordId: params.recordId,
       })
-      .catch(() => ({
-        items: [] as Awaited<
-          ReturnType<typeof procedureService.listPayments>
-        >['items'],
-      }));
+      .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listPayments>>['items'] }));
 
     for (const p of res.items) {
-      const direction = p.direction ?? getProcedureDirection(procedureType);
       items.push({
         id: p.id,
         userId: p.memberId,
@@ -1860,13 +1402,10 @@ export async function listUnifiedPayments(
         procedureRecordId: p.procedureRecordId,
         procedureType,
         name: p.memberName,
-        typology: p.typology,
+        typology: getProcedureTypology(procedureType),
         service: p.serviceName ?? '-',
         insertDate: p.paymentDate,
         paid: p.amount,
-        direction,
-        paymentIn: direction === 'IN' ? p.amount : null,
-        paymentOut: direction === 'OUT' ? p.amount : null,
         originalDebt: p.originalDebt,
         residualDebt: p.residualDebt,
         rest: p.balanceAfter ?? p.residualDebt,
@@ -1878,24 +1417,18 @@ export async function listUnifiedPayments(
     }
   }
 
-  const unverified = await loadToBeVerifiedPaymentIds(
-    items.map((row) => String(row.id)),
-  );
+  const unverified = await loadToBeVerifiedPaymentIds(items.map((row) => String(row.id)));
   for (const row of items) row.toBeVerified = unverified.has(String(row.id));
-  const listed = params.toBeVerified
-    ? items.filter((row) => row.toBeVerified)
-    : items;
+  const listed = params.toBeVerified ? items.filter((row) => row.toBeVerified) : items;
 
-  listed.sort((a, b) =>
-    String(b.insertDate).localeCompare(String(a.insertDate)),
-  );
+  listed.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(listed, params), page, pageSize);
 }
 
 /** Archives menu: all typologies in one Receipts list. */
 export async function listUnifiedReceipts(
   ctx: ClubAuthContext,
-  params: ArchiveQueryParams = {},
+  params: ArchiveQueryParams = {}
 ): Promise<PaginatedArchive<Record<string, unknown>>> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 25;
@@ -1909,13 +1442,8 @@ export async function listUnifiedReceipts(
         memberId: params.memberId,
         recordId: params.recordId,
       })
-      .catch(() => ({
-        items: [] as Awaited<
-          ReturnType<typeof procedureService.listReceipts>
-        >['items'],
-      }));
+      .catch(() => ({ items: [] as Awaited<ReturnType<typeof procedureService.listReceipts>>['items'] }));
 
-    const direction = getProcedureDirection(procedureType);
     for (const r of res.items) {
       items.push({
         id: r.id,
@@ -1924,16 +1452,13 @@ export async function listUnifiedReceipts(
         procedureRecordId: r.procedureRecordId,
         procedureType,
         name: r.memberName,
-        typology: r.typology,
+        typology: getProcedureTypology(procedureType),
         service: r.serviceName ?? '-',
         insertDate: r.receiptDate,
         category: r.documentType,
         contract: r.documentNumber,
         value: r.amount,
         paid: r.paymentAmount,
-        direction,
-        paymentIn: direction === 'IN' ? r.paymentAmount : null,
-        paymentOut: direction === 'OUT' ? r.paymentAmount : null,
         residualDebt: r.residualDebt ?? Math.max(0, r.amount - r.paymentAmount),
         casual: r.annotations ?? '',
         operator: r.operatorName,
@@ -1942,33 +1467,22 @@ export async function listUnifiedReceipts(
     }
   }
 
-  items.sort((a, b) =>
-    String(b.insertDate).localeCompare(String(a.insertDate)),
-  );
+  items.sort((a, b) => String(b.insertDate).localeCompare(String(a.insertDate)));
   return paginate(applyFilters(items, params), page, pageSize);
 }
 
-export async function listCompanies(
-  ctx: ClubAuthContext,
-): Promise<{ id: string; name: string }[]> {
+export async function listCompanies(ctx: ClubAuthContext): Promise<{ id: string; name: string }[]> {
   const table = await findExistingTable(['multifactories', 'multifactory']);
   if (!table) {
     return [{ id: 'default', name: 'Default company' }];
   }
 
-  const rows = await prisma.$queryRawUnsafe<
-    { id: bigint | number; name: string | null }[]
-  >(
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint | number; name: string | null }[]>(
     `SELECT id, name FROM \`${table}\` WHERE club_id = ? OR user_id = ? ORDER BY name ASC`,
     ctx.club.id,
-    ctx.userId,
+    ctx.userId
   );
 
-  const companies = rows.map((r) => ({
-    id: String(r.id),
-    name: text(r.name) || `Company ${r.id}`,
-  }));
-  return companies.length > 0
-    ? companies
-    : [{ id: 'default', name: 'Default company' }];
+  const companies = rows.map((r) => ({ id: String(r.id), name: text(r.name) || `Company ${r.id}` }));
+  return companies.length > 0 ? companies : [{ id: 'default', name: 'Default company' }];
 }

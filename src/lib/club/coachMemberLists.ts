@@ -1,11 +1,5 @@
 import { prisma, prismaConnect } from '@/lib/prisma';
 import { verifyPassword } from '@/lib/auth';
-import {
-  adminAsMemberConfirmResponse,
-  isAddableMemberUserType,
-  isAdminAddableMemberUserType,
-  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
-} from '@/lib/club/memberArchiveStatus';
 
 /**
  * Coach workspace of Archive of Users.
@@ -188,31 +182,18 @@ export async function addCoachAthleteByCredentials(
   coachId: string,
   username: string,
   password: string,
-  opts?: { confirmAdminAsMember?: boolean },
-): Promise<
-  | { ok: true; athleteId: string }
-  | { error: string; status: number; code?: string; question?: string }
-> {
+): Promise<{ ok: true; athleteId: string } | { error: string; status: number }> {
   const athlete = await prisma.user.findUnique({
     where: { username },
     select: { id: true, password: true, userType: true },
   });
   if (!athlete) return { error: 'User not found', status: 404 };
   if (athlete.id === coachId) return { error: 'You cannot add yourself', status: 400 };
-  if (!isAddableMemberUserType(athlete.userType)) {
-    return { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR, status: 400 };
+  if (athlete.userType !== 'ATHLETE' && athlete.userType !== 'COACH') {
+    return { error: 'Only Single Users and Coaches can be added', status: 400 };
   }
   if (!(await verifyPassword(password, athlete.password))) {
     return { error: 'Invalid password', status: 401 };
-  }
-  if (isAdminAddableMemberUserType(athlete.userType) && !opts?.confirmAdminAsMember) {
-    const confirm = adminAsMemberConfirmResponse();
-    return {
-      error: confirm.error,
-      status: 409,
-      code: confirm.code,
-      question: confirm.question,
-    };
   }
   const existing = await prisma.coachAthlete.findUnique({
     where: { coachId_athleteId: { coachId, athleteId: athlete.id } },

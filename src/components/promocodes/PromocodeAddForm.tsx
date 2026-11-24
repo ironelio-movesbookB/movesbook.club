@@ -21,7 +21,6 @@ import {
 } from '@/lib/promocodes/promocodeLanguages';
 import { fetchGeneratedPromocode } from '@/lib/promocodes/generatePromocode';
 import { markPromocodeListForRefresh } from '@/lib/promocodes/promocodeInviteEvents';
-import { isBlankInviteHtml } from '@/lib/promocodes/promocodeInviteHtmlUtils';
 import './promocode-add.css';
 
 const MONTHS: Record<string, string> = {
@@ -339,15 +338,8 @@ export default function PromocodeAddForm({
   };
 
   const openPreview = () => {
-    if (!helpHtmlPagesId) {
-      showAlert('Please select an HTML document for the invitation attachment.', 'Validation');
-      return;
-    }
     const page = meta?.helpHtmlPages.find((p) => p.id === helpHtmlPagesId);
-    if (!page?.title) {
-      showAlert('Please select an HTML document for the invitation attachment.', 'Validation');
-      return;
-    }
+    if (!page?.title) return;
     const lang = Number(languageId) > 0 ? Number(languageId) : 1;
     const params = new URLSearchParams({ language_id: String(lang) });
     window.open(
@@ -377,38 +369,13 @@ export default function PromocodeAddForm({
     return `/promocodes/send-invite?${params.toString()}`;
   };
 
-  const sendInviteMail = async () => {
+  const sendInviteMail = () => {
     if (!inviteEmail.trim()) {
       showAlert('Please enter an email address.', 'Validation');
       return;
     }
     if (!code.trim()) {
-      showAlert('Promotional code is required.', 'Validation');
-      return;
-    }
-    if (!helpHtmlPagesId) {
-      showAlert('Please select an HTML document before sending the invitation.', 'Validation');
-      return;
-    }
-
-    try {
-      const previewParams = new URLSearchParams(
-        buildSendInvitePreviewUrl(inviteEmail, inviteUrl1, inviteUrl2).split('?')[1] ?? ''
-      );
-      const res = await promocodesFetch(`/api/admin/promocodes/send-invite?${previewParams.toString()}`);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Could not load invitation preview');
-      }
-      if (isBlankInviteHtml(String(data.emailBodyHtml ?? ''))) {
-        showAlert(
-          'Invitation body text is empty for the selected language. Add invite text under Settings → Language (Long text) or choose another language.',
-          'Validation'
-        );
-        return;
-      }
-    } catch (err) {
-      showAlert(err instanceof Error ? err.message : 'Could not verify invitation body text.', 'Validation');
+      showAlert('Promocode code is required.', 'Validation');
       return;
     }
 
@@ -521,7 +488,7 @@ export default function PromocodeAddForm({
           <table>
             <tbody>
               <tr>
-                <td>Promotional code</td>
+                <td>Promo code</td>
                 <td colSpan={2}>
                   <input
                     id="promocodeCode"

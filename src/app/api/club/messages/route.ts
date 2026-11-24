@@ -11,13 +11,6 @@ import {
   userCanAccessClubMessages,
   type ClubPartyType,
 } from '@/lib/messages/clubStaffMessages';
-import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
-
-function hasMessageContent(html: string): boolean {
-  return (
-    Boolean(html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').trim()) || /<img\b/i.test(html)
-  );
-}
 
 export const dynamic = 'force-dynamic';
 
@@ -80,13 +73,11 @@ export async function POST(request: NextRequest) {
     const recipientType = parsePartyType(body?.recipientType);
     const recipientUserId =
       typeof body?.recipientUserId === 'string' ? body.recipientUserId.trim() : '';
-    const text = typeof body?.body === 'string' ? sanitizeRichHtml(body.body) : '';
+    const text = typeof body?.body === 'string' ? body.body.trim() : '';
     if (!clubId) return NextResponse.json({ error: 'Select a club' }, { status: 400 });
     if (!recipientType) return NextResponse.json({ error: 'Select a type of recipient' }, { status: 400 });
     if (!recipientUserId) return NextResponse.json({ error: 'Select a recipient' }, { status: 400 });
-    if (!hasMessageContent(text)) {
-      return NextResponse.json({ error: 'Message body required' }, { status: 400 });
-    }
+    if (!text) return NextResponse.json({ error: 'Message body required' }, { status: 400 });
 
     const thread = await createClubStaffMessage({
       userId: auth.userId,

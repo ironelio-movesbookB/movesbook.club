@@ -26,18 +26,13 @@ export default function ProcedureArchiveTabs({ tabs, activeTab, trailing }: Prop
         <nav className="flex flex-wrap gap-1 items-end min-w-0">
           {tabs.map((tab) => {
             if (tab.onClick) {
-              const isEnabledPayMoreAction = tab.id === 'pay-selected' && !tab.disabled;
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={tab.onClick}
                   disabled={tab.disabled}
-                  className={`${tabClass(tab.id, tab.disabled)} ${
-                    isEnabledPayMoreAction
-                      ? 'border-red-600 !text-red-700 font-bold hover:!text-red-800'
-                      : ''
-                  }`}
+                  className={tabClass(tab.id, tab.disabled)}
                   title={
                     tab.disabled
                       ? 'Select 2+ deadlines of the same member with Rest > 0'

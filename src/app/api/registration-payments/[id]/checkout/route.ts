@@ -14,10 +14,9 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = (await request.json().catch(() => ({}))) as { provider?: string };
-    const provider =
-      body.provider === 'paypal' ? 'paypal' : body.provider === 'stripe' ? 'stripe' : body.provider === 'klarna' ? 'klarna' : null;
+    const provider = body.provider === 'paypal' ? 'paypal' : body.provider === 'stripe' ? 'stripe' : null;
     if (!provider) {
-      return NextResponse.json({ error: 'Choose PayPal, credit card, or installment payment' }, { status: 400 });
+      return NextResponse.json({ error: 'Choose PayPal or credit card' }, { status: 400 });
     }
 
     const payment = await getRegistrationPayment(params.id);
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const pageUrl = `${origin}/register/payment/${payment.id}`;
     const description = `Movesbook - ${payment.versionName}`;
 
-    if (provider === 'stripe' || provider === 'klarna') {
+    if (provider === 'stripe') {
       if (!credentials.stripe) {
         return NextResponse.json({ error: 'Card payment is not available' }, { status: 400 });
       }
@@ -41,13 +40,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         productName: description,
         reference: payment.id,
         customerEmail: buyer.email || undefined,
-        successUrl: `${pageUrl}?provider=${provider}&session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${pageUrl}?provider=stripe&session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${pageUrl}?cancelled=1`,
-        installment: provider === 'klarna',
-        locale: payment.language,
       });
       await setRegistrationPaymentCheckout(payment.id, {
-        provider,
+        provider: 'stripe',
         mode: credentials.stripe.mode,
         ref: session.id,
       });

@@ -5,7 +5,6 @@ import type {
   ProcedurePaymentDto,
   ProcedureReceiptDto,
   ProcedureRecordDto,
-  ExpenseInvoiceImage,
 } from '@/lib/procedures/types';
 
 export const SERVICE_SALE_TYPE = 'service_sale';
@@ -33,7 +32,6 @@ export type ServiceSalePurchase = {
   operatorId: string | null;
   operatorName: string;
   lastPaymentDate: string | null;
-  expenseInvoice?: ExpenseInvoiceImage | null;
   /** Tax doc label from metadata when present (Simple Receipt / Tax Receipt / Invoice). */
   docType?: string;
 };
@@ -86,7 +84,6 @@ function metaString(metadata: Record<string, unknown> | null | undefined, key: s
 
 export function mapRecord(record: ProcedureRecordDto): ServiceSalePurchase {
   const meta = record.metadata;
-  const invoice = meta?.expenseInvoice;
   const taxDocRaw = meta?.taxDoc ?? meta?.tax_doc;
   const taxDocument =
     meta?.taxDocument && typeof meta.taxDocument === 'object'
@@ -131,15 +128,6 @@ export function mapRecord(record: ProcedureRecordDto): ServiceSalePurchase {
     operatorId: record.operatorId,
     operatorName: record.operatorName,
     lastPaymentDate: record.lastPaymentDate,
-    expenseInvoice:
-      invoice && typeof invoice === 'object' &&
-      typeof (invoice as Record<string, unknown>).name === 'string' &&
-      typeof (invoice as Record<string, unknown>).url === 'string'
-        ? {
-            name: String((invoice as Record<string, unknown>).name),
-            url: String((invoice as Record<string, unknown>).url),
-          }
-        : null,
     docType: docType || undefined,
   };
 }

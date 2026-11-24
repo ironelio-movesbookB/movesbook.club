@@ -12,7 +12,6 @@ const DESCRIPTION_MAX = 255;
 
 type OfferForm = {
   enabled: boolean;
-  offerCode: string;
   titleByLang: Record<string, string>;
   descriptionByLang: Record<string, string>;
   counterLangs: string[];
@@ -33,7 +32,6 @@ type OfferStatus = {
 
 const EMPTY_FORM: OfferForm = {
   enabled: false,
-  offerCode: '',
   titleByLang: {},
   descriptionByLang: {},
   counterLangs: [],
@@ -87,7 +85,6 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
   const applyOffer = useCallback((offer: Record<string, unknown>) => {
     setForm({
       enabled: Boolean(offer.enabled),
-      offerCode: String(offer.offerCode || ''),
       titleByLang: (offer.titleByLang as Record<string, string>) || {},
       descriptionByLang: (offer.descriptionByLang as Record<string, string>) || {},
       counterLangs: (offer.counterLangs as string[]) || [],
@@ -282,20 +279,6 @@ export default function SpecialOfferSettingsPanel({ versionId, versionName }: Pr
               ) : null}
             </p>
           ) : null}
-
-          <label className="block text-sm">
-            <span className="font-semibold text-gray-800">Code</span>
-            <span className="ml-2 text-xs text-gray-500">
-              Shown in Archive of Movesbook users → Check column for Special Offer subscriptions
-            </span>
-            <input
-              className={`${inputClass} mt-1 w-full max-w-xs`}
-              value={form.offerCode}
-              maxLength={32}
-              onChange={(e) => setForm((prev) => ({ ...prev, offerCode: e.target.value }))}
-              placeholder="e.g. ST01D"
-            />
-          </label>
 
           <div className="border border-gray-200 rounded">
             <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-[#f5f5f5] px-2 py-2">

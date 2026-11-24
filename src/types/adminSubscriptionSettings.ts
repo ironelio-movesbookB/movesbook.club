@@ -1,5 +1,3 @@
-import type { PaymentModalitySettings } from '@/lib/subscriptions/paymentModalities';
-
 export type SubscriptionUserType = 'athlete' | 'coach' | 'team' | 'group' | 'club';
 
 export type SubscriptionNotifyChannel = 'mail' | 'network' | 'cellular' | 'facebook';
@@ -54,8 +52,6 @@ export type SubscriptionGeneralSettings = {
   tripleDurationDiscount: number;
   tripleDurationPrice: number;
   sloganByLang: Record<string, string>;
-  /** Payment modalities A–F (set from "Modality of subscription available" → APPLY). */
-  paymentModalities?: PaymentModalitySettings;
 };
 
 export type SubscriptionMembershipSetting = {

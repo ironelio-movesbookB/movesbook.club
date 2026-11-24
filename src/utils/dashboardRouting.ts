@@ -87,7 +87,6 @@ export function canAccessManagedArchiveShell(
     pathname.startsWith('/club/staff') ||
     pathname.startsWith('/club/settings/documents') ||
     pathname.startsWith('/club/documents-editor') ||
-    pathname.startsWith('/club/documents/') ||
     pathname.startsWith('/club/legal-documents') ||
     (isTeamAccountUserType(userType) && pathname.startsWith('/club/settings/tables/member_type')) ||
     (isTeamAccountUserType(userType) && pathname.startsWith('/club/coaches')) ||

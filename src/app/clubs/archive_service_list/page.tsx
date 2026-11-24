@@ -21,7 +21,6 @@ import {
 import { Member } from '@/types/clubTable';
 import {
   deletePurchase,
-  fetchDeadlines,
   fetchPurchases,
   type ServiceSalePurchase,
 } from '@/lib/club/serviceSaleClient';
@@ -100,7 +99,6 @@ function ArchiveServiceListInner() {
   const [editTarget, setEditTarget] = useState<ServiceSalePurchase | null>(null);
   const [showDeletePasswordModal, setShowDeletePasswordModal] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
-  const [hidePaid, setHidePaid] = useState(false);
 
   const memberIdFromUrl = searchParams?.get('memberId') || null;
 
@@ -115,14 +113,13 @@ function ArchiveServiceListInner() {
     setLoading(true);
     setError('');
     try {
-      const params = {
+      const res = await fetchPurchases({
         page,
         pageSize,
         recordIds: effectiveIds.length > 0 ? effectiveIds : undefined,
         memberId: memberIdFromUrl || undefined,
         ...filters.applied,
-      };
-      const res = hidePaid ? await fetchDeadlines(params) : await fetchPurchases(params);
+      });
       setTotal(res.total);
       setData(
         res.items.map((p, i) =>
@@ -146,7 +143,7 @@ function ArchiveServiceListInner() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, effectiveIds, filters.applied, memberIdFromUrl, hidePaid]);
+  }, [page, pageSize, effectiveIds, filters.applied, memberIdFromUrl]);
 
   const performDelete = useCallback(
     async (ids: string[]) => {
@@ -211,21 +208,6 @@ function ArchiveServiceListInner() {
           setPage(1);
         }}
         dateRangeError={filters.dateRangeError}
-        paginationTrailing={
-          <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] text-red-700">
-            <input
-              type="checkbox"
-              checked={hidePaid}
-              onChange={(event) => {
-                setHidePaid(event.target.checked);
-                setPage(1);
-                setSelectedIds(new Set());
-              }}
-              className="h-4 w-4 accent-red-700"
-            />
-            Hide already paid
-          </label>
-        }
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
         pagination={

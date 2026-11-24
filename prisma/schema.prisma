@@ -56,7 +56,7 @@ model User {
   image                    String?   @db.LongText
   /// Cover/banner: public path, remote URL, or data URL (banner-upload stores data:image/...).
   profileBanner            String?   @db.LongText
-  profileBannerAlignment   String?   // "center" | "default" ? object-position for cover (legacy)
+  profileBannerAlignment   String?   // "center" | "default" — object-position for cover (legacy)
   /// JSON string[] of banner paths / data URLs for rotating cover
   profileBannerSequence    String?   @db.LongText
   profileBannerVideo       String?   // Uploaded cover video path (public URL under /uploads/...)
@@ -156,7 +156,7 @@ model MyDeskItem {
   @@map("my_desk_items")
 }
 
-/** Club Desk tree ? same shape as My Desk, scoped to a club (admin-managed). */
+/** Club Desk tree — same shape as My Desk, scoped to a club (admin-managed). */
 model ClubDeskItem {
   id          String    @id @default(cuid())
   clubId      String
@@ -315,7 +315,7 @@ model OgpNewsSponsorGroup {
   name         String
   /// A: first sponsor row (1–5). If that row does not exist on a page, use the last row available.
   startRow     Int              @default(2)
-  /// B: repeat every N rows after the first sponsor (3?99), counting across pages.
+  /// B: repeat every N rows after the first sponsor (3–99), counting across pages.
   intervalRows Int              @default(12)
   /// Rotation delay in milliseconds when more than one sponsor is configured in this group.
   delayMs      Int              @default(5000)
@@ -713,7 +713,7 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
-/// Admin ? users broadcast messages for the Movesbook channel in user chat.
+/// Admin → users broadcast messages for the Movesbook channel in user chat.
 model ChatBroadcastMessage {
   id           String   @id @default(cuid())
   content      String   @db.LongText
@@ -723,7 +723,7 @@ model ChatBroadcastMessage {
   clubId       String?
   /// JSON string[] of target user IDs. Null = all Telegram-linked users (mode=all).
   /// For mode=reply: JSON { parentId, senderUserId }.
-  /// For mode=repliers: JSON string[] of users who replied to broadcasts (Chat users ? All).
+  /// For mode=repliers: JSON string[] of users who replied to broadcasts (Chat users → All).
   recipientIds String?  @db.LongText
   createdAt    DateTime @default(now())
 
@@ -749,17 +749,11 @@ model UserMessageThread {
   status          String?               @db.VarChar(32)
   /// Marked inappropriate by staff/admin (formerly "spam")
   isInappropriate Boolean               @default(false)
-  /// Club/staff thread: recipient soft-deleted their copy (raw SQL path also ensures this column).
-  deletedByRecipient Boolean            @default(false)
   /// JSON array of up to 3 public image URLs attached to the first post
   imageUrls       String?               @db.Text
   likeCount       Int                   @default(0)
   dislikeCount    Int                   @default(0)
   isPublic        Boolean               @default(false)
-  /// Club staff messaging (runtime ALTER in clubStaffMessages.ts; keep so db push does not drop).
-  recipientUserId String?   @db.VarChar(191)
-  recipientType   String?   @db.VarChar(16)
-  senderType      String?   @db.VarChar(16)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -817,7 +811,7 @@ model Language {
   name      String
   isActive  Boolean  @default(true)
   isDefault Boolean  @default(false)
-  /// Maps legacy language_values.id / audio_settings.language (1?12).
+  /// Maps legacy language_values.id / audio_settings.language (1–12).
   legacyLangId Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -833,35 +827,17 @@ model Language {
 }
 
 model Translation {
-  id         String   @id @default(cuid())
-  key        String
-  language   String
-  value      String   @db.Text
-  category   String   @default("general")
-  isDeleted  Boolean  @default(false)
-  /// Language → Long Texts: keep short keys (e.g. email subjects) in Tab 3.
-  isLongText Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  id        String   @id @default(cuid())
+  key       String
+  language  String   
+  value     String   @db.Text
+  category  String   @default("general") 
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([key, language])
   @@map("translations")
-}
-
-/// Lookup table for club identification devices (card readers).
-model ClubCardReaderType {
-  id   Int    @id @default(autoincrement())
-  name String @db.VarChar(191)
-
-  @@map("club_card_reader_types")
-}
-
-/// Lookup table for club card-reader control modes.
-model ClubCardControlMode {
-  id   Int    @id @default(autoincrement())
-  name String @db.VarChar(191)
-
-  @@map("club_card_control_modes")
 }
 
 model CoachAthlete {
@@ -953,7 +929,7 @@ model PlannedActionTemplate {
   nameByLanguage        String?  @db.Text
   descriptionByLanguage String?  @db.Text
   color                 String   @default("#6366f1")
-  /// ASCII default only ? MySQL rejects emoji in DEFAULT (e.g. ??). App still uses ?? on create.
+  /// ASCII default only — MySQL rejects emoji in DEFAULT (e.g. 📌). App still uses 📌 on create.
   icon                  String   @default("pin")
   displayOrder          Int      @default(0)
   createdAt             DateTime @default(now())
@@ -998,9 +974,9 @@ model Period {
   userId      String
   name        String
   description String
-  /// JSON map of language code ? description (e.g. {"en":"...","it":"..."}). English mirrors `description`.
+  /// JSON map of language code → description (e.g. {"en":"...","it":"..."}). English mirrors `description`.
   descriptionTranslations String? @db.Text
-  /// JSON map of language code ? period name/title (e.g. {"en":"Base","it":"Base"}). English mirrors `name`.
+  /// JSON map of language code → period name/title (e.g. {"en":"Base","it":"Base"}). English mirrors `name`.
   nameTranslations String? @db.Text
   color       String
   displayOrder Int          @default(0) // Order for display in lists
@@ -1097,9 +1073,9 @@ model WorkoutSection {
   name        String
   code        String? // Short code (max 5 characters) for compact display
   description String
-  /// JSON map of language code ? description. English mirrors `description`.
+  /// JSON map of language code → description. English mirrors `description`.
   descriptionTranslations String? @db.Text
-  /// JSON map of language code ? section name/title. English mirrors `name`.
+  /// JSON map of language code → section name/title. English mirrors `name`.
   nameTranslations String? @db.Text
   color       String
   displayOrder Int        @default(0) // Order for display in lists
@@ -1116,9 +1092,9 @@ model ExecutionTechnique {
   userId      String
   name        String
   description String
-  /// JSON map of language code ? description. English mirrors `description`.
+  /// JSON map of language code → description. English mirrors `description`.
   descriptionTranslations String? @db.Text
-  /// JSON map of language code ? technique name/title. English mirrors `name`.
+  /// JSON map of language code → technique name/title. English mirrors `name`.
   nameTranslations String? @db.Text
   color       String
   sports      String   @default("") // Comma-separated list of sports that can use this technique
@@ -1470,7 +1446,7 @@ model UserSettings {
   notificationSettings   String    @db.Text
   socialSettings         String    @db.Text
   sportIconType          String    @default("emoji")
-  /// JSON: sports, equipment, exercises, pathology catalog, etc. ? can exceed 64KB; use LongText
+  /// JSON: sports, equipment, exercises, pathology catalog, etc. — can exceed 64KB; use LongText
   toolsSettings          String    @db.LongText
   workoutPreferences     String    @db.Text
   nutritionPreferences   String?   @db.Text
@@ -1480,19 +1456,19 @@ model UserSettings {
   /// JSON array of news topic names hidden from the topic menu
   newsHiddenTopics       String?   @db.Text
   musicTopicOrder        String?   @db.Text // JSON array of topic names for Music OGP section order
-  /// JSON object: { [topicName]: string[] } ? favorite genre order per music topic
+  /// JSON object: { [topicName]: string[] } — favorite genre order per music topic
   musicTopicGenreOrder   String?   @db.Text
   /// JSON array of music topic names hidden from the topic menu
   musicHiddenTopics      String?   @db.Text
-  /// JSON object: { [topicName]: string[] } ? musical genres hidden per topic
+  /// JSON object: { [topicName]: string[] } — musical genres hidden per topic
   musicHiddenGenres      String?   @db.Text
-  /// JSON object: { [category]: string[] } ? topic order per My Library exercise category
+  /// JSON object: { [category]: string[] } — topic order per My Library exercise category
   exerciseTopicOrder     String?   @db.Text
-  /// JSON object: { [category]: string[] } ? hidden topic names per exercise library category
+  /// JSON object: { [category]: string[] } — hidden topic names per exercise library category
   exerciseHiddenTopics   String?   @db.Text
   /// JSON array of musical genre names used in Music (grey chips in topic bar)
   musicGenres            String?   @db.Text
-  /// JSON: { "A"?: PlanPersist, "B"?: ? } for Weekly workout structure tab (Plans A?E)
+  /// JSON: { "A"?: PlanPersist, "B"?: … } for Weekly workout structure tab (Plans A–E)
   weeklyStructureV1      String?   @db.LongText
   user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1591,7 +1567,7 @@ enum GlobalArchiveRecordType {
   COACH_PLAN
 }
 
-/// Super Admin global catalog ? workouts & weekly plans shared for all Movesbook users.
+/// Super Admin global catalog — workouts & weekly plans shared for all Movesbook users.
 model GlobalWorkoutArchiveEntry {
   id                String                  @id @default(cuid())
   recordType        GlobalArchiveRecordType @default(WORKOUT)
@@ -1709,7 +1685,7 @@ model TeamMember {
   @@map("team_members_new")
 }
 
-/** Team-scoped member dossier (settings, parents, other details, visibility?). */
+/** Team-scoped member dossier (settings, parents, other details, visibility…). */
 model TeamMemberProfile {
   id               String     @id @default(cuid())
   teamMemberId     String     @unique
@@ -1733,7 +1709,7 @@ model TeamStaff {
   staffType  String
   /// Employment area / role (e.g. Instructor, Personal trainer)
   role       String
-  /// JSON string array of permission keys (management, payment, ?)
+  /// JSON string array of permission keys (management, payment, …)
   userLevels String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -1839,7 +1815,7 @@ model ClubSharedNews {
   @@map("club_shared_news")
 }
 
-/// Custom topics under ?Topics available? in the club website editor (admin/staff).
+/// Custom topics under “Topics available” in the club website editor (admin/staff).
 model ClubWebsiteTopic {
   id             String   @id @default(cuid())
   clubId         String
@@ -1914,7 +1890,7 @@ model UserProfileExtras {
   @@map("user_profile_extras")
 }
 
-/** Club-scoped member dossier (other details, parents, settings, visibility, pay-for?). */
+/** Club-scoped member dossier (other details, parents, settings, visibility, pay-for…). */
 model ClubMemberProfile {
   id              String     @id @default(cuid())
   clubMemberId    String     @unique
@@ -1953,7 +1929,7 @@ model ClubMemberNote {
   @@map("club_member_notes")
 }
 
-/// Named member lists created by club admin from Archive ? Members.
+/// Named member lists created by club admin from Archive — Members.
 model ClubMemberGroup {
   id        String                  @id @default(cuid())
   clubId    String
@@ -1989,7 +1965,7 @@ model ClubStaff {
   staffType  String
   /// Employment area / role (e.g. Instructor, Personal trainer)
   role       String
-  /// JSON string array of permission keys (management, payment, ?)
+  /// JSON string array of permission keys (management, payment, …)
   userLevels String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -2084,7 +2060,7 @@ model SuperAdminSettings {
   @@map("super_admin_settings")
 }
 
-/// Super Admin ? Statistics ? Cost recovery plan: costs and planned subscriptions per version (JSON).
+/// Super Admin → Statistics → Cost recovery plan: costs and planned subscriptions per version (JSON).
 /// Also created on first use by src/lib/admin/costRecoveryPlanStore.ts (keep both in sync).
 model CostRecoveryPlan {
   version   String   @id @db.VarChar(20)
@@ -2469,7 +2445,7 @@ model ClubBillingCreditNoteRow {
   @@ignore
 }
 
-/// src/lib/admin/versionSettingsStore.ts ? per-user copy shown in PCU ? Version settings
+/// src/lib/admin/versionSettingsStore.ts — per-user copy shown in PCU → Version settings
 model UserVersionSettingRow {
   userId    String   @id @db.VarChar(191) @map("user_id")
   versionId Int?     @map("version_id")
@@ -2484,7 +2460,7 @@ model UserVersionSettingRow {
   @@ignore
 }
 
-/// src/lib/sharing/sharingService.ts ? sharing requests between users and companies
+/// src/lib/sharing/sharingService.ts — sharing requests between users and companies
 model CompanyShareRequestRow {
   id                String    @id @db.VarChar(191)
   senderKind        String    @db.VarChar(10) @map("sender_kind")
@@ -2512,7 +2488,7 @@ model CompanyShareRequestRow {
   @@ignore
 }
 
-/// src/lib/sharing/sharingService.ts ? default sections shared per recipient type
+/// src/lib/sharing/sharingService.ts — default sections shared per recipient type
 model CompanyShareDefaultRow {
   ownerKind     String   @db.VarChar(10) @map("owner_kind")
   ownerId       String   @db.VarChar(191) @map("owner_id")
@@ -2530,7 +2506,6 @@ model SubscriptionSpecialOfferRow {
   id               Int      @id @default(autoincrement())
   versionId        Int      @unique(map: "uq_special_offer_version")
   enabled          Boolean  @default(false)
-  offerCode        String   @default("") @db.VarChar(32)
   titlesJson       String?  @db.Text
   descriptionsJson String?  @db.MediumText
   counterLangsJson String?  @db.Text
@@ -2547,59 +2522,6 @@ model SubscriptionSpecialOfferRow {
   @@ignore
 }
 
-/// Registration device mode for admin/all Mode column. Raw SQL in register + registered-users routes.
-model UserRegistrationMetaRow {
-  userId           String   @id @db.VarChar(191)
-  registrationMode String   @default("desk") @db.VarChar(20)
-  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
-
-  @@map("user_registration_meta")
-  @@ignore
-}
-
-/// src/lib/subscriptions/specialUpgrades.ts
-model SubscriptionSpecialUpgradeRow {
-  id                 Int       @id @default(autoincrement())
-  versionId          Int       @unique(map: "uq_special_upgrade_version")
-  enabled            Boolean   @default(false)
-  titlesJson         String?   @db.Text
-  descriptionsJson   String?   @db.MediumText
-  buttonLabelsJson   String?   @db.Text
-  validFrom          DateTime? @db.Date
-  validTo            DateTime? @db.Date
-  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
-  daysOfSubscription Int       @default(365)
-  analyzeWithinDays  Int       @default(60)
-  logoUrl            String?   @db.VarChar(512)
-  updatedAt          DateTime  @default(now()) @updatedAt @db.DateTime(0)
-
-  @@map("subscription_special_upgrades")
-  @@ignore
-}
-
-model SubscriptionSpecialUpgradeRegistrationRow {
-  id                 Int       @id @default(autoincrement())
-  upgradeId          Int
-  versionId          Int
-  versionName        String    @db.VarChar(255)
-  upgradeTitle       String?   @db.VarChar(255)
-  userId             String    @db.VarChar(191)
-  costEuro           Decimal   @default(0) @db.Decimal(10, 2)
-  dateStart          DateTime  @db.Date
-  dateEnd            DateTime? @db.Date
-  checkDeadline      DateTime? @db.Date
-  checkCleared       Boolean   @default(false)
-  softwareCompany    String    @default("") @db.VarChar(255)
-  softwareVersion    String    @default("") @db.VarChar(255)
-  softwareExpiration String    @default("") @db.VarChar(32)
-  createdAt          DateTime  @default(now()) @db.DateTime(0)
-
-  @@index([upgradeId], map: "idx_sur_upgrade")
-  @@index([userId], map: "idx_sur_user")
-  @@map("subscription_special_upgrade_registrations")
-  @@ignore
-}
-
 /// src/lib/subscriptions/versionSettingsStore.ts
 model SubscriptionVersionSettingsRow {
   versionId Int      @id
@@ -2610,7 +2532,7 @@ model SubscriptionVersionSettingsRow {
   @@ignore
 }
 
-/// Club / team sponsors (Marketing ? Sponsor). Raw SQL in `src/lib/club/sponsors/sponsorService.ts`.
+/// Club / team sponsors (Marketing → Sponsor). Raw SQL in `src/lib/club/sponsors/sponsorService.ts`.
 model OrgSponsorRow {
   id             String   @id @db.VarChar(191)
   workspace_kind String   @db.VarChar(10)
@@ -2646,10 +2568,6 @@ model OrgSponsorContractRow {
   notes            String?   @db.Text
   pdf_name         String?   @db.VarChar(191)
   pdf_path         String?   @db.VarChar(255)
-  invoice_number   String    @default("") @db.VarChar(64)
-  invoice_date     DateTime? @db.Date
-  invoice_name     String?   @db.VarChar(191)
-  invoice_path     String?   @db.VarChar(255)
   reminder_sent_at DateTime? @db.DateTime(0)
   created_at       DateTime  @default(now()) @db.DateTime(3)
 
@@ -2659,18 +2577,15 @@ model OrgSponsorContractRow {
 }
 
 model OrgSponsorPaymentRow {
-  id                 String    @id @db.VarChar(191)
-  sponsor_id         String    @db.VarChar(191)
-  amount             Decimal   @default(0) @db.Decimal(12, 2)
-  due_date           DateTime  @db.Date
-  reminder_days      Int       @default(7)
-  note               String    @default("") @db.VarChar(255)
-  paid_at            DateTime? @db.Date
-  pay_mode           String    @default("") @db.VarChar(64)
-  operator_username  String    @default("") @db.VarChar(191)
-  annotations        String?   @db.Text
-  reminder_sent_at   DateTime? @db.DateTime(0)
-  created_at         DateTime  @default(now()) @db.DateTime(3)
+  id               String    @id @db.VarChar(191)
+  sponsor_id       String    @db.VarChar(191)
+  amount           Decimal   @default(0) @db.Decimal(12, 2)
+  due_date         DateTime  @db.Date
+  reminder_days    Int       @default(7)
+  note             String    @default("") @db.VarChar(255)
+  paid_at          DateTime? @db.Date
+  reminder_sent_at DateTime? @db.DateTime(0)
+  created_at       DateTime  @default(now()) @db.DateTime(3)
 
   @@index([sponsor_id], map: "org_sponsor_payments_sponsor_idx")
   @@map("org_sponsor_payments")
@@ -2689,206 +2604,7 @@ model OrgSponsorEventRow {
   @@ignore
 }
 
-/// Kit/report header + report cadence (Marketing ? Sponsors settings).
-model OrgSponsorSettingsRow {
-  workspace_kind       String   @db.VarChar(10)
-  workspace_id         String   @db.VarChar(191)
-  use_banner           Boolean  @default(true)
-  gradient_from        String   @default("#0f172a") @db.VarChar(9)
-  gradient_to          String   @default("#1e40af") @db.VarChar(9)
-  report_interval_days Int      @default(0)
-  updated_at           DateTime @default(now()) @db.DateTime(3)
-
-  @@id([workspace_kind, workspace_id])
-  @@map("org_sponsor_settings")
-  @@ignore
-}
-
-/// Last auto-report send timestamp per sponsor.
-model OrgSponsorReportLogRow {
-  sponsor_id   String    @id @db.VarChar(191)
-  last_sent_at DateTime? @db.DateTime(3)
-
-  @@map("org_sponsor_report_log")
-  @@ignore
-}
-
-/// Club / team internal events (Manage Events). Raw SQL in `src/lib/club/events/eventService.ts`.
-model OrgClubEventRow {
-  id                    String   @id @db.VarChar(191)
-  workspace_kind        String   @db.VarChar(10)
-  workspace_id          String   @db.VarChar(191)
-  name                  String   @db.VarChar(191)
-  event_type            String   @default("Event") @db.VarChar(40)
-  start_date            DateTime @db.Date
-  end_date              DateTime @db.Date
-  cost                  Decimal  @default(0) @db.Decimal(12, 2)
-  seats                 Int      @default(0)
-  allow_subevents       Boolean  @default(false)
-  hide_from_share       Boolean  @default(false)
-  allow_multi_subevent  Boolean  @default(false)
-  subscriber_type       String   @default("Singles") @db.VarChar(20)
-  members_only          Boolean  @default(false)
-  open_to_non_members   Boolean  @default(true)
-  confirmation_text     String?  @db.Text
-  city                  String   @default("") @db.VarChar(120)
-  zip                   String   @default("") @db.VarChar(20)
-  address               String   @default("") @db.VarChar(255)
-  province              String   @default("") @db.VarChar(40)
-  description           String?  @db.Text
-  banner_url            String   @default("") @db.VarChar(512)
-  cover_path            String?  @db.VarChar(255)
-  sponsor_id            String   @default("") @db.VarChar(191)
-  privacy_text          String?  @db.Text
-  photo_video_text      String?  @db.Text
-  attachment1_name      String   @default("") @db.VarChar(191)
-  attachment1_path      String?  @db.VarChar(255)
-  attachment2_name      String   @default("") @db.VarChar(191)
-  attachment2_path      String?  @db.VarChar(255)
-  file_upload_enabled   Boolean  @default(false)
-  file_upload_label     String   @default("") @db.VarChar(191)
-  sibling_enabled       Boolean  @default(false)
-  sibling_parent_name   String   @default("") @db.VarChar(191)
-  sibling_fiscal_code   String   @default("") @db.VarChar(32)
-  sibling_percent       Decimal  @default(0) @db.Decimal(5, 2)
-  sibling_non_members   Boolean  @default(false)
-  public_token          String   @unique(map: "org_club_events_token") @db.VarChar(64)
-  created_at            DateTime @default(now()) @db.DateTime(3)
-  updated_at            DateTime @default(now()) @db.DateTime(3)
-  subscription_close_date DateTime? @db.Date
-  removed_at            DateTime? @db.DateTime(3)
-  /// A no payment, B only at the club, C only online, D club or online, E online now or later
-  payment_modality      String   @default("D") @db.VarChar(1)
-
-  @@index([workspace_kind, workspace_id], map: "org_club_events_ws")
-  @@map("org_club_events")
-  @@ignore
-}
-
-model OrgClubEventSubeventRow {
-  id               String   @id @db.VarChar(191)
-  event_id         String   @db.VarChar(191)
-  name             String   @db.VarChar(191)
-  start_date       DateTime @db.Date
-  end_date         DateTime @db.Date
-  cost             Decimal  @default(0) @db.Decimal(12, 2)
-  seats            Int      @default(0)
-  external_to_main Boolean  @default(false)
-  sort_order       Int      @default(0)
-  text_color       String   @default("") @db.VarChar(20)
-
-  @@index([event_id], map: "org_club_event_subevents_event")
-  @@map("org_club_event_subevents")
-  @@ignore
-}
-
-model OrgClubEventServiceRow {
-  id         String  @id @db.VarChar(191)
-  event_id   String  @db.VarChar(191)
-  name       String  @db.VarChar(191)
-  price      Decimal @default(0) @db.Decimal(12, 2)
-  sort_order Int     @default(0)
-
-  @@index([event_id], map: "org_club_event_services_event")
-  @@map("org_club_event_services")
-  @@ignore
-}
-
-model OrgClubEventTextRow {
-  id         String  @id @db.VarChar(191)
-  event_id   String  @db.VarChar(191)
-  label      String  @db.VarChar(500)
-  mandatory           Boolean @default(false)
-  enabled             Boolean @default(true)
-  sort_order          Int     @default(0)
-  file_upload_enabled Boolean @default(false)
-  file_upload_label   String  @default("") @db.VarChar(191)
-
-  @@index([event_id], map: "org_club_event_texts_event")
-  @@map("org_club_event_texts")
-  @@ignore
-}
-
-model OrgClubEventRegistrationRow {
-  id                     String   @id @db.VarChar(191)
-  event_id               String   @db.VarChar(191)
-  full_name              String   @default("") @db.VarChar(191)
-  email                  String   @default("") @db.VarChar(191)
-  phone                  String   @default("") @db.VarChar(64)
-  fiscal_code            String   @default("") @db.VarChar(32)
-  birthdate              String   @default("") @db.VarChar(10)
-  address                String   @default("") @db.VarChar(255)
-  city                   String   @default("") @db.VarChar(120)
-  province               String   @default("") @db.VarChar(40)
-  zip                    String   @default("") @db.VarChar(20)
-  is_minor               Boolean  @default(false)
-  parent_name            String   @default("") @db.VarChar(191)
-  parent_fiscal_code     String   @default("") @db.VarChar(32)
-  notes                  String?  @db.Text
-  group_or_team_name     String   @default("") @db.VarChar(191)
-  member_user_id         String?  @db.VarChar(191)
-  is_member              Boolean  @default(false)
-  selected_main_event    Boolean  @default(true)
-  selected_subevent_ids  String?  @db.Text
-  selected_service_ids   String?  @db.Text
-  text_answers_json      String?  @db.Text
-  file_path              String?  @db.VarChar(255)
-  amount_gross           Decimal  @default(0) @db.Decimal(12, 2)
-  discount_percent       Decimal  @default(0) @db.Decimal(5, 2)
-  amount_paid            Decimal  @default(0) @db.Decimal(12, 2)
-  pay_mode               String   @default("") @db.VarChar(64)
-  status                 String   @default("confirmed") @db.VarChar(20)
-  receipt_number         String?  @db.VarChar(64)
-  created_at             DateTime @default(now()) @db.DateTime(3)
-  relative_name          String   @default("") @db.VarChar(191)
-  relative_fiscal_code   String   @default("") @db.VarChar(32)
-  text_files_json        String?  @db.Text
-  first_name             String   @default("") @db.VarChar(120)
-  last_name              String   @default("") @db.VarChar(120)
-  sex                    String   @default("") @db.VarChar(1)
-  birth_country          String   @default("") @db.VarChar(80)
-  birth_locality         String   @default("") @db.VarChar(120)
-  foreign_id_code        String   @default("") @db.VarChar(64)
-  confirmed_at           DateTime? @db.DateTime(3)
-  /// sha256 of the token in the confirmation email link
-  confirm_token          String?  @db.VarChar(64)
-  language               String   @default("en") @db.VarChar(10)
-  /// Deadline (procedure_records, type event_subscription) of this subscription
-  procedure_record_id    String?  @db.VarChar(191)
-  amount_due             Decimal? @db.Decimal(10, 2)
-  currency               String   @default("EUR") @db.VarChar(10)
-
-  @@index([event_id], map: "org_club_event_regs_event")
-  @@map("org_club_event_registrations")
-  @@ignore
-}
-
-model OrgClubEventSettingsRow {
-  workspace_kind               String   @db.VarChar(10)
-  workspace_id                 String   @db.VarChar(191)
-  disable_subscription_emails  Boolean  @default(false)
-  auto_remove_expired          Boolean  @default(false)
-  require_confirmation         Boolean  @default(true)
-  updated_at                   DateTime @default(now()) @db.DateTime(3)
-
-  @@id([workspace_kind, workspace_id])
-  @@map("org_club_event_settings")
-  @@ignore
-}
-
-model OrgClubEventDiscountRuleRow {
-  id               String  @id @db.VarChar(191)
-  workspace_kind   String  @db.VarChar(10)
-  workspace_id     String  @db.VarChar(191)
-  min_subevents    Int     @default(2)
-  discount_percent Decimal @default(0) @db.Decimal(5, 2)
-
-  @@index([workspace_kind, workspace_id], map: "org_club_event_discount_ws")
-  @@map("org_club_event_discount_rules")
-  @@ignore
-}
-
-/// Club / team public website (Marketing ? Website). Raw SQL in `src/lib/club/website/websiteService.ts`.
+/// Club / team public website (Marketing → Website). Raw SQL in `src/lib/club/website/websiteService.ts`.
 model OrgWebsiteRow {
   workspace_kind    String   @db.VarChar(10)
   workspace_id      String   @db.VarChar(191)
@@ -2901,7 +2617,6 @@ model OrgWebsiteRow {
   donation_enabled  Boolean  @default(false)
   donation_text     String?  @db.Text
   donation_tax_code String   @default("") @db.VarChar(32)
-  donation_image    String   @default("") @db.VarChar(500)
   socials_json      String?  @db.Text
   updated_at        DateTime @default(now()) @db.DateTime(3)
 
@@ -2976,9 +2691,6 @@ model RegistrationPaymentRow {
   periodId     String?   @db.VarChar(64) @map("period_id")
   kind         String    @default("register") @db.VarChar(24)
   pendingData  String?   @db.MediumText @map("pending_data")
-  paymentModality   String?  @db.VarChar(2) @map("payment_modality")
-  modalityTotalEur  Decimal? @db.Decimal(10, 2) @map("modality_total_eur")
-  modalityDeadlines Int?     @map("modality_deadlines")
   createdAt    DateTime  @default(now()) @db.DateTime(0) @map("created_at")
   paidAt       DateTime? @db.DateTime(0) @map("paid_at")
 
@@ -3133,7 +2845,7 @@ model SportMachineCompany {
   @@map("sport_machine_companies")
 }
 
-/// User catalog of sport machines / instruments (Technical settings ? Machines).
+/// User catalog of sport machines / instruments (Technical settings — Machines).
 model SportMachine {
   id                      String   @id @default(cuid())
   userId                  String
@@ -3150,7 +2862,7 @@ model SportMachine {
   otherPicturesJson       String?  @db.Text
   videoUrl                String?
   descriptionByLanguage   String?  @db.Text
-  /// JSON: { machineTypes, musclesPositioning, correctExecution, criticalMistakes } ? Record<lang, html>
+  /// JSON: { machineTypes, musclesPositioning, correctExecution, criticalMistakes } → Record<lang, html>
   richSectionsJson        String?  @db.Text
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -3285,7 +2997,7 @@ enum WorkoutStatus {
   DONE_MORE_75
   /// Originally planned on a different day; done under 60% (light blue)
   DONE_SHIFTED_LESS_60
-  /// Originally planned on a different day; done 50?80% (blue)
+  /// Originally planned on a different day; done 50–80% (blue)
   DONE_SHIFTED_50_80
   /// Originally planned on a different day; done over 80% (dark blue)
   DONE_SHIFTED_MORE_80
@@ -3293,12 +3005,12 @@ enum WorkoutStatus {
 
 // Yearly Plan symbol color meanings (see .cursor/rules/yearly-plan-workout-symbol-colors.mdc):
 // NOT_PLANNED = white (auto)
-// PLANNED_FUTURE = yellow ? future week, not done (auto)
-// PLANNED_CURRENT_WEEK = orange ? this week, not done (auto)
-// PLANNED_NEXT_WEEK = red ? previous week, not done (auto; legacy name)
-// DONE_LESS_75 = light green ? same day done <60% (manual)
-// DONE_DIFFERENTLY = green ? same day done 60?80% (manual; legacy name)
-// DONE_MORE_75 = dark green ? same day done >80% (manual)
+// PLANNED_FUTURE = yellow — future week, not done (auto)
+// PLANNED_CURRENT_WEEK = orange — this week, not done (auto)
+// PLANNED_NEXT_WEEK = red — previous week, not done (auto; legacy name)
+// DONE_LESS_75 = light green — same day done <60% (manual)
+// DONE_DIFFERENTLY = green — same day done 60–80% (manual; legacy name)
+// DONE_MORE_75 = dark green — same day done >80% (manual)
 
 enum MoveframeType {
   STANDARD
@@ -3588,7 +3300,7 @@ model NewsSharePost {
   @@map("news_share_post")
 }
 
-// --- Global food & recipe database (admin-managed, used by Diet Builder) ---
+// ─── Global food & recipe database (admin-managed, used by Diet Builder) ───
 
 model FoodDatabaseSection {
   id               String              @id @default(cuid())
@@ -3655,7 +3367,7 @@ model FoodDatabaseRecipe {
   name             String
   nameTranslations String?             @db.Text
   description      String?             @db.Text
-  /** JSON map of language code ? preparation steps */
+  /** JSON map of language code → preparation steps */
   preparationTranslations String?     @db.Text
   /** JSON array: { foodItemId?, name, grams, nutrients? } */
   componentsJson   String              @db.Text
@@ -3740,7 +3452,7 @@ model ProcedureType {
 model ProcedureRecord {
   id              String                @id @default(cuid())
   procedureTypeId String
-  /// clubs_new.id, or teams_new.id in a Team workspace ? so no foreign key to clubs_new.
+  /// clubs_new.id, or teams_new.id in a Team workspace — so no foreign key to clubs_new.
   clubId          String
   memberId        String
   operatorId      String?
@@ -3774,8 +3486,6 @@ model ProcedurePayment {
   procedureRecordId String
   amount            Decimal  @db.Decimal(12, 2)
   balanceAfter      Decimal? @db.Decimal(12, 2)
-  cancelledAt       DateTime? @db.DateTime(3)
-  reversalOfId      String?  @db.VarChar(191)
   paymentDate       DateTime @db.Date
   operatorId        String?
   payMode           String?
@@ -3790,7 +3500,6 @@ model ProcedurePayment {
   receipts        ProcedureReceipt[]
 
   @@index([procedureRecordId, paymentDate])
-  @@index([reversalOfId])
   @@map("procedure_payments")
 }
 
@@ -3798,7 +3507,7 @@ model ProcedureReceipt {
   id                 String   @id @default(cuid())
   procedureRecordId  String
   procedurePaymentId String?
-  /// clubs_new.id, or teams_new.id in a Team workspace ? so no foreign key to clubs_new.
+  /// clubs_new.id, or teams_new.id in a Team workspace — so no foreign key to clubs_new.
   clubId             String
   memberId           String
   operatorId         String?
@@ -3924,7 +3633,7 @@ model ClubCustomOutcome {
 }
 
 // Legacy promocode tables (PHP movesbook-new compatibility).
-// Live deploy: npm run db:ensure-promocode-meta  ? do NOT use prisma db push
+// Live deploy: npm run db:ensure-promocode-meta  — do NOT use prisma db push
 // to apply promocode columns (db push would try to reshape the whole live DB).
 // ---------------------------------------------------------------------------
 
@@ -4152,7 +3861,7 @@ model Notification {
   submittedByUserId    String?
   /// Super Admin / staff account id when source is movesbook_staff
   submittedByAdminId   String?
-  /// JSON string[] of UserType values for staff broadcasts (app sets "[]" on insert; no DB default ? MySQL <8.0.13 rejects TEXT defaults)
+  /// JSON string[] of UserType values for staff broadcasts (app sets "[]" on insert; no DB default — MySQL <8.0.13 rejects TEXT defaults)
   audienceRolesJson     String              @db.Text
   /// JSON string[] of usernames (staff targeting per requirement)
   audienceUsernamesJson String              @db.Text
@@ -4160,7 +3869,7 @@ model Notification {
   audienceUserIdsJson   String              @db.Text
   /// JSON string[] of entity ids (clubs / teams / groups / coaching groups depending on source)
   clubIdsJson           String              @db.Text
-  /// members | staff ? club audience kind
+  /// members | staff — club audience kind
   audienceKind         String              @default("members")
   /// ISO language codes for Super Admin targeting (e.g. ["en","it"]); empty / null = all languages
   audienceLanguagesJson String?            @db.Text
@@ -4567,8 +4276,6 @@ model LegacyExpenses {
   userId String @db.VarChar(191) @map("user_id")
   name String @db.VarChar(250)
   parentId BigInt @map("parent_id")
-  icon String? @db.VarChar(50)
-  imageUrl String? @db.VarChar(255) @map("image_url")
   created DateTime?
   modified DateTime?
   @@index([name], map: "idx_expenses_name")
@@ -4599,134 +4306,6 @@ model LegacyUnits {
   @@index([name], map: "idx_units_name")
   @@index([userId, clubId], map: "idx_units_user_club")
   @@map("units")
-  @@ignore
-}
-
-/// src/lib/club/paymentFrequentSettingsStore.ts
-model ClubPaymentFrequentSettings {
-  clubId       String    @id @map("club_id") @db.VarChar(191)
-  settingsJson String    @map("settings_json") @db.LongText
-  updatedAt    DateTime? @default(now()) @map("updated_at") @db.DateTime(0)
-
-  @@map("club_payment_frequent_settings")
-  @@ignore
-}
-
-/// src/lib/club/memberPaymentMethodsStore.ts
-model ClubMemberPaymentMethodsRow {
-  entityId     String   @id @map("entity_id") @db.VarChar(191)
-  settingsJson String   @map("settings_json") @db.LongText
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-
-  @@map("club_member_payment_methods")
-  @@ignore
-}
-
-/// src/lib/club/memberOnlinePayments.ts
-model ClubMemberOnlinePaymentRow {
-  id              String    @id @db.VarChar(191)
-  entityId        String    @map("entity_id") @db.VarChar(191)
-  entityName      String    @map("entity_name") @db.VarChar(255)
-  memberUserId    String    @map("member_user_id") @db.VarChar(191)
-  memberName      String    @map("member_name") @db.VarChar(255)
-  createdByUserId String    @map("created_by_user_id") @db.VarChar(191)
-  provider        String    @db.VarChar(16)
-  amountEur       Decimal   @map("amount_eur") @db.Decimal(10, 2)
-  description     String    @db.VarChar(255)
-  status          String    @db.VarChar(16)
-  providerMode    String?   @map("provider_mode") @db.VarChar(16)
-  providerRef     String?   @map("provider_ref") @db.VarChar(255)
-  settlementJson  String?   @map("settlement_json") @db.LongText
-  currency        String    @default("EUR") @db.VarChar(10)
-  createdAt       DateTime? @default(now()) @map("created_at")
-  paidAt          DateTime? @map("paid_at")
-
-  @@index([entityId], map: "idx_club_member_online_entity")
-  @@index([memberUserId], map: "idx_club_member_online_member")
-  @@map("club_member_online_payments")
-  @@ignore
-}
-
-/// Club and team product catalog. Orders, customers, and payments stay on the existing procedure archives.
-model ShopSettings {
-  id                   String   @id @default(cuid())
-  workspaceKind        String   @db.VarChar(16)
-  workspaceId          String   @db.VarChar(191)
-  slug                 String   @unique @db.VarChar(80)
-  displayName          String   @default("") @db.VarChar(120)
-  shopDescription      String   @db.Text
-  shopActive         Boolean  @default(true)
-  orderEmailsEnabled Boolean  @default(true)
-  /// "logo" or "banner": what the public shop page shows at the top.
-  headerMode         String   @default("logo") @db.VarChar(16)
-  onsitePaymentEnabled Boolean @default(true)
-  bankTransferEnabled  Boolean @default(false)
-  bankTransferDetails  String? @db.Text
-  /// Paid through the club's own Stripe / PayPal account (Payment methods for members).
-  onlinePaymentEnabled Boolean @default(false)
-  shopAlert            String? @db.Text
-  afterSalesInfo       String? @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@unique([workspaceKind, workspaceId])
-  @@map("shop_settings")
-}
-
-model ShopProduct {
-  id                 String   @id @default(cuid())
-  workspaceKind      String   @db.VarChar(16)
-  workspaceId        String   @db.VarChar(191)
-  name               String   @db.VarChar(160)
-  description        String   @db.Text
-  price              Decimal  @db.Decimal(10, 2)
-  vatRate            Decimal  @default(0) @db.Decimal(5, 2)
-  quantity           Int      @default(0)
-  imageUrl           String?  @db.VarChar(500)
-  isVisible          Boolean  @default(true)
-  hideFromShop       Boolean  @default(false)
-  allowMultipleUnits Boolean  @default(true)
-  allowNonMembers    Boolean  @default(false)
-  sector             String   @default("Shop") @db.VarChar(32)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@index([workspaceKind, workspaceId])
-  @@map("shop_products")
-}
-
-/// src/lib/procedures/receiptShares.ts — public read-only receipt links
-model ClubReceiptShareRow {
-  token     String   @id @db.VarChar(64)
-  receiptId String   @unique(map: "club_receipt_shares_receipt") @map("receipt_id") @db.VarChar(191)
-  clubId    String   @map("club_id") @db.VarChar(191)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
-
-  @@map("club_receipt_shares")
-  @@ignore
-}
-
-/// src/app/api/club/settings/card-readers/route.ts — main readers table (types/modes already declared above)
-model ClubCardReaderRow {
-  id            BigInt    @id @default(autoincrement()) @db.BigInt
-  userId        String    @map("user_id") @db.VarChar(191)
-  clubId        String?   @map("club_id") @db.VarChar(191)
-  readerNumber  Int       @default(0) @map("reader_number")
-  readerName    String    @map("reader_name") @db.VarChar(250)
-  readerTypeId  Int       @default(1) @map("reader_type_id")
-  readerPort    String    @default("COM1") @map("reader_port") @db.VarChar(50)
-  ip            String    @default("") @db.VarChar(255)
-  iplocal       String?   @db.VarChar(255)
-  controlModeId Int       @default(1) @map("control_mode_id")
-  enable        String    @default("Y") @db.Char(1)
-  activityList  String    @map("activity_list") @db.Text
-  serviceList   String    @map("service_list") @db.Text
-  description   String    @default("") @db.VarChar(255)
-  created       DateTime? @default(now()) @db.DateTime(0)
-  modified      DateTime? @default(now()) @updatedAt @db.DateTime(0)
-
-  @@index([userId, clubId], map: "idx_card_readers_user_club")
-  @@map("club_card_readers")
   @@ignore
 }
 

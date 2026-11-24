@@ -28,34 +28,3 @@ export async function fetchSuggestMovesbookIntroText(language: string): Promise<
 
   return stripStoredHtml(await fetchLongTextTranslation(SUGGEST_MOVESBOOK_INTRO_KEY, language, fallback));
 }
-
-export const SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY = 'SuggestMovesbookInviteDefault';
-
-export const SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN =
-  'I\'m sending you this invitation to introduce you to the "Movesbook" brand, a tool I\'ve been using with great satisfaction. I invite you to sign up for free so you can see for yourself just how powerful and professional this application is, not to mention more affordable than many others.';
-
-export const SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT =
-  'Questo è un messaggio di invito che ti invio per promuovere questo marchio "Movesbook", che sto utilizzando con grande soddisfazione. Ti invito a registrarti gratuitamente così potrai vedere direttamente quanto è potente e professionale questa applicazione, nonchè economica più di tante altre..';
-
-export async function fetchSuggestMovesbookInviteDefaultText(language: string): Promise<string> {
-  const lang = (language || 'en').toLowerCase();
-  const fallback = lang.startsWith('it')
-    ? SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT
-    : SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN;
-
-  const values = await fetchTranslationValues(SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY);
-  if (!values) return stripStoredHtml(fallback);
-
-  const normalized = normalizeToolsLanguage(language);
-  const localized = values[normalized]?.trim();
-  if (localized) return stripStoredHtml(localized);
-
-  if (lang.startsWith('it')) {
-    const it = values.it?.trim();
-    return stripStoredHtml(it || SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT);
-  }
-
-  return stripStoredHtml(
-    await fetchLongTextTranslation(SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY, language, fallback),
-  );
-}

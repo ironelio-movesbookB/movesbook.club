@@ -6,7 +6,6 @@ import {
   buildMemberDisplayName,
   buildTaxDocumentDefaults,
   computeVatBreakdown,
-  counterKeyForDocumentType,
   counterValueForDocumentType,
   nextDocumentNumber,
   TAX_DOCUMENT_TYPE_OPTIONS,
@@ -42,8 +41,6 @@ export type TaxDocumentFormValues = {
 type Props = {
   open: boolean;
   memberName: string;
-  title?: string;
-  fixedDocumentType?: string;
   defaultCausal?: string;
   initial?: Partial<TaxDocumentFormValues>;
   defaultTotal?: number;
@@ -116,8 +113,6 @@ function buildFormState(
 export default function TaxDocumentModal({
   open,
   memberName,
-  title = 'Tax document',
-  fixedDocumentType,
   defaultCausal = '',
   initial,
   defaultTotal = 0,
@@ -132,14 +127,6 @@ export default function TaxDocumentModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const modalInitial = fixedDocumentType
-    ? {
-        ...initial,
-        documentType: fixedDocumentType,
-        heading: initial?.heading ?? '',
-        counterKey: counterKeyForDocumentType(fixedDocumentType),
-      }
-    : initial;
 
   useEffect(() => {
     if (!open) return;
@@ -162,7 +149,7 @@ export default function TaxDocumentModal({
             defaultCausal,
             defaultTotal,
             defaultResidual,
-            modalInitial,
+            initial,
             hideMemberName
           )
         );
@@ -191,7 +178,7 @@ export default function TaxDocumentModal({
             defaultCausal,
             defaultTotal,
             defaultResidual,
-            modalInitial,
+            initial,
             hideMemberName
           )
         );
@@ -267,7 +254,7 @@ export default function TaxDocumentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl border border-gray-200">
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+          <h3 className="text-lg font-semibold text-gray-800">Tax document</h3>
           <button
             type="button"
             onClick={onClose}
@@ -315,24 +302,15 @@ export default function TaxDocumentModal({
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
               <span className="text-sm text-gray-600 md:text-right">Document type</span>
               <div className="md:col-span-3">
-                {fixedDocumentType ? (
-                  <input
-                    type="text"
-                    className={procedureReadonlyInputClass}
-                    value={fixedDocumentType}
-                    readOnly
-                  />
-                ) : (
-                  <select
-                    className={procedureInputClass}
-                    value={form.documentType}
-                    onChange={(e) => handleDocumentTypeChange(e.target.value)}
-                  >
-                    {TAX_DOCUMENT_TYPE_OPTIONS.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  className={procedureInputClass}
+                  value={form.documentType}
+                  onChange={(e) => handleDocumentTypeChange(e.target.value)}
+                >
+                  {TAX_DOCUMENT_TYPE_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -359,21 +337,17 @@ export default function TaxDocumentModal({
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600">
-                  {fixedDocumentType ? 'Progressive number' : 'Number'}
-                </span>
+                <span className="text-sm text-gray-600">Number</span>
                 <input
                   type="text"
                   className={`mt-1 ${procedureHighlightInputClass}`}
                   value={form.documentNumber}
                   onChange={(e) => updateForm({ ...form, documentNumber: e.target.value })}
                 />
-                {!fixedDocumentType && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    WARNING: This number is only reserved when you Confirm the payment. Until then the
-                    receipt is not saved and the counter is not updated.
-                  </p>
-                )}
+                <p className="text-xs text-amber-600 mt-1">
+                  WARNING: This number is only reserved when you Confirm the payment. Until then the
+                  receipt is not saved and the counter is not updated.
+                </p>
               </label>
             </div>
 

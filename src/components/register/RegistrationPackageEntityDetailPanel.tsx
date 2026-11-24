@@ -33,6 +33,7 @@ export type RegistrationEntityDetailTab = EntityDetailTab;
 
 const ENTITY_TABS: { key: EntityDetailTab; label: string; clubOnly?: boolean }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'detailed_overview', label: 'Detailed overview' },
   { key: 'availability_shares', label: 'Availability shares' },
   { key: 'last_news', label: 'Last news' },
   { key: 'club_pricelists', label: 'Club pricelists', clubOnly: true },
@@ -48,8 +49,6 @@ type RegistrationPackageEntityDetailPanelProps = {
   onClose?: () => void;
   /** When true, renders inline (dashboard) instead of as a modal overlay. */
   embedded?: boolean;
-  /** When true, sits under the comparison table instead of covering it. */
-  flow?: boolean;
   initialActiveTab?: EntityDetailTab;
   initialClubSubTab?: ClubPricelistTab;
 };
@@ -134,7 +133,6 @@ function OverviewTab({
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
-  const [overviewHtml, setOverviewHtml] = useState<{ title: string; html: string } | null>(null);
 
   const features = useMemo(
     () => getOverviewFeaturesForEntity(userType, entity.tierKey, lang, category),
@@ -227,46 +225,12 @@ function OverviewTab({
       {enlargedImage ? (
         <EnlargedImageModal src={enlargedImage} onClose={() => setEnlargedImage(null)} />
       ) : null}
-      {overviewHtml ? (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
-          <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded bg-white p-4 shadow-2xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <h3 className="text-lg font-bold text-black">{overviewHtml.title}</h3>
-              <button
-                type="button"
-                onClick={() => setOverviewHtml(null)}
-                className="bg-[#444] px-3 py-1 text-xs font-bold text-white"
-              >
-                Close
-              </button>
-            </div>
-            {overviewHtml.html ? (
-              <div
-                className="prose prose-sm max-w-none text-gray-800"
-                dangerouslySetInnerHTML={{ __html: overviewHtml.html }}
-              />
-            ) : (
-              <p className="text-sm text-gray-600">No detailed overview for this package.</p>
-            )}
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex-1 overflow-y-auto bg-white">
         {pageFeatures.length === 0 ? (
           <p className="p-6 text-sm text-gray-600">No features available for this version.</p>
         ) : (
-          pageFeatures.map((feature) =>
-            feature.kind === 'separator' ? (
-              <div
-                key={feature.id}
-                className="px-4 py-2 text-sm font-bold"
-                style={{ backgroundColor: feature.backgroundColor, color: feature.titleColor }}
-              >
-                {feature.icon ? `${feature.icon} ` : ''}
-                {feature.title}
-              </div>
-            ) : (
+          pageFeatures.map((feature) => (
             <div
               key={feature.id}
               className="flex flex-wrap items-start gap-3 border-b border-gray-200 px-4 py-4"
@@ -283,27 +247,14 @@ function OverviewTab({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <Check className="h-4 w-4 shrink-0 text-[#5cb85c] stroke-[3]" />
-                  <span className="font-bold text-black">{feature.title}</span>
+                  <span className="font-bold text-gray-900">{feature.title}</span>
                 </div>
                 {feature.description ? (
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800">{feature.description}</p>
+                  <p className="mt-1 text-sm text-gray-700 leading-relaxed">{feature.description}</p>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOverviewHtml({
-                      title: feature.title,
-                      html: feature.html,
-                    })
-                  }
-                  className="mt-2 border border-gray-800 bg-[#333] px-2 py-1 text-[11px] font-bold text-white hover:bg-black"
-                >
-                  Detailed overview
-                </button>
               </div>
             </div>
-            ),
-          )
+          ))
         )}
       </div>
     </div>
@@ -413,7 +364,6 @@ export default function RegistrationPackageEntityDetailPanel({
   category,
   onClose,
   embedded = false,
-  flow = false,
   initialActiveTab,
   initialClubSubTab = 'versions_features',
 }: RegistrationPackageEntityDetailPanelProps) {
@@ -440,11 +390,9 @@ export default function RegistrationPackageEntityDetailPanel({
     setActiveTab('overview');
   };
 
-  const containerClass = flow
-    ? 'relative mt-4 flex h-[520px] w-full flex-col overflow-hidden rounded-md border border-gray-300 bg-white'
-    : embedded
-      ? 'absolute inset-0 z-10 flex flex-col overflow-hidden bg-white'
-      : 'absolute inset-x-2 bottom-2 top-24 z-20 flex flex-col overflow-hidden rounded-md border-2 border-gray-400 bg-white shadow-2xl sm:inset-x-4';
+  const containerClass = embedded
+    ? 'absolute inset-0 z-10 flex flex-col overflow-hidden bg-white'
+    : 'absolute inset-x-2 bottom-2 top-24 z-20 flex flex-col overflow-hidden rounded-md border-2 border-gray-400 bg-white shadow-2xl sm:inset-x-4';
 
   return (
     <div className={containerClass}>

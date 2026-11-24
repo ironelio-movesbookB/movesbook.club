@@ -38,10 +38,6 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     ? { key: secondaryKey, header: def.columnHeaders.secondary }
     : null;
 
-  // OUT payments (expenses, member credits) get a receipt the recipient signs for acceptance.
-  const printCol: Column[] =
-    def.metadataKeys.direction === 'OUT' ? [{ key: 'print', header: 'Receipt', sortable: false }] : [];
-
   const recordColumns: Column[] = [
     { key: 'number', header: 'N' },
     { key: 'name', header: 'Full Name' },
@@ -90,30 +86,18 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     { key: 'insertDate', header: 'Date', render: (v) => formatDate(v) },
     {
       key: 'paid',
-      header: def.metadataKeys.direction === 'OUT' ? 'Payment OUT' : 'Payment IN',
-      render: (v) => (
-        <span
-          className="font-bold"
-          style={{
-            color: def.metadataKeys.direction === 'OUT' ? '#b91c1c' : '#166534',
-          }}
-        >
-          {formatEuro(v)}
-        </span>
-      ),
+      header: def.metadataKeys.direction === 'OUT' ? 'Value OUT' : 'Payment IN',
+      render: (v) => formatEuro(v),
     },
     {
       key: 'originalDebt',
       header: 'OF..',
       render: (_, row) =>
-        `${Number(
-          def.metadataKeys.direction === 'OUT' ? row.paid ?? 0 : row.rest ?? 0
-        ).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
+        `${Number(row.residualDebt ?? 0).toFixed(2)} / ${Number(row.originalDebt ?? 0).toFixed(2)}`,
     },
     { key: 'rest', header: 'Rest', render: (v) => formatEuro(v) },
     { key: 'casual', header: 'Notes' },
     { key: 'operator', header: 'Operator' },
-    ...printCol,
     { key: 'edit', header: 'Edit', sortable: false },
     { key: 'delete', header: 'Delete', sortable: false },
   ];
@@ -133,7 +117,6 @@ export function buildProcedureColumns(def: ProcedureDefinition) {
     },
     { key: 'casual', header: 'Annotations' },
     { key: 'operator', header: 'Operator' },
-    ...printCol,
     { key: 'edit', header: 'Edit', sortable: false },
     { key: 'delete', header: 'Delete', sortable: false },
   ];

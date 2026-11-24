@@ -15,7 +15,6 @@ import {
   getAccountActivationStatus,
 } from '@/lib/registration/registrationPayments';
 import { registrationOrigin, sendActivationEmailSafely } from '@/lib/registration/registrationFlow';
-import { createDeadlinePayment, findOverdueDeadline } from '@/lib/movesbookDeadlines/subscriptionStatus';
 
 const ACTIVATION_RESEND_MS = 60 * 60 * 1000;
 
@@ -50,30 +49,6 @@ async function registrationActivationBlock(
     },
     { status: 403 },
   );
-}
-
-/**
- * Archive of Deadlines (Movesbook): an unpaid deadline past its expiration date blocks the login.
- * The response carries the payment page of that deadline. Errors never block the login.
- */
-async function overdueDeadlineBlock(userId: string): Promise<NextResponse | null> {
-  try {
-    const overdue = await findOverdueDeadline(userId);
-    if (!overdue) return null;
-    const paymentId = await createDeadlinePayment(userId, overdue.id);
-    const [y, m, d] = overdue.dueDate.split('-');
-    return NextResponse.json(
-      {
-        error: `Your subscription has an unpaid deadline that expired on ${d}/${m}/${y} (€ ${overdue.restEur.toFixed(2)}). Pay it to log in again.`,
-        reason: 'deadline_overdue',
-        paymentUrl: `/register/payment/${paymentId}`,
-      },
-      { status: 403 },
-    );
-  } catch (e) {
-    console.error('Overdue deadline check failed for user', userId, e);
-    return null;
-  }
 }
 
 type LegacyDbConfig = {
@@ -727,9 +702,6 @@ export async function POST(request: NextRequest) {
 
     const activationBlock = await registrationActivationBlock(request, user.id);
     if (activationBlock) return activationBlock;
-
-    const deadlineBlock = await overdueDeadlineBlock(user.id);
-    if (deadlineBlock) return deadlineBlock;
 
     const userSettings = await prisma.userSettings.findUnique({
       where: { userId: user.id },

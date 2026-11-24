@@ -1,9 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { Share2 } from 'lucide-react';
-import SocialShareModal from '@/components/news/SocialShareModal';
-import PostInviteToMovesbookModal from '@/components/club/PostInviteToMovesbookModal';
+import { useEffect, useState } from 'react';
 import { qrImageUrl } from '@/lib/club/sponsors/sponsorClient';
 
 type Props = {
@@ -12,28 +9,12 @@ type Props = {
   /** Site-relative path of the public page. */
   path: string;
   qrFileName: string;
-  /** Optional richer body for Post on Movesbook (HTML). */
-  postBodyHtml?: string;
-  /** Post on Movesbook targets every member (confirmation before posting). */
-  postToAllMembers?: boolean;
-  /** Extra controls shown above the buttons (e.g. a filter that changes `path`). */
-  children?: ReactNode;
 };
 
-/** Top banner with a public page link: open, copy, download QR, share, QR preview. */
-export default function PublicLinkBanner({
-  title,
-  description,
-  path,
-  qrFileName,
-  postBodyHtml,
-  postToAllMembers = false,
-  children,
-}: Props) {
+/** Top banner with a public page link: open, copy, download QR and QR preview. */
+export default function PublicLinkBanner({ title, description, path, qrFileName }: Props) {
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [postOpen, setPostOpen] = useState(false);
 
   useEffect(() => {
     setUrl(`${window.location.origin}${path}`);
@@ -65,74 +46,41 @@ export default function PublicLinkBanner({
   };
 
   return (
-    <>
-      <div className="flex flex-col gap-4 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 p-5 text-white shadow md:flex-row md:items-center">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-bold">{title}</h2>
-          <p className="mt-1 text-sm text-blue-100">{description}</p>
-          <p className="mt-2 truncate font-mono text-xs text-blue-200">{url}</p>
-          {children ? <div className="mt-3">{children}</div> : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <a
-              href={path}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-blue-800 hover:bg-blue-50"
-            >
-              Open page
-            </a>
-            <button
-              type="button"
-              onClick={copy}
-              className="rounded-md border border-white/60 px-3 py-1.5 text-sm font-semibold hover:bg-white/10"
-            >
-              {copied ? 'Link copied' : 'Copy link'}
-            </button>
-            <button
-              type="button"
-              onClick={downloadQr}
-              disabled={!url}
-              className="rounded-md border border-white/60 px-3 py-1.5 text-sm font-semibold hover:bg-white/10 disabled:opacity-50"
-            >
-              Download QR
-            </button>
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              disabled={!url}
-              className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-blue-50 disabled:opacity-50"
-            >
-              <Share2 className="h-4 w-4" />
-              Share
-            </button>
-          </div>
+    <div className="flex flex-col gap-4 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 p-5 text-white shadow md:flex-row md:items-center">
+      <div className="min-w-0 flex-1">
+        <h2 className="text-lg font-bold">{title}</h2>
+        <p className="mt-1 text-sm text-blue-100">{description}</p>
+        <p className="mt-2 truncate font-mono text-xs text-blue-200">{url}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={path}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+          >
+            Open page
+          </a>
+          <button
+            type="button"
+            onClick={copy}
+            className="rounded-md border border-white/60 px-3 py-1.5 text-sm font-semibold hover:bg-white/10"
+          >
+            {copied ? 'Link copied' : 'Copy link'}
+          </button>
+          <button
+            type="button"
+            onClick={downloadQr}
+            disabled={!url}
+            className="rounded-md border border-white/60 px-3 py-1.5 text-sm font-semibold hover:bg-white/10 disabled:opacity-50"
+          >
+            Download QR
+          </button>
         </div>
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={qrImageUrl(url)} alt="QR code" className="h-28 w-28 shrink-0 rounded-lg bg-white p-1.5" />
-        ) : null}
       </div>
-
-      <SocialShareModal
-        isOpen={shareOpen}
-        onClose={() => setShareOpen(false)}
-        articleUrl={url}
-        articleTitle={title}
-        heading="Share this page"
-        onPostToMovesbook={() => {
-          setShareOpen(false);
-          setPostOpen(true);
-        }}
-      />
-
-      <PostInviteToMovesbookModal
-        open={postOpen}
-        onClose={() => setPostOpen(false)}
-        title={title}
-        bodyHtml={postBodyHtml || `<p>${description}</p>`}
-        inviteUrl={url}
-        allMembers={postToAllMembers}
-      />
-    </>
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={qrImageUrl(url)} alt="QR code" className="h-28 w-28 shrink-0 rounded-lg bg-white p-1.5" />
+      ) : null}
+    </div>
   );
 }

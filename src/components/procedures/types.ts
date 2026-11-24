@@ -38,10 +38,6 @@ export type PaymentFormValues = {
   notes: string;
   createReceipt: boolean;
   receiptNumber: string;
-  payMode?: string;
-  operatorId?: string;
-  operatorPassword?: string;
-  taxDocument?: Record<string, unknown>;
 };
 
 export type PaymentFormProps = {
@@ -53,11 +49,4 @@ export type PaymentFormProps = {
   onSubmit: (values: PaymentFormValues) => Promise<void>;
   onCancel?: () => void;
   cancelLabel?: string;
-  /** Product selling: payment mode, operator password and the receipt popup. */
-  sellingPayment?: {
-    memberName: string;
-    operators: { id: string; name: string }[];
-    defaultOperatorId?: string | null;
-    passwordRequired?: boolean;
-  };
 };

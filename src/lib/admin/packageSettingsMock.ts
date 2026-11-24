@@ -1,14 +1,10 @@
 import { SUPPORTED_LANGUAGES } from '@/constants/tools.constants';
 import type {
-  PackageCatalog,
   PackageItem,
   PackageItemEditData,
-  PackageKind,
-  PackageSection,
   PackageSettingsView,
   PackageTypeConfig,
   PackageTypeId,
-  PackageViewMode,
 } from '@/types/adminPackageSettings';
 import { emptyLangMap } from '@/lib/admin/packageSettingsLang';
 
@@ -28,8 +24,11 @@ export const PACKAGE_TYPE_CONFIGS: PackageTypeConfig[] = [
     id: 6,
     label: 'Coach',
     tiers: [
+      { key: 'basic_pfu', label: 'Basic PFU' },
       { key: 'basic', label: 'Basic' },
+      { key: 'prem_pfu', label: 'Prem PFU' },
       { key: 'prem', label: 'Prem' },
+      { key: 'pro_pfu', label: 'Pro PFU' },
       { key: 'pro', label: 'Pro' },
     ],
   },
@@ -37,8 +36,11 @@ export const PACKAGE_TYPE_CONFIGS: PackageTypeConfig[] = [
     id: 7,
     label: 'Team',
     tiers: [
+      { key: 'basic_pfu', label: 'Basic PFU' },
       { key: 'basic', label: 'Basic' },
+      { key: 'prem_pfu', label: 'Prem PFU' },
       { key: 'prem', label: 'Prem' },
+      { key: 'pro_pfu', label: 'Pro PFU' },
       { key: 'pro', label: 'Pro' },
     ],
   },
@@ -112,21 +114,14 @@ function athleteTiers(index: number, name: string): Record<string, boolean> {
 }
 
 function coachTeamTiers(index: number, name: string): Record<string, boolean> {
-  const keys = ['basic', 'prem', 'pro'];
+  const keys = ['basic_pfu', 'basic', 'prem_pfu', 'prem', 'pro_pfu', 'pro'];
   if (name === 'View totals') return tierFlags(keys, keys);
   if (name === 'E-newsletter') return tierFlags(keys, ['basic']);
   if (name === 'Online training diary' || name === 'Social Networking') return tierFlags(keys, []);
-  if (index % 3 === 0) return tierFlags(keys, ['prem', 'pro']);
-  if (index % 3 === 1) return tierFlags(keys, ['basic', 'prem']);
-  return tierFlags(keys, ['pro']);
-}
-
-function sectionForName(name: string): PackageSection {
-  const n = name.toLowerCase();
-  if (/diet|nutrition|weight|measure/.test(n)) return 'nutrition';
-  if (/social|friend|share|newsletter|press|calendar/.test(n)) return 'social';
-  if (/manage|coach|deletion|account|staff|member/.test(n)) return 'management';
-  return 'training';
+  if (index % 4 === 0) return tierFlags(keys, ['prem', 'pro', 'pro_pfu']);
+  if (index % 4 === 1) return tierFlags(keys, ['basic', 'basic_pfu', 'prem']);
+  if (index % 4 === 2) return tierFlags(keys, ['prem_pfu', 'prem', 'pro']);
+  return tierFlags(keys, ['pro', 'pro_pfu']);
 }
 
 function clubTiers(index: number, name: string): Record<string, boolean> {
@@ -153,210 +148,40 @@ function groupTiers(index: number, name: string): Record<string, boolean> {
   return tierFlags(keys, index % 2 === 0 ? keys : []);
 }
 
-function buildPackageItem(
-  name: string,
-  index: number,
-  id: number,
-  catalog: PackageCatalog,
-): PackageItem {
-  const titles = emptyLangMap(name);
-  titles.en = name;
-  const tiersByUserType = emptyTiersByUserType();
-  tiersByUserType[5] = athleteTiers(index, name);
-  tiersByUserType[6] = coachTeamTiers(index, name);
-  tiersByUserType[7] = coachTeamTiers(index, name);
-  tiersByUserType[8] = clubTiers(index, name);
-  tiersByUserType[9] = groupTiers(index, name);
-  return {
-    id,
-    sortOrder: index + 1,
-    section: sectionForName(name),
-    catalog,
-    kind: 'package',
-    icon: '',
-    titleColor: '#111111',
-    backgroundColor: '#e8e8e8',
-    titlesByLang: titles,
-    descriptionsByLang: emptyLangMap(''),
-    htmlByLang: emptyLangMap(''),
-    pictures: ['', '', ''],
-    published: true,
-    tiersByUserType,
-  };
-}
-
 function buildGlobalPackages(): PackageItem[] {
-  return GLOBAL_PACKAGE_NAMES.map((name, index) =>
-    buildPackageItem(name, index, index + 1, 'packages'),
-  );
-}
+  return GLOBAL_PACKAGE_NAMES.map((name, index) => {
+    const titles = emptyLangMap(name);
+    titles.en = name;
+    const tiersByUserType = emptyTiersByUserType();
+    tiersByUserType[5] = athleteTiers(index, name);
+    tiersByUserType[6] = coachTeamTiers(index, name);
+    tiersByUserType[7] = coachTeamTiers(index, name);
+    tiersByUserType[8] = clubTiers(index, name);
+    tiersByUserType[9] = groupTiers(index, name);
 
-function buildAthleteAccountPackages(): PackageItem[] {
-  return buildGlobalPackages().map((pkg) => ({
-    ...structuredClone(pkg),
-    id: pkg.id + 10000,
-    catalog: 'athlete_accounts' as const,
-  }));
-}
-
-const STORAGE_KEY = 'movesbook.packageSettings.v3';
-
-export const PACKAGE_PURCHASE_TABS = [
-  { key: 'versions_features', label: 'Versions and features' },
-  { key: 'optional_modules', label: 'Optional Modules' },
-  { key: 'account_pricelist', label: 'Account pricelist' },
-  { key: 'identification_devices', label: 'Identification devices' },
-  { key: 'others', label: 'Others' },
-] as const;
-
-export type PackagePurchaseTabKey = (typeof PACKAGE_PURCHASE_TABS)[number]['key'];
-
-function defaultPurchaseTabs(): Record<PackagePurchaseTabKey, boolean> {
-  return {
-    versions_features: true,
-    optional_modules: true,
-    account_pricelist: true,
-    identification_devices: true,
-    others: true,
-  };
-}
-
-function blankItemFields(): Pick<
-  PackageItem,
-  'section' | 'catalog' | 'kind' | 'icon' | 'titleColor' | 'backgroundColor'
-> {
-  return {
-    section: 'management',
-    catalog: 'packages',
-    kind: 'package',
-    icon: '',
-    titleColor: '#111111',
-    backgroundColor: '#e8e8e8',
-  };
-}
-
-function normalizeItem(raw: Partial<PackageItem> & { id: number }): PackageItem {
-  const base = blankItemFields();
-  return {
-    ...base,
-    id: raw.id,
-    sortOrder: raw.sortOrder ?? raw.id,
-    section: raw.section ?? sectionForName(raw.titlesByLang?.en || Object.values(raw.titlesByLang ?? {}).find(Boolean) || ''),
-    catalog: raw.catalog ?? base.catalog,
-    kind: raw.kind ?? base.kind,
-    icon: raw.icon ?? '',
-    titleColor: raw.titleColor ?? base.titleColor,
-    backgroundColor: raw.backgroundColor ?? base.backgroundColor,
-    titlesByLang: raw.titlesByLang ?? emptyLangMap(''),
-    descriptionsByLang: raw.descriptionsByLang ?? emptyLangMap(''),
-    htmlByLang: raw.htmlByLang ?? emptyLangMap(''),
-    pictures: raw.pictures ?? ['', '', ''],
-    published: raw.published ?? true,
-    tiersByUserType: raw.tiersByUserType ?? emptyTiersByUserType(),
-  };
+    return {
+      id: index + 1,
+      sortOrder: index + 1,
+      titlesByLang: titles,
+      descriptionsByLang: emptyLangMap(''),
+      htmlByLang: emptyLangMap(''),
+      pictures: ['', '', ''],
+      published: true,
+      tiersByUserType,
+    };
+  });
 }
 
 let globalPackages: PackageItem[] = buildGlobalPackages();
-let athleteAccountPackages: PackageItem[] = buildAthleteAccountPackages();
-let packageViewMode: PackageViewMode = 'standard';
-let purchaseTabs: Record<PackagePurchaseTabKey, boolean> = defaultPurchaseTabs();
-let storageLoaded = false;
-
-function persistPackageSettings(): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      packages: globalPackages,
-      athletePackages: athleteAccountPackages,
-      viewMode: packageViewMode,
-      purchaseTabs,
-    }),
-  );
-}
-
-export function ensurePackageSettingsLoaded(): void {
-  if (storageLoaded || typeof window === 'undefined') return;
-  storageLoaded = true;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as {
-      packages?: PackageItem[];
-      athletePackages?: PackageItem[];
-      viewMode?: PackageViewMode;
-      purchaseTabs?: Partial<Record<PackagePurchaseTabKey, boolean>>;
-    };
-    if (Array.isArray(parsed.packages) && parsed.packages.length > 0) {
-      globalPackages = parsed.packages.map((item) => normalizeItem(item));
-    }
-    if (Array.isArray(parsed.athletePackages)) {
-      athleteAccountPackages = parsed.athletePackages.map((item) =>
-        normalizeItem({ ...item, catalog: 'athlete_accounts' }),
-      );
-    }
-    if (parsed.viewMode === 'black' || parsed.viewMode === 'standard') {
-      packageViewMode = parsed.viewMode;
-    }
-    purchaseTabs = { ...defaultPurchaseTabs(), ...parsed.purchaseTabs };
-  } catch {
-    storageLoaded = true;
-  }
-}
-
-function catalogList(catalog: PackageCatalog): PackageItem[] {
-  return catalog === 'athlete_accounts' ? athleteAccountPackages : globalPackages;
-}
-
-function setCatalogList(catalog: PackageCatalog, packages: PackageItem[]): void {
-  const next = packages.map((pkg) => ({ ...pkg, catalog }));
-  if (catalog === 'athlete_accounts') athleteAccountPackages = next;
-  else globalPackages = next;
-  persistPackageSettings();
-}
-
-export function getPackagesByCatalog(catalog: PackageCatalog): PackageItem[] {
-  return catalogList(catalog);
-}
 
 export function getGlobalPackages(): PackageItem[] {
-  return getPackagesByCatalog('packages');
-}
-
-export function getAthleteAccountPackages(): PackageItem[] {
-  return getPackagesByCatalog('athlete_accounts');
+  return globalPackages;
 }
 
 export function saveGlobalPackages(packages: PackageItem[]): void {
-  setCatalogList('packages', packages);
-}
-
-export function saveAthleteAccountPackages(packages: PackageItem[]): void {
-  setCatalogList('athlete_accounts', packages);
-}
-
-export function getPackageViewMode(): PackageViewMode {
-  return packageViewMode;
-}
-
-export function setPackageViewMode(mode: PackageViewMode): void {
-  packageViewMode = mode;
-  persistPackageSettings();
-}
-
-export function getPurchaseTabVisibility(): Record<PackagePurchaseTabKey, boolean> {
-  return { ...purchaseTabs };
-}
-
-export function setPurchaseTabVisibility(
-  next: Record<PackagePurchaseTabKey, boolean>,
-): void {
-  purchaseTabs = { ...next };
-  persistPackageSettings();
-}
-
-export function isPurchaseTabVisible(key: PackagePurchaseTabKey): boolean {
-  return getPurchaseTabVisibility()[key] !== false;
+  globalPackages = [...packages]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((pkg, index) => ({ ...pkg, sortOrder: index + 1 }));
 }
 
 export function getPackageTypeConfig(userTypeId: number): PackageTypeConfig | undefined {
@@ -390,25 +215,13 @@ export function getPackageEditHref(
   return `/subscriptions/edit/${itemId}/${lang}?userType=${userTypeId}`;
 }
 
-function findPackageItem(itemId: number): PackageItem | undefined {
-  return (
-    getGlobalPackages().find((p) => p.id === itemId) ??
-    getAthleteAccountPackages().find((p) => p.id === itemId)
-  );
-}
-
-function nextPackageId(): number {
-  const ids = [...getGlobalPackages(), ...getAthleteAccountPackages()].map((p) => p.id);
-  return Math.max(0, ...ids) + 1;
-}
-
 export function getPackageItemEditData(
   userTypeId: PackageTypeId,
   itemId: number,
   lang: string,
 ): PackageItemEditData | null {
   if (!getPackageTypeConfig(userTypeId)) return null;
-  const item = findPackageItem(itemId);
+  const item = getGlobalPackages().find((p) => p.id === itemId);
   if (!item) return null;
   return {
     userTypeId,
@@ -418,12 +231,10 @@ export function getPackageItemEditData(
 }
 
 export function savePackageItemEditData(editData: PackageItemEditData): void {
-  const catalog = editData.item.catalog ?? 'packages';
-  const current = catalogList(catalog);
-  const packages = current.some((pkg) => pkg.id === editData.item.id)
-    ? current.map((pkg) => (pkg.id === editData.item.id ? { ...editData.item, catalog } : pkg))
-    : [...current, { ...editData.item, catalog }];
-  setCatalogList(catalog, packages);
+  const packages = getGlobalPackages().map((pkg) =>
+    pkg.id === editData.item.id ? editData.item : pkg,
+  );
+  saveGlobalPackages(packages);
 }
 
 export function updatePackageTiersForUserType(
@@ -431,83 +242,33 @@ export function updatePackageTiersForUserType(
   userTypeId: PackageTypeId,
   tiers: Record<string, boolean>,
 ): void {
-  const item = findPackageItem(itemId);
-  if (!item) return;
-  const catalog = item.catalog ?? 'packages';
-  setCatalogList(
-    catalog,
-    catalogList(catalog).map((pkg) =>
-      pkg.id === itemId
-        ? { ...pkg, tiersByUserType: { ...pkg.tiersByUserType, [userTypeId]: tiers } }
-        : pkg,
-    ),
+  const packages = getGlobalPackages().map((pkg) =>
+    pkg.id === itemId
+      ? { ...pkg, tiersByUserType: { ...pkg.tiersByUserType, [userTypeId]: tiers } }
+      : pkg,
   );
-}
-
-export function addPackageItem(options: {
-  catalog?: PackageCatalog;
-  section?: PackageSection;
-  kind?: PackageKind;
-}): PackageItem {
-  const catalog = options.catalog ?? 'packages';
-  const section = options.section ?? 'management';
-  const kind = options.kind ?? 'package';
-  const packages = catalogList(catalog);
-  const inSection = packages.filter((p) => p.section === section);
-  const item: PackageItem = {
-    id: nextPackageId(),
-    sortOrder: inSection.reduce((max, row) => Math.max(max, row.sortOrder), 0) + 1,
-    ...blankItemFields(),
-    catalog,
-    section,
-    kind,
-    titlesByLang: emptyLangMap(kind === 'separator' ? 'Separator' : 'New package'),
-    descriptionsByLang: emptyLangMap(''),
-    htmlByLang: emptyLangMap(''),
-    pictures: ['', '', ''],
-    published: kind === 'separator',
-    tiersByUserType: emptyTiersByUserType(),
-    icon: kind === 'separator' ? '•' : '',
-    titleColor: '#111111',
-    backgroundColor: kind === 'separator' ? '#d9edf7' : '#e8e8e8',
-  };
-  setCatalogList(catalog, [...packages, item]);
-  return item;
+  saveGlobalPackages(packages);
 }
 
 export function addGlobalPackageItem(): PackageItem {
-  return addPackageItem({ catalog: 'packages', section: 'management', kind: 'package' });
-}
-
-export function removePackageItem(itemId: number): void {
-  const item = findPackageItem(itemId);
-  if (!item) return;
-  const catalog = item.catalog ?? 'packages';
-  setCatalogList(
-    catalog,
-    catalogList(catalog).filter((p) => p.id !== itemId),
-  );
+  const packages = getGlobalPackages();
+  const nextId = Math.max(0, ...packages.map((p) => p.id)) + 1;
+  const item: PackageItem = {
+    id: nextId,
+    sortOrder: packages.length + 1,
+    titlesByLang: emptyLangMap('New package'),
+    descriptionsByLang: emptyLangMap(''),
+    htmlByLang: emptyLangMap(''),
+    pictures: ['', '', ''],
+    published: false,
+    tiersByUserType: emptyTiersByUserType(),
+  };
+  saveGlobalPackages([...packages, item]);
+  return item;
 }
 
 export function removeGlobalPackageItem(itemId: number): void {
-  removePackageItem(itemId);
-}
-
-export function reorderPackagesInSection(
-  catalog: PackageCatalog,
-  section: PackageSection,
-  orderedIds: number[],
-): void {
-  const all = catalogList(catalog);
-  const byId = new Map(all.filter((p) => p.section === section).map((p) => [p.id, p]));
-  const reordered = orderedIds
-    .map((id, index) => {
-      const pkg = byId.get(id);
-      return pkg ? { ...pkg, sortOrder: index + 1 } : null;
-    })
-    .filter((p): p is PackageItem => p !== null);
-  const rest = all.filter((p) => p.section !== section);
-  setCatalogList(catalog, [...rest, ...reordered]);
+  saveGlobalPackages(getGlobalPackages().filter((p) => p.id !== itemId));
 }
 
 export function reorderGlobalPackages(orderedIds: number[]): void {
@@ -519,22 +280,6 @@ export function reorderGlobalPackages(orderedIds: number[]): void {
     })
     .filter((p): p is PackageItem => p !== null);
   saveGlobalPackages(packages);
-}
-
-export function copyPackageSectionToAthleteAccounts(section: PackageSection): void {
-  const source = getGlobalPackages().filter((pkg) => pkg.section === section);
-  const kept = getAthleteAccountPackages().filter((pkg) => pkg.section !== section);
-  let nextId = nextPackageId();
-  const copies = source.map((pkg) => {
-    const copy: PackageItem = {
-      ...structuredClone(pkg),
-      id: nextId,
-      catalog: 'athlete_accounts',
-    };
-    nextId += 1;
-    return copy;
-  });
-  saveAthleteAccountPackages([...kept, ...copies]);
 }
 
 export const MOVESBOOK_LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);

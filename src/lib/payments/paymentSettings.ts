@@ -30,14 +30,11 @@ type StoredKeys = {
 type StoredPaymentSettings = StoredKeys & {
   /** When true, registration skips payment (accounts are created as if paid). */
   testMode: boolean;
-  /** Which key pair clubs and teams use when a member pays them. */
-  memberPaymentMode: StripeKeyMode;
 };
 
 /** Admin view: secrets are never returned, only whether they exist and their last 4 chars. */
 export type PaymentSettingsAdminView = {
   testMode: boolean;
-  memberPaymentMode: StripeKeyMode;
   stripe: {
     enabled: boolean;
     mode: StripeKeyMode;
@@ -59,7 +56,6 @@ export type PaymentSettingsAdminView = {
 /** Admin save payload: empty secret = keep the stored one; `clear*` = remove it. */
 export type PaymentSettingsInput = {
   testMode?: boolean;
-  memberPaymentMode?: StripeKeyMode;
   stripe?: {
     enabled?: boolean;
     mode?: StripeKeyMode;
@@ -107,7 +103,6 @@ function settingKey(scope: string): string {
 function defaultSettings(): StoredPaymentSettings {
   return {
     testMode: true,
-    memberPaymentMode: 'test',
     stripe: {
       enabled: false,
       mode: 'test',
@@ -190,7 +185,6 @@ function parseStored(raw: string | null | undefined): StoredPaymentSettings {
     const parsed = JSON.parse(raw) as Partial<StoredPaymentSettings>;
     return {
       testMode: typeof parsed.testMode === 'boolean' ? parsed.testMode : true,
-      memberPaymentMode: parsed.memberPaymentMode === 'live' ? 'live' : 'test',
       stripe: { ...base.stripe, ...(parsed.stripe ?? {}) },
       paypal: { ...base.paypal, ...(parsed.paypal ?? {}) },
     };
@@ -222,7 +216,6 @@ async function writeStored(scope: string, settings: StoredPaymentSettings): Prom
 function toAdminView(s: StoredPaymentSettings): PaymentSettingsAdminView {
   return {
     testMode: s.testMode,
-    memberPaymentMode: s.memberPaymentMode === 'live' ? 'live' : 'test',
     stripe: {
       enabled: s.stripe.enabled,
       mode: s.stripe.mode,
@@ -263,10 +256,6 @@ export async function savePaymentSettings(
   const paypalIn = input.paypal ?? {};
   const next: StoredPaymentSettings = {
     testMode: typeof input.testMode === 'boolean' ? input.testMode : current.testMode,
-    memberPaymentMode:
-      input.memberPaymentMode === 'live' || input.memberPaymentMode === 'test'
-        ? input.memberPaymentMode
-        : current.memberPaymentMode,
     stripe: {
       enabled: typeof stripeIn.enabled === 'boolean' ? stripeIn.enabled : current.stripe.enabled,
       mode: stripeIn.mode === 'live' || stripeIn.mode === 'test' ? stripeIn.mode : current.stripe.mode,
@@ -338,10 +327,4 @@ export async function getActivePaymentCredentials(
   }
 
   return { testMode: s.testMode, stripe, paypal };
-}
-
-/** Test or live for club and team member payments. Default is test. */
-export async function getMemberPaymentMode(scope = SITE_PAYMENT_SCOPE): Promise<StripeKeyMode> {
-  const stored = await loadStored(scope);
-  return stored.memberPaymentMode === 'live' ? 'live' : 'test';
 }

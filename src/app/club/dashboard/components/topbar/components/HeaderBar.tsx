@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
     Bell,
     FileText,
@@ -15,17 +14,13 @@ import {
 
 
 type HeaderBarProps = {
-    /** Unread chat messages of the logged-in user ("497 msg(s)" in PHP). */
-    unreadCount: number;
+    onHelpInfo: () => void;
 };
 
 
-/** HELP toolbar (PHP specific_head): current URL, unread messages, "FAQs of the Page". */
 export default function HeaderBar({
-    unreadCount
+    onHelpInfo
 }: HeaderBarProps) {
-    const pathname = usePathname() || '/';
-    const faqHref = `/faqs/current-page?url=${encodeURIComponent(pathname)}`;
 
     return (
         <div className="h-[120px] w-full bg-[#eeeeee] border-b border-gray-400 flex items-center justify-between px-4 z-10">
@@ -34,32 +29,23 @@ export default function HeaderBar({
                     🕘
                 </div>
                 <div className="flex flex-col gap-2">
-                    <div
-                        className="h-[40px] w-[220px] bg-[#b8bbd2] rounded px-3 flex items-center text-blue-900 text-[14px] overflow-hidden whitespace-nowrap text-ellipsis"
-                        title={pathname}
-                    >
-                        {pathname}
+                    <div className="h-[40px] w-[220px] bg-[#b8bbd2] rounded px-3 flex items-center text-blue-900 text-[14px]">
+                        /users/clubnotification
                     </div>
                     <div className="flex gap-2">
                         <div className="h-[28px] px-3 bg-green-600 text-white rounded flex items-center text-[12px]">
                             2026-12-31 Current
                         </div>
                         <div className="h-[28px] px-3 bg-white rounded border border-gray-300 text-blue-700 flex items-center text-[12px]">
-                            {unreadCount} msg(s)
+                            497 msg(s)
                         </div>
                     </div>
                 </div>
             </div>
 
-            <Link
-                href={faqHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open the FAQs of the current page"
-                className="h-[78px] w-[155px] bg-[#75a9d8] hover:bg-[#6598c7] text-white rounded text-[14px] flex items-center justify-center text-center px-2"
-            >
+            <button onClick={onHelpInfo} className="h-[78px] w-[155px] bg-[#75a9d8] text-white rounded text-[14px]">
                 FAQs of the Page
-            </Link>
+            </button>
 
             <div className="h-[62px] px-3 bg-[#eeeeee] border border-gray-500 rounded-lg flex items-center gap-3">
                 {/* PHP specific_head: fa-comment-o → Notifies from the club staff */}

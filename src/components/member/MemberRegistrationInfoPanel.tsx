@@ -13,7 +13,6 @@ import {
   getEntityDisplayTitle,
   getPackageReviewRowsForCategory,
   getUserTypeReviewLabel,
-  REGISTRATION_PACKAGE_SECTIONS,
   type RegistrationPackageCategory,
   type RegistrationUserType,
 } from '@/lib/registration/waysToGetStarted';
@@ -33,7 +32,7 @@ export default function MemberRegistrationInfoPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<LoadedInfo | null>(null);
-  const [category, setCategory] = useState<RegistrationPackageCategory>('management');
+  const [category, setCategory] = useState<RegistrationPackageCategory>('social_training');
 
   useEffect(() => {
     let cancelled = false;
@@ -191,21 +190,29 @@ export default function MemberRegistrationInfoPanel({
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-base font-bold text-gray-900">Included packages</h3>
-            <div className="flex flex-wrap gap-1">
-              {REGISTRATION_PACKAGE_SECTIONS.map((section) => (
-                <button
-                  key={section.key}
-                  type="button"
-                  onClick={() => setCategory(section.key)}
-                  className={`px-2 py-1 text-xs font-bold rounded ${
-                    category === section.key
-                      ? 'bg-[#337ab7] text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {section.label}
-                </button>
-              ))}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setCategory('social_training')}
+                className={`px-2 py-1 text-xs font-bold rounded ${
+                  category === 'social_training'
+                    ? 'bg-[#337ab7] text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Social &amp; Training
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategory('management')}
+                className={`px-2 py-1 text-xs font-bold rounded ${
+                  category === 'management'
+                    ? 'bg-[#337ab7] text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Management
+              </button>
             </div>
           </div>
 
@@ -246,16 +253,6 @@ export default function MemberRegistrationInfoPanel({
                   </tr>
                 ) : (
                   packages.map((pkg, index) => {
-                    if (pkg.kind === 'separator') {
-                      return (
-                        <tr key={pkg.id} style={{ backgroundColor: pkg.backgroundColor }}>
-                          <td colSpan={2} className="px-3 py-2 text-sm font-bold" style={{ color: pkg.titleColor }}>
-                            {pkg.icon ? `${pkg.icon} ` : ''}
-                            {pkg.title}
-                          </td>
-                        </tr>
-                      );
-                    }
                     const enabled = pkg.tiers[purchasedTierKey] ?? false;
                     return (
                       <tr

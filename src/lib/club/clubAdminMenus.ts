@@ -1,5 +1,4 @@
 import type { LucideIcon } from 'lucide-react';
-import type { ArchiveType } from '@/lib/club/archives/clubArchiveClient';
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -23,7 +22,6 @@ import {
   HelpCircle,
   Hourglass,
   Landmark,
-  LayoutGrid,
   Calculator,
   Megaphone,
   Paperclip,
@@ -34,7 +32,6 @@ import {
   Server,
   ShoppingBasket,
   ShoppingCart,
-  Store,
   Timer,
   User,
   UserCog,
@@ -67,9 +64,7 @@ export const CLUB_ADMIN_INSERT_NEW_ITEM_GROUPS: ClubAdminInsertItem[][] = [
     { kind: 'icon', Icon: CheckCircle, label: 'Payment of deadlines', path: '/clubs/archive_deadlines' },
   ],
   [
-    { kind: 'icon', Icon: LayoutGrid, label: 'Panel of sellings', path: '/clubs/shop/sell' },
-    { kind: 'icon', Icon: ShoppingCart, label: 'Selling of a product', path: '/ArchiveSeles/new_product_sale' },
-    { kind: 'icon', Icon: Store, label: 'Purchase ONLINE', path: '/clubs/shop' },
+    { kind: 'icon', Icon: ShoppingCart, label: 'Sell products', path: '/ArchiveSeles/product_sale_list' },
     {
       kind: 'icon',
       Icon: ShoppingBasket,
@@ -236,8 +231,7 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'icon', Icon: Hourglass, label: 'Planned expenses', path: '/clubs/arc_expenses' },
   ],
   [
-    { kind: 'icon', Icon: ShoppingCart, label: 'Archive of sellings', path: '/ArchiveSeles/product_sale_list' },
-    { kind: 'icon', Icon: Store, label: 'Online shop', path: '/clubs/shop' },
+    { kind: 'icon', Icon: ShoppingCart, label: 'Shop/Selling of products', path: '/ArchiveSeles/product_sale_list' },
     { kind: 'icon', Icon: Users2, label: 'Archive of Memberships', path: '/clubs/memberships/archive' },
     { kind: 'icon', Icon: BookOpen, label: 'Archive of Course Subs', path: '/clubs/courses/archive' },
     { kind: 'icon', Icon: FileText, label: 'Archive of Services', path: '/clubs/archive_service_list' },
@@ -260,7 +254,6 @@ export const CLUB_ADMIN_ARCHIVE_GROUPS: ClubAdminArchiveItem[][] = [
     { kind: 'icon', Icon: Paperclip, label: 'Reservations', path: '/clubs/archive_reservations' },
     { kind: 'icon', Icon: Phone, label: 'Contacts of marketing', path: '/clubs/marketing_contacts' },
     { kind: 'icon', Icon: Calendar, label: 'Events', path: '/clubs/archive_events' },
-    { kind: 'icon', Icon: Calendar, label: 'Manage Events', path: '/clubs/events' },
   ],
   [
     { kind: 'icon', Icon: Presentation, label: 'Polls', path: '/clubs/archive_polls' },
@@ -280,49 +273,19 @@ export const COACH_ADMIN_ARCHIVE_GROUPS = CLUB_ADMIN_ARCHIVE_GROUPS.filter(
   (group) => !group.some((item) => item.kind === 'group' && CLUB_TEAM_ONLY_GROUPS.has(item.label)),
 );
 
-/** Insert-data rows hidden on Member Overview only. */
-export const MEMBER_OVERVIEW_OMIT_INSERT_LABELS = new Set([
-  'New user',
-  'Payment other deadlines',
-  'Payment expenses',
-  'Card to a member',
-  'Card for operator',
-  'Quick door block',
-  'New Employee/Operator',
-  'New Poll',
-  'New Advertising campaign',
-]);
-
-export function memberOverviewInsertLabel(label: string): string {
-  if (label === 'Pay a member or an employee') return 'Pay a member';
-  return label;
-}
-
-/**
- * Administration buttons on Member Overview.
- * Order matches product feedback; Subscriptions is the default.
- * Grids open under the buttons (existing archive loaders).
- */
-export const MEMBER_OVERVIEW_MNGMNT_LINKS: {
-  label: string;
-  archiveType?: ArchiveType;
-  services?: boolean;
-}[] = [
-  { label: 'Subscriptions', archiveType: 'subscriptions' },
-  { label: 'Bookings', archiveType: 'reservations' },
-  { label: 'Memberships', archiveType: 'affiliations' },
-  { label: 'Services', services: true },
-  { label: 'Purchases', archiveType: 'product-sales-unified' },
-  { label: 'Deadlines', archiveType: 'deadlines' },
-  { label: 'Credits', archiveType: 'credits' },
-  { label: 'Payments', archiveType: 'payments' },
-  { label: 'Receipts', archiveType: 'receipts' },
-  { label: 'Accesses', archiveType: 'accesses' },
-  { label: 'Contacts', archiveType: 'marketing-contacts' },
+/** Mngmnt sub-buttons → existing archives (scoped with ?memberId=). */
+export const MEMBER_OVERVIEW_MNGMNT_LINKS: { label: string; path: string }[] = [
+  { label: 'Bookings', path: '/clubs/archive_reservations' },
+  { label: 'Subscriptions', path: '/clubs/subscription' },
+  { label: 'Accesses', path: '/clubs/access_list' },
+  { label: 'Memberships', path: '/clubs/memberships/archive' },
+  { label: 'Purchases', path: '/ArchiveSeles/product_sale_list' },
+  { label: 'Services', path: '/clubs/archive_service_list' },
+  { label: 'Deadlines', path: '/clubs/archive_deadlines' },
+  { label: 'Credits', path: '/clubMembers/member_credit_list' },
+  { label: 'Payments', path: '/clubs/archive_payments' },
+  { label: 'Receipts', path: '/clubs/archive_receipts' },
 ];
-
-/** Default Administration archive button. */
-export const MEMBER_OVERVIEW_ADMIN_DEFAULT_LABEL = 'Subscriptions';
 
 export function appendMemberIdToPath(path: string, memberId: string): string {
   const [base, query = ''] = path.split('?');

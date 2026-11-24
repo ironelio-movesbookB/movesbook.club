@@ -13,8 +13,6 @@ type PromocodeInviteCKEditor4Props = {
   value: string;
   onChange: (html: string) => void;
   minHeightPx?: number;
-  /** Extra CKEditor 4 config, applied when the instance is created. */
-  config?: Record<string, unknown>;
 };
 
 /** Legacy CKEditor 4 — matches PHP send-invite popup (manual init, not auto-replace). */
@@ -23,10 +21,7 @@ export default function PromocodeInviteCKEditor4({
   value,
   onChange,
   minHeightPx = 330,
-  config,
 }: PromocodeInviteCKEditor4Props) {
-  const configRef = useRef(config);
-  configRef.current = config;
   const reactId = useId().replace(/:/g, '');
   const editorId = id?.trim() || `promocode_invite_editor_${reactId}`;
   const [scriptReady, setScriptReady] = useState(
@@ -53,7 +48,6 @@ export default function PromocodeInviteCKEditor4({
     const editor = CKEDITOR.replace(editorId, {
       height: minHeightPx,
       allowedContent: true,
-      ...(configRef.current ?? {}),
     });
     editorRef.current = editor;
 

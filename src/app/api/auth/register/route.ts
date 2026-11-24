@@ -3,13 +3,7 @@ import bcrypt from 'bcryptjs';
 import { SportType, UserType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ensureUserSettingsColumns } from '@/lib/userSettingsDb';
-import { getSubscriptionById, getSubscriptionEditData } from '@/lib/admin/subscriptionSettingsMock';
-import {
-  MODALITY_SUBSCRIPTION_DAYS,
-  resolveRegistrationModality,
-  splitIntoDeadlines,
-  type RegistrationModalityChoice,
-} from '@/lib/subscriptions/paymentModalities';
+import { getSubscriptionById } from '@/lib/admin/subscriptionSettingsMock';
 import { copyVersionSettingsToUser } from '@/lib/admin/versionSettingsStore';
 import { hydrateVersionSettings } from '@/lib/subscriptions/versionSettingsStore';
 import {
@@ -25,12 +19,6 @@ import {
   versionDurationDays,
   type SpecialOfferRegistration,
 } from '@/lib/subscriptions/specialOffers';
-import {
-  ensureSpecialUpgradeTables,
-  reserveSpecialUpgradeSlot,
-  SpecialUpgradeUnavailableError,
-  type SpecialUpgradeRegistration,
-} from '@/lib/subscriptions/specialUpgrades';
 import { getCountryPriceInfo } from '@/lib/countries/countryPricingDb';
 import {
   localAmount,
@@ -38,11 +26,6 @@ import {
   type CountryPriceInfo,
 } from '@/lib/countries/countryPriceFormula';
 import { getActivePaymentCredentials } from '@/lib/payments/paymentSettings';
-import {
-  createDeadlinesForPayment,
-  ensureMovesbookDeadlinesTable,
-  registrationTypology,
-} from '@/lib/movesbookDeadlines/movesbookDeadlines';
 import {
   createRegistrationPayment,
   ensureRegistrationPaymentTables,
@@ -72,10 +55,6 @@ export async function POST(request: NextRequest) {
       language,
       subscriptionVersionId,
       useSpecialOffer,
-      useSpecialUpgrade,
-      specialUpgradeSoftware,
-      registrationMode,
-      paymentModality,
     } = await request.json();
 
     await hydrateVersionSettings();
@@ -84,40 +63,11 @@ export async function POST(request: NextRequest) {
     const selectedVersion =
       requestedVersion && requestedVersion.userType === userType ? requestedVersion : undefined;
     const withSpecialOffer = Boolean(useSpecialOffer && selectedVersion);
-    const withSpecialUpgrade = Boolean(useSpecialUpgrade && selectedVersion);
     if (useSpecialOffer && !selectedVersion) {
       return NextResponse.json(
         { error: 'Select the version of the special offer' },
         { status: 400 },
       );
-    }
-    if (useSpecialUpgrade && !selectedVersion) {
-      return NextResponse.json(
-        { error: 'Select the version of the special upgrade' },
-        { status: 400 },
-      );
-    }
-    if (withSpecialOffer && withSpecialUpgrade) {
-      return NextResponse.json(
-        { error: 'Choose either the special offer or the special upgrade, not both' },
-        { status: 400 },
-      );
-    }
-
-    // Payment modality A–F (versions with modalities set up; special offers/upgrades keep their own price).
-    let modality: RegistrationModalityChoice | null = null;
-    if (selectedVersion && !withSpecialOffer && !withSpecialUpgrade) {
-      try {
-        modality = resolveRegistrationModality(
-          getSubscriptionEditData(selectedVersion.id)?.general.paymentModalities,
-          paymentModality,
-        );
-      } catch (e) {
-        return NextResponse.json(
-          { error: e instanceof Error ? e.message : 'Invalid payment modality' },
-          { status: 400 },
-        );
-      }
     }
 
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
@@ -197,7 +147,6 @@ export async function POST(request: NextRequest) {
 
     await ensureUserSettingsColumns();
     if (withSpecialOffer) await ensureSpecialOfferTables();
-    if (withSpecialUpgrade) await ensureSpecialUpgradeTables();
 
     // Accounts that pick a version go through payment (or the test/free skip) and activation.
     const usesPaymentFlow = Boolean(selectedVersion);
@@ -211,7 +160,6 @@ export async function POST(request: NextRequest) {
     let testMode = true;
     if (usesPaymentFlow) {
       await ensureRegistrationPaymentTables();
-      await ensureMovesbookDeadlinesTable();
       try {
         countryPrice = await getCountryPriceInfo(String(country));
       } catch (e) {
@@ -295,66 +243,23 @@ export async function POST(request: NextRequest) {
       });
 
       let offerRegistration: SpecialOfferRegistration | null = null;
-      let upgradeRegistration: SpecialUpgradeRegistration | null = null;
       if (withSpecialOffer && selectedVersion) {
         offerRegistration = await reserveSpecialOfferSlot(tx, {
           versionId: selectedVersion.id,
           userId: created.id,
         });
       }
-      if (withSpecialUpgrade && selectedVersion) {
-        upgradeRegistration = await reserveSpecialUpgradeSlot(tx, {
-          versionId: selectedVersion.id,
-          userId: created.id,
-          softwareCompany: String(specialUpgradeSoftware?.company || ''),
-          softwareVersion: String(specialUpgradeSoftware?.version || ''),
-          softwareExpiration: String(specialUpgradeSoftware?.expiration || ''),
-        });
-      }
-
-      // Persist registration device mode for admin/all Mode column (best-effort).
-      try {
-        const mode = ['desk', 'mobile', 'tablet', 'notebook'].includes(String(registrationMode))
-          ? String(registrationMode)
-          : 'desk';
-        await tx.$executeRawUnsafe(
-          `CREATE TABLE IF NOT EXISTS user_registration_meta (
-             userId VARCHAR(191) NOT NULL PRIMARY KEY,
-             registrationMode VARCHAR(20) NOT NULL DEFAULT 'desk',
-             updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-           )`,
-        );
-        await tx.$executeRawUnsafe(
-          `INSERT INTO user_registration_meta (userId, registrationMode) VALUES (?, ?)
-           ON DUPLICATE KEY UPDATE registrationMode = VALUES(registrationMode)`,
-          created.id,
-          mode,
-        );
-      } catch {
-        /* ignore meta table failures */
-      }
 
       let adminSettings = '{}';
       let paymentId: string | null = null;
       let paymentStatus: RegistrationPaymentStatus | null = null;
       if (selectedVersion) {
-        const dateStart =
-          upgradeRegistration?.dateStart ?? offerRegistration?.dateStart ?? todayYmd();
+        const dateStart = offerRegistration?.dateStart ?? todayYmd();
         const dateEnd =
-          upgradeRegistration?.dateEnd ??
           offerRegistration?.dateEnd ??
-          addDaysYmd(dateStart, modality ? MODALITY_SUBSCRIPTION_DAYS : versionDurationDays(selectedVersion.id));
-        // With a modality, this payment is its first deadline (the rest go to the Archive of Deadlines).
-        const modalityTotalEur = modality ? priceForCountry(modality.quote.total, countryPrice.factor) : null;
-        const basePriceEur = modality
-          ? modality.deadlineAmounts[0]
-          : Number(
-              upgradeRegistration?.costEuro ?? offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0,
-            );
-        const amountEur =
-          modality && modalityTotalEur != null
-            ? splitIntoDeadlines(modalityTotalEur, modality.quote.deadlines)[0]
-            : priceForCountry(basePriceEur, countryPrice.factor);
+          addDaysYmd(dateStart, versionDurationDays(selectedVersion.id));
+        const basePriceEur = Number(offerRegistration?.costEuro ?? selectedVersion.price1 ?? 0);
+        const amountEur = priceForCountry(basePriceEur, countryPrice.factor);
         const amountLocalValue =
           countryPrice.currencyCode && countryPrice.currencyCode !== 'EUR'
             ? localAmount(amountEur, countryPrice.eurToLocal)
@@ -386,28 +291,7 @@ export async function POST(request: NextRequest) {
           amountLocal: amountLocalValue,
           language: userLanguage,
           periodId,
-          paymentModality: modality?.code ?? null,
-          modalityTotalEur,
-          modalityDeadlines: modality?.quote.deadlines ?? null,
         });
-        // Archive of Deadlines (Movesbook): one deadline per payment step of this registration.
-        await createDeadlinesForPayment(
-          tx,
-          {
-            id: paymentId,
-            userId: created.id,
-            status: paymentStatus,
-            provider: null,
-            versionId: selectedVersion.id,
-            versionName: selectedVersion.name,
-            amountEur,
-            periodId,
-            paymentModality: modality?.code ?? null,
-            modalityTotalEur,
-            modalityDeadlines: modality?.quote.deadlines ?? null,
-          },
-          { dateStart, typology: registrationTypology(registrationMode) },
-        );
         await setAccountActivationStatus(
           tx,
           created.id,
@@ -513,9 +397,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (error instanceof SpecialOfferUnavailableError) {
       return NextResponse.json({ error: error.message, specialOfferUnavailable: true }, { status: 409 });
-    }
-    if (error instanceof SpecialUpgradeUnavailableError) {
-      return NextResponse.json({ error: error.message, specialUpgradeUnavailable: true }, { status: 409 });
     }
 
     console.error('Registration error:', error);

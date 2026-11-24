@@ -10,7 +10,6 @@ import {
 import { formatLocalAmount } from '@/lib/countries/countryPriceFormula';
 import {
   getQuickRegisterPendingData,
-  getRegistrationPayment,
   issueActivationToken,
   linkQuickRegisterPaymentUser,
   markRegistrationPaymentPaid,
@@ -18,26 +17,11 @@ import {
   type RegistrationPayment,
 } from '@/lib/registration/registrationPayments';
 import { decryptPrivateData } from '@/lib/payments/paymentSettings';
-import {
-  createDeadlinesForPayment,
-  ensureMovesbookDeadlinesTable,
-  markFirstDeadlinePaid,
-} from '@/lib/movesbookDeadlines/movesbookDeadlines';
-import { completeRenewalPayment, settleDeadlinePayment } from '@/lib/movesbookDeadlines/subscriptionStatus';
 import { quickRegisterUser, type QuickRegisterPayload } from '@/lib/users/quickRegisterService';
-import {
-  ACTIVATION_EMAIL_BODY_EN,
-  ACTIVATION_EMAIL_BODY_KEY,
-  ACTIVATION_EMAIL_BUTTON_EN,
-  ACTIVATION_EMAIL_BUTTON_KEY,
-  ACTIVATION_EMAIL_SUBJECT_EN,
-  ACTIVATION_EMAIL_SUBJECT_KEY,
-  PAYMENT_SUCCESS_LONG_TEXT_EN,
-  PAYMENT_SUCCESS_LONG_TEXT_KEY,
-} from '@/constants/activationEmailLongText';
 
-export const PAYMENT_SUCCESS_TEXT_KEY = PAYMENT_SUCCESS_LONG_TEXT_KEY;
-export const PAYMENT_SUCCESS_FALLBACK_EN = PAYMENT_SUCCESS_LONG_TEXT_EN;
+export const PAYMENT_SUCCESS_TEXT_KEY = 'Payment_successfully';
+export const PAYMENT_SUCCESS_FALLBACK_EN =
+  'You have successfully registered. Open your email and activate your account.';
 
 /** Long text from Settings → Language in the user's language, then English, then the fallback. */
 export async function registrationLongText(
@@ -91,9 +75,13 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
   const displayName = user.firstName?.trim() || user.name?.trim() || user.username;
 
   const [subject, body, buttonLabel] = await Promise.all([
-    registrationLongText(ACTIVATION_EMAIL_SUBJECT_KEY, lang, ACTIVATION_EMAIL_SUBJECT_EN),
-    registrationLongText(ACTIVATION_EMAIL_BODY_KEY, lang, ACTIVATION_EMAIL_BODY_EN),
-    registrationLongText(ACTIVATION_EMAIL_BUTTON_KEY, lang, ACTIVATION_EMAIL_BUTTON_EN),
+    registrationLongText('Activation_email_subject', lang, 'Activate your Movesbook account'),
+    registrationLongText(
+      'Activation_email',
+      lang,
+      'Hello {name},\n\nthank you for registering on Movesbook with the username {username}.\nClick the button below to activate your account.',
+    ),
+    registrationLongText('Activate_account', lang, 'Activate account'),
   ]);
 
   const values = {
@@ -102,9 +90,7 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
     link: escapeHtml(link),
   };
   const bodyHtml = sanitizeRichHtml(fillPlaceholders(longTextDisplayHtml(body), values));
-  const label = escapeHtml(
-    buttonLabel.replace(/<[^>]*>/g, '').trim() || ACTIVATION_EMAIL_BUTTON_EN,
-  );
+  const label = escapeHtml(buttonLabel.replace(/<[^>]*>/g, '').trim() || 'Activate account');
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">
   ${bodyHtml}
   <p style="margin:28px 0">
@@ -120,7 +106,7 @@ export async function sendActivationEmail(userId: string, origin: string): Promi
 
   await sendIonosEmail({
     to: user.email,
-    subject: subject.replace(/<[^>]*>/g, '').trim() || ACTIVATION_EMAIL_SUBJECT_EN,
+    subject: subject.replace(/<[^>]*>/g, '').trim() || 'Activate your Movesbook account',
     html,
     text,
   });
@@ -157,23 +143,10 @@ export async function finalizePaidRegistration(
   const first = await markRegistrationPaymentPaid(payment.id, providerTxn, payment.provider);
   if (!first) return;
 
-  // Later deadline / renewal of an existing account: no activation step.
-  const testPayMode = providerTxn.startsWith('test-') ? 'test' : undefined;
-  if (payment.kind === 'deadline') {
-    await settleDeadlinePayment(payment, testPayMode);
-    return;
-  }
-  if (payment.kind === 'renewal') {
-    await completeRenewalPayment(payment, testPayMode);
-    return;
-  }
-
   if (payment.kind === 'quick_register') {
     await completePaidQuickRegister(payment);
-    await syncPaidPaymentDeadlines(payment.id);
     return;
   }
-  await syncPaidPaymentDeadlines(payment.id);
 
   const settings = await prisma.userSettings.findUnique({
     where: { userId: payment.userId },
@@ -205,26 +178,6 @@ export async function finalizePaidRegistration(
  * Paid promocode registration: create the account from the stored form data (credentials email included).
  * On failure the form data is kept so the account can still be created from the paid row.
  */
-/**
- * Archive of Deadlines: the paid registration payment settles its first deadline. Deadlines are
- * created here when missing (quick register accounts exist only after payment; older payments).
- * Never blocks the payment flow.
- */
-async function syncPaidPaymentDeadlines(paymentId: string): Promise<void> {
-  try {
-    const fresh = await getRegistrationPayment(paymentId);
-    if (!fresh) return;
-    await ensureMovesbookDeadlinesTable();
-    await createDeadlinesForPayment(prisma, fresh, {
-      dateStart: fresh.createdAt.toISOString().slice(0, 10),
-      typology: 'A',
-    });
-    await markFirstDeadlinePaid(fresh.id, fresh.provider);
-  } catch (e) {
-    console.error('Archive of Deadlines update failed for payment', paymentId, e);
-  }
-}
-
 async function completePaidQuickRegister(payment: RegistrationPayment): Promise<void> {
   const encrypted = await getQuickRegisterPendingData(payment.id);
   if (!encrypted) return;

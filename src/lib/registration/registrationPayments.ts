@@ -5,13 +5,9 @@ import { prisma } from '@/lib/prisma';
 type Db = Prisma.TransactionClient | typeof prisma;
 
 export type RegistrationPaymentStatus = 'pending' | 'paid' | 'test' | 'free';
-export type RegistrationPaymentProvider = 'stripe' | 'paypal' | 'klarna';
-/**
- * `quick_register`: promocode registration; the account is created only after payment.
- * `deadline`: a later deadline of the Movesbook Archive of Deadlines, paid online.
- * `renewal`: renewal of an expiring subscription (creates the next period and its deadlines).
- */
-export type RegistrationPaymentKind = 'register' | 'quick_register' | 'deadline' | 'renewal';
+export type RegistrationPaymentProvider = 'stripe' | 'paypal';
+/** `quick_register`: promocode registration; the account is created only after payment. */
+export type RegistrationPaymentKind = 'register' | 'quick_register';
 export type AccountActivationStatus = 'pending_payment' | 'pending_activation' | 'active';
 
 export type RegistrationPayment = {
@@ -35,31 +31,14 @@ export type RegistrationPayment = {
   amountLocal: number | null;
   language: string;
   periodId: string | null;
-  /** Payment modality A–F chosen at registration (null = classic single payment). */
-  paymentModality: string | null;
-  /** Yearly total of the modality; this payment is its first deadline. */
-  modalityTotalEur: number | null;
-  /** Number of deadlines of the modality. */
-  modalityDeadlines: number | null;
   createdAt: Date;
   paidAt: Date | null;
 };
 
 export type NewRegistrationPayment = Omit<
   RegistrationPayment,
-  | 'id'
-  | 'kind'
-  | 'provider'
-  | 'providerMode'
-  | 'providerRef'
-  | 'providerTxn'
-  | 'createdAt'
-  | 'paidAt'
-  | 'paymentModality'
-  | 'modalityTotalEur'
-  | 'modalityDeadlines'
-> &
-  Partial<Pick<RegistrationPayment, 'paymentModality' | 'modalityTotalEur' | 'modalityDeadlines'>>;
+  'id' | 'kind' | 'provider' | 'providerMode' | 'providerRef' | 'providerTxn' | 'createdAt' | 'paidAt'
+>;
 
 let tablesEnsured = false;
 
@@ -108,21 +87,6 @@ export async function ensureRegistrationPaymentTables(): Promise<void> {
       `ALTER TABLE registration_payments ADD COLUMN pending_data MEDIUMTEXT NULL`,
     );
   }
-  if (!columns.has('payment_modality')) {
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE registration_payments ADD COLUMN payment_modality VARCHAR(2) NULL`,
-    );
-  }
-  if (!columns.has('modality_total_eur')) {
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE registration_payments ADD COLUMN modality_total_eur DECIMAL(10,2) NULL`,
-    );
-  }
-  if (!columns.has('modality_deadlines')) {
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE registration_payments ADD COLUMN modality_deadlines INT NULL`,
-    );
-  }
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS user_account_activations (
       user_id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -158,9 +122,6 @@ type PaymentRow = {
   amount_local: Prisma.Decimal | number | string | null;
   language: string;
   period_id: string | null;
-  payment_modality?: string | null;
-  modality_total_eur?: Prisma.Decimal | number | string | null;
-  modality_deadlines?: number | null;
   created_at: Date;
   paid_at: Date | null;
 };
@@ -174,8 +135,7 @@ function num(value: Prisma.Decimal | number | string | null): number | null {
 function mapRow(row: PaymentRow): RegistrationPayment {
   return {
     id: row.id,
-    kind:
-      row.kind === 'quick_register' || row.kind === 'deadline' || row.kind === 'renewal' ? row.kind : 'register',
+    kind: row.kind === 'quick_register' ? 'quick_register' : 'register',
     userId: row.user_id,
     status: row.status as RegistrationPaymentStatus,
     provider: (row.provider as RegistrationPaymentProvider | null) ?? null,
@@ -193,9 +153,6 @@ function mapRow(row: PaymentRow): RegistrationPayment {
     amountLocal: num(row.amount_local),
     language: row.language,
     periodId: row.period_id,
-    paymentModality: row.payment_modality ?? null,
-    modalityTotalEur: num(row.modality_total_eur ?? null),
-    modalityDeadlines: row.modality_deadlines != null ? Number(row.modality_deadlines) : null,
     createdAt: row.created_at,
     paidAt: row.paid_at,
   };
@@ -211,8 +168,8 @@ export async function createRegistrationPayment(
     `INSERT INTO registration_payments
        (id, user_id, status, version_id, version_name, special_offer, base_price_eur, amount_eur,
         country, currency_code, eur_to_local, amount_local, language, period_id, paid_at,
-        kind, pending_data, payment_modality, modality_total_eur, modality_deadlines)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        kind, pending_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     data.userId,
     data.status,
@@ -230,25 +187,8 @@ export async function createRegistrationPayment(
     data.status === 'pending' ? null : new Date(),
     extra.kind ?? 'register',
     extra.pendingData ?? null,
-    data.paymentModality ?? null,
-    data.modalityTotalEur ?? null,
-    data.modalityDeadlines ?? null,
   );
   return id;
-}
-
-/** Extra data of a `deadline` / `renewal` payment (JSON in pending_data). */
-export async function getPaymentExtraData(id: string): Promise<Record<string, unknown> | null> {
-  const rows = await prisma.$queryRawUnsafe<{ pending_data: string | null }[]>(
-    `SELECT pending_data FROM registration_payments WHERE id = ? AND kind IN ('deadline', 'renewal') LIMIT 1`,
-    id,
-  );
-  try {
-    const data = rows[0]?.pending_data ? JSON.parse(rows[0].pending_data) : null;
-    return data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Encrypted form data of a quick register waiting for payment; null once the account exists. */

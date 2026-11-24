@@ -240,12 +240,12 @@ export default function MemberCreditPaymentDetailPage() {
     );
   }
 
-  async function handleSubmit(values: ServicePaymentSubmitValues): Promise<boolean> {
+  async function handleSubmit(values: ServicePaymentSubmitValues) {
     setError('');
     setSuccess('');
     if (values.amountPaid > totalRest) {
       setError('Payment exceeds remaining balance.');
-      return false;
+      return;
     }
     setSaving(true);
     try {
@@ -296,15 +296,9 @@ export default function MemberCreditPaymentDetailPage() {
       }
 
       setSuccess('Payment saved.');
-      try {
-        await load();
-      } catch {
-        // The payment is saved; a refresh failure should not keep the form open.
-      }
-      return true;
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
-      return false;
     } finally {
       setSaving(false);
     }

@@ -6,8 +6,6 @@ export type SportFieldDef = {
   label: string;
   /** Rendered as a select when set, otherwise as free text. */
   options?: readonly string[];
-  /** When true with options, render checkboxes and store a multi value. */
-  multi?: boolean;
 };
 
 export type SportStatGroup = {
@@ -27,36 +25,8 @@ export function sportFieldKey(label: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-export function field(
-  label: string,
-  options?: readonly string[],
-  multi = false,
-): SportFieldDef {
-  if (!options) return { key: sportFieldKey(label), label };
-  return multi
-    ? { key: sportFieldKey(label), label, options, multi: true }
-    : { key: sportFieldKey(label), label, options };
-}
-
-/** Persist multi-check choices as a JSON string array (legacy single values still decode). */
-export function encodeMultiSportValues(values: readonly string[]): string {
-  return JSON.stringify([...values]);
-}
-
-export function decodeMultiSportValues(raw: string | null | undefined): string[] {
-  const s = String(raw ?? '').trim();
-  if (!s) return [];
-  if (s.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(s) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.map((v) => String(v).trim()).filter(Boolean);
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-  return [s];
+export function field(label: string, options?: readonly string[]): SportFieldDef {
+  return options ? { key: sportFieldKey(label), label, options } : { key: sportFieldKey(label), label };
 }
 
 export function statGroup(title: string, labels: readonly string[]): SportStatGroup {

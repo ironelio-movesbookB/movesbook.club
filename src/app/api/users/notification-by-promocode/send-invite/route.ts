@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
     promocodeId?: number | string;
     introMessage?: string;
     inviteMode?: string;
-    lang?: string;
   };
   try {
     body = await request.json();
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
       promocodeId,
       introMessage: body.introMessage,
       inviteMode: body.inviteMode,
-      languageCode: body.lang?.trim() || null,
       origin: resolvePublicOrigin(request),
       sendEmail: async ({ to, subject, html, replyTo }) => {
         await sendIonosEmail({

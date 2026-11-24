@@ -68,9 +68,6 @@ type QuickRegisterStrings = {
   language: string;
   singleUser: string;
   club: string;
-  themeLight: string;
-  themeDark: string;
-  introVideo: string;
 };
 
 const EN: QuickRegisterStrings = {
@@ -93,7 +90,7 @@ const EN: QuickRegisterStrings = {
   typeHereYourData: 'Type here your data',
   country: 'Country*',
   selectCountry: 'Select country',
-  countryHint: 'Pricing will be calculated in your currency.',
+  countryHint: 'Together with the country selected, pricing is calculated in your currency.',
   userType: 'User type*',
   selectUserType: 'Select user type',
   userTypeHint: 'User type will affect the versions available.',
@@ -121,8 +118,8 @@ const EN: QuickRegisterStrings = {
   discountWithPromocode: 'Discount with promocode',
   credits: 'Credits',
   creditReceiverHint: 'For the club that receive the invitation and decides to register itself',
-  creditSenderHint: 'For the sender club each time an user suggested will register himself',
-  membersHint: 'Number of members available or that will be able to be added to the existing ones',
+  creditSenderHint: 'For the sender club each time a club suggested will register itself',
+  membersHint: 'Number of members available or that will be added to the existing ones',
   officialInviteEmail: 'Official invitation email (Movesbook)',
   officialInviteNote: '(Invitation from Movesbook – official address)',
   usernameOfWhoInvitedYou: 'Username of who invited you *',
@@ -136,9 +133,6 @@ const EN: QuickRegisterStrings = {
   language: 'Language',
   singleUser: 'Single User',
   club: 'Club',
-  themeLight: 'Light',
-  themeDark: 'Dark',
-  introVideo: 'Discover Movesbook',
 };
 
 const IT: QuickRegisterStrings = {
@@ -204,9 +198,6 @@ const IT: QuickRegisterStrings = {
   language: 'Lingua',
   singleUser: 'Utente singolo',
   club: 'Club',
-  themeLight: 'Chiaro',
-  themeDark: 'Scuro',
-  introVideo: 'Scopri Movesbook',
 };
 
 const FR: QuickRegisterStrings = {
@@ -251,9 +242,6 @@ const FR: QuickRegisterStrings = {
   language: 'Langue',
   singleUser: 'Utilisateur unique',
   club: 'Club',
-  themeLight: 'Clair',
-  themeDark: 'Sombre',
-  introVideo: 'Découvrir Movesbook',
 };
 
 const DE: QuickRegisterStrings = {
@@ -298,9 +286,6 @@ const DE: QuickRegisterStrings = {
   language: 'Sprache',
   singleUser: 'Einzelbenutzer',
   club: 'Club',
-  themeLight: 'Hell',
-  themeDark: 'Dunkel',
-  introVideo: 'Movesbook entdecken',
 };
 
 const ES: QuickRegisterStrings = {
@@ -345,9 +330,6 @@ const ES: QuickRegisterStrings = {
   language: 'Idioma',
   singleUser: 'Usuario individual',
   club: 'Club',
-  themeLight: 'Claro',
-  themeDark: 'Oscuro',
-  introVideo: 'Descubre Movesbook',
 };
 
 const BY_LANG: Record<QuickRegisterLang, QuickRegisterStrings> = {

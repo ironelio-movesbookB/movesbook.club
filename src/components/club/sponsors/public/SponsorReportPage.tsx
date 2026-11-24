@@ -4,74 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, Eye, Image as ImageIcon, Layers, MousePointerClick, Printer, type LucideIcon } from 'lucide-react';
 import type { SponsorReportData } from '@/lib/club/sponsors/sponsorPublicService';
 import { SPONSOR_SECTIONS, type SponsorSectionKey } from '@/lib/club/sponsors/sponsorConstants';
-import { sponsorHeaderBackground } from '@/lib/club/sponsors/sponsorKitSettings';
 import {
   SponsorLanguageSelect,
   initialSponsorPageLanguage,
   makeSponsorT,
   sectionLabel,
 } from '@/components/club/sponsors/public/sponsorPublicShared';
-
-/**
- * Print / "save as PDF": keep the colors of the bars and cards (browsers drop backgrounds by default),
- * print the header on white with black text, and never split a card between two pages.
- */
-/**
- * Global `globals.css` hides everything in print except `.print-area`.
- * The report root must use that class; override absolute positioning so multi-page
- * reports are not clipped.
- */
-const PRINT_CSS = `
-@page { size: A4; margin: 12mm; }
-@media print {
-  html, body {
-    background: #fff !important;
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .spr-root.print-area {
-    display: block !important;
-    visibility: visible !important;
-    position: static !important;
-    left: auto !important;
-    top: auto !important;
-    width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
-    background: #fff !important;
-    overflow: visible !important;
-    color: #111 !important;
-  }
-  .spr-root.print-area,
-  .spr-root.print-area * {
-    visibility: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .spr-header {
-    background: #fff !important;
-    background-image: none !important;
-    color: #000 !important;
-    border-bottom: 2px solid #1e40af;
-  }
-  .spr-header * { color: #000 !important; }
-  .spr-no-print,
-  .spr-no-print * {
-    display: none !important;
-    visibility: hidden !important;
-  }
-  .spr-root section,
-  .spr-root tr,
-  .spr-root .rounded-2xl {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  .spr-root .shadow-sm { box-shadow: none !important; border: 1px solid #e2e8f0; }
-}
-`;
 
 function formatDate(ymd: string, lang: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -140,10 +78,6 @@ export default function SponsorReportPage({ token }: { token: string }) {
   const { org, sponsor, stats } = data;
   const placements = SPONSOR_SECTIONS.filter((s) => data.placements[s.key as SponsorSectionKey]);
   const maxViews = Math.max(1, ...stats.bySection.map((r) => r.views));
-  const landing =
-    sponsor.landingUrl && !/^https?:\/\//i.test(sponsor.landingUrl)
-      ? `https://${sponsor.landingUrl}`
-      : sponsor.landingUrl;
 
   const applyPeriod = () => {
     const url = new URL(window.location.href);
@@ -154,13 +88,9 @@ export default function SponsorReportPage({ token }: { token: string }) {
   };
 
   return (
-    <div className="spr-root print-area min-h-screen bg-slate-100 text-slate-900 print:block print:min-h-0 print:bg-white">
-      <style>{PRINT_CSS}</style>
-      <header
-        className="spr-header text-white print:block print:bg-white print:text-black"
-        style={sponsorHeaderBackground(data.header, org.bannerUrl, 'linear-gradient(rgba(15,23,42,.7), rgba(30,58,138,.75))')}
-      >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+    <div className="min-h-screen bg-slate-100 text-slate-900 print:bg-white">
+      <header className="bg-gradient-to-r from-slate-900 to-indigo-800 text-white print:bg-none print:text-slate-900">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
             {org.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -168,7 +98,7 @@ export default function SponsorReportPage({ token }: { token: string }) {
             ) : null}
             <span className="font-bold">{org.name}</span>
           </div>
-          <div className="spr-no-print no-print flex items-center gap-3 print:hidden">
+          <div className="flex items-center gap-3 print:hidden">
             <SponsorLanguageSelect value={data.language} label={t('spk_language')} onChange={setLang} />
             <button
               type="button"
@@ -180,48 +110,24 @@ export default function SponsorReportPage({ token }: { token: string }) {
             </button>
           </div>
         </div>
-        <div className="mx-auto max-w-5xl px-5 pb-5 pt-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-blue-200 print:text-black">
+        <div className="mx-auto max-w-5xl px-5 pb-8 pt-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-blue-200 print:text-slate-500">
             {t('spr_title')}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4">
+          <div className="mt-2 flex items-center gap-4">
             {sponsor.logoUrl ? (
-              landing ? (
-                <a href={landing} target="_blank" rel="noopener noreferrer sponsored" title={sponsor.name}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sponsor.logoUrl} alt="" className="h-14 w-14 rounded-xl bg-white object-contain p-1" />
-                </a>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={sponsor.logoUrl} alt="" className="h-14 w-14 rounded-xl bg-white object-contain p-1" />
-              )
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sponsor.logoUrl} alt="" className="h-16 w-16 rounded-xl bg-white object-contain p-1" />
             ) : null}
-            <div className="min-w-0">
-              <h1 className="text-2xl font-extrabold md:text-3xl">{sponsor.name}</h1>
-              <p className="text-blue-100 print:text-black">{t('spr_with_club', { club: org.name })}</p>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-blue-50 print:text-black">
-                {sponsor.phone ? (
-                  <a href={`tel:${sponsor.phone}`} className="hover:underline">
-                    {t('spr_phone')}: {sponsor.phone}
-                  </a>
-                ) : null}
-                {sponsor.email ? (
-                  <a href={`mailto:${sponsor.email}`} className="hover:underline">
-                    {t('spr_email')}: {sponsor.email}
-                  </a>
-                ) : null}
-                {landing ? (
-                  <a href={landing} target="_blank" rel="noopener noreferrer sponsored" className="hover:underline">
-                    {t('spr_website')}
-                  </a>
-                ) : null}
-              </div>
+            <div>
+              <h1 className="text-3xl font-extrabold">{sponsor.name}</h1>
+              <p className="text-blue-100 print:text-slate-600">{t('spr_with_club', { club: org.name })}</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto block max-w-5xl space-y-6 px-5 py-6 print:block print:max-w-none print:px-0">
+      <main className="mx-auto max-w-5xl space-y-6 px-5 py-6">
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
           <div className="mr-auto">
             <div className="text-xs font-semibold uppercase text-slate-500">{t('spr_period')}</div>
@@ -229,18 +135,18 @@ export default function SponsorReportPage({ token }: { token: string }) {
               {formatDate(stats.from, data.language)} – {formatDate(stats.to, data.language)}
             </div>
           </div>
-          <label className="spr-no-print no-print text-sm print:hidden">
+          <label className="text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_from')}</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
-          <label className="spr-no-print no-print text-sm print:hidden">
+          <label className="text-sm print:hidden">
             <span className="block text-xs font-semibold text-slate-500">{t('spr_to')}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1" />
           </label>
           <button
             type="button"
             onClick={applyPeriod}
-            className="spr-no-print no-print rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
+            className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden"
           >
             {t('spr_update')}
           </button>

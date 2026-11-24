@@ -27,7 +27,6 @@ const taxDocumentSchema = z
 export const addProcedurePaymentSchema = z.object({
   amount: z.coerce.number().positive(),
   paymentDate: z.string().min(1),
-  installmentId: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   operatorId: z.string().optional().nullable(),
@@ -46,6 +45,4 @@ export const addProcedurePaymentSchema = z.object({
   taxDocument: taxDocumentSchema,
 });
 
-export type AddProcedurePaymentPayload = z.infer<
-  typeof addProcedurePaymentSchema
->;
+export type AddProcedurePaymentPayload = z.infer<typeof addProcedurePaymentSchema>;

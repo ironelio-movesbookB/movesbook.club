@@ -22,15 +22,8 @@ import {
   isOrgFeedbackCategory,
   resolveOrgFeedbackReply,
 } from '@/lib/messages/orgFeedbacks';
-import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
 
 export const dynamic = 'force-dynamic';
-
-function hasMessageContent(html: string): boolean {
-  return (
-    Boolean(html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').trim()) || /<img\b/i.test(html)
-  );
-}
 
 export async function GET(
   request: NextRequest,
@@ -140,11 +133,8 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const text =
-      typeof body?.body === 'string' ? sanitizeRichHtml(body.body) : '';
-    if (!hasMessageContent(text)) {
-      return NextResponse.json({ error: 'Message body required' }, { status: 400 });
-    }
+    const text = typeof body?.body === 'string' ? body.body.trim() : '';
+    if (!text) return NextResponse.json({ error: 'Message body required' }, { status: 400 });
 
     const thread = await prisma.userMessageThread.findUnique({ where: { id } });
     if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });

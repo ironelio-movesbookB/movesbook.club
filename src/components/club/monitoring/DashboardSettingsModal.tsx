@@ -51,7 +51,7 @@ export default function DashboardSettingsModal({
   onSaveDefault: () => void;
   onLoadDefault: () => void;
 }) {
-  const [pane, setPane] = useState<Pane | null>(null);
+  const [pane, setPane] = useState<Pane>('summary');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const selectedSection = draft.sections.find((section) => section.id === pane);
 
@@ -96,7 +96,7 @@ export default function DashboardSettingsModal({
             ×
           </button>
         </div>
-        <div className={`grid max-h-[70vh] grid-cols-1 overflow-hidden ${pane ? 'md:grid-cols-2' : ''}`}>
+        <div className="grid max-h-[70vh] grid-cols-1 overflow-hidden md:grid-cols-2">
           <div className="overflow-y-auto border-r border-gray-200">
             <div className="flex items-center gap-2 border-b border-gray-200 bg-[#fff6cc] px-2 py-2">
               <input
@@ -108,9 +108,8 @@ export default function DashboardSettingsModal({
               <span className="flex-1 text-sm font-medium">Summary panels</span>
               <button
                 type="button"
-                onClick={() => setPane((current) => (current === 'summary' ? null : 'summary'))}
+                onClick={() => setPane('summary')}
                 className={`rounded p-1 ${pane === 'summary' ? 'bg-white' : ''}`}
-                aria-pressed={pane === 'summary'}
                 aria-label="Summary panel order"
               >
                 <Settings className="h-4 w-4" />
@@ -137,11 +136,8 @@ export default function DashboardSettingsModal({
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              setPane((current) => (current === section.id ? null : section.id))
-                            }
+                            onClick={() => setPane(section.id)}
                             className={`rounded p-1 ${pane === section.id ? 'bg-gray-100' : ''}`}
-                            aria-pressed={pane === section.id}
                             aria-label={`${def?.label ?? 'Section'} settings`}
                           >
                             <Settings className="h-4 w-4" />
@@ -155,7 +151,6 @@ export default function DashboardSettingsModal({
             </DndContext>
           </div>
 
-          {pane ? (
           <div className="overflow-y-auto bg-[#fafafa]">
             {pane === 'summary' ? (
               <>
@@ -227,7 +222,6 @@ export default function DashboardSettingsModal({
               </div>
             ) : null}
           </div>
-          ) : null}
         </div>
         <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50 px-3 py-2">
           <button type="button" onClick={onSave} className="rounded bg-[#3d6b4f] px-3 py-1.5 text-sm text-white">

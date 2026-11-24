@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { PackageItemEditData } from '@/types/adminPackageSettings';
-import { PACKAGE_SECTIONS } from '@/types/adminPackageSettings';
-import { PACKAGE_DESCRIPTION_ROW_CHARS } from '@/lib/admin/packageSettingsLang';
 import {
   getPackageSettingsHref,
   PACKAGE_TYPE_CONFIGS,
@@ -105,26 +103,7 @@ export default function PackageEditPanel({ initialData }: PackageEditPanelProps)
               <MovesbookLanguageGrid activeLang={editLang} onChange={setEditLang} />
 
               <div>
-                <label className="mb-1 block text-sm text-gray-700">Section</label>
-                <select
-                  value={data.item.section ?? 'training'}
-                  onChange={(e) =>
-                    updateItem({ section: e.target.value as PackageItemEditData['item']['section'] })
-                  }
-                  className="w-full max-w-xs border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                >
-                  {PACKAGE_SECTIONS.map((section) => (
-                    <option key={section.key} value={section.key}>
-                      {section.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">
-                  {data.item.kind === 'separator' ? 'Title' : 'Feature'}
-                </label>
+                <label className="block text-sm text-gray-700 mb-1">Feature</label>
                 <input
                   type="text"
                   value={data.item.titlesByLang[editLang] ?? ''}
@@ -133,57 +112,15 @@ export default function PackageEditPanel({ initialData }: PackageEditPanelProps)
                 />
               </div>
 
-              {data.item.kind === 'separator' ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm text-gray-700">Icon</label>
-                    <input
-                      type="text"
-                      value={data.item.icon}
-                      onChange={(e) => updateItem({ icon: e.target.value })}
-                      className="w-full border border-gray-300 bg-white px-3 py-1.5 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-gray-700">Title color</label>
-                    <input
-                      type="color"
-                      value={data.item.titleColor || '#111111'}
-                      onChange={(e) => updateItem({ titleColor: e.target.value })}
-                      className="h-9 w-full border border-gray-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-gray-700">Background color</label>
-                    <input
-                      type="color"
-                      value={data.item.backgroundColor || '#e8e8e8'}
-                      onChange={(e) => updateItem({ backgroundColor: e.target.value })}
-                      className="h-9 w-full border border-gray-300 bg-white"
-                    />
-                  </div>
-                </div>
-              ) : (
               <div>
                 <label className="block text-sm text-gray-700 mb-1">Description</label>
                 <textarea
                   value={data.item.descriptionsByLang[editLang] ?? ''}
                   onChange={(e) => updateLangField('descriptionsByLang', editLang, e.target.value)}
-                  rows={6}
-                  style={{ width: `${PACKAGE_DESCRIPTION_ROW_CHARS}ch` }}
-                  className="max-w-full border border-gray-300 bg-white px-0 py-2 text-sm leading-5 resize-y"
+                  rows={4}
+                  className="w-full border border-gray-300 bg-white px-3 py-2 text-sm resize-y"
                 />
-                <p className="mt-1 text-[11px] text-gray-500">
-                  The registration form shows only the first two rows at this same width.
-                </p>
-                <div
-                  style={{ width: `${PACKAGE_DESCRIPTION_ROW_CHARS}ch`, maxHeight: '2.5rem' }}
-                  className="mt-2 max-w-full overflow-hidden whitespace-pre-wrap border border-dashed border-gray-300 bg-gray-50 px-0 py-0 text-sm leading-5 text-gray-800"
-                >
-                  {data.item.descriptionsByLang[editLang] || '—'}
-                </div>
               </div>
-              )}
 
               <div>
                 <span className="block text-sm text-gray-700 mb-2">Status</span>
@@ -260,8 +197,6 @@ export default function PackageEditPanel({ initialData }: PackageEditPanelProps)
           </div>
         </div>
 
-        {data.item.kind === 'separator' ? null : (
-        <>
         <div className="border border-gray-300 mb-4 max-w-5xl mx-auto">
           <div className="bg-[#5bc0de] text-white px-4 py-2 font-bold text-sm">
             Full package overview
@@ -300,8 +235,6 @@ export default function PackageEditPanel({ initialData }: PackageEditPanelProps)
             </div>
           </div>
         </div>
-        </>
-        )}
 
         <div className="flex justify-center gap-3 pb-8">
           <button

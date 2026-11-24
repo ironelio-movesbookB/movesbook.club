@@ -4,47 +4,31 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { getInfoRepsCloseLabel } from '@/constants/infoRepsLongText';
 import { fetchPaymentInfoText } from '@/constants/paymentInfoLongText';
-import { useLanguage } from '@/contexts/LanguageContext';
-import {
-  normalizeToolsLanguage,
-  resolveProfileLanguageCodeForToolsLoad,
-} from '@/utils/toolsProfileLanguage';
+import { resolveProfileLanguageCodeForToolsLoad } from '@/utils/toolsProfileLanguage';
 import { longTextDisplayHtml } from '@/utils/richTextTranslation';
 import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
 
 type PaymentInfoModalProps = {
   open: boolean;
   onClose: () => void;
-  /**
-   * Language of the member whose profile is open (Member profile → Other references → Language).
-   * Falls back to the signed-in user's profile language, then the UI language.
-   */
-  memberLanguage?: string | null;
 };
 
-/** Types of payments help — `Payment_info` long text in the member's / current user profile language. */
-export default function PaymentInfoModal({
-  open,
-  onClose,
-  memberLanguage,
-}: PaymentInfoModalProps) {
-  const { currentLanguage } = useLanguage();
-  const language = normalizeToolsLanguage(
-    String(memberLanguage || '').trim() ||
-      resolveProfileLanguageCodeForToolsLoad() ||
-      currentLanguage,
-  );
+/** Types of payments help — `Payment_info` long text in the signed-in user's profile language. */
+export default function PaymentInfoModal({ open, onClose }: PaymentInfoModalProps) {
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
+  const [language, setLanguage] = useState('en');
   const bodyHtml = useMemo(() => sanitizeRichHtml(longTextDisplayHtml(body)), [body]);
   const closeLabel = getInfoRepsCloseLabel(language);
 
   useEffect(() => {
     if (!open) return;
+    const lang = resolveProfileLanguageCodeForToolsLoad();
+    setLanguage(lang);
     let cancelled = false;
     setLoading(true);
     setBody('');
-    void fetchPaymentInfoText(language).then((text) => {
+    void fetchPaymentInfoText(lang).then((text) => {
       if (cancelled) return;
       setBody(text);
       setLoading(false);
@@ -52,7 +36,7 @@ export default function PaymentInfoModal({
     return () => {
       cancelled = true;
     };
-  }, [open, language]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +77,7 @@ export default function PaymentInfoModal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-gray-700">
           {loading ? (
-            <p className="text-gray-500">{language === 'it' ? 'Caricamento…' : 'Loading…'}</p>
+            <p className="text-gray-500">Loading…</p>
           ) : (
             <div
               className="long-text-display [&_h3]:mb-3 [&_h3]:mt-5 [&_h3:first-child]:mt-0 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-gray-900 [&_h4]:mb-2 [&_h4]:mt-4 [&_h4]:font-bold [&_h4]:text-red-700 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"

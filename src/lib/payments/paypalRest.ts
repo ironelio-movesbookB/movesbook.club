@@ -74,14 +74,7 @@ export function euroValue(amountEur: number): string {
   return (Math.round(amountEur * 100) / 100).toFixed(2);
 }
 
-const PAYPAL_NO_DECIMALS = new Set(['HUF', 'JPY', 'TWD']);
-
-/** Amount string PayPal expects for the currency. */
-export function currencyValue(amount: number, currency = 'EUR'): string {
-  return PAYPAL_NO_DECIMALS.has(currency.toUpperCase()) ? String(Math.round(amount)) : euroValue(amount);
-}
-
-/** PayPal order (EUR unless currency is given); the buyer approves it on the returned URL. */
+/** PayPal order in EUR; the buyer approves it on the returned URL. */
 export async function createPaypalOrder(
   creds: ActivePaypalCredentials,
   input: {
@@ -90,10 +83,8 @@ export async function createPaypalOrder(
     reference: string;
     returnUrl: string;
     cancelUrl: string;
-    currency?: string;
   },
 ): Promise<{ id: string; approveUrl: string }> {
-  const currency = (input.currency || 'EUR').toUpperCase();
   const { ok, status, data } = await paypalRequest(creds, 'POST', '/v2/checkout/orders', {
     intent: 'CAPTURE',
     purchase_units: [
@@ -101,7 +92,7 @@ export async function createPaypalOrder(
         reference_id: input.reference,
         custom_id: input.reference,
         description: input.description.slice(0, 127),
-        amount: { currency_code: currency, value: currencyValue(input.amountEur, currency) },
+        amount: { currency_code: 'EUR', value: euroValue(input.amountEur) },
       },
     ],
     application_context: {

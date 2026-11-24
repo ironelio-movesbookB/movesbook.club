@@ -18,18 +18,15 @@ import {
   ClipboardList,
   Loader2,
   Mail,
-  Pencil,
   Printer,
   Receipt,
   Settings,
-  Trash2,
   User,
   Users,
 } from 'lucide-react';
 import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
 import {
   PREVIEW_LIMIT,
-  SECTION_PREVIEW_COLUMNS,
   archiveSectionById,
   summaryTileById,
   type ArchiveSectionId,
@@ -45,7 +42,6 @@ import {
 } from '@/lib/club/monitoring/dashboardSettings';
 import type { MonthPoint, PreviewRow } from '@/lib/club/monitoring/dashboardSummary';
 import DashboardSettingsModal from '@/components/club/monitoring/DashboardSettingsModal';
-import DashboardMemberDirectory from '@/components/club/monitoring/DashboardMemberDirectory';
 
 type Snapshot = {
   counts: Record<SummaryTileId, number>;
@@ -226,27 +222,30 @@ export default function ClubMonitoringDashboard({
       {error ? <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {visibleTiles.length > 0 ? (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {visibleTiles.map((tile) => {
             const def = summaryTileById(tile.id);
             if (!def) return null;
             const Icon = TILE_ICONS[tile.id];
             const count = snapshot?.counts[tile.id];
-            const open = detail?.id === tile.id;
             return (
-              <button
-                key={tile.id}
-                type="button"
-                title={def.label}
-                onClick={() => void openDetail(tile.id)}
-                className={`flex h-12 min-w-[92px] items-center justify-between gap-3 rounded-sm px-3 text-white shadow-sm ${
-                  open ? 'ring-2 ring-black/40' : ''
-                }`}
-                style={{ backgroundColor: def.color }}
-              >
-                <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />
-                <span className="text-xl font-semibold leading-none">{count == null ? '…' : count}</span>
-              </button>
+              <div key={tile.id} className="overflow-hidden rounded border border-gray-300 shadow-sm">
+                <div className="flex items-start justify-between px-3 py-2 text-white" style={{ backgroundColor: def.color }}>
+                  <Icon className="h-8 w-8 opacity-90" strokeWidth={1.5} />
+                  <div className="text-right">
+                    <div className="text-2xl font-semibold leading-none">{count == null ? '…' : count}</div>
+                    <div className="mt-1 text-sm">{def.label}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void openDetail(tile.id)}
+                  className="flex w-full items-center justify-center gap-2 bg-white py-1.5 text-sm text-gray-800 hover:bg-gray-50"
+                >
+                  <Icon className="h-4 w-4" style={{ color: def.color }} />
+                  View Detail
+                </button>
+              </div>
             );
           })}
         </div>
@@ -283,25 +282,8 @@ export default function ClubMonitoringDashboard({
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>
-            ) : detail.id === 'total-members' || detail.id === 'birthdays' || detail.id === 'name-days' ? (
-              <DashboardMemberDirectory
-                rows={detail.items}
-                mode={
-                  detail.id === 'birthdays' ? 'birthdays' : detail.id === 'name-days' ? 'name-days' : 'members'
-                }
-                clubId={clubId}
-              />
             ) : (
-              <PreviewTable
-                rows={detail.items}
-                altColor="#f3f4f6"
-                visibleCount={detail.items.length}
-                columns={[
-                  { key: 'name', header: 'Name' },
-                  { key: 'detail', header: 'Detail' },
-                  { key: 'date', header: 'Date' },
-                ]}
-              />
+              <PreviewTable rows={detail.items} altColor="#f3f4f6" visibleCount={detail.items.length} />
             )}
           </div>
         ) : loading && !series ? (
@@ -373,13 +355,7 @@ export default function ClubMonitoringDashboard({
                     </div>
                   ) : (
                     <>
-                      <PreviewTable
-                        rows={rows}
-                        altColor={section.altColor}
-                        visibleCount={visibleCount}
-                        columns={SECTION_PREVIEW_COLUMNS[section.id]}
-                        archivePath={def.readAllPath}
-                      />
+                      <PreviewTable rows={rows} altColor={section.altColor} visibleCount={visibleCount} />
                       {rows.length > section.rows && !showAll ? (
                         <button
                           type="button"
@@ -429,63 +405,32 @@ function PreviewTable({
   rows,
   altColor,
   visibleCount,
-  columns,
-  archivePath,
 }: {
   rows: PreviewRow[];
   altColor: string;
   visibleCount: number;
-  columns: { key: string; header: string }[];
-  archivePath?: string;
 }) {
-  const router = useRouter();
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-500">No records.</p>;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
-        <thead>
-          <tr className="bg-[#2f8f3a] text-left text-white">
-            <th className="w-10 px-2 py-2 font-semibold">
-              <span className="sr-only">Select</span>
-            </th>
-            {columns.map((column) => (
-              <th key={column.key} className="whitespace-nowrap px-2 py-2 font-semibold">
-                {column.header}
-              </th>
-            ))}
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="bg-gray-100 text-left text-gray-700">
+          <th className="px-2 py-1.5 font-semibold">Name</th>
+          <th className="px-2 py-1.5 font-semibold">Detail</th>
+          <th className="px-2 py-1.5 font-semibold">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.slice(0, visibleCount).map((row, index) => (
+          <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
+            <td className="px-2 py-1.5">{row.title}</td>
+            <td className="px-2 py-1.5">{row.detail || '—'}</td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.date || '—'}</td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, visibleCount).map((row, index) => (
-            <tr key={row.id} style={{ backgroundColor: index % 2 === 1 ? altColor : '#ffffff' }}>
-              <td className="px-2 py-1.5">
-                <input type="checkbox" aria-label={`Select ${row.title}`} />
-              </td>
-              {columns.map((column) => (
-                <td key={column.key} className="whitespace-nowrap px-2 py-1.5">
-                  {column.key === 'edit' || column.key === 'delete' ? (
-                    <button
-                      type="button"
-                      className="text-gray-700 hover:text-black"
-                      aria-label={column.header}
-                      title={column.header}
-                      onClick={() => {
-                        if (archivePath) router.push(archivePath);
-                      }}
-                    >
-                      {column.key === 'edit' ? <Pencil className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                    </button>
-                  ) : (
-                    row.fields?.[column.key] || '—'
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }

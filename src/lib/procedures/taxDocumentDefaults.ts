@@ -1,11 +1,4 @@
-export const SIGNED_RECEIPT_DOCUMENT_TYPE = 'Receipt document to be signed';
-
-export const TAX_DOCUMENT_TYPE_OPTIONS = [
-  'Simple receipt',
-  'Tax receipt',
-  'Invoice',
-  SIGNED_RECEIPT_DOCUMENT_TYPE,
-] as const;
+export const TAX_DOCUMENT_TYPE_OPTIONS = ['Simple receipt', 'Tax receipt', 'Invoice'] as const;
 
 export type TaxDocumentTypeOption = (typeof TAX_DOCUMENT_TYPE_OPTIONS)[number];
 
@@ -41,7 +34,6 @@ export function counterKeyForDocumentType(
     case 'Invoice':
       return 'invoice';
     case 'Simple receipt':
-    case SIGNED_RECEIPT_DOCUMENT_TYPE:
       return 'simpleReceipt';
     case 'Tax receipt':
     default:

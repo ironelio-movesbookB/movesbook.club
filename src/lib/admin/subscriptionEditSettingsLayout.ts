@@ -54,7 +54,7 @@ export function getMembershipSectionLabel(
   roleLabel: string,
 ): string {
   if (usesCoachTeamClubSharingLayout(userType)) {
-    return 'The Club or Team can share its data with this number of other users';
+    return `${roleLabel} can share with....`;
   }
   return `${roleLabel} can be member of....`;
 }

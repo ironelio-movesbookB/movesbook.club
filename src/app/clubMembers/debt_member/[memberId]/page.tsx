@@ -1,19 +1,19 @@
 'use client';
 
 import DebtMemberForm from '@/components/club/debts/DebtMemberForm';
-import { getProcedureDefinition } from '@/lib/procedures/registry';
-import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
 
 export default function DebtMemberForMemberPage() {
-  const def = getProcedureDefinition(PROCEDURE_TYPE_CODES.MEMBER_DEBT)!;
-
   return (
-    <div className="min-h-full bg-gray-50">
-      <div className="bg-teal-800 px-6 py-4 text-white">
-        <h1 className="text-xl font-semibold">{def.form.title}</h1>
-        <p className="mt-1 text-sm text-teal-100">{def.form.subtitle}</p>
+    <div className="min-h-full w-full bg-[#ececec] py-2">
+      <div className="w-full border border-gray-300 bg-white shadow-sm">
+        <div className="bg-black px-4 py-3">
+          <h1 className="text-[18px] font-bold leading-none text-white">Add a credit</h1>
+        </div>
+        <p className="border-b border-gray-200 px-4 py-3 text-center text-[13px] font-bold text-black">
+          How you can add a debt beside the &apos;classic&apos; debts of subscription and purchasest
+        </p>
+        <DebtMemberForm />
       </div>
-      <DebtMemberForm />
     </div>
   );
 }

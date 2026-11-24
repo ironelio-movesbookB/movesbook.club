@@ -64,15 +64,13 @@ export default function ProcedureArchiveTable({
   bordered = false,
 }: Props) {
   const cellBorder = bordered ? 'border border-gray-300' : '';
-  const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(
-    null,
-  );
+  const [internalSort, setInternalSort] = useState<ArchiveSortState | null>(null);
   const sort = controlledSort !== undefined ? controlledSort : internalSort;
   const clientSort = !onSortChange;
 
   const displayRows = useMemo(
     () => (clientSort ? sortArchiveRows(rows, sort) : rows),
-    [clientSort, rows, sort],
+    [clientSort, rows, sort]
   );
 
   function handleSort(key: keyof Member) {
@@ -96,39 +94,15 @@ export default function ProcedureArchiveTable({
     if (!ACTION_KEYS.has(String(columns[i]!.key))) break;
     actionCount += 1;
   }
-  const dataColumns =
-    actionCount > 0 ? columns.slice(0, columns.length - actionCount) : columns;
-  const actionColumns =
-    actionCount > 0 ? columns.slice(columns.length - actionCount) : [];
+  const dataColumns = actionCount > 0 ? columns.slice(0, columns.length - actionCount) : columns;
+  const actionColumns = actionCount > 0 ? columns.slice(columns.length - actionCount) : [];
 
   const colSpan =
-    dataColumns.length +
-    (actionColumns.length > 0 ? 1 : 0) +
-    (selectable ? 1 : 0);
-  const pinActions = actionColumns.length > 0;
-  // border-collapse breaks position:sticky on th/td — always use separate borders when pinning.
-  const tableLayout =
-    bordered || pinActions ? 'border-separate border-spacing-0' : '';
-  // Keep Options (and other action cols) glued to the visible right edge while data cols scroll.
-  const stickyHead =
-    'sticky right-0 z-30 bg-teal-800 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.35)]';
-  const stickyCellBase =
-    'sticky right-0 z-20 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.18)]';
+    dataColumns.length + (actionColumns.length > 0 ? 1 : 0) + (selectable ? 1 : 0);
 
   return (
-    <div
-      className={`relative border rounded-lg overflow-x-auto overscroll-x-contain ${
-        bordered ? 'border-gray-300' : ''
-      }`}
-    >
-      <table
-        className={`w-max min-w-full text-sm ${tableLayout}`}
-        style={
-          pinActions
-            ? { borderCollapse: 'separate', borderSpacing: 0 }
-            : undefined
-        }
-      >
+    <div className={`isolate border rounded-lg overflow-x-auto ${bordered ? 'border-gray-300' : ''}`}>
+      <table className={`min-w-full text-sm ${bordered ? 'border-collapse' : ''}`}>
         <thead className="bg-teal-800 text-white">
           <tr>
             {selectable && (
@@ -139,7 +113,7 @@ export default function ProcedureArchiveTable({
                   disabled={loading || selectableRows.length === 0}
                   onChange={(e) => onToggleSelectAll?.(e.target.checked)}
                   aria-label={
-                    selectOnlyOpenRest && !selectableAll
+                    !selectableAll && selectOnlyOpenRest
                       ? 'Select all with Rest > 0'
                       : 'Select all'
                   }
@@ -165,12 +139,11 @@ export default function ProcedureArchiveTable({
                 </th>
               );
             })}
-            {pinActions && (
+            {actionColumns.length > 0 && (
               <th
-                className={`${stickyHead} px-3 py-2 text-left whitespace-nowrap ${
+                className={`sticky right-0 z-20 bg-teal-800 px-3 py-2 text-left whitespace-nowrap ${
                   bordered ? cellBorder : 'border-l border-teal-700'
                 }`}
-                style={{ position: 'sticky', right: 0 }}
               >
                 <span className="flex items-center gap-4">
                   {actionColumns.map((col) => (
@@ -205,80 +178,36 @@ export default function ProcedureArchiveTable({
               const isSelected = selectedId && row.id === selectedId;
               const isChecked = Boolean(row.id && selectedIds?.has(row.id));
               const canCheck = rowIsCheckable(row);
-              const isExpense = row.procedureType === "expense";
-              const expenseDirection = row.expenseDirection ?? row.direction;
-              const isRecurringExpense =
-                isExpense && (row.isRecurrent || row.isRecurringOccurrence);
-              const isOutgoingExpense =
-                isExpense && expenseDirection !== 'IN';
-              const isIncomingExpense =
-                isExpense && expenseDirection === 'IN';
-              const rowBg = isRecurringExpense
-                ? 'bg-gray-100'
-                : isOutgoingExpense
-                  ? 'bg-red-50'
-                  : row.isDuplicate
-                    ? 'bg-red-100'
-                    : isChecked
-                      ? 'bg-amber-50'
-                      : isSelected
-                        ? 'bg-amber-100'
-                        : 'bg-white';
-              const rowHover = isRecurringExpense
-                ? 'hover:bg-gray-200'
-                : isOutgoingExpense
-                  ? 'hover:bg-red-100'
-                  : row.isDuplicate
-                    ? 'hover:bg-red-200'
-                    : 'hover:bg-teal-50';
-              const actionHover = isRecurringExpense
-                ? 'group-hover:bg-gray-200'
-                : isOutgoingExpense
-                  ? 'group-hover:bg-red-100'
-                  : row.isDuplicate
-                    ? 'group-hover:bg-red-200'
-                    : isChecked
-                      ? 'group-hover:bg-amber-100'
-                      : 'group-hover:bg-teal-50';
+              // Pinned cells need the row's own background, hover included, or the scrolled
+              // columns show through them.
+              const rowBg = row.isDuplicate
+                ? 'bg-red-100'
+                : isChecked
+                  ? 'bg-amber-50'
+                  : isSelected
+                    ? 'bg-amber-100'
+                    : 'bg-white';
+              const rowHover = row.isDuplicate ? 'hover:bg-red-200' : 'hover:bg-teal-50';
+              const actionHover = row.isDuplicate
+                ? 'group-hover:bg-red-200'
+                : 'group-hover:bg-teal-50';
               const statusClass = getRowClassName?.(row) ?? '';
-              const cellTextClass = isIncomingExpense
-                ? 'text-[#0b5d3c] font-semibold'
-                : isOutgoingExpense
-                  ? 'text-red-800'
-                  : isRecurringExpense
-                  ? 'text-gray-500'
-                  : row.isDuplicate
-                    ? 'text-red-800'
-                    : statusClass || 'text-gray-800';
               return (
                 <tr
                   key={row.id ?? `${row.name}-${row.insertDate}`}
                   className={`group ${bordered ? '' : 'border-t'} cursor-pointer ${rowBg} ${rowHover} ${
-                    isIncomingExpense
-                      ? 'text-[#0b5d3c] font-semibold'
-                      : isOutgoingExpense
-                        ? 'text-red-800'
-                        : isRecurringExpense
-                          ? 'text-gray-500'
-                          : row.isDuplicate
-                        ? 'text-red-800'
-                        : ''
+                    row.isDuplicate ? 'text-red-800' : ''
                   } ${statusClass}`}
                   onClick={() => onRowClick?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                 >
                   {selectable && (
-                    <td
-                      className={`px-2 py-2 ${cellBorder}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <td className={`px-2 py-2 ${cellBorder}`} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isChecked}
                         disabled={!canCheck}
-                        onChange={() =>
-                          row.id && canCheck && onToggleSelect?.(row)
-                        }
+                        onChange={() => row.id && canCheck && onToggleSelect?.(row)}
                         aria-label={`Select ${row.name ?? row.id}`}
                       />
                     </td>
@@ -286,27 +215,25 @@ export default function ProcedureArchiveTable({
                   {dataColumns.map((col) => (
                     <td
                       key={String(col.key)}
-                      className={`px-3 py-2 whitespace-nowrap ${cellBorder} ${cellTextClass}`}
+                      className={`px-3 py-2 whitespace-nowrap ${cellBorder} ${statusClass || 'text-gray-800'}`}
                     >
                       {col.render
                         ? col.render(row[col.key], row)
-                        : ((row[col.key] as React.ReactNode) ?? '-')}
+                        : (row[col.key] as React.ReactNode) ?? '-'}
                     </td>
                   ))}
-                  {pinActions && (
+                  {actionColumns.length > 0 && (
                     <td
-                      className={`${stickyCellBase} px-3 py-2 whitespace-nowrap ${cellTextClass} ${
+                      className={`sticky right-0 z-10 px-3 py-2 text-gray-800 whitespace-nowrap ${
                         bordered ? cellBorder : 'border-l border-gray-200'
                       } ${rowBg} ${actionHover}`}
-                      style={{ position: 'sticky', right: 0 }}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className="flex items-center gap-4">
                         {actionColumns.map((col) => (
                           <span key={String(col.key)}>
                             {col.render
                               ? col.render(row[col.key], row)
-                              : ((row[col.key] as React.ReactNode) ?? '-')}
+                              : (row[col.key] as React.ReactNode) ?? '-'}
                           </span>
                         ))}
                       </span>

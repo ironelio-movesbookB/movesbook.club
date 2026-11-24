@@ -27,13 +27,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       pageSize: Number(request.nextUrl.searchParams.get('pageSize') ?? 10),
       recordId: request.nextUrl.searchParams.get('recordId') ?? undefined,
       memberId: request.nextUrl.searchParams.get('memberId') ?? undefined,
-      expenseName: request.nextUrl.searchParams.get('expenseName') ?? undefined,
       recordIds,
       ...filters,
     });
 
-    // clubName: the payer printed on OUT receipts signed for acceptance.
-    return NextResponse.json({ ...result, clubName: auth.ctx.club.name });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('GET procedure payments:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

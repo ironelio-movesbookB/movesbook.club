@@ -56,20 +56,3 @@ export function SponsorLanguageSelect({
 export function sectionLabel(t: ReturnType<typeof makeSponsorT>, key: string): string {
   return t(key ? `spk_section_${key}` : 'spk_section_presentation');
 }
-
-/** `mailto:` link, with an optional subject. */
-export function mailtoHref(email: string, subject?: string): string {
-  return `mailto:${email.trim()}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`;
-}
-
-/**
- * Click handler that always opens the mail app: some in-app browsers and preview frames swallow plain
- * `mailto:` anchors, so the location is also set explicitly. Other links keep the default behavior.
- */
-export function openMailOnClick(href: string) {
-  return (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!href.startsWith('mailto:')) return;
-    e.preventDefault();
-    window.location.href = href;
-  };
-}

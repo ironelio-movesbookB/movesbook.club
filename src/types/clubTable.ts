@@ -65,10 +65,6 @@ export type Member = {
   operator?: string;
   /** Operator id behind `operator` — needed to preselect the operator when editing a row. */
   operatorId?: string;
-  /** Direction of an expense record in the expense archive. */
-  expenseDirection?: 'IN' | 'OUT';
-  /** Payment direction for cash-movement rows. */
-  direction?: 'IN' | 'OUT';
   /** Club staff type when row comes from club_staff (coadmin/operator/collaborator). */
   staffType?: string | null;
   /** Club staff employment area / role when row comes from club_staff. */
@@ -90,9 +86,6 @@ export type Member = {
   casual?: string;
   originalDebt?: number;
   residualDebt?: number;
-  /** Unified payment/receipt archives: amount split by cash direction (null on the other side). */
-  paymentIn?: number | null;
-  paymentOut?: number | null;
   number?: number;
   category?: string;
 
@@ -101,14 +94,6 @@ export type Member = {
   isDuplicate?: boolean;
   /** Archive of Payments: stored as "To be verified" and not confirmed yet (grey row). */
   toBeVerified?: boolean;
-  /** Later instances generated from a recurrent expense schedule (grey row). */
-  isRecurringOccurrence?: boolean;
-  /** Recurrent expense still planned and awaiting activation. */
-  isRecurrent?: boolean;
-  /** Cash archive cancellation state for procedure payments. */
-  cancelled?: boolean;
-  /** Cash archive reversals reference the original payment and cannot be edited/deleted alone. */
-  reversalOfId?: string | null;
   /**
    * Archive of Users A/B/C/D:
    * member | pending | not_member | archived
@@ -120,18 +105,13 @@ export type Member = {
   isCoach?: boolean;
   options?: React.ReactNode;
   edit?: React.ReactNode;
-  cancel?: React.ReactNode;
   delete?: React.ReactNode;
-  /** OUT payments: prints the receipt the payee signs for acceptance. */
-  print?: React.ReactNode;
 
   // extended archive fields (legacy tables)
   outcome?: string;
   hour?: string;
   direction?: string;
   source?: string;
-  /** Product lines behind a selling row. Clicking the count opens this list. */
-  purchaseLines?: { name: string; quantity: number; productId?: string }[];
 };
 
 export type Column = {

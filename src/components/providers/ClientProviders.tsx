@@ -6,7 +6,6 @@ import { SettingsProvider } from '@/contexts/SettingsContext';
 import { PcuAlertProvider } from '@/contexts/PcuAlertContext';
 import { getCurrentTheme } from '@/lib/theme';
 import MemberNotePopupHost from '@/components/club/memberProfile/MemberNotePopupHost';
-import SubscriptionExpiryHost from '@/components/subscriptions/SubscriptionExpiryHost';
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
   const theme = getCurrentTheme();
@@ -17,7 +16,6 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
           <PcuAlertProvider>
             {children}
             <MemberNotePopupHost />
-            <SubscriptionExpiryHost />
           </PcuAlertProvider>
         </SettingsProvider>
       </LanguageProvider>

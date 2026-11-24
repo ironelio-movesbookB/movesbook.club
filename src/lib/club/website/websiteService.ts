@@ -20,7 +20,6 @@ import { todayYmd, type SponsorSectionKey } from '@/lib/club/sponsors/sponsorCon
 import { listSectionSponsors, sponsorClickUrl } from '@/lib/club/sponsors/sponsorPlacementService';
 import type { SponsorSlotItem } from '@/lib/club/sponsors/sponsorSlotTypes';
 import {
-  WEBSITE_DONATION_PLACEHOLDER,
   WEBSITE_MAX_COVER_BYTES,
   WEBSITE_SECTIONS,
   WEBSITE_SLUG_RE,
@@ -62,21 +61,12 @@ async function ensureWebsiteTable(): Promise<void> {
       donation_enabled TINYINT(1) NOT NULL DEFAULT 0,
       donation_text TEXT NULL,
       donation_tax_code VARCHAR(32) NOT NULL DEFAULT '',
-      donation_image VARCHAR(500) NOT NULL DEFAULT '',
       socials_json TEXT NULL,
       updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       PRIMARY KEY (workspace_kind, workspace_id),
       UNIQUE KEY org_websites_slug (slug)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
-  const cols = await prisma.$queryRawUnsafe<Array<{ COLUMN_NAME: string }>>(
-    `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'org_websites'`,
-  );
-  if (!cols.some((c) => c.COLUMN_NAME.toLowerCase() === 'donation_image')) {
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE org_websites ADD COLUMN donation_image VARCHAR(500) NOT NULL DEFAULT '' AFTER donation_tax_code`,
-    );
-  }
   tableReady = true;
 }
 
@@ -92,7 +82,6 @@ type WebsiteRow = {
   donation_enabled: number | boolean;
   donation_text: string | null;
   donation_tax_code: string;
-  donation_image: string | null;
   socials_json: string | null;
 };
 
@@ -134,7 +123,6 @@ function rowToSettings(row: WebsiteRow): WebsiteSettings {
     donationEnabled: Boolean(Number(row.donation_enabled)),
     donationText: row.donation_text ?? '',
     donationTaxCode: row.donation_tax_code,
-    donationImage: row.donation_image ?? '',
     socials: parseSocials(row.socials_json),
   };
 }
@@ -187,7 +175,6 @@ export async function getWebsiteSettings(ws: WebsiteWorkspace): Promise<{ settin
       donationEnabled: false,
       donationText: '',
       donationTaxCode: teamProfileOf(meta)?.mainData?.fiscalCode?.trim() ?? '',
-      donationImage: '',
       socials: parseSocials(null),
     },
   };
@@ -202,14 +189,6 @@ function cleanUrl(value: unknown, label: string): string {
   } catch {
     throw new WebsiteError(`The link of "${label}" is not valid`, 400);
   }
-}
-
-/** Image of the 5x1000 block: an https URL or a path of this site (`/img/…`, `/uploads/…`); anything else is dropped. */
-function cleanImageRef(value: unknown): string {
-  const raw = typeof value === 'string' ? value.trim().slice(0, 500) : '';
-  if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
-  return /^\/(img|images|uploads)\/[^\s]+$/.test(raw) && !raw.includes('..') ? raw : '';
 }
 
 export async function saveWebsiteSettings(ws: WebsiteWorkspace, input: Partial<WebsiteSettings>): Promise<WebsiteSettings> {
@@ -230,17 +209,16 @@ export async function saveWebsiteSettings(ws: WebsiteWorkspace, input: Partial<W
   const season = /^\d{4}\/\d{4}$/.test(String(input.season ?? '')) ? String(input.season) : currentWebsiteSeason();
   const taxCode = String(input.donationTaxCode ?? '').replace(/\s+/g, '').toUpperCase().slice(0, 32);
   if (input.donationEnabled && !taxCode) throw new WebsiteError('Enter the tax code for the 5x1000', 400);
-  const donationImage = cleanImageRef(input.donationImage);
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO org_websites
        (workspace_kind, workspace_id, enabled, slug, about_text, sections_json, season,
-        donation_enabled, donation_text, donation_tax_code, donation_image, socials_json, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        donation_enabled, donation_text, donation_tax_code, socials_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), slug = VALUES(slug), about_text = VALUES(about_text),
        sections_json = VALUES(sections_json), season = VALUES(season), donation_enabled = VALUES(donation_enabled),
        donation_text = VALUES(donation_text), donation_tax_code = VALUES(donation_tax_code),
-       donation_image = VALUES(donation_image), socials_json = VALUES(socials_json), updated_at = VALUES(updated_at)`,
+       socials_json = VALUES(socials_json), updated_at = VALUES(updated_at)`,
     ws.kind,
     ws.id,
     input.enabled ? 1 : 0,
@@ -251,7 +229,6 @@ export async function saveWebsiteSettings(ws: WebsiteWorkspace, input: Partial<W
     input.donationEnabled ? 1 : 0,
     String(input.donationText ?? '').slice(0, 2000),
     taxCode,
-    donationImage,
     JSON.stringify(socials),
     new Date(),
   );
@@ -302,15 +279,13 @@ export type PublicSiteData = {
   season: string;
   links: Array<{ key: WebsiteSectionKey; url: string }>;
   documents: Array<{ key: 'rules' | 'privacy'; html: string }>;
-  /** The "Document archive" card is enabled (it is shown even before the club has written its rules). */
-  documentsEnabled: boolean;
   events: Array<{ id: string; title: string; date: string; type: string; description: string }> | null;
   shop: Array<{ id: string; name: string; price: number | null; imageUrl: string | null }> | null;
   sponsors: Array<{ id: string; name: string; logoUrl: string | null; clickUrl: string | null }> | null;
   /** Sponsors placed in a website card (key = website section). */
   sectionSponsors: Partial<Record<string, SponsorSlotItem[]>>;
   sponsorKitPath: string;
-  donation: { text: string; taxCode: string; imageUrl: string } | null;
+  donation: { text: string; taxCode: string } | null;
   socials: Partial<Record<WebsiteSocialKey, string>>;
 };
 
@@ -477,17 +452,7 @@ export async function getPublicSite(
 
   const sectionSponsors: PublicSiteData['sectionSponsors'] = {};
   for (const [key, sections] of Object.entries(SITE_SPONSOR_SECTIONS)) {
-    // A sponsor placed in several sections of the same card (e.g. online payments + fee payments)
-    // must show once: dedupe by sponsor and image.
-    const seen = new Set<string>();
-    const list = slotItems
-      .filter((i) => (sections as string[]).includes(i.section))
-      .filter((i) => {
-        const id = `${i.id}|${i.imageUrl}`;
-        if (seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      });
+    const list = slotItems.filter((i) => (sections as string[]).includes(i.section));
     if (list.length) sectionSponsors[key] = list;
   }
 
@@ -521,20 +486,14 @@ export async function getPublicSite(
       .filter((k) => on(k))
       .map((k) => ({ key: k, url: settings.sections[k].url })),
     documents,
-    documentsEnabled: on('documents'),
     events,
     shop,
     sponsors,
     sectionSponsors,
     sponsorKitPath: `/sponsor-kit/${encodeURIComponent(org.id)}`,
-    // ON + tax code (or only a text) is enough to show the block.
     donation:
-      settings.donationEnabled && (settings.donationTaxCode || settings.donationText.trim())
-        ? {
-            text: settings.donationText,
-            taxCode: settings.donationTaxCode,
-            imageUrl: settings.donationImage || WEBSITE_DONATION_PLACEHOLDER,
-          }
+      settings.donationEnabled && settings.donationTaxCode
+        ? { text: settings.donationText, taxCode: settings.donationTaxCode }
         : null,
     socials,
   };

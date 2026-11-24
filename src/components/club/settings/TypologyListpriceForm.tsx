@@ -4,7 +4,6 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import ClubSettingsTypologyTabs from '@/components/club/settings/ClubSettingsTypologyTabs';
-import ListpriceEditSubTabs from '@/components/club/settings/subscriptionPackages/ListpriceEditSubTabs';
 import {
   createEmptyListpriceForm,
   type TypologyListpriceForm as FormState
@@ -210,7 +209,6 @@ export default function TypologyListpriceForm({ mode, listpriceId, initialTypolo
     <div className="p-4 lg:p-6">
       <section className="rounded-md border border-gray-200 bg-white shadow-sm">
         <ClubSettingsTypologyTabs listPriceTypologyId={form.typologyId || null} />
-        {mode === 'edit' && listpriceId && <ListpriceEditSubTabs listpriceId={listpriceId} showAllPackagesLink />}
         <form onSubmit={onSubmit} className="divide-y divide-gray-200">
           <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
             <h1 className="text-xl font-semibold">

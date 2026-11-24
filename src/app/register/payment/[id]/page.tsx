@@ -8,9 +8,7 @@ import { formatEuroAmount, formatLocalAmount } from '@/lib/countries/countryPric
 
 type PaymentView = {
   id: string;
-  kind?: 'register' | 'quick_register' | 'deadline' | 'renewal';
   status: 'pending' | 'paid' | 'test' | 'free';
-  testMode?: boolean;
   versionName: string;
   specialOffer: boolean;
   amountEur: number;
@@ -21,11 +19,11 @@ type PaymentView = {
   providers: { stripe: boolean; paypal: boolean };
 };
 
-type Provider = 'paypal' | 'stripe' | 'klarna';
+type Provider = 'paypal' | 'stripe';
 
 type PageProps = {
   params: { id: string };
-  searchParams: { provider?: string; session_id?: string; token?: string; cancelled?: string; method?: string };
+  searchParams: { provider?: string; session_id?: string; token?: string; cancelled?: string };
 };
 
 export default function RegistrationPaymentPage({ params, searchParams }: PageProps) {
@@ -42,8 +40,8 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
 
   const successUrl = `/register/success?p=${encodeURIComponent(params.id)}`;
   const returningFrom: Provider | null =
-    (searchParams.provider === 'stripe' || searchParams.provider === 'klarna') && searchParams.session_id
-      ? searchParams.provider
+    searchParams.provider === 'stripe' && searchParams.session_id
+      ? 'stripe'
       : searchParams.provider === 'paypal' && searchParams.token
         ? 'paypal'
         : null;
@@ -62,13 +60,7 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
           return;
         }
         setPayment(view);
-        const asked = searchParams.method;
-        const askedOk =
-          (asked === 'paypal' && view.providers.paypal) ||
-          ((asked === 'stripe' || asked === 'klarna') && view.providers.stripe);
-        setProvider(
-          askedOk ? (asked as Provider) : view.providers.paypal ? 'paypal' : view.providers.stripe ? 'stripe' : null,
-        );
+        setProvider(view.providers.paypal ? 'paypal' : view.providers.stripe ? 'stripe' : null);
 
         if (returningFrom && !confirmStarted.current) {
           confirmStarted.current = true;
@@ -81,7 +73,7 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 provider: returningFrom,
-                ref: returningFrom === 'paypal' ? searchParams.token : searchParams.session_id,
+                ref: returningFrom === 'stripe' ? searchParams.session_id : searchParams.token,
               }),
             },
           );
@@ -132,27 +124,6 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
       ? formatLocalAmount(payment.amountLocal, payment.currencyCode)
       : '';
   const noProvider = payment && !payment.providers.paypal && !payment.providers.stripe;
-  /** Later deadline / renewal of an existing account (not a registration). */
-  const isAccountPayment = payment?.kind === 'deadline' || payment?.kind === 'renewal';
-  const canTestPay = Boolean(isAccountPayment && payment?.testMode);
-
-  const handleTestPay = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/registration-payments/${encodeURIComponent(params.id)}/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'test' }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.paid) throw new Error(data.error || 'The test payment failed');
-      router.replace(data.next || successUrl);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'The test payment failed');
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex items-start justify-center p-4 py-12 relative">
@@ -164,13 +135,7 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
       <div className="relative z-10 w-full max-w-xl bg-white rounded-xl shadow-2xl overflow-hidden">
         <div className="bg-[#8b2942] px-6 py-4 text-white">
           <h1 className="text-xl font-bold">Movesbook</h1>
-          <p className="text-sm opacity-90">
-            {payment?.kind === 'renewal'
-              ? 'Renew your subscription'
-              : payment?.kind === 'deadline'
-                ? 'Pay your subscription deadline'
-                : 'Complete your registration'}
-          </p>
+          <p className="text-sm opacity-90">Complete your registration</p>
         </div>
 
         <div className="p-6 space-y-5">
@@ -187,11 +152,7 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                   Welcome <span className="font-semibold">{payment.name || payment.username}</span>
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  {payment.kind === 'renewal'
-                    ? 'Pay the first payment of your renewal below.'
-                    : payment.kind === 'deadline'
-                      ? 'Pay this deadline of your subscription below.'
-                      : 'To activate your account, pay the subscription below.'}
+                  To activate your account, pay the subscription below.
                 </p>
               </div>
 
@@ -211,27 +172,10 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                 {localText ? <div className="text-base text-gray-700">= {localText}</div> : null}
               </div>
 
-              {canTestPay ? (
-                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
-                  <p className="text-sm text-amber-800">Payments are in test mode: no money is charged.</p>
-                  <button
-                    type="button"
-                    onClick={handleTestPay}
-                    disabled={busy}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-600 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                    Confirm test payment ({formatEuroAmount(payment.amountEur)})
-                  </button>
-                </div>
-              ) : null}
-
               {noProvider ? (
-                canTestPay ? null : (
                 <p className="text-amber-700 text-sm">
                   Online payment is not available at the moment. Please try again later.
                 </p>
-                )
               ) : (
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-gray-800">Payment method</div>
@@ -262,24 +206,6 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                       <span className="font-medium text-gray-800">Credit / debit card</span>
                     </label>
                   ) : null}
-                  {payment.providers.stripe ? (
-                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="provider"
-                        className="mt-1"
-                        checked={provider === 'klarna'}
-                        onChange={() => setProvider('klarna')}
-                        disabled={busy}
-                      />
-                      <span>
-                        <span className="block font-medium text-gray-800">Installment payment</span>
-                        <span className="block text-sm text-gray-600">
-                          Pay in 3, 6 or 12 parts with Klarna. The full subscription amount is received now.
-                        </span>
-                      </span>
-                    </label>
-                  ) : null}
                 </div>
               )}
 
@@ -294,9 +220,8 @@ export default function RegistrationPaymentPage({ params, searchParams }: PagePr
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-green-600 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                  {provider === 'klarna'
-                    ? `Continue with installment payment (${formatEuroAmount(payment.amountEur)})`
-                    : `Pay ${formatEuroAmount(payment.amountEur)}${localText ? ` (${localText})` : ''}`}
+                  Pay {formatEuroAmount(payment.amountEur)}
+                  {localText ? ` (${localText})` : ''}
                 </button>
               ) : null}
             </>

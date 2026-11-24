@@ -168,6 +168,8 @@ export async function ensureQuickRegisterSubscriptionSettings(): Promise<void> {
       ['short_name', row.short_name],
       ['days_duration', row.days_duration],
       ['price', row.price],
+      ['credit', String(row.credit)],
+      ['credit2', String(row.credit2)],
       ['members_number1', row.members_number1],
       ['members_number2', row.members_number2],
       ['discount', String(row.discount)],

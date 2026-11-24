@@ -78,40 +78,29 @@ export async function forgetMemberSettingsDeadlines(opts: {
     const key = opts.key;
     if (key) {
       deadlines.generated = deadlines.generated.filter((k) => k !== key);
-      deadlines.paidKeys = deadlines.paidKeys.filter((k) => k !== key);
-      deadlines.firstPaidRecorded = deadlines.paidKeys.includes('firstPayment');
-      football[key] = { ...(football[key] ?? {}), amount: '', status: '' };
-      football.deadlines =
-        deadlines.generated.length > 0 ? deadlines : emptyMemberSettingsDeadlines();
+      football[key] = { ...(football[key] ?? {}), amount: '' };
+      if (key === 'firstPayment') {
+        football.firstPayment.status = '';
+        deadlines.firstPaidRecorded = false;
+      }
+      football.deadlines = deadlines.generated.length > 0 ? deadlines : emptyMemberSettingsDeadlines();
     } else {
       football.deadlines = emptyMemberSettingsDeadlines();
-      for (const installmentKey of MEMBER_SETTINGS_INSTALLMENT_KEYS) {
-        football[installmentKey] = { ...(football[installmentKey] ?? {}), status: '' };
-      }
+      football.firstPayment = { ...(football.firstPayment ?? {}), status: '' };
       if (football.paymentStatus === CREATE_DEADLINES_PAYMENT_STATUS) football.paymentStatus = 'Pending';
     }
   });
 }
 
-/**
- * A Settings-linked payment was deleted in the Archive of Payments: untick Paid for that
- * installment so it can be recorded again. Defaults to first payment when `key` is omitted.
- */
+/** The first-payment record was deleted in the Archive of Payments: untick Paid so it can be recorded again. */
 export async function forgetMemberSettingsFirstPaid(opts: {
   clubId: string;
   memberUserId: string;
   recordId: string;
-  key?: MemberSettingsInstallmentKey;
 }): Promise<void> {
-  const key = opts.key ?? 'firstPayment';
   await updateLinkedSettings(opts, (football, deadlines) => {
-    football[key] = { ...(football[key] ?? {}), status: '' };
-    const paidKeys = deadlines.paidKeys.filter((k) => k !== key);
-    football.deadlines = {
-      ...deadlines,
-      paidKeys,
-      firstPaidRecorded: paidKeys.includes('firstPayment'),
-    };
+    football.firstPayment = { ...(football.firstPayment ?? {}), status: '' };
+    football.deadlines = { ...deadlines, firstPaidRecorded: false };
   });
 }
 

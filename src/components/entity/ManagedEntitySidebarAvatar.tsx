@@ -7,6 +7,7 @@ import { resolveManagedEntityDisplayImageUrl } from '@/lib/entity/resolveManaged
 type ManagedEntitySidebarAvatarProps = {
   description?: string | null;
   imageUrl?: string | null;
+  userImageUrl?: string | null;
   alt?: string;
   className?: string;
 };
@@ -16,17 +17,19 @@ const isDataUrl = (src: string) =>
 
 /**
  * Large avatar on my-club / my-team / my-group / my-coaching-group sidebars.
- * Shows the entity logo only. The signed-in user's photo stays on My Page.
+ * Shows entity logo when set; otherwise the signed-in user's profile photo.
  */
 export default function ManagedEntitySidebarAvatar({
   description,
   imageUrl,
+  userImageUrl,
   alt = '',
   className = 'w-20 h-20 rounded-2xl',
 }: ManagedEntitySidebarAvatarProps) {
   const src = resolveManagedEntityDisplayImageUrl({
     description,
     imageUrl,
+    userImageUrl,
   });
 
   if (src) {

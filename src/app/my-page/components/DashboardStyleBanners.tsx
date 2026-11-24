@@ -9,10 +9,7 @@ import AthleteLegacyBanner, {
 import ChangeBannerModal, { type BannerAlignment } from '@/components/athlete/ChangeBannerModal';
 import ClubDashboardMyPageBanner from '@/app/club/dashboard/components/ClubDashboardMyPageBanner';
 import { getClubMyPageDisplayName, getFormCreatedClubsSortedByCreatedAt } from '@/lib/club/clubSidebarLabel';
-import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
-import { useEntityVisual } from '@/lib/entity/useEntityVisual';
-import { isUserClubAdmin } from '@/lib/club/clubWebsitePermissions';
-import { useAuth } from '@/hooks/useAuth';
+import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
 
@@ -27,7 +24,7 @@ type DashboardStyleBannersProps = {
     description?: string | null;
     createdAt?: string | Date | null;
   }>;
-  myClubs: Array<{ id: string; name?: string | null; description?: string | null; adminId?: string | null }>;
+  myClubs: Array<{ id: string; name?: string | null }>;
   selectedClubId?: string | null;
 };
 
@@ -42,7 +39,6 @@ export default function DashboardStyleBanners({
 }: DashboardStyleBannersProps) {
   const router = useRouter();
   const { t } = useLanguage();
-  const { user: authUser } = useAuth();
   const [bannerProfile, setBannerProfile] = useState<AthleteLegacyBannerProfile | null>(null);
   const [showChangeBannerModal, setShowChangeBannerModal] = useState(false);
 
@@ -86,21 +82,13 @@ export default function DashboardStyleBanners({
     return activeClub ?? formClubs[0] ?? null;
   }, [isClub, formClubs, selectedClubId]);
 
-  const selectedAthleteClub =
-    activeTab === 'my-page'
-      ? null
-      : myClubs.find((c) => c.id === selectedClubId) ?? myClubs[0] ?? null;
-  const entitySource = isClub ? (activeTab === 'my-page' ? null : bannerClub) : selectedAthleteClub;
-  const entityVisual = useEntityVisual(entitySource?.id, entitySource && 'description' in entitySource ? entitySource.description : null);
-  const canEditEntity = Boolean(
-    entitySource &&
-      (isClub || isUserClubAdmin(authUser?.id, entitySource)),
-  );
+  const primaryClubName =
+    myClubs.find((c) => c.id === selectedClubId)?.name ?? myClubs[0]?.name ?? null;
 
   return (
     <>
       {showAdBanner ? (
-        <div className="mb-4 flex-shrink-0 px-4">
+        <div className="flex-shrink-0 px-4">
           <AdvertisementCarousel />
         </div>
       ) : null}
@@ -116,17 +104,8 @@ export default function DashboardStyleBanners({
           coverBannerAlignment={
             bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
           }
-          entityLogoUrl={entitySource ? entityVisual.logoUrl : null}
-          entityBannerUrl={entitySource ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
-          entityEdit={
-            canEditEntity && entitySource
-              ? { kind: 'club', entityId: entitySource.id }
-              : null
-          }
           onCoverCameraClick={() => setShowChangeBannerModal(true)}
           showSponsored={activeTab === 'my-page'}
-          personal={activeTab === 'my-page'}
-          avatarImagePath={bannerProfile?.image}
         />
       ) : null}
 
@@ -134,14 +113,7 @@ export default function DashboardStyleBanners({
         <div className="mb-6 flex-shrink-0 px-0">
           <AthleteLegacyBanner
             profile={bannerProfile}
-            primaryClubName={selectedAthleteClub?.name ?? null}
-            entityLogoUrl={selectedAthleteClub ? entityVisual.logoUrl : null}
-            entityBannerUrl={selectedAthleteClub ? entityVisual.bannerUrl : null}
-            entityEdit={
-              canEditEntity && selectedAthleteClub
-                ? { kind: 'club', entityId: selectedAthleteClub.id }
-                : null
-            }
+            primaryClubName={primaryClubName}
             onCoverCameraClick={() => setShowChangeBannerModal(true)}
             t={t}
           />

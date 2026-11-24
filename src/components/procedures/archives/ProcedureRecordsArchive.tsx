@@ -24,8 +24,7 @@ import {
   getProcedureTabs,
   type ProcedureArchiveTabId,
 } from '@/lib/procedures/registry';
-import { PROCEDURE_TYPE_CODES, type ProcedureTypeCode } from '@/lib/procedures/types';
-import { EXPENSE_STATISTICS_BASE_PATH } from '@/lib/club/expenseStatisticsShared';
+import type { ProcedureTypeCode } from '@/lib/procedures/types';
 import type { Member } from '@/types/clubTable';
 
 type Props = {
@@ -45,8 +44,6 @@ function toTableRow(
     number: index + 1,
     name: record.memberName,
     typology: record.typology,
-    procedureType: record.procedureType,
-    expenseDirection: record.expenseDirection,
     service: record.primaryLabel,
     course: record.secondaryLabel || undefined,
     insertDate: record.recordDate ?? undefined,
@@ -54,7 +51,6 @@ function toTableRow(
     value: record.value,
     paid: record.pay,
     rest: record.rest,
-    isRecurringOccurrence: record.isRecurringOccurrence,
     casual: record.notes,
     operator: record.operatorName,
     dateEnd: record.lastPaymentDate ?? undefined,
@@ -100,9 +96,9 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
             (page - 1) * pageSize + i,
             (target) => requestPassword(() => setEditTarget(target)),
             (id) =>
-              requestPassword(async (adminPassword) => {
+              requestPassword(async () => {
                 try {
-                  await client.deleteRecord(id, adminPassword);
+                  await client.deleteRecord(id);
                   load();
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
@@ -137,10 +133,10 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
   function handleDeleteSelected() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    requestPassword(async (adminPassword) => {
+    requestPassword(async () => {
       try {
         for (const id of ids) {
-          await client.deleteRecord(id, adminPassword);
+          await client.deleteRecord(id);
         }
         setSelectedIds(new Set());
         load();
@@ -156,24 +152,13 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
       activeTab={activeTab}
       tabs={getProcedureTabs(procedureCode, activeTab, selectedId, selectedMemberId)}
       headerAction={
-        <div className="flex items-center gap-2">
-          {procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && (
-            <button
-              type="button"
-              onClick={() => router.push('/clubs/expense_dead_line')}
-              className="text-sm border border-white/80 text-white px-3 py-1 rounded hover:bg-white/10"
-            >
-              Expense Planner
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => router.push(def.routes.form)}
-            className="text-sm bg-white text-teal-800 px-3 py-1 rounded hover:bg-teal-50"
-          >
-            {def.archiveTitles.newRecordButton}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => router.push(def.routes.form)}
+          className="text-sm bg-white text-teal-800 px-3 py-1 rounded hover:bg-teal-50"
+        >
+          {def.archiveTitles.newRecordButton}
+        </button>
       }
       error={error}
       footerHint="Check rows to delete selected · Click to select · Double-click to open payment form · Edit and Delete ask for your password"
@@ -195,11 +180,6 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
-        statisticsHref={
-          procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
-            ? `${EXPENSE_STATISTICS_BASE_PATH}/a`
-            : undefined
-        }
         pagination={
           <ProcedurePagination
             page={page}
@@ -254,8 +234,6 @@ function ProcedureRecordsArchiveInner({ procedureCode, activeTab }: Props) {
             recordDate: editTarget.recordDate,
             paydate: editTarget.paydate,
             expireDate: editTarget.expireDate,
-            value: editTarget.value,
-            pay: editTarget.pay,
             notes: editTarget.notes,
             operatorId: editTarget.operatorId,
           }}
