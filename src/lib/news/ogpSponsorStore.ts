@@ -46,17 +46,32 @@ async function execIgnoreDuplicate(sql: string) {
   }
 }
 
-async function sponsorsHaveSettingsIdColumn(): Promise<boolean> {
-  if (hasSettingsIdColumn != null) return hasSettingsIdColumn;
+async function listSponsorColumns(): Promise<Set<string>> {
   try {
     const cols = await prisma.$queryRawUnsafe<{ Field: string }[]>(
       'SHOW COLUMNS FROM `ogp_news_sponsors`',
     );
-    hasSettingsIdColumn = cols.some((c) => c.Field === 'settingsId');
+    return new Set(cols.map((c) => c.Field));
   } catch {
-    hasSettingsIdColumn = false;
+    return new Set();
   }
+}
+
+async function sponsorsHaveSettingsIdColumn(): Promise<boolean> {
+  if (hasSettingsIdColumn != null) return hasSettingsIdColumn;
+  hasSettingsIdColumn = (await listSponsorColumns()).has('settingsId');
   return hasSettingsIdColumn;
+}
+
+async function sponsorsHaveIndex(indexName: string): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ Key_name: string }[]>(
+      'SHOW INDEX FROM `ogp_news_sponsors`',
+    );
+    return rows.some((r) => r.Key_name === indexName);
+  } catch {
+    return false;
+  }
 }
 
 async function ensureSponsorGroupsSchema() {
@@ -80,12 +95,19 @@ async function ensureSponsorGroupsSchema() {
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 
-  await execIgnoreDuplicate(
-    'ALTER TABLE `ogp_news_sponsors` ADD COLUMN `groupId` VARCHAR(191) NULL',
-  );
-  await execIgnoreDuplicate(
-    'ALTER TABLE `ogp_news_sponsors` ADD INDEX `ogp_news_sponsors_groupId_sortOrder_idx` (`groupId`, `sortOrder`)',
-  );
+  // Check first so we never issue ALTER that MySQL rejects (Prisma still logs caught errors).
+  const columns = await listSponsorColumns();
+  if (!columns.has('groupId')) {
+    await execIgnoreDuplicate(
+      'ALTER TABLE `ogp_news_sponsors` ADD COLUMN `groupId` VARCHAR(191) NULL',
+    );
+  }
+  const groupIndex = 'ogp_news_sponsors_groupId_sortOrder_idx';
+  if (!(await sponsorsHaveIndex(groupIndex))) {
+    await execIgnoreDuplicate(
+      `ALTER TABLE \`ogp_news_sponsors\` ADD INDEX \`${groupIndex}\` (\`groupId\`, \`sortOrder\`)`,
+    );
+  }
 
   const groupCount = await prisma.$queryRaw<{ c: bigint | number }[]>`
     SELECT COUNT(*) AS c FROM ogp_news_sponsor_groups
