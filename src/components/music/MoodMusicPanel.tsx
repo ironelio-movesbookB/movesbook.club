@@ -29,6 +29,8 @@ export type MoodMusicItem = {
 
 type MoodMusicPanelProps = {
   onClose?: () => void;
+  /** When true, use adminToken (superadmin admin panel). */
+  adminContext?: boolean;
 };
 
 /** YouTube hqdefault thumb from a video id (not a playlist id). */
@@ -118,13 +120,18 @@ function SortableMoodRow({
  * Legacy PHP clubs/mood_music → clubs/show_video flow:
  * list of cream bars + thumbs; click opens full-width YouTube playlist embed.
  */
-export default function MoodMusicPanel({ onClose }: MoodMusicPanelProps) {
+export default function MoodMusicPanel({ onClose, adminContext = false }: MoodMusicPanelProps) {
   const [items, setItems] = useState<MoodMusicItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
   /** Selected row → inline show_video player (legacy click behavior). */
   const [playing, setPlaying] = useState<MoodMusicItem | null>(null);
+
+  const getAuthToken = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    return adminContext ? localStorage.getItem('adminToken') : localStorage.getItem('token');
+  }, [adminContext]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -143,7 +150,7 @@ export default function MoodMusicPanel({ onClose }: MoodMusicPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const token = getAuthToken();
       const res = await fetch('/api/music/mood', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -158,7 +165,7 @@ export default function MoodMusicPanel({ onClose }: MoodMusicPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAuthToken]);
 
   useEffect(() => {
     void load();
@@ -168,7 +175,7 @@ export default function MoodMusicPanel({ onClose }: MoodMusicPanelProps) {
     async (next: MoodMusicItem[]) => {
       setSavingOrder(true);
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const token = getAuthToken();
         const res = await fetch('/api/music/mood', {
           method: 'PUT',
           headers: {
@@ -187,7 +194,7 @@ export default function MoodMusicPanel({ onClose }: MoodMusicPanelProps) {
         setSavingOrder(false);
       }
     },
-    [load]
+    [getAuthToken, load]
   );
 
   const onDragEnd = useCallback(

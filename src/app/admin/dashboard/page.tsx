@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Users, Shield, Activity, TrendingUp } from 'lucide-react';
 import AdminSuperAdminOGPMusicContent from '@/components/admin/AdminSuperAdminOGPMusicContent';
 import AdminOgMusicPanelContent from '@/components/admin/AdminOgMusicPanelContent';
+import MoodMusicPanel from '@/components/music/MoodMusicPanel';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 
 interface AdminUser {
@@ -37,13 +38,24 @@ function AdminDashboardInner() {
     return null;
   }
 
-  // Music Tracked → My Music; OG Music panel → Music (OGP) section
+  // Music Tracked → My Music; OG Music panel → Music (OGP) section; Mood Panel → Mood Music
   if (panel === 'music-tracked') {
     return <AdminOgMusicPanelContent closeHref="/admin/dashboard" />;
   }
 
   if (panel === 'og-music') {
     return <AdminSuperAdminOGPMusicContent closeHref="/admin/dashboard" />;
+  }
+
+  if (panel === 'mood-panel') {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col p-2 md:p-3">
+        <MoodMusicPanel
+          adminContext
+          onClose={() => router.push('/admin/dashboard')}
+        />
+      </div>
+    );
   }
 
   if (panel === 'my-feedbacks') {
