@@ -126,6 +126,115 @@ export const ARCHIVE_SECTIONS: ArchiveSectionDef[] = [
   },
 ];
 
+export type SectionColumn = { key: string; header: string };
+
+/** Columns shown when a dashboard section is opened. Same fields as that section's Read all grid. */
+export const SECTION_PREVIEW_COLUMNS: Record<ArchiveSectionId, SectionColumn[]> = {
+  memberships: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+    { key: 'cost', header: 'Cost' },
+    { key: 'paid', header: 'Paid' },
+    { key: 'rest', header: 'Rest' },
+    { key: 'lastPayment', header: 'Last payment' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+  'new-members': [
+    { key: 'name', header: 'Full Name' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+  ],
+  services: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Service slot' },
+    { key: 'date', header: 'Date' },
+    { key: 'expiration', header: 'Expiration Date' },
+    { key: 'cost', header: 'Cost' },
+    { key: 'paid', header: 'Paid' },
+    { key: 'rest', header: 'Rest' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+  subscriptions: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+    { key: 'cost', header: 'Cost' },
+    { key: 'paid', header: 'Paid' },
+    { key: 'rest', header: 'Rest' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+  credits: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'valueIn', header: 'Value In' },
+    { key: 'residual', header: 'Residual' },
+    { key: 'date', header: 'Date Start' },
+    { key: 'description', header: 'Description' },
+  ],
+  deadlines: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+    { key: 'expiration', header: 'Expiration Date' },
+    { key: 'cost', header: 'Cost' },
+    { key: 'paid', header: 'Paid' },
+    { key: 'rest', header: 'Rest' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+  accesses: [
+    { key: 'name', header: 'Member' },
+    { key: 'outcome', header: 'Outcome / Code' },
+    { key: 'date', header: 'Date' },
+    { key: 'hour', header: 'Hour' },
+  ],
+  payments: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+    { key: 'paymentIn', header: 'Payment IN' },
+    { key: 'payment', header: 'Payment' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+  sellings: [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'payment', header: 'Value' },
+    { key: 'status', header: 'Status' },
+  ],
+  'audio-messages': [
+    { key: 'name', header: 'Name' },
+    { key: 'detail', header: 'Message' },
+    { key: 'date', header: 'Date' },
+  ],
+  reservations: [
+    { key: 'name', header: 'Member' },
+    { key: 'course', header: 'Course / Section' },
+    { key: 'date', header: 'Date' },
+    { key: 'status', header: 'Status' },
+  ],
+  'subscription-stats': [
+    { key: 'name', header: 'Full Name' },
+    { key: 'typology', header: 'Typology' },
+    { key: 'detail', header: 'Detail' },
+    { key: 'date', header: 'Date' },
+    { key: 'cost', header: 'Cost' },
+    { key: 'paid', header: 'Paid' },
+    { key: 'rest', header: 'Rest' },
+    { key: 'edit', header: 'Edit' },
+    { key: 'delete', header: 'Delete' },
+  ],
+};
+
 export const ARCHIVE_SECTION_IDS = ARCHIVE_SECTIONS.map((section) => section.id);
 
 export const SUMMARY_TILE_IDS = SUMMARY_TILES.map((tile) => tile.id);

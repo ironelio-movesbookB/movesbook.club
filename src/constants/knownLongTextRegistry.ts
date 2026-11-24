@@ -12,12 +12,56 @@ import {
   IDENTIFICATION_DEVICES_INFO_DEFAULT_EN,
   IDENTIFICATION_DEVICES_INFO_TRANSLATION_KEY,
 } from './identificationDevicesInfoLongText';
-import { PAYMENT_INFO_DEFAULT_EN, PAYMENT_INFO_TRANSLATION_KEY } from './paymentInfoLongText';
+import {
+  PAYMENT_INFO_DEFAULT_EN,
+  PAYMENT_INFO_DEFAULT_IT,
+  PAYMENT_INFO_TRANSLATION_KEY,
+} from './paymentInfoLongText';
+import { PAY_MODE_ALERT_EN, PAY_MODE_ALERT_IT, PAY_MODE_ALERT_KEY } from './payModeAlertLongText';
+import {
+  EVENT_SIBLING_DISCOUNT_INFO_EN,
+  EVENT_SIBLING_DISCOUNT_INFO_IT,
+  EVENT_SIBLING_DISCOUNT_INFO_KEY,
+} from './eventSiblingDiscountLongText';
+import {
+  EVENT_QUICK_REGISTRATION_EN,
+  EVENT_QUICK_REGISTRATION_IT,
+  EVENT_QUICK_REGISTRATION_KEY,
+} from './eventQuickRegistrationLongText';
+import {
+  ADD_AVAILABLE_SLOTS_FORM_EN,
+  ADD_AVAILABLE_SLOTS_FORM_IT,
+  ADD_AVAILABLE_SLOTS_FORM_KEY,
+  ARCHIVE_LOW_SLOTS_NOTICE_EN,
+  ARCHIVE_LOW_SLOTS_NOTICE_IT,
+  ARCHIVE_LOW_SLOTS_NOTICE_KEY,
+  MEMBER_REMOVE_SLOTS_INFO_EN,
+  MEMBER_REMOVE_SLOTS_INFO_IT,
+  MEMBER_REMOVE_SLOTS_INFO_KEY,
+} from './memberArchiveSlotsLongText';
+import {
+  MEMBER_RENAME_INFO_EN,
+  MEMBER_RENAME_INFO_IT,
+  MEMBER_RENAME_INFO_KEY,
+} from './memberRenameQuotaLongText';
 import {
   SUGGEST_MOVESBOOK_INTRO_EN,
   SUGGEST_MOVESBOOK_INTRO_IT,
   SUGGEST_MOVESBOOK_INTRO_KEY,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT,
+  SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY,
 } from './suggestMovesbookLongText';
+import {
+  ACTIVATION_EMAIL_BODY_EN,
+  ACTIVATION_EMAIL_BODY_KEY,
+  ACTIVATION_EMAIL_BUTTON_EN,
+  ACTIVATION_EMAIL_BUTTON_KEY,
+  ACTIVATION_EMAIL_SUBJECT_EN,
+  ACTIVATION_EMAIL_SUBJECT_KEY,
+  PAYMENT_SUCCESS_LONG_TEXT_EN,
+  PAYMENT_SUCCESS_LONG_TEXT_KEY,
+} from './activationEmailLongText';
 
 export type KnownLongTextEntry = {
   key: string;
@@ -51,7 +95,55 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     key: PAYMENT_INFO_TRANSLATION_KEY,
     category: 'management',
     descriptionEn: 'Member profile Settings — “Type of payments — method default” Info popup.',
-    values: { en: PAYMENT_INFO_DEFAULT_EN },
+    values: { en: PAYMENT_INFO_DEFAULT_EN, it: PAYMENT_INFO_DEFAULT_IT },
+  },
+  {
+    key: PAY_MODE_ALERT_KEY,
+    category: 'management',
+    descriptionEn:
+      'Pay mode dropdowns and “Methods your members can use” — alert explaining red (pay link) and blue (verify) methods.',
+    values: { en: PAY_MODE_ALERT_EN, it: PAY_MODE_ALERT_IT },
+  },
+  {
+    key: EVENT_SIBLING_DISCOUNT_INFO_KEY,
+    category: 'management',
+    descriptionEn: 'Manage Events → event editor → “Sibling / relative discount” explanation.',
+    values: { en: EVENT_SIBLING_DISCOUNT_INFO_EN, it: EVENT_SIBLING_DISCOUNT_INFO_IT },
+  },
+  {
+    key: EVENT_QUICK_REGISTRATION_KEY,
+    category: 'management',
+    descriptionEn:
+      'Event subscription page → “Quick registration” box at the top of the form ({club} = club / team name).',
+    values: { en: EVENT_QUICK_REGISTRATION_EN, it: EVENT_QUICK_REGISTRATION_IT },
+  },
+  {
+    key: MEMBER_REMOVE_SLOTS_INFO_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Users — message when removing a member (slots are not freed; Members added is progressive).',
+    values: { en: MEMBER_REMOVE_SLOTS_INFO_EN, it: MEMBER_REMOVE_SLOTS_INFO_IT },
+  },
+  {
+    key: ARCHIVE_LOW_SLOTS_NOTICE_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Members — notice when residual slots are below 10 (prompt to add new available slots).',
+    values: { en: ARCHIVE_LOW_SLOTS_NOTICE_EN, it: ARCHIVE_LOW_SLOTS_NOTICE_IT },
+  },
+  {
+    key: ADD_AVAILABLE_SLOTS_FORM_KEY,
+    category: 'management',
+    descriptionEn:
+      'Archive of Members — “Add new available slots” modal body (purchase form placeholder).',
+    values: { en: ADD_AVAILABLE_SLOTS_FORM_EN, it: ADD_AVAILABLE_SLOTS_FORM_IT },
+  },
+  {
+    key: MEMBER_RENAME_INFO_KEY,
+    category: 'management',
+    descriptionEn:
+      'Member profile Data for Login — info that renaming is allowed for 10% of total enabled slots.',
+    values: { en: MEMBER_RENAME_INFO_EN, it: MEMBER_RENAME_INFO_IT },
   },
   {
     key: SUGGEST_MOVESBOOK_INTRO_KEY,
@@ -59,6 +151,41 @@ export const KNOWN_LONG_TEXT_ENTRIES: KnownLongTextEntry[] = [
     descriptionEn:
       'Suggest Movesbook — intro explaining advantages of inviting friends (login prompt + Suggest Movesbook page).',
     values: { en: SUGGEST_MOVESBOOK_INTRO_EN, it: SUGGEST_MOVESBOOK_INTRO_IT },
+  },
+  {
+    key: SUGGEST_MOVESBOOK_INVITE_DEFAULT_KEY,
+    category: 'social',
+    descriptionEn:
+      'Suggest Movesbook — default “message of intro” loaded into the invite (Load invite default).',
+    values: {
+      en: SUGGEST_MOVESBOOK_INVITE_DEFAULT_EN,
+      it: SUGGEST_MOVESBOOK_INVITE_DEFAULT_IT,
+    },
+  },
+  {
+    key: ACTIVATION_EMAIL_SUBJECT_KEY,
+    category: 'system',
+    descriptionEn: 'Registration activation email — subject line. Placeholders: none.',
+    values: { en: ACTIVATION_EMAIL_SUBJECT_EN },
+  },
+  {
+    key: ACTIVATION_EMAIL_BODY_KEY,
+    category: 'system',
+    descriptionEn:
+      'Registration activation email — body. Placeholders: {name}, {username}, {link}.',
+    values: { en: ACTIVATION_EMAIL_BODY_EN },
+  },
+  {
+    key: ACTIVATION_EMAIL_BUTTON_KEY,
+    category: 'system',
+    descriptionEn: 'Registration activation email — green button label.',
+    values: { en: ACTIVATION_EMAIL_BUTTON_EN },
+  },
+  {
+    key: PAYMENT_SUCCESS_LONG_TEXT_KEY,
+    category: 'system',
+    descriptionEn: 'Shown on /register/success after payment or free/test registration.',
+    values: { en: PAYMENT_SUCCESS_LONG_TEXT_EN },
   },
 ];
 

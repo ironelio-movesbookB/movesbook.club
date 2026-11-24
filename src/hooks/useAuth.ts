@@ -9,6 +9,7 @@ import {
 } from '@/lib/entity/entityDirectAccessSession';
 import type { EntityDirectAccessKind } from '@/lib/entity/entityDirectAccessMeta';
 import { clearClubWorkspaceSessionOnLogout } from '@/lib/club/clearClubWorkspaceSession';
+import { clearMubUnlock } from '@/lib/mub/mubUnlockClient';
 import {
   MEMBER_NOTE_LOGIN_EVENT,
   MEMBER_NOTE_LOGIN_FLAG,
@@ -50,6 +51,7 @@ export function useAuth() {
       clearEntityDirectAccessLock();
       clearEntityCompanyLoginSession();
       clearClubWorkspaceSessionOnLogout();
+      clearMubUnlock();
     }
     setUser(null);
     logoutInFlight.current = false;

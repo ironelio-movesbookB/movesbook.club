@@ -18,6 +18,7 @@ import {
   listInsertCredits,
   listMarketingContactsArchive,
   listPollsArchive,
+  listProductSaleLines,
   listReservationsArchive,
   listStaffQueriesArchive,
   listUnifiedDeadlines,
@@ -43,8 +44,14 @@ function parseArchiveParams(
     fromDate: sp.get('fromDate') ?? undefined,
     toDate: sp.get('toDate') ?? undefined,
     orderBy: (sp.get('orderBy') as 'recent' | 'old') ?? undefined,
+    direction: (() => {
+      const direction = sp.get('direction');
+      return direction === 'IN' || direction === 'OUT' ? direction : undefined;
+    })(),
     memberId: sp.get('memberId') ?? undefined,
+    productId: sp.get('productId') ?? undefined,
     recordId: sp.get('recordId') ?? undefined,
+    procedureType: sp.get('procedureType') ?? undefined,
     sport: sp.get('sport') ?? undefined,
     groupTrained: sp.get('groupTrained') ?? undefined,
     memberGroupId: sp.get('memberGroupId') ?? undefined,
@@ -122,6 +129,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         break;
       case 'product-sales-unified':
         result = await listUnifiedProductSales(auth.ctx, archiveParams);
+        break;
+      case 'product-sale-lines':
+        result = await listProductSaleLines(auth.ctx, archiveParams);
         break;
       case 'deadlines':
         result = await listUnifiedDeadlines(auth.ctx, archiveParams);

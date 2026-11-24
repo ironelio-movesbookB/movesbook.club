@@ -34,7 +34,7 @@ export default function MubPageRouteClient({ categorySlug }: MubPageRouteClientP
     loadParam === 'movesbook' || loadParam === 'user' ? loadParam : null;
 
   return (
-    <div className="px-4 py-6">
+    <div className="px-2 py-4">
       <MubPageClient
         mode={edit ? 'edit' : 'view'}
         initialPanel={panel}

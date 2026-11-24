@@ -1,8 +1,10 @@
 import type { PackageTypeId } from '@/types/adminPackageSettings';
 import {
+  getAthleteAccountPackages,
   getGlobalPackages,
   getPackageTypeConfig,
   PACKAGE_TYPE_CONFIGS,
+  saveAthleteAccountPackages,
   saveGlobalPackages,
 } from '@/lib/admin/packageSettingsMock';
 
@@ -79,21 +81,26 @@ export function copySinglePackageToUserType(
   if (!targetConfig) return;
 
   const targetKeys = targetConfig.tiers.map((t) => t.key);
-  const packages = getGlobalPackages().map((pkg) => {
-    if (pkg.id !== itemId) return pkg;
-    const sourceTiers = pkg.tiersByUserType[sourceUserTypeId] ?? {};
-    const existingTarget = pkg.tiersByUserType[targetUserTypeId] ?? {};
-    const merged = copyTiersBetweenUserTypes(sourceTiers, targetKeys, existingTarget);
-    return {
-      ...pkg,
-      tiersByUserType: {
-        ...pkg.tiersByUserType,
-        [targetUserTypeId]: merged,
-      },
-    };
-  });
+  const apply = (packages: ReturnType<typeof getGlobalPackages>) =>
+    packages.map((pkg) => {
+      if (pkg.id !== itemId) return pkg;
+      const sourceTiers = pkg.tiersByUserType[sourceUserTypeId] ?? {};
+      const existingTarget = pkg.tiersByUserType[targetUserTypeId] ?? {};
+      const merged = copyTiersBetweenUserTypes(sourceTiers, targetKeys, existingTarget);
+      return {
+        ...pkg,
+        tiersByUserType: {
+          ...pkg.tiersByUserType,
+          [targetUserTypeId]: merged,
+        },
+      };
+    });
 
-  saveGlobalPackages(packages);
+  if (getGlobalPackages().some((pkg) => pkg.id === itemId)) {
+    saveGlobalPackages(apply(getGlobalPackages()));
+    return;
+  }
+  saveAthleteAccountPackages(apply(getAthleteAccountPackages()));
 }
 
 export function buildCopyAllSettingsWarning(

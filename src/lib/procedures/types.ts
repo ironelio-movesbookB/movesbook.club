@@ -8,6 +8,7 @@ export const PROCEDURE_TYPE_CODES = {
   MEMBERSHIP: 'membership',
   COURSE_SUBSCRIPTION: 'course_subscription',
   MEMBER_CREDIT: 'member_credit',
+  EVENT_SUBSCRIPTION: 'event_subscription',
 } as const;
 
 export type ProcedureTypeCode =
@@ -19,6 +20,19 @@ export type PaginatedResult<T> = {
   page: number;
   pageSize: number;
 };
+
+export type ExpenseInvoiceImage = {
+  name: string;
+  url: string;
+};
+
+export type ExpenseRecurrenceInterval =
+  | "7d"
+  | "14d"
+  | "15d"
+  | "1m"
+  | "2m"
+  | "3m";
 
 export type ClubAuthContext = {
   userId: string;
@@ -53,11 +67,15 @@ export type ProcedureRecordDto = {
   notes: string | null;
   metadata: Record<string, unknown> | null;
   lastPaymentDate: string | null;
+  /** ACTIVE or DELETED. Present when the list includes cancelled records. */
+  recordStatus?: string;
 };
 
 export type ProcedurePaymentDto = {
   id: string;
   procedureRecordId: string;
+  cancelledAt: string | null;
+  reversalOfId: string | null;
   memberId: string;
   memberName: string;
   amount: number;
@@ -68,6 +86,7 @@ export type ProcedurePaymentDto = {
   notes: string | null;
   serviceName: string | null;
   typology: string;
+  direction?: "IN" | "OUT";
   balanceAfter: number | null;
   originalDebt: number;
   residualDebt: number;
@@ -137,14 +156,23 @@ export type CreateProcedureRecordInput = {
   receiptAnnotations?: string | null;
   serviceName?: string | null;
   taxDocument?: TaxDocumentInput | null;
+  expenseRecurrence?: {
+    interval: ExpenseRecurrenceInterval;
+    repeatCount: number;
+  };
+  /** Create the deadline even when Other settings turned deadlines off (event subscriptions). */
+  forceDeadline?: boolean;
 };
 
 export type AddProcedurePaymentInput = {
   amount: number;
   paymentDate: string;
+  installmentId?: string | null;
   notes?: string | null;
   operatorId?: string | null;
   operatorPassword?: string | null;
+  /** Set only when the member pay link is confirmed. The desk already checked the password. */
+  skipOperatorPassword?: boolean;
   payMode?: string | null;
   paymentType?: string | null;
   taxDoc?: boolean;
@@ -167,9 +195,12 @@ export type ListQuery = {
   /** Filter to these procedure record ids (payment-form scoped archives). */
   recordIds?: string[];
   search?: string;
+  expenseName?: string;
   fromDate?: string;
   toDate?: string;
   orderBy?: 'recent' | 'old';
+  /** Include cancelled (deleted) records. Archive lists hide them unless this is set. */
+  includeDeleted?: boolean;
 };
 
 export function decimalToNumber(value: Decimal | number | string): number {

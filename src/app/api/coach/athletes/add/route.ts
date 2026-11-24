@@ -15,17 +15,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Only coaches can add athletes trained' }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { username?: unknown; password?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    username?: unknown;
+    password?: unknown;
+    confirmAdminAsMember?: unknown;
+  };
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
+  const confirmAdminAsMember = body.confirmAdminAsMember === true;
   if (!username || !password) {
     return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
   }
 
   try {
-    const result = await addCoachAthleteByCredentials(String(decoded.userId), username, password);
+    const result = await addCoachAthleteByCredentials(String(decoded.userId), username, password, {
+      confirmAdminAsMember,
+    });
     if ('error' in result) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json(
+        {
+          error: result.error,
+          ...(result.code ? { code: result.code, question: result.question } : {}),
+        },
+        { status: result.status },
+      );
     }
     return NextResponse.json({ success: true, athleteId: result.athleteId });
   } catch (error) {

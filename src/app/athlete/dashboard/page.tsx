@@ -61,6 +61,7 @@ import DarkSidebar from '@/components/DarkSidebar';
 import SimpleFooter from '@/components/SimpleFooter';
 import AddMemberModal from '@/components/AddMemberModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useDisplayLayoutOptions } from '@/hooks/useDisplayLayoutOptions';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import WorkoutSection from '@/components/workouts/WorkoutSection';
@@ -78,22 +79,30 @@ import MusicOGPPanel from '@/components/music/MusicOGPPanel';
 import MoodMusicPanel from '@/components/music/MoodMusicPanel';
 import PostsPanel from '@/components/posts/PostsPanel';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
+import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import ClubNewsArchivePanel from '@/components/club/ClubNewsArchivePanel';
 import ClubSharedNewsPanel from '@/components/club/ClubSharedNewsPanel';
 import ClubMovesbookNewsPanel from '@/components/club/ClubMovesbookNewsPanel';
 import AthleteLegacyBanner, {
   type AthleteLegacyBannerProfile,
 } from '@/components/athlete/AthleteLegacyBanner';
+import { isUserClubAdmin } from '@/lib/club/clubWebsitePermissions';
+import { useEntityVisual } from '@/lib/entity/useEntityVisual';
 import ChangeBannerModal, {
   type BannerAlignment,
 } from '@/components/athlete/ChangeBannerModal';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
-import { getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
+import { DEFAULT_HERO_BANNER_URL, getHeroBannerDisplayUrl } from '@/lib/profileBannerSequence';
 import AthleteMyPageRightSidebarExtras from '@/components/dashboard/AthleteMyPageRightSidebarExtras';
 import AthleteMyClubRightSidebar from '@/components/dashboard/AthleteMyClubRightSidebar';
 import MemberRegistrationInfoPanel from '@/components/member/MemberRegistrationInfoPanel';
-import MemberVisitorContactActivitiesPanel from '@/components/member/MemberVisitorContactActivitiesPanel';
-import { isClubAccountUserType, showSuggestMovesbookForTab } from '@/utils/dashboardRouting';
+import MemberContactActivitiesPanel from '@/components/member/MemberContactActivitiesPanel';
+import {
+  getDashboardPathForUserType,
+  isClubAccountUserType,
+  isManagedEntityAdminUserType,
+  showSuggestMovesbookForTab,
+} from '@/utils/dashboardRouting';
 import {
   getEntityDirectAccessLock,
   getEntityDirectAccessProfilePath,
@@ -122,6 +131,18 @@ const AvatarPlaceholder = ({ size = 'w-10 h-10' }: { size?: string }) => (
 function AthleteDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const asMember = searchParams?.get('asMember') === '1';
+  const memberKind = searchParams?.get('kind') || 'club';
+  const memberId = searchParams?.get('id');
+  const memberName = searchParams?.get('name') || '';
+  const memberTabLabel =
+    memberKind === 'team'
+      ? 'My Team'
+      : memberKind === 'group'
+        ? 'My Group'
+        : memberKind === 'coaching-group'
+          ? 'Trained Group'
+          : 'My Club';
   const { user, loading } = useAuth();
   const { t } = useLanguage();
   const { unreadCount: chatUnreadCount } = useChatUnreadCount();
@@ -144,16 +165,25 @@ function AthleteDashboardContent() {
     | 'registration-info'
     | 'contact-activities'
     | 'staff-feedbacks'
+    | 'club-staff-messages'
   >('overview');
-  const [showAdBanner, setShowAdBanner] = useState(true);
-  const [showPersonalBanner, setShowPersonalBanner] = useState(true);
-  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
-  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const {
+    showAdBanner,
+    showPersonalBanner,
+    showLeftSidebar,
+    showRightSidebar,
+    showSectionsToolbar: showToolbar,
+    showCentralToolbar,
+    setShowAdBanner,
+    setShowPersonalBanner,
+    setShowLeftSidebar,
+    setShowRightSidebar,
+    setShowSectionsToolbar: setShowToolbar,
+  } = useDisplayLayoutOptions();
   const [newsExpanded, setNewsExpanded] = useState(false);
   const [musicExpanded, setMusicExpanded] = useState(false);
   const [clubAddSongsOgpOpen, setClubAddSongsOgpOpen] = useState(false);
   const [clubAddSongsOgpExpanded, setClubAddSongsOgpExpanded] = useState(false);
-  const [showToolbar, setShowToolbar] = useState(true);
   const showLegacyButtonBars = false;
   const [activeRightTab, setActiveRightTab] = useState<'actions-planner' | 'chat-panel'>('actions-planner');
   const [expandedActionsPlanner, setExpandedActionsPlanner] = useState(true);
@@ -222,6 +252,7 @@ function AthleteDashboardContent() {
   // Redirect if not athlete: club accounts use /club/dashboard (e.g. News → ?open=news); others use legacy my-page.
   useEffect(() => {
     if (user && !['ATHLETE', 'ADMIN'].includes(user.userType)) {
+      if (asMember && isManagedEntityAdminUserType(user.userType)) return;
       if (isClubAccountUserType(user.userType)) {
         const lock = getEntityDirectAccessLock();
         if (lock) {
@@ -234,7 +265,13 @@ function AthleteDashboardContent() {
         router.push('/my-page');
       }
     }
-  }, [user, router]);
+  }, [user, router, asMember]);
+
+  useEffect(() => {
+    if (!asMember || !memberId) return;
+    setActiveTab('my-entity');
+    if (memberKind === 'club') setSelectedClubId(memberId);
+  }, [asMember, memberId, memberKind]);
 
   // Open News/OGP, My Music, or Music editor when navigating with ?open=news / ?open=music / ?open=add-songs
   useEffect(() => {
@@ -271,12 +308,12 @@ function AthleteDashboardContent() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (myClubs.length === 0 && activeTab === 'my-entity') {
+    if (!asMember && myClubs.length === 0 && activeTab === 'my-entity') {
       setActiveTab('my-page');
       setClubChatOpen(false);
       setClubMainPanel('default');
     }
-  }, [myClubs.length, activeTab]);
+  }, [myClubs.length, activeTab, asMember]);
 
   const openClubNewsPanel = useCallback((panel: Exclude<AthleteClubMainPanel, 'default'>) => {
     setActiveTab('my-entity');
@@ -452,6 +489,13 @@ function AthleteDashboardContent() {
   /** With both sidebars off, chat grows to the bottom of the viewport. */
   const chatFillsViewport = chatOpen && !showLeftSidebar && !showRightSidebar;
 
+  const entityClub =
+    activeTab === 'my-entity'
+      ? myClubs.find((c) => c.id === selectedClubId) ?? myClubs[0] ?? null
+      : null;
+  const entityVisual = useEntityVisual(entityClub?.id, entityClub?.description);
+  const canEditEntityClub = isUserClubAdmin(user?.id, entityClub);
+
   // Don't render if not authenticated (after all hooks are called)
   if (loading || !user) {
     return null;
@@ -610,31 +654,31 @@ function AthleteDashboardContent() {
         <div className={`flex items-center justify-between flex-wrap gap-2 transition-all duration-300 ${showToolbar ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={showLeftSidebar} onChange={(e) => setShowLeftSidebar(e.target.checked)} className="w-4 h-4" />
+              <span className="flex items-center gap-1">
+                {showLeftSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                Left side bar
+              </span>
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showAdBanner} onChange={(e) => setShowAdBanner(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showAdBanner ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Advertising Banner
+                Advertising banner
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showPersonalBanner} onChange={(e) => setShowPersonalBanner(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showPersonalBanner ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Personal Banner & Picture
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={showLeftSidebar} onChange={(e) => setShowLeftSidebar(e.target.checked)} className="w-4 h-4" />
-              <span className="flex items-center gap-1">
-                {showLeftSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Left Sidebar
+                Personal banner
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={showRightSidebar} onChange={(e) => setShowRightSidebar(e.target.checked)} className="w-4 h-4" />
               <span className="flex items-center gap-1">
                 {showRightSidebar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                Right Sidebar
+                Right sidebar
               </span>
             </label>
             {showLegacyButtonBars && (
@@ -681,7 +725,7 @@ function AthleteDashboardContent() {
 
       <div className="flex min-h-0 flex-1 flex-col w-full py-2">
         {showAdBanner && (
-          <div className="flex-shrink-0">
+          <div className="mb-4 flex-shrink-0">
             <AdvertisementCarousel />
           </div>
         )}
@@ -726,8 +770,13 @@ function AthleteDashboardContent() {
           <div className="flex-shrink-0 px-0">
             <AthleteLegacyBanner
               profile={bannerProfile}
-              primaryClubName={
-                myClubs.find((c) => c.id === selectedClubId)?.name ?? myClubs[0]?.name
+              primaryClubName={entityClub?.name ?? null}
+              entityLogoUrl={entityClub ? entityVisual.logoUrl : null}
+              entityBannerUrl={entityClub ? entityVisual.bannerUrl : null}
+              entityEdit={
+                canEditEntityClub && entityClub
+                  ? { kind: 'club', entityId: entityClub.id }
+                  : null
               }
               onCoverCameraClick={() => setShowChangeBannerModal(true)}
               onAvatarCameraClick={() => setShowChangeProfilePhotoModal(true)}
@@ -737,14 +786,14 @@ function AthleteDashboardContent() {
         )}
 
         {/* Personal Banner - Horizontal Navigation Bar */}
-        {showPersonalBanner && (
+        {showCentralToolbar && (
           <div className="flex-shrink-0">
             <div className="bg-gray-800 overflow-hidden shadow-lg relative" style={{ height: '52px' }}>
               {/* Background image with subtle overlay (matches legacy: same cover as main banner when set) */}
               <div 
                 className="absolute inset-0 bg-cover opacity-20"
                 style={{
-                  backgroundImage: `url(${heroBannerStripBgUrl(bannerProfile)})`,
+                  backgroundImage: `url(${entityClub ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : heroBannerStripBgUrl(bannerProfile)})`,
                   backgroundSize: 'cover',
                   backgroundPosition:
                     bannerProfile?.profileBannerAlignment === 'center' ? 'center center' : 'center top',
@@ -925,11 +974,18 @@ function AthleteDashboardContent() {
           {showLeftSidebar && !newsExpanded && !musicExpanded && !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start print:hidden">
               <DarkSidebar
-                userType={user?.userType || ''}
-                entities={myClubs}
+                userType={asMember ? 'ATHLETE' : user?.userType || ''}
+                entityTabLabel={asMember ? memberTabLabel : undefined}
+                entities={
+                  asMember && memberId
+                    ? [{ id: memberId, name: memberName || memberTabLabel }]
+                    : myClubs
+                }
                 athleteTeams={myTeams}
                 onAthleteTeamSelect={handleMyTeamSelect}
-                selectedEntityId={selectedClubId ?? myClubs[0]?.id ?? null}
+                selectedEntityId={
+                  asMember && memberId ? memberId : selectedClubId ?? myClubs[0]?.id ?? null
+                }
                 onEntitySelect={handleAthleteClubSelect}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
@@ -940,6 +996,10 @@ function AthleteDashboardContent() {
                   }
                 }}
                 onMyPageClick={() => {
+                  if (asMember && user && isManagedEntityAdminUserType(user.userType)) {
+                    router.push(getDashboardPathForUserType(user.userType));
+                    return;
+                  }
                   setActiveTab('my-page');
                   setActiveSection('overview');
                 }}
@@ -958,6 +1018,10 @@ function AthleteDashboardContent() {
                 onMyFeedbacksStaffClick={() => {
                   setActiveTab('my-page');
                   setActiveSection('staff-feedbacks');
+                }}
+                onClubStaffMessagesClick={() => {
+                  setActiveTab('my-page');
+                  setActiveSection('club-staff-messages');
                 }}
                 onMyClubClick={() => setActiveTab('my-entity')}
                 onClubChatClick={handleClubChatClick}
@@ -1105,17 +1169,35 @@ function AthleteDashboardContent() {
                     />
                   </div>
                 )}
-                {activeSection === 'contact-activities' && (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <MemberVisitorContactActivitiesPanel
-                      embedded
+                {activeSection === 'contact-activities' && user?.id ? (
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <MemberContactActivitiesPanel
+                      userId={user.id}
+                      clubs={myClubs.map((c: { id: string; name: string }) => ({
+                        id: c.id,
+                        name: c.name,
+                      }))}
                       onClose={() => setActiveSection('overview')}
                     />
                   </div>
-                )}
+                ) : null}
                 {activeSection === 'staff-feedbacks' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <MyStaffFeedbacksPanel onClose={() => setActiveSection('overview')} />
+                  </div>
+                )}
+                {activeSection === 'club-staff-messages' && (
+                  <div className="w-full">
+                    <div className="px-1 pt-2">
+                      <h1 className="text-xl font-bold text-orange-600">
+                        Messages among Staff and members
+                      </h1>
+                      <p className="text-sm text-gray-600 mt-1 mb-2">
+                        All clubs and teams you belong to. Club logo and username appear on the
+                        right of each message.
+                      </p>
+                    </div>
+                    <ClubStaffMessagesPanel showClubBadge />
                   </div>
                 )}
               </div>
@@ -1231,7 +1313,9 @@ function AthleteDashboardContent() {
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border p-8 pt-12 flex-1 flex items-start justify-center">
                   <div className="text-center">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">My Club Page</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                      {asMember ? `${memberTabLabel} Page` : 'My Club Page'}
+                    </h2>
                     <p className="text-gray-600 mb-6">Club-related content will be displayed here.</p>
                   </div>
                 </div>
@@ -1251,7 +1335,7 @@ function AthleteDashboardContent() {
                     userId={chatPeerInfoUserId}
                     onClose={() => setChatPeerInfoUserId(null)}
                   />
-                ) : activeTab === 'my-entity' ? (
+                ) : activeTab === 'my-entity' && (!asMember || memberKind === 'club') ? (
                   <AthleteMyClubRightSidebar clubId={selectedClubId ?? myClubs[0]?.id ?? null} />
                 ) : (
                   <div className="p-4 flex flex-col">

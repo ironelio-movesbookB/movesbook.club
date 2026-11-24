@@ -179,7 +179,6 @@ function MyGroupContent() {
                   <ManagedEntitySidebarAvatar
                     description={group?.description}
                     imageUrl={group?.imageUrl}
-                    userImageUrl={user?.image}
                     alt={group?.name || 'Group'}
                   />
                 </div>

@@ -7,8 +7,10 @@ import ProcedurePagination from '@/components/procedures/ProcedurePagination';
 import {
   DeleteRowButton,
   EditRowButton,
+  PrintRowButton,
   usePasswordGate,
 } from '@/components/procedures/ArchiveRowActions';
+import { printAcceptanceReceipt } from '@/components/procedures/printAcceptanceReceipt';
 import ArchiveScopeRadios, { useArchiveScope } from '@/components/procedures/ArchiveScopeRadios';
 import ArchiveListToolbar from '@/components/procedures/ArchiveListToolbar';
 import { useArchiveListFilters } from '@/components/procedures/useArchiveListFilters';
@@ -31,7 +33,8 @@ type Props = {
 function toPaymentRow(
   payment: ProcedurePaymentView,
   onEdit: (payment: ProcedurePaymentView) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onPrint?: (payment: ProcedurePaymentView) => void
 ): Member {
   return {
     id: payment.id,
@@ -45,6 +48,7 @@ function toPaymentRow(
     rest: payment.balance,
     casual: payment.description,
     operator: payment.operatorName,
+    print: onPrint ? <PrintRowButton onClick={() => onPrint(payment)} /> : undefined,
     edit: <EditRowButton onClick={() => onEdit(payment)} />,
     delete: <DeleteRowButton onClick={() => onDelete(payment.id)} />,
   };
@@ -55,8 +59,9 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
   const client = useMemo(() => createProcedureClient(procedureCode), [procedureCode]);
   const columns = useMemo(() => buildProcedureColumns(def), [def]);
   const scope = useArchiveScope();
-  const filters = useArchiveListFilters();
+  const filters = useArchiveListFilters('recent');
   const { request: requestPassword, modal: passwordModal } = usePasswordGate();
+  const isOut = def.metadataKeys.direction === 'OUT';
 
   const [data, setData] = useState<Member[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -66,6 +71,26 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
   const [pageSize, setPageSize] = useState(client.pageSize);
   const [total, setTotal] = useState(0);
   const [editTarget, setEditTarget] = useState<ProcedurePaymentView | null>(null);
+  const isExpense = procedureCode === 'expense';
+  const [expenseTypes, setExpenseTypes] = useState<{ id: string; name: string }[]>([]);
+  const [draftExpenseName, setDraftExpenseName] = useState('');
+  const [appliedExpenseName, setAppliedExpenseName] = useState('');
+
+  useEffect(() => {
+    if (!isExpense) return;
+    let active = true;
+    client
+      .fetchFormOptions<{ expenses: { id: string; name: string }[] }>()
+      .then((options) => {
+        if (active) setExpenseTypes(options.expenses);
+      })
+      .catch((e) => {
+        if (active) setError(e instanceof Error ? e.message : 'Failed to load expense types');
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, isExpense]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,8 +101,27 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
         pageSize,
         ...scope.filters,
         ...filters.applied,
+        ...(isExpense && appliedExpenseName ? { expenseName: appliedExpenseName } : {}),
       });
       setTotal(res.total);
+      const printReceipt = isOut
+        ? (payment: ProcedurePaymentView) => {
+            const opened = printAcceptanceReceipt({
+              clubName: res.clubName,
+              recipientName: payment.memberName,
+              amount: payment.paid,
+              paymentDate: payment.paymentDate,
+              detail: payment.primaryLabel,
+              notes: payment.description,
+              payMode: payment.payMode,
+              operatorName: payment.operatorName,
+              typology: payment.typology,
+              totalAmount: payment.originalDebt,
+              residualAmount: payment.balance,
+            });
+            if (!opened) setError('Allow pop-ups for this site to print the receipt.');
+          }
+        : undefined;
       setData(
         res.items.map((payment) =>
           toPaymentRow(
@@ -91,7 +135,8 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Delete failed');
                 }
-              })
+              }),
+            printReceipt
           )
         )
       );
@@ -101,7 +146,7 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [client, page, pageSize, scope.filters, filters.applied, requestPassword]);
+  }, [client, isExpense, appliedExpenseName, isOut, page, pageSize, scope.filters, filters.applied, requestPassword]);
 
   useEffect(() => {
     load();
@@ -136,17 +181,46 @@ function ProcedurePaymentsArchiveInner({ procedureCode, activeTab }: Props) {
         <ArchiveScopeRadios state={scope} name="paymentsScope" onChange={() => setPage(1)} />
       }
       error={error}
-      footerHint="Check rows to delete selected · Edit and Delete ask for your password."
+      footerHint={
+        isOut
+          ? 'Outgoing payments (OUT) · Print the receipt for the recipient to sign for acceptance · Edit and Delete ask for your password.'
+          : 'Check rows to delete selected · Edit and Delete ask for your password.'
+      }
     >
       <ArchiveListToolbar
         title={`Filter · ${def.archiveTitles.payments}`}
+        orderFirst={isExpense}
+        additionalFilter={
+          isExpense ? (
+            <label className="flex min-w-[180px] flex-col">
+              <span className="mb-1 block text-[12px] font-semibold text-gray-800">Type of expense</span>
+              <select
+                className="block h-9 w-full rounded border border-gray-400 bg-white px-2.5 text-[13px] text-gray-900 focus:border-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-700"
+                value={draftExpenseName}
+                onChange={(event) => setDraftExpenseName(event.target.value)}
+              >
+                <option value="">All types</option>
+                {expenseTypes.map((expense) => (
+                  <option key={expense.id} value={expense.name}>
+                    {expense.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : undefined
+        }
         values={filters.draft}
         onChange={filters.onChange}
         onApply={() => {
-          if (filters.apply()) setPage(1);
+          if (filters.apply()) {
+            setAppliedExpenseName(draftExpenseName);
+            setPage(1);
+          }
         }}
         onClear={() => {
           filters.clear();
+          setDraftExpenseName('');
+          setAppliedExpenseName('');
           setPage(1);
         }}
         dateRangeError={filters.dateRangeError}

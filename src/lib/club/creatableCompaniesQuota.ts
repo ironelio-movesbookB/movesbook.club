@@ -27,29 +27,27 @@ export async function countFormCreatedClubsForAdmin(userId: string): Promise<num
   );
 }
 
-/** Companies created by the admin from the create form (clubs, teams, groups trained, groups). */
+/**
+ * Companies created from the form, of every kind.
+ * The subscription limit is one pool: a club, a team, a group, and a group trained all count.
+ */
 export async function countFormCreatedCompaniesForAdmin(
   userId: string,
-  userType: string,
+  _userType: string,
 ): Promise<number> {
-  switch (subscriptionUserTypeForUser(userType)) {
-    case 'club':
-      return countFormCreatedClubsForAdmin(userId);
-    case 'team':
-      return countFormCreated(
-        prisma.team.findMany({ where: { adminId: userId }, select: { description: true } }),
-      );
-    case 'group':
-      return countFormCreated(
-        prisma.group.findMany({ where: { adminId: userId }, select: { description: true } }),
-      );
-    case 'coach':
-      return countFormCreated(
-        prisma.coachingGroup.findMany({ where: { coachId: userId }, select: { description: true } }),
-      );
-    default:
-      return 0;
-  }
+  const [clubs, teams, groups, trained] = await Promise.all([
+    countFormCreatedClubsForAdmin(userId),
+    countFormCreated(
+      prisma.team.findMany({ where: { adminId: userId }, select: { description: true } }),
+    ),
+    countFormCreated(
+      prisma.group.findMany({ where: { adminId: userId }, select: { description: true } }),
+    ),
+    countFormCreated(
+      prisma.coachingGroup.findMany({ where: { coachId: userId }, select: { description: true } }),
+    ),
+  ]);
+  return clubs + teams + groups + trained;
 }
 
 /** Max companies the admin can create — read from the user's PCU version settings. */

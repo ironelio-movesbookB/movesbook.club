@@ -8,6 +8,22 @@ export type ClubDescriptionMeta = {
   subscriptionEnd?: string;
   /** Cumulative member slots purchased before the current subscription allowance. */
   membersPurchasedBase?: number;
+  /**
+   * Progressive “Members added” counter for Archive of Users capacity.
+   * Increases on each add; never decreases on remove/archive.
+   * Residual slots = total available slots − membersAddedLifetime.
+   */
+  membersAddedLifetime?: number;
+  /**
+   * A — rename allowance. Bootstrapped as floor(10% × total available slots);
+   * each slot purchase of N adds floor(10% × N).
+   */
+  memberRenamesQuota?: number;
+  /**
+   * B — progressive count of member first/last name renames performed by the club.
+   * Residual renamings = memberRenamesQuota − memberRenamesUsed.
+   */
+  memberRenamesUsed?: number;
   /** Number of subscription renewals applied (0 = first subscription period). */
   subscriptionRenewalCount?: number;
   username?: string;
@@ -31,6 +47,29 @@ export type ClubDescriptionMeta = {
     rulesHtml?: string;
     privacyPolicyHtml?: string;
     updatedAt?: string;
+  };
+  /**
+   * Documents folder (General settings → Documents): custom HTML/PDF/generated docs,
+   * page share flag, and visibility for built-in Rules / Privacy rows.
+   */
+  documentsFolder?: {
+    pageShared?: boolean;
+    builtinVisible?: {
+      rules?: boolean;
+      privacyPolicy?: boolean;
+    };
+    items?: Array<{
+      id: string;
+      title: string;
+      type?: 'html' | 'pdf' | 'generated';
+      contentHtml?: string;
+      filePath?: string;
+      fileName?: string;
+      visible?: boolean;
+      sourceKeys?: string[];
+      createdAt?: string;
+      updatedAt?: string;
+    }>;
   };
   /** Up to 5 payment method ids shown by default on payment forms. */
   defaultPaymentMethods?: string[];

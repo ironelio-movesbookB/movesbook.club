@@ -17,6 +17,8 @@ type EditRecordModalProps = {
     recordDate: string | null;
     paydate: string | null;
     expireDate?: string | null;
+    value: number;
+    pay: number;
     notes: string;
     operatorId: string | null;
   };
@@ -33,6 +35,8 @@ export default function EditRecordModal({
   const title = getProcedureDefinition(procedureCode)?.name ?? 'Record';
   const [recordDate, setRecordDate] = useState('');
   const [expireDate, setExpireDate] = useState('');
+  const [cost, setCost] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [notes, setNotes] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [operators, setOperators] = useState<{ id: string; name: string }[]>([]);
@@ -46,6 +50,8 @@ export default function EditRecordModal({
     setExpireDate(
       toDateInputValue(record.expireDate !== undefined ? record.expireDate : record.paydate)
     );
+    setCost(String(record.value));
+    setAdminPassword('');
     setNotes(record.notes ?? '');
     setOperatorId(record.operatorId ?? '');
     setError(null);
@@ -59,14 +65,45 @@ export default function EditRecordModal({
   if (!isOpen) return null;
 
   const handleSave = async () => {
+    const originalExpireDate = toDateInputValue(
+      record.expireDate !== undefined ? record.expireDate : record.paydate,
+    );
+    const expenseCostChanged = Number(cost) !== record.value;
+    const expenseExpirationChanged = expireDate !== originalExpireDate;
+    const protectedExpenseFieldsChanged =
+      expenseCostChanged || expenseExpirationChanged;
+    if (procedureCode === PROCEDURE_TYPE_CODES.EXPENSE) {
+      if (protectedExpenseFieldsChanged && !adminPassword.trim()) {
+        setError('Enter the Club Admin password to edit the amount or expiration date.');
+        return;
+      }
+      const parsedCost = Number(cost);
+      if (cost.trim() === '' || !Number.isFinite(parsedCost) || parsedCost < 0) {
+        setError('Enter a valid cost.');
+        return;
+      }
+      if (parsedCost > record.pay) {
+        setError('Cost cannot exceed the amount already paid.');
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
       await client.updateRecord(record.id, {
         recordDate: recordDate || undefined,
-        dueDate: expireDate || undefined,
+        ...(procedureCode !== PROCEDURE_TYPE_CODES.EXPENSE || expenseExpirationChanged
+          ? { dueDate: expireDate || null }
+          : {}),
         notes: notes || undefined,
         operatorId: operatorId || undefined,
+        ...(procedureCode === PROCEDURE_TYPE_CODES.EXPENSE
+          ? {
+              ...(expenseCostChanged ? { totalAmount: Number(cost) } : {}),
+              ...(protectedExpenseFieldsChanged ? { adminPassword } : {}),
+            }
+          : {}),
       });
       onSaved();
       onClose();
@@ -99,6 +136,20 @@ export default function EditRecordModal({
         </div>
 
         <div className="space-y-4 p-5">
+          {procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && (
+            <div>
+              <label htmlFor="edit-record-admin-password" className="mb-1 block text-sm text-gray-800">Club Admin password</label>
+              <input
+                id="edit-record-admin-password"
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                disabled={saving}
+                autoComplete="current-password"
+                className="w-full rounded border border-gray-400 bg-white px-3 py-2 text-sm disabled:opacity-60"
+              />
+            </div>
+          )}
           <div>
             <label htmlFor="edit-record-date" className="mb-1 block text-sm text-gray-800">Date</label>
             <input
@@ -119,11 +170,35 @@ export default function EditRecordModal({
               min={new Date().toISOString().slice(0, 10)}
               value={expireDate}
               onChange={(e) => setExpireDate(e.target.value)}
-              disabled={saving}
+              disabled={saving || (procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && !adminPassword.trim())}
               className="w-full rounded border border-gray-400 px-3 py-2 text-sm disabled:opacity-60"
               style={{ backgroundColor: '#d3f07b' }}
             />
           </div>
+
+          {procedureCode === PROCEDURE_TYPE_CODES.EXPENSE && (
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label htmlFor="edit-record-cost" className="text-sm text-gray-800">Cost</label>
+                <span className="text-xs text-gray-600">Already paid: €{record.pay.toFixed(2)}</span>
+              </div>
+              <input
+                id="edit-record-cost"
+                type="number"
+                min="0"
+                max={record.pay}
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                disabled={saving || !adminPassword.trim()}
+                className="w-full rounded border border-gray-400 px-3 py-2 text-sm disabled:opacity-60"
+                aria-describedby="edit-record-cost-hint"
+              />
+              <p id="edit-record-cost-hint" className="mt-1 text-xs text-gray-500">
+                Cost must not exceed the amount already paid.
+              </p>
+            </div>
+          )}
 
           <div>
             <label htmlFor="edit-notes" className="mb-1 block text-sm text-gray-800">Notes</label>

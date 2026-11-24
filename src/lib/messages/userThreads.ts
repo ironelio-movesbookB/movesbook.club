@@ -21,7 +21,15 @@ export const PRIVATE_THREAD_CATEGORIES = ['club_message', 'org_feedback'];
 const EXCERPT_LEN = 160;
 
 export function excerptFromBody(text: string): string {
-  const t = text.replace(/\s+/g, ' ').trim();
+  const t = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return /<img\b/i.test(text) ? '[Image]' : '';
   if (t.length <= EXCERPT_LEN) return t;
   return `${t.slice(0, EXCERPT_LEN)}…`;
 }

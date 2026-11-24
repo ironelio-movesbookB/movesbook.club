@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { findExistingTable } from '@/lib/club/legacyTableLookup';
+import type { Prisma } from '@prisma/client';
 
 const CREDIT_TABLES = ['insert_credits', 'insert_credit'];
 const CREDIT_DETAIL_TABLES = ['insert_credit_details', 'insert_credit_detail'];
@@ -57,6 +58,58 @@ export async function applyCardCreditPayment(
       row.id,
       lastAvailable,
       remaining
+    );
+  }
+}
+
+/** Restore member credit consumed by a card-mode payment that was cancelled or deleted. */
+export async function restoreCardCreditPayment(
+  clubId: string,
+  memberId: string,
+  amount: number,
+  operatorId?: string | null,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  if (amount <= 0) return;
+
+  const client = tx ?? prisma;
+  const creditTable = await findExistingTable(CREDIT_TABLES);
+  const detailTable = await findExistingTable(CREDIT_DETAIL_TABLES);
+  if (!creditTable) return;
+
+  const rows = await client.$queryRawUnsafe<
+    { id: bigint | number; last_annotations: string | number | null; credit_available: string | number | null }[]
+  >(
+    `SELECT id, last_annotations, credit_available FROM \`${creditTable}\`
+     WHERE club_id = ? AND user_id = ? LIMIT 1`,
+    clubId,
+    memberId
+  );
+
+  const row = rows[0];
+  if (!row) return;
+
+  const lastAvailable = num(row.last_annotations ?? row.credit_available);
+  const restored = lastAvailable + amount;
+
+  await client.$executeRawUnsafe(
+    `UPDATE \`${creditTable}\`
+     SET last_annotations = ?, credit_available = ?, pay = ?, operator_id = ?, modified = NOW()
+     WHERE id = ?`,
+    restored,
+    restored,
+    -amount,
+    operatorId ?? null,
+    row.id
+  );
+
+  if (detailTable) {
+    await client.$executeRawUnsafe(
+      `INSERT INTO \`${detailTable}\` (credit_id, last_current_available, total_current_available, created, modified)
+       VALUES (?, ?, ?, NOW(), NOW())`,
+      row.id,
+      lastAvailable,
+      restored
     );
   }
 }

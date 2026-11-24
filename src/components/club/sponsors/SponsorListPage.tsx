@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PublicLinkBanner from '@/components/club/sponsors/PublicLinkBanner';
+import SponsorKitSettingsCard from '@/components/club/sponsors/SponsorKitSettingsCard';
 import {
   ContractStatusBadge,
   PaymentsStatusBadge,
@@ -93,6 +94,8 @@ export default function SponsorListPage() {
           qrFileName="sponsorship-kit-qr"
         />
       ) : null}
+
+      <SponsorKitSettingsCard />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Contracts value" value={formatSponsorEuro(summary.contractsValue)} />

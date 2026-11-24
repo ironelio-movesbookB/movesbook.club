@@ -831,9 +831,12 @@ export function periodsForRow(
   pcuAccess?: PcuAccessWindow | null,
 ): NetworkSubscriptionPeriod[] {
   const entityId = row.entityId ?? null;
+  // Registration stores account-level periods (no entityId). Club/team rows must still
+  // pick those up so Stripe/Klarna/PayPal amount + method show on the admin list.
   const matching = userHistory.filter((p) => {
     const pEntity = p.entityId ?? null;
-    return entityId ? pEntity === entityId : !pEntity;
+    if (!entityId) return !pEntity;
+    return pEntity === entityId || (!pEntity && p.id.startsWith('register-'));
   });
 
   const live = rowToPeriod(row, pcuAccess);
@@ -843,7 +846,7 @@ export function periodsForRow(
   // The live row of a new account assumes 365 days from sign-up; the period saved at
   // registration (creation date in UTC vs server-local day) has the version's real length.
   const registration =
-    exact || entityId || rowUsesPcuAccessDates(row, pcuAccess)
+    exact || rowUsesPcuAccessDates(row, pcuAccess)
       ? undefined
       : matching.find(
           (p) =>
@@ -856,7 +859,7 @@ export function periodsForRow(
         ...live,
         dateStart: stored.dateStart,
         dateEnd: stored.dateEnd,
-        version: registration?.version || live.version,
+        version: stored.version?.trim() || live.version,
         paymentMethod: stored.paymentMethod,
         amountPaid: stored.amountPaid,
         amountLocal: stored.amountLocal,

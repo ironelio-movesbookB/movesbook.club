@@ -32,7 +32,13 @@ import type { PublicSiteData } from '@/lib/club/website/websiteService';
 import type { WebsiteSocialKey } from '@/lib/club/website/websiteConstants';
 import { WEBSITE_PUBLIC_TEXTS } from '@/lib/club/website/websitePublicTexts';
 import { fillSponsorText } from '@/lib/club/sponsors/sponsorPublicTexts';
-import { SponsorLanguageSelect, initialSponsorPageLanguage } from '@/components/club/sponsors/public/sponsorPublicShared';
+import {
+  SponsorLanguageSelect,
+  initialSponsorPageLanguage,
+  mailtoHref,
+  openMailOnClick,
+} from '@/components/club/sponsors/public/sponsorPublicShared';
+import { WEBSITE_SHOP_PLACEHOLDER } from '@/lib/club/website/websiteConstants';
 import { getAuthToken } from '@/utils/auth.utils';
 
 const LINK_ICONS: Record<string, LucideIcon> = {
@@ -40,6 +46,7 @@ const LINK_ICONS: Record<string, LucideIcon> = {
   online_payments: CreditCard,
   calendar: CalendarDays,
   medical_visit: Stethoscope,
+  documents: FileText,
 };
 
 const SOCIAL_ICONS: Record<WebsiteSocialKey, LucideIcon> = {
@@ -118,12 +125,12 @@ export default function PublicSitePage({ slug }: { slug: string }) {
   const { org } = data;
   const language = data.language;
   const cover = data.coverUrl || org.bannerUrl;
-  const hasServices = data.links.length > 0 || data.documents.length > 0;
+  const hasServices = data.links.length > 0 || data.documentsEnabled;
   const hasEvents = data.events !== null;
   const hasShop = !!data.shop?.length;
   const hasSponsors = data.sponsors !== null;
   const socials = Object.entries(data.socials) as Array<[WebsiteSocialKey, string]>;
-  const contactHref = org.email ? `mailto:${org.email}` : org.phone ? `tel:${org.phone}` : '';
+  const contactHref = org.email ? mailtoHref(org.email) : org.phone ? `tel:${org.phone}` : '';
   const price = (v: number) =>
     new Intl.NumberFormat(language || undefined, { style: 'currency', currency: 'EUR' }).format(v);
 
@@ -249,9 +256,10 @@ export default function PublicSitePage({ slug }: { slug: string }) {
                   {href ? (
                     <a
                       href={href}
+                      onClick={l.url ? undefined : openMailOnClick(href)}
                       target={l.url ? '_blank' : undefined}
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-700 hover:underline"
+                      className="relative z-10 inline-flex cursor-pointer items-center gap-1.5 text-sm font-bold text-indigo-700 hover:underline"
                     >
                       {l.url ? t('web_open') : t('web_contact_us')}
                       <ArrowRight className="h-4 w-4" />
@@ -266,7 +274,7 @@ export default function PublicSitePage({ slug }: { slug: string }) {
                 </ServiceCard>
               );
             })}
-            {data.documents.length ? (
+            {data.documentsEnabled ? (
               <ServiceCard Icon={FileText} title={t('web_sec_documents')} text={t('web_sec_documents_text')}>
                 <div className="flex flex-wrap gap-3">
                   {data.documents.map((d) => (
@@ -274,12 +282,22 @@ export default function PublicSitePage({ slug }: { slug: string }) {
                       key={d.key}
                       type="button"
                       onClick={() => setOpenDoc(d.key)}
-                      className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-700 hover:underline"
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-bold text-indigo-700 hover:underline"
                     >
                       {d.key === 'rules' ? t('web_doc_rules') : t('web_doc_privacy')}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   ))}
+                  {data.documents.length === 0 && contactHref ? (
+                    <a
+                      href={contactHref}
+                      onClick={openMailOnClick(contactHref)}
+                      className="relative z-10 inline-flex cursor-pointer items-center gap-1.5 text-sm font-bold text-indigo-700 hover:underline"
+                    >
+                      {t('web_contact_us')}
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  ) : null}
                 </div>
               </ServiceCard>
             ) : null}
@@ -318,6 +336,31 @@ export default function PublicSitePage({ slug }: { slug: string }) {
         </Block>
       ) : null}
 
+      {data.shop !== null ? (
+        <section className="bg-white">
+          <div className="mx-auto max-w-6xl px-5 pb-6 pt-2">
+            <div className="grid overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 to-sky-600 text-white shadow-lg md:grid-cols-2">
+              <div className="flex flex-col justify-center gap-3 p-8">
+                <h2 className="text-3xl font-extrabold">{t('web_shop_promo_title')}</h2>
+                <p className="text-indigo-50">{t('web_shop_promo_text')}</p>
+                <div>
+                  <a
+                    href={hasShop ? '#shop' : contactHref || '#contacts'}
+                    onClick={hasShop || !contactHref ? undefined : openMailOnClick(contactHref)}
+                    className="relative z-10 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-5 py-2.5 font-bold text-indigo-800 hover:bg-indigo-50"
+                  >
+                    <ShoppingBag className="h-5 w-5" />
+                    {t('web_shop_promo_cta')}
+                  </a>
+                </div>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={WEBSITE_SHOP_PLACEHOLDER} alt="" className="h-56 w-full object-cover md:h-full" />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {hasShop ? (
         <Block id="shop" title={t('web_shop_title')} text={t('web_shop_text')} tinted>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -338,7 +381,11 @@ export default function PublicSitePage({ slug }: { slug: string }) {
                       {item.price !== null ? price(item.price) : ''}
                     </span>
                     {contactHref ? (
-                      <a href={contactHref} className="text-xs font-bold text-slate-500 hover:text-indigo-700">
+                      <a
+                        href={contactHref}
+                        onClick={openMailOnClick(contactHref)}
+                        className="relative z-10 cursor-pointer text-xs font-bold text-slate-500 hover:text-indigo-700"
+                      >
                         {t('web_shop_ask')}
                       </a>
                     ) : null}
@@ -390,7 +437,11 @@ export default function PublicSitePage({ slug }: { slug: string }) {
 
       {data.donation ? (
         <section id="donate" className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-          <div className="mx-auto grid max-w-6xl items-center gap-8 px-5 py-14 md:grid-cols-[1fr_auto]">
+          <div
+            className={`mx-auto grid max-w-6xl items-center gap-8 px-5 py-14 ${
+              data.donation.taxCode ? 'md:grid-cols-[1fr_auto]' : ''
+            }`}
+          >
             <div>
               <div className="flex items-center gap-3">
                 <Gift className="h-9 w-9" />
@@ -399,7 +450,16 @@ export default function PublicSitePage({ slug }: { slug: string }) {
               <p className="mt-3 max-w-2xl whitespace-pre-line text-emerald-50">
                 {data.donation.text || t('web_donate_text')}
               </p>
+              {data.donation.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={data.donation.imageUrl}
+                  alt={t('web_donate_title')}
+                  className="mt-6 max-h-64 w-full max-w-xl rounded-2xl object-cover shadow-lg"
+                />
+              ) : null}
             </div>
+            {data.donation.taxCode ? (
             <div className="rounded-2xl bg-white p-5 text-center text-slate-900 shadow-lg">
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('web_tax_code')}</div>
               <div className="mt-1 font-mono text-2xl font-extrabold tracking-wider">{data.donation.taxCode}</div>
@@ -412,6 +472,7 @@ export default function PublicSitePage({ slug }: { slug: string }) {
                 {copied ? t('web_copied') : t('web_copy')}
               </button>
             </div>
+            ) : null}
           </div>
         </section>
       ) : null}

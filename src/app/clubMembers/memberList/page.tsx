@@ -9,6 +9,10 @@ import ClubMemberArchivePage, {
   type MemberArchiveViewMode,
 } from '@/components/club/members/ClubMemberArchivePage';
 import AddMemberModal from '@/components/AddMemberModal';
+import {
+  ADMIN_AS_MEMBER_CONFIRM_CODE,
+  AdminAsMemberConfirmError,
+} from '@/lib/club/memberArchiveStatus';
 import PromocodeConfirmModal from '@/components/promocodes/PromocodeConfirmModal';
 import ClubMemberArchiveHeader from './components/status';
 import MemberArchiveTopNav, {
@@ -20,6 +24,8 @@ import MemberArchiveTopNav, {
 } from '@/components/club/memberArchive/MemberArchiveTopNav';
 import ArchiveEntityProfilePanel from '@/components/club/memberArchive/ArchiveEntityProfilePanel';
 import AthletesParentsArchive from '@/components/club/memberArchive/AthletesParentsArchive';
+import LowSlotsNoticeModal from '@/components/club/memberArchive/LowSlotsNoticeModal';
+import AddAvailableSlotsModal from '@/components/club/memberArchive/AddAvailableSlotsModal';
 import ClubStaffList from '@/components/club/staff/ClubStaffList';
 import { clubApiFetch, getAuthHeaders, withSelectedClubId } from '@/lib/club/servicePurchasesClient';
 import {
@@ -33,6 +39,7 @@ import {
 import { SUBSCRIPTION_SETTINGS_UPDATED_EVENT } from '@/lib/admin/subscriptionSettingsMock';
 import { useClubWorkspace } from '@/contexts/ClubWorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getArchiveEntityProfileSectionLabel,
   managedEntityKindFromUserType,
@@ -45,6 +52,13 @@ import {
   normalizeMemberArchiveStatus,
   type MemberArchiveStatus,
 } from '@/lib/club/memberArchiveStatus';
+import {
+  fetchMemberRemoveSlotsInfoText,
+  MEMBER_REMOVE_SLOTS_INFO_EN,
+} from '@/constants/memberArchiveSlotsLongText';
+import { sanitizeRichHtml } from '@/lib/sanitizeRichHtml';
+import { longTextDisplayHtml } from '@/utils/richTextTranslation';
+import { normalizeToolsLanguage } from '@/utils/toolsProfileLanguage';
 import AutoTranslate from '@/components/i18n/AutoTranslate';
 
 type MemberCapacityResponse = {
@@ -108,6 +122,8 @@ function MemberListPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { selectedClubId: contextClubId } = useClubWorkspace();
+  const { currentLanguage } = useLanguage();
+  const language = normalizeToolsLanguage(currentLanguage);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [memberPendingDelete, setMemberPendingDelete] = useState<Member | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -118,6 +134,10 @@ function MemberListPageContent() {
   const [capacityPayload, setCapacityPayload] = useState<MemberCapacityResponse | null>(null);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [teamId, setTeamId] = useState<string | null>(null);
+  const [removeSlotsInfoHtml, setRemoveSlotsInfoHtml] = useState('');
+  const [lowSlotsNoticeOpen, setLowSlotsNoticeOpen] = useState(false);
+  const [lowSlotsNoticeShownFor, setLowSlotsNoticeShownFor] = useState<string | null>(null);
+  const [addAvailableSlotsOpen, setAddAvailableSlotsOpen] = useState(false);
 
   const entityKind = useMemo(
     () => managedEntityKindFromUserType(user?.userType),
@@ -542,6 +562,7 @@ function MemberListPageContent() {
     if (!subscriptionSettingId) return base;
 
     return computeClubMemberCapacity({
+      currentMembers: base.currentMembers,
       membersAdded: base.membersAdded,
       membersPurchasedBase: base.membersPurchasedBase,
       subscriptionSettingId,
@@ -551,14 +572,58 @@ function MemberListPageContent() {
         : null,
       usersAllowanceFirst: getUsersAvailableFirstSubscription(subscriptionSettingId),
       usersAllowanceRenewal: getUsersAvailableRenewal(subscriptionSettingId),
+      renamesUsed: base.renameQuota?.used ?? 0,
+      ...(base.renameQuota?.quota != null ? { renameQuotaA: base.renameQuota.quota } : {}),
     });
   }, [capacityPayload, settingsRevision]);
+
+  const openAddAvailableSlotsForm = useCallback(() => {
+    setAddAvailableSlotsOpen(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMemberRemoveSlotsInfoText(language)
+      .then((text) => {
+        if (cancelled) return;
+        setRemoveSlotsInfoHtml(
+          sanitizeRichHtml(longTextDisplayHtml(text || MEMBER_REMOVE_SLOTS_INFO_EN)),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRemoveSlotsInfoHtml(
+          sanitizeRichHtml(longTextDisplayHtml(MEMBER_REMOVE_SLOTS_INFO_EN)),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
+
+  useEffect(() => {
+    if (archiveSection !== 'athletes' || !capacity || capacity.unlimited) {
+      return;
+    }
+    const residual = capacity.availableSlots;
+    if (residual === null || residual >= 10) return;
+    const noticeKey = `${capacityOwnerId ?? 'x'}:${residual}`;
+    if (lowSlotsNoticeShownFor === noticeKey) return;
+    setLowSlotsNoticeOpen(true);
+    setLowSlotsNoticeShownFor(noticeKey);
+  }, [
+    archiveSection,
+    capacity,
+    capacityOwnerId,
+    lowSlotsNoticeShownFor,
+  ]);
 
   const handleAddExistingUser = useCallback(
     async (data: {
       username: string;
       password: string;
       membershipStatus?: MemberArchiveStatus;
+      confirmAdminAsMember?: boolean;
     }) => {
       setAddError('');
       const resolvedWorkspaceId =
@@ -579,10 +644,20 @@ function MemberListPageContent() {
         const response = await fetch('/api/coach/athletes/add', {
           method: 'POST',
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: data.username, password: data.password }),
+          body: JSON.stringify({
+            username: data.username,
+            password: data.password,
+            ...(data.confirmAdminAsMember ? { confirmAdminAsMember: true } : {}),
+          }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
+          if (payload.code === ADMIN_AS_MEMBER_CONFIRM_CODE) {
+            throw new AdminAsMemberConfirmError(
+              typeof payload.error === 'string' ? payload.error : undefined,
+              typeof payload.question === 'string' ? payload.question : undefined,
+            );
+          }
           throw new Error(
             typeof payload.error === 'string' ? payload.error : 'Failed to add athlete',
           );
@@ -600,16 +675,23 @@ function MemberListPageContent() {
             `/api/clubs/${encodeURIComponent(resolvedWorkspaceId)}/members/add`,
           );
       const response = await fetch(url, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            username: data.username,
-            password: data.password,
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
           membershipStatus: data.membershipStatus,
-          }),
+          ...(data.confirmAdminAsMember ? { confirmAdminAsMember: true } : {}),
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (payload.code === ADMIN_AS_MEMBER_CONFIRM_CODE) {
+          throw new AdminAsMemberConfirmError(
+            typeof payload.error === 'string' ? payload.error : undefined,
+            typeof payload.question === 'string' ? payload.question : undefined,
+          );
+        }
         throw new Error(
           typeof payload.error === 'string' ? payload.error : 'Failed to add member',
         );
@@ -640,11 +722,7 @@ function MemberListPageContent() {
           {archiveSection === 'athletes' && capacity ? (
             <ClubMemberArchiveHeader
               capacity={capacity}
-              onPurchaseMembers={() => {
-                window.alert(
-                  'Purchase members — additional slot packs will be added to Members purchased.',
-                );
-              }}
+              onPurchaseMembers={openAddAvailableSlotsForm}
               onStatusAccounts={() => {
                 window.alert('Status accounts — member account status overview.');
               }}
@@ -673,6 +751,7 @@ function MemberListPageContent() {
             onMembershipStatusChanged={() => setRefreshKey((k) => k + 1)}
             onViewModeChange={setArchiveViewMode}
             statusChangesEnabled={!isCoachWorkspace}
+            clubChannelMessaging={!isTeamWorkspace && !isCoachWorkspace}
             footerHint={
               isCoachWorkspace
                 ? 'Athletes trained by you: added directly or members of your groups trained. Groups and the Group of training filter use your groups trained.'
@@ -722,8 +801,13 @@ function MemberListPageContent() {
           </div>
         )
       ) : archiveSection === 'staff' ? (
-        <div className="min-h-0 flex-1">
-          <ClubStaffList />
+        <div className="min-h-0 flex-1 space-y-0">
+          <div className="flex items-center justify-between rounded-t-lg bg-teal-800 px-4 py-3 text-white">
+            <h1 className="text-lg font-semibold whitespace-nowrap">Archive — Staff</h1>
+          </div>
+          <div className="overflow-hidden rounded-b-lg border border-gray-200 border-t-0 bg-white">
+            <ClubStaffList />
+          </div>
         </div>
       ) : archiveSection === 'club-profile' ? (
         <ArchiveEntityProfilePanel clubId={clubId} />
@@ -745,6 +829,14 @@ function MemberListPageContent() {
         open={Boolean(memberPendingDelete)}
         title={isCoachWorkspace ? 'Stop training' : isTeamWorkspace ? 'Remove from team' : 'Remove from club'}
         message={deleteConfirmMessage}
+        messageExtra={
+          !isCoachWorkspace && removeSlotsInfoHtml ? (
+            <div
+              className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-relaxed text-gray-800 prose prose-sm max-w-none prose-p:my-1.5"
+              dangerouslySetInnerHTML={{ __html: removeSlotsInfoHtml }}
+            />
+          ) : null
+        }
         confirmLabel="Remove"
         cancelLabel="Cancel"
         destructive
@@ -779,6 +871,18 @@ function MemberListPageContent() {
           setFavouritePendingRemove(null);
         }}
         onConfirm={() => void handleConfirmRemoveFavourite()}
+      />
+
+      <LowSlotsNoticeModal
+        open={lowSlotsNoticeOpen}
+        onClose={() => setLowSlotsNoticeOpen(false)}
+        onAddSlots={openAddAvailableSlotsForm}
+      />
+
+      <AddAvailableSlotsModal
+        open={addAvailableSlotsOpen}
+        onClose={() => setAddAvailableSlotsOpen(false)}
+        onPurchased={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );

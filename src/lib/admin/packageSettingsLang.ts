@@ -40,14 +40,37 @@ export function getPackageDisplayDescription(
   );
 }
 
-/** First line of the localized Description field (Product Review subtitle). */
-export function getPackageDescriptionFirstLine(
+/** Characters per row shared by the settings textarea and the registration preview. */
+export const PACKAGE_DESCRIPTION_ROW_CHARS = 52;
+
+/** First two wrapped rows of the localized Description field. */
+export function getPackageDescriptionPreview(
   descriptionsByLang: Record<string, string>,
   lang: string,
 ): string {
   const full = getPackageDisplayDescription(descriptionsByLang, lang);
   if (!full) return '';
-  return full.split(/\r?\n/)[0]?.trim() ?? '';
+  const width = PACKAGE_DESCRIPTION_ROW_CHARS;
+  const rows: string[] = [];
+  for (const paragraph of full.split(/\r?\n/)) {
+    if (paragraph.length === 0) {
+      rows.push('');
+    } else {
+      for (let i = 0; i < paragraph.length; i += width) {
+        rows.push(paragraph.slice(i, i + width));
+      }
+    }
+    if (rows.length >= 2) break;
+  }
+  return rows.slice(0, 2).join('\n');
+}
+
+/** First line of the localized Description field (Product Review subtitle). */
+export function getPackageDescriptionFirstLine(
+  descriptionsByLang: Record<string, string>,
+  lang: string,
+): string {
+  return getPackageDescriptionPreview(descriptionsByLang, lang).split('\n')[0] ?? '';
 }
 
 export function hasPackageFullOverview(

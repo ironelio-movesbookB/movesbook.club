@@ -1,7 +1,7 @@
 'use client';
 import Image from 'next/image';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import ProcedureFormSection, {
@@ -13,7 +13,14 @@ import ProcedureFormSection, {
 } from '@/components/procedures/ProcedureFormLayout';
 import TaxDocumentModal, { type TaxDocumentFormValues } from '@/components/procedures/TaxDocumentModal';
 import PaymentModeSelect from '@/components/club/PaymentModeSelect';
+import PayModeAlert from '@/components/club/PayModeAlert';
+import PaymentLinkChannelModal, {
+  type PaymentLinkChannel,
+  type PaymentLinkResult,
+} from '@/components/club/PaymentLinkChannelModal';
 import { useClubDefaultPaymentMethods } from '@/hooks/useClubDefaultPaymentMethods';
+import { clubApiFetch } from '@/lib/club/servicePurchasesClient';
+import { PAY_LINK_METHODS } from '@/lib/procedures/payModes';
 import {
   createPurchase,
   fetchFormOptions,
@@ -104,6 +111,8 @@ export default function ServicePurchaseForm({ initialMemberId }: Props) {
     return v === 'yes' || v === 'y' || v === '1' || v === 'true' || v === 't';
   })();
   const [formPayDeadlineStatus, setFormPayDeadlineStatus] = useState('Yes');
+  const [linkOpen, setLinkOpen] = useState(false);
+  const linkRecordId = useRef<string | null>(null);
   const [notEnterCustData, setNotEnterCustData] = useState(false);
 
   useEffect(() => {
@@ -212,43 +221,82 @@ export default function ServicePurchaseForm({ initialMemberId }: Props) {
     if (!operatorId) return setError('Please select an operator.');
     if (isPasswordEnabled && !operatorPassword.trim()) return setError('Operator password is required.');
 
-    const selectedSector = options?.sectors.find((s) => s.id === sectorId);
+    if (paid > 0 && PAY_LINK_METHODS.includes(payMode)) {
+      setLinkOpen(true);
+      return;
+    }
 
     setSaving(true);
     try {
-      const result = await createPurchase({
-        userId: memberId,
-        sectorId,
-        serviceId,
-        sectorName: selectedSector?.name,
-        serviceName: selectedService?.name,
-        value: total,
-        pay: paid,
-        recordDate: movementDate,
-        movementTime,
-        expireDate,
-        causal,
-        payMode,
-        operatorId,
-        operatorPassword,
-        discount: Number(discountPct) || 0,
-        discountApplied: discountEnabled,
-        taxDoc,
-        taxDocument: taxDocument ?? undefined,
-        companyId: companyId || undefined,
-        companyName: companies.find((c) => c.id === companyId)?.name,
-        createReceipt: Boolean(taxDoc && taxDocument && paid > 0),
-        receiptDocumentType: taxDocument?.documentType ?? 'Invoice',
-        receiptNumber: taxDocument?.documentNumber || undefined,
-        receiptAnnotations: taxDocument?.causal || undefined,
-      });
-
+      const result = await createPurchase(purchasePayload(paid));
       router.push(`/clubs/archive_service_list?created=${result.purchaseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
+  }
+
+  function purchasePayload(payNow: number) {
+    const selectedSector = options?.sectors.find((s) => s.id === sectorId);
+    return {
+      userId: memberId,
+      sectorId,
+      serviceId,
+      sectorName: selectedSector?.name,
+      serviceName: selectedService?.name,
+      value: total,
+      pay: payNow,
+      recordDate: movementDate,
+      movementTime,
+      expireDate,
+      causal,
+      payMode,
+      operatorId,
+      operatorPassword,
+      discount: Number(discountPct) || 0,
+      discountApplied: discountEnabled,
+      taxDoc,
+      taxDocument: taxDocument ?? undefined,
+      companyId: companyId || undefined,
+      companyName: companies.find((c) => c.id === companyId)?.name,
+      createReceipt: Boolean(taxDoc && taxDocument && payNow > 0),
+      receiptDocumentType: taxDocument?.documentType ?? 'Invoice',
+      receiptNumber: taxDocument?.documentNumber || undefined,
+      receiptAnnotations: taxDocument?.causal || undefined,
+    };
+  }
+
+  /** The purchase and its deadline are saved unpaid; the link pays the "Pay" amount later. */
+  async function sendPaymentLink(channel: PaymentLinkChannel, email: string): Promise<PaymentLinkResult> {
+    if (!linkRecordId.current) {
+      const created = await createPurchase(purchasePayload(0));
+      linkRecordId.current = created.purchaseId;
+    }
+    return clubApiFetch<PaymentLinkResult>('/api/club/member-online-payments', {
+      method: 'POST',
+      body: JSON.stringify({
+        memberUserId: memberId,
+        amountEur: paid,
+        description: causal.trim() || selectedService?.name || 'Service',
+        payMode,
+        procedureType: 'service_sale',
+        operatorId,
+        paymentDate: movementDate,
+        lines: [{ recordId: linkRecordId.current, amount: paid }],
+        channel,
+        email,
+        receipt:
+          taxDoc && taxDocument
+            ? {
+                documentType: taxDocument.documentType,
+                documentNumber: taxDocument.documentNumber,
+                annotations: taxDocument.causal,
+                serviceName: selectedService?.name,
+              }
+            : null,
+      }),
+    });
   }
 
   if (loading) {
@@ -462,6 +510,7 @@ export default function ServicePurchaseForm({ initialMemberId }: Props) {
               </ProcedureFormCell>
             )}
           </ProcedureFormGrid>
+          <PayModeAlert className="mt-3" />
         </ProcedureFormSection>
 
         <ProcedureFormSection title="Company" titleClassName="text-green-800">
@@ -516,6 +565,22 @@ export default function ServicePurchaseForm({ initialMemberId }: Props) {
           </button>
         </div>
       </form>
+
+      <PaymentLinkChannelModal
+        open={linkOpen}
+        memberUserId={memberId}
+        memberName={selectedMember?.name}
+        amountEur={paid}
+        onClose={() => setLinkOpen(false)}
+        sendLink={sendPaymentLink}
+        onSent={(notice) => {
+          setLinkOpen(false);
+          window.alert(notice);
+          router.push(
+            `/clubs/archive_service_list${linkRecordId.current ? `?created=${linkRecordId.current}` : ''}`,
+          );
+        }}
+      />
 
       <TaxDocumentModal
         open={taxModalOpen}

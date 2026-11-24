@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Clock, FileText, LifeBuoy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, FileText, LifeBuoy, Monitor } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import StaffMessagesExperience, { type MainTab } from '@/components/messages/StaffMessagesExperience';
+import SectionDisplayPanel from '@/components/layout/SectionDisplayPanel';
 import styles from './MessagesHelpRail.module.css';
 
 export default function MessagesHelpRail() {
@@ -11,6 +12,7 @@ export default function MessagesHelpRail() {
   const [stripOpen, setStripOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<MainTab>('support');
+  const [sectionPanelOpen, setSectionPanelOpen] = useState(false);
 
   const openPanel = (tab: MainTab) => {
     setPanelTab(tab);
@@ -38,7 +40,7 @@ export default function MessagesHelpRail() {
 
           <div
             className={`flex flex-col gap-1 bg-slate-800 py-2 px-1.5 transition-all duration-200 ${styles.railStripNav} ${
-              stripOpen ? 'w-[52px] opacity-100' : 'w-0 overflow-hidden border-0 p-0 opacity-0'
+              stripOpen ? 'w-[68px] opacity-100' : 'w-0 overflow-hidden border-0 p-0 opacity-0'
             }`}
           >
             <RailIconButton label={t('messages_rail_version')} onClick={() => openPanel('version')}>
@@ -50,9 +52,24 @@ export default function MessagesHelpRail() {
             <RailIconButton label={t('messages_rail_support')} onClick={() => openPanel('support')}>
               <LifeBuoy className="h-5 w-5" />
             </RailIconButton>
+            <RailIconButton
+              label={t('messages_rail_section')}
+              onClick={() => {
+                setStripOpen(true);
+                setSectionPanelOpen((open) => !open);
+              }}
+            >
+              <Monitor className="h-5 w-5" />
+            </RailIconButton>
           </div>
         </div>
       </div>
+
+      {sectionPanelOpen && (
+        <div className="pointer-events-auto fixed z-[103]" style={{ top: '34%', right: '4.5rem' }}>
+          <SectionDisplayPanel onClose={() => setSectionPanelOpen(false)} />
+        </div>
+      )}
 
       {panelOpen && (
         <>
@@ -100,7 +117,7 @@ function RailIconButton({
       className="flex flex-col items-center justify-center gap-0.5 rounded py-2 hover:bg-slate-700/80"
     >
       {children}
-      <span className="max-w-[48px] truncate px-0.5 text-center text-[9px] leading-tight opacity-90">
+      <span className="max-w-[60px] whitespace-normal px-0.5 text-center text-[9px] leading-tight opacity-90">
         {label}
       </span>
     </button>

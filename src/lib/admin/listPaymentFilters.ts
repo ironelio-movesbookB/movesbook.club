@@ -1,7 +1,18 @@
 import type { RegisteredUserListRow } from '@/lib/admin/expandRegisteredUserListRows';
 
 export type ListPaymentStatus = 'paid' | 'unpaid' | 'test';
-export type ListPaymentMode = 'stripe' | 'paypal' | 'promocode' | 'manual' | 'free' | 'test' | 'pending';
+export type ListPaymentMode =
+  | 'stripe'
+  | 'klarna'
+  | 'paypal'
+  | 'satispay'
+  | 'google_pay'
+  | 'apple_pay'
+  | 'promocode'
+  | 'manual'
+  | 'free'
+  | 'test'
+  | 'pending';
 
 export const LIST_PAYMENT_STATUS_OPTIONS: { value: ListPaymentStatus; label: string }[] = [
   { value: 'paid', label: 'Paid' },
@@ -11,7 +22,11 @@ export const LIST_PAYMENT_STATUS_OPTIONS: { value: ListPaymentStatus; label: str
 
 export const LIST_PAYMENT_MODE_OPTIONS: { value: ListPaymentMode; label: string }[] = [
   { value: 'stripe', label: 'Stripe' },
+  { value: 'klarna', label: 'Installment (Klarna)' },
   { value: 'paypal', label: 'PayPal' },
+  { value: 'satispay', label: 'Satispay' },
+  { value: 'google_pay', label: 'Google Pay' },
+  { value: 'apple_pay', label: 'Apple Pay' },
   { value: 'promocode', label: 'Promocode' },
   { value: 'manual', label: 'Manual (admin)' },
   { value: 'free', label: 'Free' },
@@ -30,11 +45,27 @@ export function parseListPaymentMode(raw: string | null | undefined): ListPaymen
 }
 
 /** How the membership of a grid row was paid; null when nothing is recorded. */
-export function rowPaymentMode(row: RegisteredUserListRow): ListPaymentMode | null {
-  const method = row.paymentMethod?.trim().toLowerCase() ?? '';
-  if (method === 'stripe' || method === 'paypal' || method === 'free' || method === 'test' || method === 'pending') {
+export function listPaymentModeLabel(mode: ListPaymentMode | null): string {
+  if (!mode) return '—';
+  return LIST_PAYMENT_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? '—';
+}
+
+export function rowPaymentMode(row: { paymentMethod?: string; amountEur?: number }): ListPaymentMode | null {
+  const method = row.paymentMethod?.trim().toLowerCase().replace(/\s+/g, '_') ?? '';
+  if (method === 'googlepay' || method === 'google_pay') return 'google_pay';
+  if (method === 'applepay' || method === 'apple_pay') return 'apple_pay';
+  if (
+    method === 'stripe' ||
+    method === 'klarna' ||
+    method === 'paypal' ||
+    method === 'satispay' ||
+    method === 'free' ||
+    method === 'test' ||
+    method === 'pending'
+  ) {
     return method;
   }
+  if (method === 'card' || method === 'credit_card' || method === 'debit_card') return 'stripe';
   if (method === 'virtual_card' || method.includes('promo')) return 'promocode';
   return (row.amountEur ?? 0) > 0 ? 'manual' : null;
 }

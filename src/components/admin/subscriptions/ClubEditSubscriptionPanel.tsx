@@ -18,7 +18,9 @@ import ClubSubscriptionEditTabs, {
   type ClubSubscriptionEditTab,
 } from './ClubSubscriptionEditTabs';
 import ClubIdentificationCardsPricelistPanel from './ClubIdentificationCardsPricelistPanel';
+import SubscriptionPriceListForm from './SubscriptionPriceListForm';
 import SpecialOfferSettingsPanel from './SpecialOfferSettingsPanel';
+import SpecialUpgradeSettingsPanel from './SpecialUpgradeSettingsPanel';
 
 type ClubEditSubscriptionPanelProps = {
   id: number;
@@ -31,6 +33,8 @@ function parseTab(param: string | null): ClubSubscriptionEditTab {
     return 'identification_cards';
   }
   if (param === 'special_offer') return 'special_offer';
+  if (param === 'special_upgrade') return 'special_upgrade';
+  if (param === 'price_list') return 'price_list';
   return 'setting_subscriptions';
 }
 
@@ -93,7 +97,11 @@ export default function ClubEditSubscriptionPanel({
         ? 'identification'
         : tab === 'special_offer'
           ? 'special_offer'
-          : null;
+          : tab === 'special_upgrade'
+            ? 'special_upgrade'
+            : tab === 'price_list'
+              ? 'price_list'
+              : null;
     const base = `/subscriptions/club_edit_subscription/${id}/club`;
     router.replace(tabParam ? `${base}?tab=${tabParam}` : base, { scroll: false });
   };
@@ -112,6 +120,26 @@ export default function ClubEditSubscriptionPanel({
   const handleCancel = () => {
     router.push('/subscriptions/subscription_settings?userType=club');
   };
+
+  const saveButtons = (
+    <div className="flex justify-center gap-3 py-6">
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-[#333] px-8 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="bg-[#333] px-8 py-2 text-sm font-bold text-white hover:bg-black"
+      >
+        Cancel
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex h-full flex-col bg-gray-100">
@@ -161,23 +189,18 @@ export default function ClubEditSubscriptionPanel({
               onChange={(settings) => setData({ ...data, settings })}
             />
 
-            <div className="flex justify-center gap-3 py-6">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-[#333] px-8 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="bg-[#333] px-8 py-2 text-sm font-bold text-white hover:bg-black"
-              >
-                Cancel
-              </button>
-            </div>
+            {saveButtons}
+          </>
+        ) : null}
+
+        {activeTab === 'price_list' ? (
+          <>
+            <SubscriptionPriceListForm
+              general={data.general}
+              row={row}
+              onChange={(general) => setData({ ...data, general })}
+            />
+            {saveButtons}
           </>
         ) : null}
 
@@ -187,6 +210,10 @@ export default function ClubEditSubscriptionPanel({
 
         {activeTab === 'special_offer' ? (
           <SpecialOfferSettingsPanel versionId={id} versionName={row.name} />
+        ) : null}
+
+        {activeTab === 'special_upgrade' ? (
+          <SpecialUpgradeSettingsPanel versionId={id} versionName={row.name} />
         ) : null}
       </div>
     </div>

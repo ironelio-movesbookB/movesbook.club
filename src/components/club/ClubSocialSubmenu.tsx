@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Bell,
   ChevronDown,
@@ -24,16 +24,34 @@ const SOCIAL_ITEMS: SocialSubmenuItem[] = [
 
 /**
  * My Club sidebar — expandable SOCIAL section with Chat / Messages / Posts.
+ * Optional `children` are social-based rows (club page, lists, friends, …).
  */
 export default function ClubSocialSubmenu({
   onChatClick,
+  onMessagesClick,
   variant = 'default',
+  open: openProp,
+  onOpenChange,
+  children,
 }: {
   onChatClick?: () => void;
+  /** My Club → Messages among Staff and members (current club only). */
+  onMessagesClick?: () => void;
   /** `section`: blue "Section Social" row of the official Club My Club menu. */
   variant?: 'default' | 'section';
+  /** Controlled open state (official My Club nests social rows under this). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = typeof openProp === 'boolean';
+  const open = controlled ? openProp : uncontrolledOpen;
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    if (controlled) onOpenChange?.(value);
+    else setUncontrolledOpen(value);
+  };
   const isSection = variant === 'section';
   const hover = isSection ? 'hover:bg-[#2557a8]' : 'hover:bg-[#8f1022]';
 
@@ -84,6 +102,7 @@ export default function ClubSocialSubmenu({
                 type="button"
                 onClick={() => {
                   if (item.key === 'chat') onChatClick?.();
+                  if (item.key === 'messages') onMessagesClick?.();
                 }}
                 className={`flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-zinc-700/90 ${
                   idx > 0 ? 'border-t border-black/25' : ''
@@ -94,6 +113,9 @@ export default function ClubSocialSubmenu({
               </button>
             );
           })}
+          {children ? (
+            <div className="border-t border-black/40 bg-[#1a1a1a]">{children}</div>
+          ) : null}
         </div>
       )}
     </div>

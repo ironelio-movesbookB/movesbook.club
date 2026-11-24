@@ -31,6 +31,7 @@ import {
 } from '@/lib/club/serviceSaleClient';
 import AdminPasswordConfirmModal from '@/components/club/AdminPasswordConfirmModal';
 import EditReceiptModal from '@/components/club/archives/EditReceiptModal';
+import SendReceiptPdfModal from '@/components/procedures/SendReceiptPdfModal';
 
 function mapReceipt(
   r: ServiceSaleReceipt,
@@ -102,6 +103,7 @@ function ServiceReceiptsInner() {
   const [taxTarget, setTaxTarget] = useState<ServiceSaleReceipt | null>(null);
   const [showDeletePasswordModal, setShowDeletePasswordModal] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+  const [sendPdfIds, setSendPdfIds] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -235,6 +237,14 @@ function ServiceReceiptsInner() {
         dateRangeError={filters.dateRangeError}
         selectedCount={selectedIds.size}
         onDeleteSelected={handleDeleteSelected}
+        sendDataTitle="Mail the PDF of the checked receipts"
+        onSendData={() => {
+          if (selectedIds.size === 0) {
+            alert('Check one or more receipts to send their PDF.');
+            return;
+          }
+          setSendPdfIds(Array.from(selectedIds));
+        }}
         pagination={
           <ProcedurePagination
             page={page}
@@ -273,6 +283,8 @@ function ServiceReceiptsInner() {
         }}
         onRowDoubleClick={handleOpenReceipt}
       />
+
+      {sendPdfIds && <SendReceiptPdfModal receiptIds={sendPdfIds} onClose={() => setSendPdfIds(null)} />}
 
       {taxTarget && (
         <TaxDocumentModal

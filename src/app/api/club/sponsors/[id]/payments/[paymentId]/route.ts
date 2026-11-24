@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveSponsorWorkspace, sponsorErrorResponse } from '@/lib/club/sponsors/sponsorApi';
-import { deletePayment, savePayment, setPaymentPaid } from '@/lib/club/sponsors/sponsorService';
+import {
+  deletePayment,
+  savePayment,
+  setPaymentPaid,
+  settlePayment,
+} from '@/lib/club/sponsors/sponsorService';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +17,39 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
     const { id, paymentId } = await params;
     const body = await request.json().catch(() => ({}));
-    const sponsor =
-      typeof body?.paid === 'boolean'
-        ? await setPaymentPaid(auth.ws, id, paymentId, body.paid)
-        : await savePayment(auth.ws, id, body ?? {}, paymentId);
+    let sponsor;
+    if (body?.settleMode === 'whole' || body?.settleMode === 'partial' || body?.settleMode === 'unpaid') {
+      let operatorUsername =
+        typeof body.operatorUsername === 'string' ? body.operatorUsername.trim() : '';
+      if (!operatorUsername) {
+        try {
+          const { getClubAuthContext } = await import('@/lib/procedures/clubAuth');
+          const { prisma } = await import('@/lib/prisma');
+          const authCtx = await getClubAuthContext(request);
+          if (!('error' in authCtx)) {
+            const user = await prisma.user.findUnique({
+              where: { id: authCtx.ctx.userId },
+              select: { username: true },
+            });
+            operatorUsername = user?.username?.trim() || '';
+          }
+        } catch {
+          /* keep empty */
+        }
+      }
+      sponsor = await settlePayment(auth.ws, id, paymentId, {
+        mode: body.settleMode,
+        paidAmount: body.paidAmount,
+        payMode: body.payMode,
+        annotations: body.annotations,
+        operatorUsername,
+        paymentDate: body.paymentDate,
+      });
+    } else if (typeof body?.paid === 'boolean') {
+      sponsor = await setPaymentPaid(auth.ws, id, paymentId, body.paid);
+    } else {
+      sponsor = await savePayment(auth.ws, id, body ?? {}, paymentId);
+    }
     return NextResponse.json({ sponsor });
   } catch (error) {
     return sponsorErrorResponse(error, 'PATCH /api/club/sponsors/[id]/payments/[paymentId]');

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken, verifyPassword } from '@/lib/auth';
+import {
+  adminAsMemberConfirmResponse,
+  isAddableMemberUserType,
+  isAdminAddableMemberUserType,
+  NOT_ADDABLE_MEMBER_USER_TYPE_ERROR,
+} from '@/lib/club/memberArchiveStatus';
 
 const prisma = new PrismaClient();
 
@@ -28,7 +34,12 @@ export async function POST(
 
     const userId = decoded.userId;
     const groupId = params.groupId;
-    const { username, password } = await request.json();
+    const body = await request.json();
+    const { username, password, confirmAdminAsMember } = body as {
+      username?: string;
+      password?: string;
+      confirmAdminAsMember?: boolean;
+    };
 
     if (!username || !password) {
       return NextResponse.json(
@@ -66,6 +77,13 @@ export async function POST(
       );
     }
 
+    if (!isAddableMemberUserType(userToAdd.userType)) {
+      return NextResponse.json(
+        { error: NOT_ADDABLE_MEMBER_USER_TYPE_ERROR },
+        { status: 400 },
+      );
+    }
+
     // Verify password
     const isPasswordValid = await verifyPassword(password, userToAdd.password);
     if (!isPasswordValid) {
@@ -73,6 +91,10 @@ export async function POST(
         { error: 'Invalid password' },
         { status: 401 }
       );
+    }
+
+    if (isAdminAddableMemberUserType(userToAdd.userType) && !confirmAdminAsMember) {
+      return NextResponse.json(adminAsMemberConfirmResponse(), { status: 409 });
     }
 
     // Check if user is already a member

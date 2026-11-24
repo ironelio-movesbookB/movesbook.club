@@ -64,7 +64,6 @@ export default function QuickRegisterForm() {
   const [sport, setSport] = useState('');
   const [promocode, setPromocode] = useState(initialPromocode);
   const [inviterUsername, setInviterUsername] = useState(inviterFromUrl);
-  const [confirmInviterUsername, setConfirmInviterUsername] = useState(inviterFromUrl);
   const [movesbookOfficialEmail, setMovesbookOfficialEmail] = useState('admin@movesbook.com');
 
   const [versions, setVersions] = useState<VersionOption[]>([]);
@@ -84,7 +83,7 @@ export default function QuickRegisterForm() {
   const [credit2, setCredit2] = useState('');
   const [membersNumber, setMembersNumber] = useState('');
   const [totalPayment, setTotalPayment] = useState('');
-  const [payWithVirtualCard, setPayWithVirtualCard] = useState(true);
+  const [payProvider, setPayProvider] = useState<'paypal' | 'stripe'>('stripe');
   const [tripleDurationDays, setTripleDurationDays] = useState('');
   const [tripleDurationPrice, setTripleDurationPrice] = useState('');
   const [tripleDurationDiscount, setTripleDurationDiscount] = useState('');
@@ -102,6 +101,27 @@ export default function QuickRegisterForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const [pageTheme, setPageTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('qr-page-theme');
+      if (saved === 'dark' || saved === 'light') setPageTheme(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const body = document.querySelector('.quick-register-body');
+    if (!body) return;
+    body.classList.toggle('qr-theme-dark', pageTheme === 'dark');
+    try {
+      window.localStorage.setItem('qr-page-theme', pageTheme);
+    } catch {
+      /* ignore */
+    }
+  }, [pageTheme]);
 
   const initDone = useRef(false);
   const usernameEditedRef = useRef(false);
@@ -387,7 +407,6 @@ export default function QuickRegisterForm() {
         if (data.movesbookOfficialEmail) setMovesbookOfficialEmail(data.movesbookOfficialEmail);
         if (data.inviterUsername) {
           setInviterUsername(data.inviterUsername);
-          setConfirmInviterUsername(data.inviterUsername);
         }
         if (typeof data.inviterReadonly === 'boolean') setInviterReadonly(data.inviterReadonly);
         if (data.promocodeAllowedVersionIds) setPromocodeVersionIds(data.promocodeAllowedVersionIds);
@@ -684,11 +703,11 @@ export default function QuickRegisterForm() {
           sport,
           promocode: code,
           inviter_username: inviterUsername.trim() || undefined,
-          confirm_inviter_username: confirmInviterUsername.trim() || undefined,
+          confirm_inviter_username: inviterUsername.trim() || undefined,
           invite_by_movesbook: inviteByMovesbook,
           origin_email: originEmail || undefined,
           disccount_hidden: discountHidden,
-          payment_method: payWithVirtualCard ? 'virtual_card' : 'standard',
+          payment_method: payProvider,
           total_payment: totalPayment,
           use_triple: useTripleSubscription,
           language: currentLanguage,
@@ -733,22 +752,23 @@ export default function QuickRegisterForm() {
   };
 
   return (
-    <div className="quickregistration" style={{ marginTop: 20 }}>
-      <div className="qr-register-head">
-        <img
-          className="qr-register-badge"
-          src="/img/register-now.png"
-          alt="REGISTER NOW"
-        />
-        <div className="qr-register-head-copy">
-          <div className="quickregi-title">{t.registerYourself}</div>
-          <div className="quickregi-subtitle">
-            {t.alreadyHaveAccount}{' '}
-            <Link href="/login" target="_blank">
-              {t.logIn}
-            </Link>
-          </div>
-        </div>
+    <div className="quickregistration">
+      <div className="qr-theme-toolbar">
+        <span className="qr-theme-label">Appearance</span>
+        <button
+          type="button"
+          className={`qr-theme-btn${pageTheme === 'light' ? ' is-active' : ''}`}
+          onClick={() => setPageTheme('light')}
+        >
+          {t.themeLight}
+        </button>
+        <button
+          type="button"
+          className={`qr-theme-btn${pageTheme === 'dark' ? ' is-active' : ''}`}
+          onClick={() => setPageTheme('dark')}
+        >
+          {t.themeDark}
+        </button>
       </div>
 
       {successMessage ? (
@@ -786,9 +806,22 @@ export default function QuickRegisterForm() {
           readOnly
         />
 
-        <div className="quickregi-form">
-          <div className="quickregi-left" style={{ border: 'none', paddingRight: 0 }}>
-            {error ? <div className="red">{error}</div> : null}
+        <div className="qr-register-split">
+          <div className="qr-register-split-left">
+            <img
+              className="qr-register-badge qr-register-badge-light"
+              src="/img/register-now.png"
+              alt="REGISTER NOW"
+            />
+            <img
+              className="qr-register-badge qr-register-badge-dark"
+              src="/img/dark_logo.jpg"
+              alt="REGISTER NOW"
+            />
+
+            <div className="quickregi-form">
+              <div className="quickregi-left" style={{ border: 'none', paddingRight: 0 }}>
+                {error ? <div className="red">{error}</div> : null}
 
             <div className="div-row">
               <span className="span-label-title">{t.typeHereYourUsername}</span>
@@ -922,7 +955,36 @@ export default function QuickRegisterForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
+              </div>
+            </div>
+          </div>
 
+          <aside className="qr-register-split-right">
+            <div className="quickregi-title">{t.registerYourself}</div>
+            <div className="quickregi-subtitle">
+              {t.alreadyHaveAccount}{' '}
+              <Link href="/login" target="_blank">
+                {t.logIn}
+              </Link>
+            </div>
+            <div className="qr-intro-video">
+              <video
+                className="qr-intro-video-el"
+                controls
+                playsInline
+                autoPlay
+                loop
+                muted
+                preload="auto"
+                src="/video/Video_Movesbook_intro.mp4"
+              >
+                <track kind="captions" />
+              </video>
+            </div>
+          </aside>
+        </div>
+
+        <div className="qr-register-full">
             <div className="div-line" />
 
             <div className="div-row">
@@ -1149,7 +1211,7 @@ export default function QuickRegisterForm() {
                   </>
                 ) : (
                   <>
-                    <div className="qr-aligned-row">
+                    <div className="qr-aligned-row qr-inviter-row">
                       <span className="qr-row-label">{t.usernameOfWhoInvitedYou}</span>
                       <input
                         type="text"
@@ -1160,17 +1222,6 @@ export default function QuickRegisterForm() {
                         id="inviter_username"
                         readOnly={inviterReadonly}
                         onChange={(e) => setInviterUsername(e.target.value)}
-                      />
-                      <span className="qr-row-label">{t.retypeUsername}</span>
-                      <input
-                        type="text"
-                        name="confirm_inviter_username"
-                        className="qr-row-input input-highlight"
-                        style={{ background: inviterReadonly ? '#eee' : undefined }}
-                        value={confirmInviterUsername}
-                        id="confirm_inviter_username"
-                        readOnly={inviterReadonly}
-                        onChange={(e) => setConfirmInviterUsername(e.target.value)}
                       />
                     </div>
                     {inviterReadonly ? (
@@ -1196,11 +1247,21 @@ export default function QuickRegisterForm() {
                 <div className="payment-row-item payment-logos">
                   <label className="inline-flex items-center gap-2 text-sm mr-3" style={{ color: '#7b0a26' }}>
                     <input
-                      type="checkbox"
-                      checked={payWithVirtualCard}
-                      onChange={(e) => setPayWithVirtualCard(e.target.checked)}
+                      type="radio"
+                      name="quick_register_pay"
+                      checked={payProvider === 'stripe'}
+                      onChange={() => setPayProvider('stripe')}
                     />
-                    {t.payWithVirtualCard}
+                    Card (Stripe)
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm mr-3" style={{ color: '#7b0a26' }}>
+                    <input
+                      type="radio"
+                      name="quick_register_pay"
+                      checked={payProvider === 'paypal'}
+                      onChange={() => setPayProvider('paypal')}
+                    />
+                    PayPal
                   </label>
                   <Image src="/img/payment_logo/logo_visa.svg" alt="Visa" width={45} height={28} />
                   <Image src="/img/payment_logo/logo_mc.svg" alt="Mastercard" width={45} height={28} />
@@ -1225,7 +1286,6 @@ export default function QuickRegisterForm() {
                 </div>
               </div>
             </div>
-          </div>
         </div>
       </form>
     </div>

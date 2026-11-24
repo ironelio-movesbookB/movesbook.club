@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   DndContext,
   type DragEndEvent,
@@ -14,6 +22,7 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -27,7 +36,8 @@ import MubPreviewModeToggle, {
   type MubDisplayMode,
 } from '@/components/mub/MubPreviewModeToggle';
 import MubButtonEditorForm, { emptyMubButtonForm, type MubButtonFormState } from '@/components/mub/MubButtonEditorForm';
-import MubButtonPreview from '@/components/mub/MubButtonPreview';
+import MubButtonPreview, { MUB_SIZE_STYLES } from '@/components/mub/MubButtonPreview';
+import MubFrameView from '@/components/mub/MubFrameView';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -40,39 +50,59 @@ import {
 import { sanitizeMubIconPath, sanitizeMubUrl } from '@/lib/mub/mubSanitize';
 import type { MubButtonDto, MubCategory, MubPageDto, MubRoleTemplate } from '@/lib/mub/types';
 import { mubPageUrl, mubStaffPageUrl } from '@/lib/mub/routes';
+import {
+  clearMubUnlock,
+  mubAuthTokenKey,
+  readMubUnlock,
+  writeMubUnlock,
+  type MubUnlockKind,
+} from '@/lib/mub/mubUnlockClient';
 
 type MubPageMode = 'view' | 'edit' | 'staff';
+
+const MUB_SIZE_STORAGE_KEY = 'mub:buttonSize';
 type MubLoadSource = 'user' | 'movesbook';
+/** What a successful password opens: the settings (A staff / B user) or the background panel. */
+type MubGateTarget = 'settings' | 'background';
 
 /**
- * Where the gear-password unlock is remembered for the rest of the browser session.
- *
- * Navigating between MUB categories drops the `edit=1` flag from the URL, which used
- * to lose the unlock — the old code compensated by treating plain `view` mode as
- * editable, which meant the password gate could be skipped entirely. Keeping the
- * unlock here instead lets the gate stay closed. It is a convenience only: every
- * route re-checks permission server-side.
+ * The gear-password unlock is a signed token from `/api/mub/verify-access`, kept for
+ * the browser tab (see `mubUnlockClient.ts`) and sent on every MUB write. The server
+ * rejects writes without it, so this copy only decides whether to show the gate.
  */
-const MUB_UNLOCK_KEYS: Record<'edit' | 'staff', string> = {
-  edit: 'mub:unlocked:user',
-  staff: 'mub:unlocked:staff',
-};
-
-function readUnlockFlag(mode: MubPageMode): boolean {
-  if (mode !== 'edit' && mode !== 'staff') return false;
-  try {
-    return window.sessionStorage.getItem(MUB_UNLOCK_KEYS[mode]) === '1';
-  } catch {
-    return false;
-  }
+function unlockKindFor(mode: MubPageMode, adminSession: boolean): MubUnlockKind | null {
+  if (adminSession) return 'admin';
+  return mode === 'edit' || mode === 'staff' ? mode : null;
 }
 
-function writeUnlockFlag(mode: 'edit' | 'staff') {
+/**
+ * The whole button is a drag handle. Releasing the pointer after a drag would
+ * otherwise also count as a click and open the button's link.
+ */
+let lastMubDragEndAt = 0;
+const DRAG_CLICK_SUPPRESS_MS = 300;
+
+/**
+ * Opens a `same_label` button ("In the central frame of the same tab").
+ * Provided by MubPageClient; null outside it (the link then behaves as a plain href).
+ */
+const MubOpenSameContext = createContext<((href: string, title: string) => void) | null>(null);
+
+/** A Movesbook URL (relative path or this origin) — navigated inside the app, not framed. */
+function internalAppPath(href: string): string | null {
+  if (href.startsWith('/') && !href.startsWith('//')) return href;
   try {
-    window.sessionStorage.setItem(MUB_UNLOCK_KEYS[mode], '1');
+    const url = new URL(href, window.location.href);
+    if (url.origin === window.location.origin) return `${url.pathname}${url.search}${url.hash}`;
   } catch {
-    /* private mode — the user re-enters the password on the next page */
+    /* not a URL */
   }
+  return null;
+}
+
+/** Server said the unlock is missing / expired / for another login. */
+function isUnlockRequired(data: { code?: string } | null | undefined): boolean {
+  return data?.code === 'mub_unlock_required';
 }
 
 type MubPageClientProps = {
@@ -85,6 +115,13 @@ type MubPageClientProps = {
   hasCategoryInPath?: boolean;
   /** Reading-mode source from ?load=user|movesbook */
   initialLoadSource?: MubLoadSource | null;
+  /**
+   * Staff builder opened from the admin panel (/admin/mub): authenticated with the
+   * Super Admin's admin-panel login (`adminToken`), unlocked without a second password.
+   */
+  adminSession?: boolean;
+  /** Where staff-builder links point (user app or admin panel). */
+  staffBasePath?: string;
 };
 
 function apiQuery(
@@ -112,16 +149,28 @@ export default function MubPageClient({
   initialCategory = 'CLUB_MANAGEMENT',
   hasCategoryInPath = false,
   initialLoadSource = null,
+  adminSession = false,
+  staffBasePath,
 }: MubPageClientProps) {
   const router = useRouter();
   const { currentLanguage: language } = useLanguage();
   const { user } = useAuth();
   const userRoleTemplate = roleTemplateFromUserType(user?.userType ?? 'ATHLETE');
-  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [unlockToken, setUnlockToken] = useState<string | null>(null);
+  const editUnlocked = Boolean(unlockToken);
+  const unlockKind = unlockKindFor(mode, adminSession);
+  /** Login token for API calls: the admin panel keeps its own (`adminToken`). */
+  const authTokenKey = mubAuthTokenKey(adminSession ? 'admin' : 'edit');
+  const [adminUnlockError, setAdminUnlockError] = useState<string | null>(null);
   /** sessionStorage is only readable after hydration; avoids flashing the gate. */
   const [unlockChecked, setUnlockChecked] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  /** Inline password box under the top bar — which top-bar link opened it. */
+  const [inlineGate, setInlineGate] = useState<MubGateTarget | null>(null);
+  /** External page shown in the central frame (same_label buttons). */
+  const [frame, setFrame] = useState<{ url: string; title: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [activePanel, setActivePanel] = useState<'user' | 'background' | null>(initialPanel);
   const [category, setCategory] = useState<MubCategory>(initialCategory);
   const [page, setPage] = useState<MubPageDto | null>(null);
@@ -133,7 +182,7 @@ export default function MubPageClient({
   const [selectedBg, setSelectedBg] = useState('white');
   const [message, setMessage] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<MubDisplayMode>(1);
-  const [buttonSize, setButtonSize] = useState<MubButtonSize>(2);
+  const [buttonSize, setButtonSize] = useState<MubButtonSize>(1);
   const [readingPageIndex, setReadingPageIndex] = useState(0);
   const [loadSource, setLoadSource] = useState<MubLoadSource | null>(initialLoadSource);
   const [loadPickerOpen, setLoadPickerOpen] = useState(false);
@@ -158,7 +207,8 @@ export default function MubPageClient({
   const showCategoryTabs =
     (activePanel === 'user' && canEdit) || mode === 'staff' || isReadingSession;
   const showBackgroundPanel = canEdit && activePanel === 'background';
-  const showLoadPickerButton = (isViewLanding || isUserSettingsHub) && !isReadingSession;
+  /** Landing / settings hub have no buttons to show — "Mub to Load" now lives in the top bar. */
+  const showLandingHint = (isViewLanding || isUserSettingsHub) && !isReadingSession;
   const pageTitle =
     mode === 'staff'
       ? `Setting page of the 'Most used buttons' by Movesbook staff`
@@ -182,9 +232,107 @@ export default function MubPageClient({
   );
 
   useEffect(() => {
-    setEditUnlocked(readUnlockFlag(mode));
+    setUnlockToken(unlockKind ? readMubUnlock(unlockKind) : null);
     setUnlockChecked(true);
-  }, [mode]);
+  }, [unlockKind]);
+
+  // Admin panel: the Super Admin already signed in with username + password, so the
+  // staff unlock is requested directly (the server checks he is an active Super Admin).
+  useEffect(() => {
+    if (!adminSession || !unlockChecked || unlockToken || adminUnlockError) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = localStorage.getItem('adminToken');
+        if (!token) throw new Error('Please log in to the admin panel first.');
+        const res = await fetch('/api/mub/verify-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ adminSession: true }),
+        });
+        const data = (await res.json()) as { error?: string; unlockToken?: string; expiresAt?: number };
+        if (!res.ok || !data.unlockToken || !data.expiresAt) {
+          throw new Error(data.error || 'Could not open the Movesbook MUB settings.');
+        }
+        if (cancelled) return;
+        writeMubUnlock('admin', data.unlockToken, data.expiresAt);
+        setUnlockToken(data.unlockToken);
+      } catch (err) {
+        if (!cancelled) {
+          setAdminUnlockError(err instanceof Error ? err.message : 'Could not open the Movesbook MUB settings.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminSession, unlockChecked, unlockToken, adminUnlockError]);
+
+  // S / M / L is a per-browser display preference (no DB column yet).
+  useEffect(() => {
+    try {
+      setButtonSize(normalizeMubButtonSize(Number(localStorage.getItem(MUB_SIZE_STORAGE_KEY) ?? 1)));
+    } catch {
+      /* storage blocked — keep S */
+    }
+  }, []);
+
+  const changeButtonSize = (size: MubButtonSize) => {
+    const next = normalizeMubButtonSize(size);
+    setButtonSize(next);
+    setReadingPageIndex(0);
+    try {
+      localStorage.setItem(MUB_SIZE_STORAGE_KEY, String(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  /** Headers for MUB API calls: login token plus the unlock token when we have one. */
+  const mubHeaders = useCallback(
+    (json = false): Record<string, string> => {
+      const token = localStorage.getItem(authTokenKey);
+      return {
+        ...(json ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(unlockToken ? { 'X-Mub-Unlock': unlockToken } : {}),
+      };
+    },
+    [unlockToken, authTokenKey],
+  );
+
+  /**
+   * same_label — "In the central frame of the same tab":
+   * - Movesbook pages: in-app navigation (header and sidebars stay, no reload).
+   * - External http(s) pages: shown in the central frame (MubFrameView).
+   * - mailto: / tel: — handed to the browser as usual.
+   */
+  const openInCentralFrame = useCallback(
+    (href: string, title: string) => {
+      const internal = internalAppPath(href);
+      if (internal) {
+        router.push(internal);
+        return;
+      }
+      if (/^https?:/i.test(href)) {
+        setFrame({ url: href, title });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      window.location.href = href;
+    },
+    [router],
+  );
+
+  /** Drop a stale unlock and send the user back to the password gate. */
+  const relock = useCallback(() => {
+    if (unlockKind) clearMubUnlock(unlockKind);
+    setUnlockToken(null);
+    // Admin panel re-unlocks by itself (effect above); elsewhere the gate reappears.
+    if (!adminSession) {
+      setPasswordError('Your MUB settings session expired. Please enter the password again.');
+    }
+  }, [unlockKind, adminSession]);
 
   useEffect(() => {
     setActivePanel(initialPanel);
@@ -198,15 +346,36 @@ export default function MubPageClient({
     setLoadSource(initialLoadSource);
   }, [initialLoadSource]);
 
+  // Any navigation to another MUB view closes the central frame.
+  useEffect(() => {
+    setFrame(null);
+  }, [mode, initialPanel, initialCategory, initialLoadSource, hasCategoryInPath]);
+
   /** Keep `edit=1` on internal navigation so the unlocked session stays in edit mode. */
   const keepEdit = mode === 'edit';
-  const goUserSettings = () => router.push(mubPageUrl({ setting: true, edit: keepEdit }));
-  const goBackgroundSetting = () =>
-    router.push(mubPageUrl({ panel: 'background', edit: keepEdit }));
+  const openInlineGate = (target: MubGateTarget) => {
+    setPassword('');
+    setPasswordError(null);
+    setLoadPickerOpen(false);
+    setInlineGate(target);
+  };
+  /**
+   * "User settings" always asks for the password: the password decides where it
+   * goes (Super Admin → Movesbook MUB settings, club admin → user MUB settings).
+   */
+  const goUserSettings = () => openInlineGate('settings');
+  /** Background only needs the user unlock; ask for it only when it is missing. */
+  const goBackgroundSetting = () => {
+    if (readMubUnlock('edit')) {
+      router.push(mubPageUrl({ panel: 'background', edit: true }));
+      return;
+    }
+    openInlineGate('background');
+  };
   const goCategory = (cat: MubCategory) => {
     if (mode === 'staff') {
       // Stay on STAFF scope — never navigate to user MUB (would load personal buttons).
-      router.push(mubStaffPageUrl({ role: staffRoleTemplate, category: cat }));
+      router.push(mubStaffPageUrl({ role: staffRoleTemplate, category: cat, basePath: staffBasePath }));
       return;
     }
     if (isReadingSession) {
@@ -229,7 +398,7 @@ export default function MubPageClient({
   };
 
   const loadPage = useCallback(async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem(authTokenKey);
     setLoading(true);
     try {
       const res = await fetch(`/api/mub/page?${queryString}&lang=${encodeURIComponent(language)}`, {
@@ -255,32 +424,32 @@ export default function MubPageClient({
     } finally {
       setLoading(false);
     }
-  }, [queryString, language]);
+  }, [queryString, language, authTokenKey]);
 
   useEffect(() => {
     // Staff templates are only fetched once the gate is open, so a locked page
     // does not fire a request the API will reject anyway.
+    // The background panel loads too, so it opens on the saved colour instead of "White".
     const shouldLoad =
-      mode === 'staff' ? editUnlocked : hasCategoryInPath || isReadingSession;
+      mode === 'staff'
+        ? editUnlocked
+        : hasCategoryInPath || isReadingSession || showBackgroundPanel;
     if (shouldLoad) {
       void loadPage();
     } else {
       setLoading(false);
       setPage(null);
     }
-  }, [loadPage, mode, hasCategoryInPath, isReadingSession, editUnlocked]);
+  }, [loadPage, mode, hasCategoryInPath, isReadingSession, editUnlocked, showBackgroundPanel]);
 
   const postAction = async (body: Record<string, unknown>) => {
-    const token = localStorage.getItem('token');
     const res = await fetch(`/api/mub/actions?${queryString}&lang=${encodeURIComponent(language)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: mubHeaders(true),
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    if (isUnlockRequired(data)) relock();
     if (!res.ok) throw new Error(data.error || 'action_failed');
     if (data.page) setPage(data.page);
     return data;
@@ -289,13 +458,9 @@ export default function MubPageClient({
   const saveButton = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/mub/buttons?${queryString}&lang=${encodeURIComponent(language)}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: mubHeaders(true),
         body: JSON.stringify({
           button: {
             id: form.id,
@@ -311,13 +476,15 @@ export default function MubPageClient({
         }),
       });
       const data = await res.json();
+      if (isUnlockRequired(data)) relock();
       if (!res.ok) throw new Error(data.error || 'save_failed');
       setPage(data.page);
       setFormOpen(false);
       setForm(emptyMubButtonForm(language));
       setMessage(null);
-    } catch {
-      setMessage('Could not save button. Please try again.');
+    } catch (err) {
+      const detail = err instanceof Error && err.message !== 'save_failed' ? ` (${err.message})` : '';
+      setMessage(`Could not save button${detail}. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -346,19 +513,20 @@ export default function MubPageClient({
   const uploadIcon = async (file: File) => {
     setUploadingIcon(true);
     try {
-      const token = localStorage.getItem('token');
       const body = new FormData();
       body.append('file', file);
       const res = await fetch('/api/mub/icon-upload', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: mubHeaders(),
         body,
       });
       const data = await res.json();
+      if (isUnlockRequired(data)) relock();
       if (!res.ok) throw new Error(data.error || 'upload_failed');
       setForm((f) => ({ ...f, iconPath: data.path, iconFileName: data.fileName ?? file.name }));
-    } catch {
-      setMessage('Could not upload icon.');
+    } catch (err) {
+      const detail = err instanceof Error && err.message !== 'upload_failed' ? ` ${err.message}` : '';
+      setMessage(`Could not upload icon.${detail}`);
     } finally {
       setUploadingIcon(false);
     }
@@ -366,15 +534,15 @@ export default function MubPageClient({
 
   const deleteButton = async (id: string) => {
     if (!window.confirm('Delete this button?')) return;
-    const token = localStorage.getItem('token');
     const res = await fetch(
       `/api/mub/buttons?${queryString}&lang=${encodeURIComponent(language)}&id=${encodeURIComponent(id)}`,
       {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: mubHeaders(),
       },
     );
     const data = await res.json();
+    if (isUnlockRequired(data)) relock();
     if (!res.ok) {
       setMessage(data.error || 'Could not delete this button.');
       return;
@@ -382,10 +550,12 @@ export default function MubPageClient({
     if (data.page) setPage(data.page);
   };
 
-  const verifyPassword = async () => {
+  const verifyPassword = async (target: MubGateTarget = 'settings') => {
+    if (!password.trim() || verifying) return;
     setPasswordError(null);
+    setVerifying(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem(authTokenKey);
       const res = await fetch('/api/mub/verify-access', {
         method: 'POST',
         headers: {
@@ -394,26 +564,53 @@ export default function MubPageClient({
         },
         body: JSON.stringify({ password }),
       });
-      const data = (await res.json()) as { access?: string; error?: string };
+      const data = (await res.json()) as {
+        access?: string;
+        error?: string;
+        unlockToken?: string;
+        expiresAt?: number;
+        roleTemplate?: MubRoleTemplate;
+      };
       if (!res.ok) throw new Error(data.error || 'verify_failed');
+      if (!data.unlockToken || !data.expiresAt) throw new Error('verify_failed');
 
-      if (data.access === 'staff') {
-        writeUnlockFlag('staff');
-        const template = roleTemplateFromUserType(user?.userType ?? 'ATHLETE');
+      if (target === 'background') {
+        // Any valid MUB password unlocks the user's own background (the server
+        // accepts every unlock level for USER-scope writes).
+        writeMubUnlock('edit', data.unlockToken, data.expiresAt);
+        setUnlockToken(data.unlockToken);
         setPassword('');
+        setInlineGate(null);
+        router.push(mubPageUrl({ panel: 'background', edit: true }));
+        return;
+      }
+
+      // A — Super Admin password: Movesbook MUB settings for this account's user type
+      //     (ID5 single user, ID6 coach, ID7 team, ID8 club, ID9 group).
+      if (data.access === 'staff') {
+        writeMubUnlock('staff', data.unlockToken, data.expiresAt);
+        // The server picks the template from the stored account type (ID5–ID9).
+        const template = data.roleTemplate ?? roleTemplateFromUserType(user?.userType ?? 'ATHLETE');
+        setPassword('');
+        setInlineGate(null);
         router.push(mubStaffPageUrl({ role: template }));
         return;
       }
+      // B — club admin password (or personal password): the user's MUB settings.
       if (data.access === 'club' || data.access === 'user') {
-        writeUnlockFlag('edit');
-        setEditUnlocked(true);
+        writeMubUnlock('edit', data.unlockToken, data.expiresAt);
+        setUnlockToken(data.unlockToken);
         setPassword('');
+        setInlineGate(null);
         router.push(mubPageUrl({ setting: true, edit: true }));
         return;
       }
       setPasswordError(data.error || 'Invalid password.');
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : 'Invalid password.');
+      const msg = err instanceof Error ? err.message : '';
+      setPasswordError(!msg || msg === 'verify_failed' ? 'Invalid password.' : msg);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -421,8 +618,10 @@ export default function MubPageClient({
     try {
       // The template is chosen server-side from the account's userType.
       const data = await postAction({ action: 'import' });
+      const by = (data.importedByCategory ?? {}) as Partial<Record<MubCategory, number>>;
       setMessage(
-        `${data.importedCount ?? 0} button(s) imported for language "${language}". ` +
+        `${data.importedCount ?? 0} button(s) imported for language "${language}" ` +
+          `(Club management ${by.CLUB_MANAGEMENT ?? 0}, Workout ${by.WORKOUT ?? 0}, Social ${by.SOCIAL ?? 0}). ` +
           'Previously imported buttons were replaced; your own buttons were kept.',
       );
     } catch {
@@ -440,16 +639,13 @@ export default function MubPageClient({
         .filter((b): b is MubButtonDto => Boolean(b)),
     });
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/mub/buttons?${queryString}&lang=${encodeURIComponent(language)}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: mubHeaders(true),
         body: JSON.stringify({ orderedIds }),
       });
       const data = await res.json();
+      if (isUnlockRequired(data)) relock();
       if (!res.ok) throw new Error(data.error || 'reorder_failed');
       if (data.page) setPage(data.page);
     } catch {
@@ -480,6 +676,7 @@ export default function MubPageClient({
   }, [orderedButtons, previewMode, isReadingSession, showCrud, readingPageIndex, sizeCount]);
 
   const onDragEnd = (event: DragEndEvent) => {
+    lastMubDragEndAt = Date.now();
     const { active, over } = event;
     if (!over || !page || active.id === over.id) return;
     const fullIds = sessionOrderIds?.length ? [...sessionOrderIds] : page.buttons.map((b) => b.id);
@@ -501,15 +698,12 @@ export default function MubPageClient({
     setReadingPageIndex(0);
     if (!showCrud || loadSource === 'movesbook') return;
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`/api/mub/page?${queryString}`, {
+      const res = await fetch(`/api/mub/page?${queryString}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: mubHeaders(true),
         body: JSON.stringify({ displayMode: next }),
       });
+      if (!res.ok && isUnlockRequired(await res.json().catch(() => null))) relock();
     } catch {
       /* preview still updates client-side */
     }
@@ -520,11 +714,11 @@ export default function MubPageClient({
     setConfirmSaving(true);
     setConfirmError(null);
     try {
-      await postAction({ action: confirmAction, password: confirmPassword });
+      const data = await postAction({ action: confirmAction, password: confirmPassword });
       setMessage(
         confirmAction === 'reset'
           ? 'All buttons on this page were removed.'
-          : 'Imported (default) buttons were removed.',
+          : `${data.removedCount ?? 0} imported (default) button(s) were removed from all sections. Your own buttons were kept.`,
       );
       setConfirmAction(null);
       setConfirmPassword('');
@@ -536,25 +730,39 @@ export default function MubPageClient({
   };
 
   const saveBackground = async () => {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`/api/mub/page?${queryString}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ backgroundColor: selectedBg }),
-    });
-    const data = await res.json();
-    if (data.page) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/mub/page?${queryString}`, {
+        method: 'PATCH',
+        headers: mubHeaders(true),
+        body: JSON.stringify({ backgroundColor: selectedBg }),
+      });
+      const data = await res.json();
+      if (isUnlockRequired(data)) relock();
+      if (!res.ok || !data.page) throw new Error(data.error || 'background_failed');
       setPage(data.page);
-      setActivePanel(null);
+      // Background applies to all three categories — back to the settings hub.
+      router.push(mubPageUrl({ setting: true, edit: keepEdit }));
+    } catch (err) {
+      const detail = err instanceof Error && err.message !== 'background_failed' ? ` (${err.message})` : '';
+      setMessage(`Could not save the background${detail}. Please try again.`);
+    } finally {
+      setSaving(false);
     }
   };
 
   if (requiresUnlock && !editUnlocked) {
     if (!unlockChecked) {
       return <p className="px-4 py-6 text-sm text-gray-600">Loading…</p>;
+    }
+    if (adminSession) {
+      return adminUnlockError ? (
+        <div className="mx-auto max-w-md rounded-lg border border-red-300 bg-white p-6 text-sm text-red-700 shadow">
+          {adminUnlockError}
+        </div>
+      ) : (
+        <p className="px-4 py-6 text-sm text-gray-600">Opening the Movesbook MUB settings…</p>
+      );
     }
     return (
       <div className="mx-auto max-w-md rounded-lg border border-gray-300 bg-white p-6 shadow-lg">
@@ -566,12 +774,21 @@ export default function MubPageClient({
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void verifyPassword('settings');
+          }}
           className="mb-3 w-full rounded border border-gray-300 px-3 py-2"
           placeholder="Password"
+          autoFocus
         />
         {passwordError ? <p className="mb-2 text-sm text-red-600">{passwordError}</p> : null}
         <div className="flex gap-2">
-          <button type="button" onClick={verifyPassword} className="rounded bg-red-700 px-4 py-2 text-white hover:bg-red-800">
+          <button
+            type="button"
+            onClick={() => void verifyPassword('settings')}
+            disabled={verifying}
+            className="rounded bg-red-700 px-4 py-2 text-white hover:bg-red-800 disabled:opacity-50"
+          >
             Continue
           </button>
           <Link href={mubPageUrl()} className="rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-800">
@@ -582,20 +799,41 @@ export default function MubPageClient({
     );
   }
 
+  if (frame) {
+    return <MubFrameView url={frame.url} title={frame.title} onBack={() => setFrame(null)} />;
+  }
+
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <MubOpenSameContext.Provider value={openInCentralFrame}>
+    <div className="w-full">
       <div className="overflow-hidden rounded border border-gray-400 bg-[#ececec] shadow">
-        {/* Top bar — User settings | Background Setting (PHP: movesbook.net/users/mub_page) */}
-        <div className="flex items-center justify-between border-b border-gray-400 bg-[#d9d9d9] px-3 py-2">
+        {/* Top bar — left: Mub to Load · right: User settings | Background Setting */}
+        <div className="flex items-center justify-between gap-3 border-b border-gray-400 bg-[#d9d9d9] px-3 py-2">
           <div className="flex items-center gap-4">
             <Menu className="h-4 w-4 shrink-0 text-gray-700" />
+            {mode !== 'staff' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineGate(null);
+                  setLoadPickerOpen(true);
+                }}
+                className="rounded bg-gray-800 px-4 py-1 text-sm font-semibold text-white hover:bg-gray-700"
+              >
+                Mub to Load
+              </button>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-4">
             {mode !== 'staff' ? (
               <>
                 <button
                   type="button"
                   onClick={goUserSettings}
                   className={`inline-flex items-center gap-1 text-sm font-semibold ${
-                    activePanel === 'user' ? 'text-red-700 underline' : 'text-red-700 hover:underline'
+                    activePanel === 'user' || inlineGate === 'settings'
+                      ? 'text-red-700 underline'
+                      : 'text-red-700 hover:underline'
                   }`}
                 >
                   <Settings className="h-3.5 w-3.5" />
@@ -605,7 +843,9 @@ export default function MubPageClient({
                   type="button"
                   onClick={goBackgroundSetting}
                   className={`inline-flex items-center gap-1 text-sm font-semibold ${
-                    activePanel === 'background' ? 'text-red-700 underline' : 'text-red-700 hover:underline'
+                    activePanel === 'background' || inlineGate === 'background'
+                      ? 'text-red-700 underline'
+                      : 'text-red-700 hover:underline'
                   }`}
                 >
                   <Settings className="h-3.5 w-3.5" />
@@ -615,9 +855,59 @@ export default function MubPageClient({
             ) : (
               <span className="text-sm font-semibold text-red-700">Background Setting</span>
             )}
+            <Menu className="h-4 w-4 shrink-0 text-gray-700" />
           </div>
-          <Menu className="h-4 w-4 shrink-0 text-gray-700" />
         </div>
+
+        {inlineGate ? (
+          <form
+            className="flex justify-center border-b border-gray-300 bg-white px-3 py-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void verifyPassword(inlineGate);
+            }}
+          >
+            <div className="w-full max-w-md rounded border border-red-700 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <label htmlFor="mub-inline-password" className="text-sm font-semibold text-red-700">
+                  Type the password
+                </label>
+                <input
+                  id="mub-inline-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-56 rounded border border-gray-400 px-2 py-1 text-sm"
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </div>
+              {passwordError ? (
+                <p className="mt-2 text-center text-sm text-red-600">{passwordError}</p>
+              ) : null}
+              <div className="mt-3 flex justify-center gap-3">
+                <button
+                  type="submit"
+                  disabled={verifying || !password.trim()}
+                  className="rounded bg-red-700 px-6 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  {verifying ? 'Checking…' : 'Ok'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineGate(null);
+                    setPassword('');
+                    setPasswordError(null);
+                  }}
+                  className="rounded border border-gray-400 px-6 py-1.5 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : null}
 
         <div className="flex items-center justify-between border-b border-gray-400 bg-[#bdbdbd] px-3 py-2 text-sm text-red-700">
           <span>{pageTitle}</span>
@@ -625,10 +915,7 @@ export default function MubPageClient({
             value={previewMode}
             onChange={(mode) => void persistPreviewMode(mode)}
             size={buttonSize}
-            onSizeChange={(size) => {
-              setButtonSize(normalizeMubButtonSize(size));
-              setReadingPageIndex(0);
-            }}
+            onSizeChange={changeButtonSize}
             disabled={loading}
           />
         </div>
@@ -638,7 +925,7 @@ export default function MubPageClient({
             {MUB_STAFF_ROLE_TEMPLATES.map((role) => (
               <Link
                 key={role.id}
-                href={mubStaffPageUrl({ role: role.id, category })}
+                href={mubStaffPageUrl({ role: role.id, category, basePath: staffBasePath })}
                 className={`rounded px-3 py-1 text-xs font-semibold ${
                   staffRoleTemplate === role.id ? 'bg-red-700 text-white' : 'bg-gray-800 text-white'
                 }`}
@@ -728,7 +1015,10 @@ export default function MubPageClient({
 
         {showBackgroundPanel ? (
           <div className="border-b border-red-700 bg-white p-4">
-            <div className="mb-3 text-sm font-semibold text-red-700">Fill background</div>
+            <div className="mb-1 text-sm font-semibold text-red-700">Fill background</div>
+            <p className="mb-3 text-xs text-gray-600">
+              Applies to all MUB sections (Club management, Workout and Social).
+            </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7">
               {MUB_BACKGROUND_OPTIONS.map((opt) => (
                 <label
@@ -753,8 +1043,13 @@ export default function MubPageClient({
               <button type="button" onClick={goViewLanding} className="rounded border px-4 py-1.5">
                 Cancel
               </button>
-              <button type="button" onClick={() => void saveBackground()} className="rounded bg-green-700 px-4 py-1.5 text-white">
-                OK
+              <button
+                type="button"
+                onClick={() => void saveBackground()}
+                disabled={saving || loading}
+                className="rounded bg-green-700 px-4 py-1.5 text-white disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'OK'}
               </button>
             </div>
           </div>
@@ -774,20 +1069,22 @@ export default function MubPageClient({
 
         <div
           className="min-h-[12rem] p-3"
-          style={{ backgroundColor: mubBackgroundCss(page?.backgroundColor ?? 'white') }}
+          style={{
+            backgroundColor: mubBackgroundCss(
+              showBackgroundPanel ? selectedBg : (page?.backgroundColor ?? 'white'),
+            ),
+          }}
         >
           {loading ? (
             <p className="text-sm text-gray-600">Loading…</p>
-          ) : showLoadPickerButton ? (
-            <div className="flex min-h-[8rem] items-start">
-              <button
-                type="button"
-                onClick={() => setLoadPickerOpen(true)}
-                className="rounded bg-gray-800 px-6 py-2 text-sm font-semibold text-white hover:bg-gray-700"
-              >
-                Mub to Load
-              </button>
-            </div>
+          ) : showBackgroundPanel ? (
+            <p className="text-sm text-gray-600">Background preview</p>
+          ) : showLandingHint ? (
+            <p className="text-sm text-gray-600">
+              {isUserSettingsHub && canEdit
+                ? 'Choose Club management, Workout section or Social section to edit its buttons.'
+                : "Use 'Mub to Load' to open a MUB page."}
+            </p>
           ) : !orderedButtons.length ? (
             <p className="text-sm text-gray-600">No buttons configured yet.</p>
           ) : showCrud || isReadingSession ? (
@@ -799,17 +1096,23 @@ export default function MubPageClient({
                 </p>
               ) : null}
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                <SortableContext items={visibleButtons.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext
+                  items={visibleButtons.map((b) => b.id)}
+                  strategy={previewMode === 2 ? rectSortingStrategy : verticalListSortingStrategy}
+                >
                   {previewMode === 2 ? (
+                    // Label mode (B): every button keeps its S/M/L size and a gap from its
+                    // neighbours; rows wrap instead of squeezing buttons into narrow columns.
                     <div
-                      className="grid gap-3"
-                      style={{ gridTemplateColumns: `repeat(${sizeCount}, minmax(0, 1fr))` }}
+                      className="flex flex-wrap items-start gap-3"
+                      style={{ maxWidth: labelRowMaxWidth(buttonSize, sizeCount, showCrud) }}
                     >
                       {visibleButtons.map((btn) => (
                         <SortableMubButtonRow
                           key={btn.id}
                           button={btn}
                           compact
+                          size={buttonSize}
                           showActions={showCrud}
                           onEdit={showCrud ? () => openEdit(btn) : undefined}
                           onDelete={showCrud ? () => void deleteButton(btn.id) : undefined}
@@ -822,6 +1125,7 @@ export default function MubPageClient({
                         <SortableMubButtonRow
                           key={btn.id}
                           button={btn}
+                          size={buttonSize}
                           showActions={showCrud}
                           onEdit={showCrud ? () => openEdit(btn) : undefined}
                           onDelete={showCrud ? () => void deleteButton(btn.id) : undefined}
@@ -859,7 +1163,7 @@ export default function MubPageClient({
             <div className="space-y-2">
               {orderedButtons.map((btn) => (
                 <div key={btn.id} className="flex items-stretch gap-2 rounded border border-gray-300/80 bg-white/40 p-2">
-                  <MubButtonLink button={btn} />
+                  <MubButtonLink button={btn} size={buttonSize} />
                 </div>
               ))}
             </div>
@@ -876,7 +1180,7 @@ export default function MubPageClient({
             <p className="mb-3 text-sm text-gray-600">
               {confirmAction === 'reset'
                 ? 'This removes ALL buttons on this category page (yours and imported). Enter your personal password to continue.'
-                : 'This removes only buttons imported from Movesbook MUB. Your manually created buttons stay. Enter your personal password to continue.'}
+                : 'This removes only buttons imported from Movesbook MUB, in all three sections. Your manually created buttons stay. Enter your personal password to continue.'}
             </p>
             <input
               type="password"
@@ -950,6 +1254,7 @@ export default function MubPageClient({
         </div>
       ) : null}
     </div>
+    </MubOpenSameContext.Provider>
   );
 }
 
@@ -958,12 +1263,14 @@ function SortableMubButtonRow({
   onEdit,
   onDelete,
   compact,
+  size = 1,
   showActions = true,
 }: {
   button: MubButtonDto;
   onEdit?: () => void;
   onDelete?: () => void;
   compact?: boolean;
+  size?: MubButtonSize;
   showActions?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -976,21 +1283,21 @@ function SortableMubButtonRow({
   };
 
   return (
+    // The whole card is the drag handle (not only the grip). The pointer sensor's
+    // 6px activation distance keeps plain clicks on the button / Edit / Delete working.
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-stretch gap-2 rounded border border-gray-300/80 bg-white/40 p-2 ${compact ? 'min-w-0' : ''}`}
+      className={`flex cursor-grab select-none items-stretch gap-2 rounded border border-gray-300/80 bg-white/40 p-2 active:cursor-grabbing ${
+        compact ? 'shrink-0' : ''
+      }`}
+      {...attributes}
+      {...listeners}
     >
-      <button
-        type="button"
-        className="mt-2 shrink-0 cursor-grab text-gray-500 active:cursor-grabbing"
-        aria-label="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
+      <span className="shrink-0 self-center text-gray-500" aria-hidden>
         <GripVertical className="h-4 w-4" />
-      </button>
-      <MubButtonLink button={button} compact={compact} />
+      </span>
+      <MubButtonLink button={button} compact={compact} size={size} />
       {showActions ? (
         <div className="flex shrink-0 flex-col gap-1">
           <button type="button" onClick={onEdit} className="rounded bg-gray-500 px-3 py-1 text-xs text-white">
@@ -1005,12 +1312,28 @@ function SortableMubButtonRow({
   );
 }
 
-function MubButtonLink({ button, compact }: { button: MubButtonDto; compact?: boolean }) {
+function MubButtonLink({
+  button,
+  compact,
+  size = 1,
+}: {
+  button: MubButtonDto;
+  compact?: boolean;
+  size?: MubButtonSize;
+}) {
   // Re-checked at render: a `javascript:` href stored before sanitising existed
   // (or written straight to the database) must still never become a live link.
   const safeHref = sanitizeMubUrl(button.urlToOpen);
   const href = safeHref ?? '#';
   const hoverTitle = compact ? button.extendedText || button.shortText : undefined;
+  const linkClass = 'block min-w-0';
+  const openSame = useContext(MubOpenSameContext);
+  const suppressClickAfterDrag = (e: React.MouseEvent) => {
+    if (Date.now() - lastMubDragEndAt < DRAG_CLICK_SUPPRESS_MS) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
   const inner = (
     <MubButtonPreview
       button={{
@@ -1023,11 +1346,12 @@ function MubButtonLink({ button, compact }: { button: MubButtonDto; compact?: bo
         extendedText: compact ? '' : button.extendedText,
       }}
       compact={compact}
+      size={size}
     />
   );
   if (!safeHref) {
     return (
-      <div className="block min-w-0" title={hoverTitle}>
+      <div className={linkClass} title={hoverTitle}>
         {inner}
       </div>
     );
@@ -1037,10 +1361,13 @@ function MubButtonLink({ button, compact }: { button: MubButtonDto; compact?: bo
     return (
       <a
         href={href}
-        className="block min-w-0"
+        className={linkClass}
         title={hoverTitle}
+        draggable={false}
+        onClickCapture={suppressClickAfterDrag}
         onClick={(e) => {
           e.preventDefault();
+          if (Date.now() - lastMubDragEndAt < DRAG_CLICK_SUPPRESS_MS) return;
           window.open(href, '_blank', 'noopener,noreferrer,width=1024,height=768');
         }}
       >
@@ -1051,16 +1378,48 @@ function MubButtonLink({ button, compact }: { button: MubButtonDto; compact?: bo
 
   if (button.pageToOpen === 'new_tab') {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="block min-w-0" title={hoverTitle}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={linkClass}
+        title={hoverTitle}
+        draggable={false}
+        onClickCapture={suppressClickAfterDrag}
+      >
         {inner}
       </a>
     );
   }
 
-  // same_label — open in the central frame of the same tab
+  // same_label — open in the central frame of the same tab (never a full-page jump).
   return (
-    <a href={href} className="block min-w-0" title={hoverTitle}>
+    <a
+      href={href}
+      className={linkClass}
+      title={hoverTitle}
+      draggable={false}
+      onClickCapture={suppressClickAfterDrag}
+      onClick={(e) => {
+        if (!openSame) return; // outside the MUB page: plain link
+        // Ctrl/Cmd/middle-click keep the browser's own "open in new tab".
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        if (Date.now() - lastMubDragEndAt < DRAG_CLICK_SUPPRESS_MS) return;
+        openSame(href, button.shortText);
+      }}
+    >
       {inner}
     </a>
   );
+}
+
+/**
+ * Width cap for label mode (B) so a row holds at most `perRow` buttons
+ * (S 8 / M 6 / L 4). Card = padding + grip + gap + button (+ Edit/Delete column).
+ */
+function labelRowMaxWidth(size: MubButtonSize, perRow: number, withActions: boolean): number {
+  const card = 18 + 16 + 8 + MUB_SIZE_STYLES[size].buttonWidth + (withActions ? 8 + 64 : 0);
+  const gap = 12;
+  return perRow * card + (perRow - 1) * gap;
 }

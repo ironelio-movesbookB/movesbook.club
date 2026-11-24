@@ -482,10 +482,14 @@ export default function LanguageSettings() {
     });
     if (!persistRes.ok) return false;
     setAllKeys((prev) =>
-      prev.map((k) => (k.key === key ? { ...k, values, category } : k)),
+      prev.map((k) => (k.key === key ? { ...k, values, category, isLongText: true } : k)),
     );
-    setCurrentKey((prev) => (prev?.key === key ? { ...prev, values, category } : prev));
-    setTab3SelectedKey((prev) => (prev?.key === key ? { ...prev, values, category } : prev));
+    setCurrentKey((prev) =>
+      prev?.key === key ? { ...prev, values, category, isLongText: true } : prev,
+    );
+    setTab3SelectedKey((prev) =>
+      prev?.key === key ? { ...prev, values, category, isLongText: true } : prev,
+    );
     lastLoadedEditorKeyRef.current = key;
     return true;
   };

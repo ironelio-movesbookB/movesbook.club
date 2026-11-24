@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { CalendarDays } from "lucide-react";
 import { createProcedureClient } from '@/lib/club/procedureClient';
 import { getProcedureDefinition } from '@/lib/procedures/registry';
 import { PROCEDURE_TYPE_CODES } from '@/lib/procedures/types';
@@ -9,7 +10,7 @@ import type { MemberDebtFormOptions } from '@/lib/procedures/memberDebtFormOptio
 import { resolvePublicImageUrl } from '@/lib/profileImageUrl';
 
 const fieldInputClass =
-  'h-[30px] w-full max-w-[420px] border border-gray-400 bg-white px-2 text-[13px] text-gray-900 outline-none focus:border-gray-600';
+  "h-[30px] w-full max-w-[420px] border border-gray-400 bg-white px-2 text-[13px] text-gray-900 outline-none focus:border-gray-600";
 
 function FieldRow({
   label,
@@ -22,7 +23,7 @@ function FieldRow({
 }) {
   return (
     <div className="flex items-center gap-3 py-2">
-      <div className="flex w-[220px] shrink-0 items-center justify-end gap-2 text-right text-[13px] text-gray-800 sm:w-[280px] md:w-[36%]">
+      <div className="flex w-[220px] shrink-0 items-center justify-end gap-2 text-right text-[14px] text-gray-800 sm:w-[280px] md:w-[36%]">
         {labelExtra}
         <span>{label}</span>
       </div>
@@ -37,11 +38,14 @@ export default function DebtMemberForm() {
   const searchParams = useSearchParams();
   const presetMemberId =
     (typeof params?.memberId === 'string' ? params.memberId : '') ||
-    searchParams.get('memberId') ||
-    searchParams.get('userId') ||
+    searchParams?.get('memberId') ||
+    searchParams?.get('userId') ||
     '';
   const def = getProcedureDefinition(PROCEDURE_TYPE_CODES.MEMBER_DEBT)!;
-  const client = useMemo(() => createProcedureClient(PROCEDURE_TYPE_CODES.MEMBER_DEBT), []);
+  const client = useMemo(
+    () => createProcedureClient(PROCEDURE_TYPE_CODES.MEMBER_DEBT),
+    [],
+  );
 
   const [options, setOptions] = useState<MemberDebtFormOptions | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +69,10 @@ export default function DebtMemberForm() {
       .fetchFormOptions<MemberDebtFormOptions>()
       .then((opts) => {
         setOptions(opts);
-        if (presetMemberId && opts.members.some((m) => m.id === presetMemberId)) {
+        if (
+          presetMemberId &&
+          opts.members.some((m) => m.id === presetMemberId)
+        ) {
           setMemberId(presetMemberId);
         }
       })
@@ -123,7 +130,11 @@ export default function DebtMemberForm() {
   }
 
   if (loading) {
-    return <div className="procedure-form p-8 text-center text-[13px] text-gray-800">Loading form...</div>;
+    return (
+      <div className="procedure-form p-8 text-center text-[13px] text-gray-800">
+        Loading form...
+      </div>
+    );
   }
 
   return (
@@ -136,11 +147,13 @@ export default function DebtMemberForm() {
 
       {/* Member + profile image */}
       <div className="border-b border-gray-200 px-4 py-4">
-        <div className="flex items-start gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3 pt-2">
-            <span className="w-16 shrink-0 text-right text-[13px] text-gray-800">Member</span>
+        <div className="mx-auto flex w-full max-w-[760px] items-start justify-center gap-3">
+          <div className="flex min-w-0 items-center gap-3 pt-2">
+            <span className="w-36 shrink-0 text-right text-[13px] text-gray-800">
+              Member
+            </span>
             <select
-              className={`${fieldInputClass} max-w-[420px]`}
+              className={`${fieldInputClass} w-[520px] max-w-[520px]`}
               value={memberId}
               onChange={(e) => setMemberId(e.target.value)}
             >
@@ -153,11 +166,8 @@ export default function DebtMemberForm() {
             </select>
           </div>
 
-          <div className="flex w-[120px] shrink-0 flex-col items-center">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              Profile image
-            </div>
-            <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden border border-gray-400 bg-white">
+          <div className="flex shrink-0 items-center pt-1">
+            <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden border border-gray-400 bg-white shadow-sm">
               {memberImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -165,8 +175,10 @@ export default function DebtMemberForm() {
                   alt={selectedMember?.name || 'Member'}
                   className="h-full w-full object-cover"
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = 'none';
-                    const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    (e.currentTarget as HTMLImageElement).style.display =
+                      'none';
+                    const fallback = e.currentTarget
+                      .nextElementSibling as HTMLElement | null;
                     if (fallback) fallback.classList.remove('hidden');
                   }}
                 />
@@ -176,8 +188,12 @@ export default function DebtMemberForm() {
                   memberImageUrl ? 'hidden' : ''
                 }`}
               >
-                <span className="text-[9px] font-bold leading-tight text-gray-600">NO IMAGE</span>
-                <span className="text-[9px] font-bold leading-tight text-gray-600">AVAILABLE</span>
+                <span className="text-[9px] font-bold leading-tight text-gray-600">
+                  NO IMAGE
+                </span>
+                <span className="text-[9px] font-bold leading-tight text-gray-600">
+                  AVAILABLE
+                </span>
               </div>
             </div>
           </div>
@@ -196,79 +212,105 @@ export default function DebtMemberForm() {
           Add a debt
         </div>
 
-        <div className="bg-white px-2 py-2">
-          <FieldRow label="Amout">
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              className={fieldInputClass}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </FieldRow>
-
-          <FieldRow label="Date" labelExtra={<span className="text-xl">📅</span>}>
-            <input
-              type="date"
-              className={fieldInputClass}
-              value={debtDate}
-              onChange={(e) => setDebtDate(e.target.value)}
-            />
-          </FieldRow>
-
-          <FieldRow label="Causal">
-            <div className="flex max-w-[460px] items-center gap-1">
+        <div className="bg-white px-2 py-3">
+          <div className="mx-auto max-w-[560px]">
+            <FieldRow label="Amout">
               <input
-                type="text"
-                className={`${fieldInputClass} max-w-none flex-1`}
-                value={causal}
-                onChange={(e) => setCausal(e.target.value)}
+                type="number"
+                min="0.01"
+                step="0.01"
+                className={fieldInputClass}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
               />
-             
+            </FieldRow>
+
+            <FieldRow
+              label="Date"
+              labelExtra={
+                <CalendarDays
+                  aria-hidden="true"
+                  className="h-4 w-4 text-gray-600"
+                />
+              }
+            >
+              <input
+                type="date"
+                className={fieldInputClass}
+                value={debtDate}
+                onChange={(e) => setDebtDate(e.target.value)}
+              />
+            </FieldRow>
+
+            <FieldRow label="Causal">
+              <div className="flex max-w-[460px] items-center gap-1">
+                <select
+                  className={`${fieldInputClass} max-w-none flex-1`}
+                  value={causal}
+                  onChange={(e) => setCausal(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="Subscription">Subscription</option>
+                  <option value="Supplementary contribution">
+                    Supplementary contribution
+                  </option>
+                  <option value="Materials">Materials</option>
+                  <option value="Sponsors">Sponsors</option>
+                  <option value="Costs for fields and/or gyms">
+                    Costs for fields and/or gyms
+                  </option>
+                  <option value="Routine">Routine</option>
+                  <option value="Extraordinary">Extraordinary</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </FieldRow>
+
+            <FieldRow label="Operator">
+              <select
+                className={fieldInputClass}
+                value={operatorId}
+                onChange={(e) => setOperatorId(e.target.value)}
+              >
+                <option value="">Select</option>
+                {options?.operators.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Typology of Deadline">
+              <select
+                className={fieldInputClass}
+                value={typologyOfDeadline}
+                onChange={(e) => setTypologyOfDeadline(e.target.value)}
+              >
+                {options?.typologies.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+
+            <div className="flex items-center gap-3 py-3 pl-[8%]">
+              <input
+                id="open-payment-after-save"
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[#2e7d32]"
+                checked={openPaymentAfterSave}
+                onChange={(e) => setOpenPaymentAfterSave(e.target.checked)}
+              />
+              <label
+                htmlFor="open-payment-after-save"
+                className="text-[14px] leading-snug text-gray-800"
+              >
+                Open form of &quot;payment of deadlines&quot; after saving this
+                debt.
+              </label>
             </div>
-          </FieldRow>
-
-          <FieldRow label="Operator">
-            <select
-              className={fieldInputClass}
-              value={operatorId}
-              onChange={(e) => setOperatorId(e.target.value)}
-            >
-              <option value="">Select</option>
-              {options?.operators.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow label="Typology of Deadline">
-            <select
-              className={fieldInputClass}
-              value={typologyOfDeadline}
-              onChange={(e) => setTypologyOfDeadline(e.target.value)}
-            >
-              {options?.typologies.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <div className="flex items-start gap-3 py-3 pl-[8%]">
-            <input
-              id="open-payment-after-save"
-              type="checkbox"
-              className="mt-0.5 h-4 w-4"
-              checked={openPaymentAfterSave}
-              onChange={(e) => setOpenPaymentAfterSave(e.target.checked)}
-            />
-            <label htmlFor="open-payment-after-save" className="text-[13px] leading-snug text-gray-800">
-              Open form of &quot;payment of deadlines&quot; after saving this debt.
-            </label>
           </div>
         </div>
 
@@ -284,10 +326,13 @@ export default function DebtMemberForm() {
         {companyOpen && (
           <div className="space-y-3 border-t border-purple-300 bg-white px-4 py-4">
             <p className="text-center text-[12px] text-gray-700">
-              if activated multicompany option you can select the company for this payment
+              if activated multicompany option you can select the company for
+              this payment
             </p>
             <div className="flex items-center gap-3">
-              <span className="w-24 shrink-0 text-right text-[13px] text-gray-800">Company</span>
+              <span className="w-24 shrink-0 text-right text-[13px] text-gray-800">
+                Company
+              </span>
               <select
                 className={fieldInputClass}
                 value={companyId}
@@ -322,14 +367,14 @@ export default function DebtMemberForm() {
         <button
           type="submit"
           disabled={saving}
-          className="min-w-[88px] rounded-sm bg-[#c62828] px-5 py-1.5 text-[13px] font-semibold text-white hover:bg-[#b71c1c] disabled:opacity-60"
+          className="min-w-[100px] rounded-sm bg-[#d32f2f] px-5 py-2 text-[13px] font-semibold uppercase text-white hover:bg-[#b71c1c] disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'save'}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="min-w-[88px] rounded-sm bg-[#424242] px-5 py-1.5 text-[13px] font-semibold text-white hover:bg-[#303030]"
+          className="min-w-[100px] rounded-sm bg-[#4b4b4b] px-5 py-2 text-[13px] font-semibold uppercase text-white hover:bg-[#303030]"
         >
           cancel
         </button>

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Users,
   Calendar,
@@ -18,6 +17,7 @@ import ClubAdminInfoForm from '@/components/profile/ClubAdminInfoForm';
 import ClubInfoContactsForm from '@/components/club/ClubInfoContactsForm';
 import ClubReferencesDisplay from '@/components/club/ClubReferencesDisplay';
 import ManagedEntitySidebarAvatar from '@/components/entity/ManagedEntitySidebarAvatar';
+import InlineMemberProfile from '@/components/club/memberOverview/InlineMemberProfile';
 import {
   getClubProfileDisplayRows,
   parseClubDescriptionMeta,
@@ -112,11 +112,25 @@ function readDashboardSettings(clubId: string | undefined): DashboardPageSetting
   }
 }
 
-function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
+function MemberSilhouetteCard({
+  member,
+  selected,
+  onSelect,
+}: {
+  member?: ClubMember;
+  selected?: boolean;
+  onSelect?: (memberId: string) => void;
+}) {
   if (member) {
     const initial = member.member.name.charAt(0).toUpperCase();
     return (
-      <div className="flex-shrink-0 w-[140px] rounded-xl border-2 border-gray-200 bg-white p-3 shadow-sm">
+      <button
+        type="button"
+        onClick={() => onSelect?.(member.member.id)}
+        className={`w-[140px] shrink-0 rounded-xl border-2 bg-white p-3 text-left shadow-sm hover:border-blue-400 ${
+          selected ? 'border-blue-500' : 'border-gray-200'
+        }`}
+      >
         <div className="mx-auto mb-2 flex h-24 w-full items-center justify-center rounded-lg bg-gradient-to-br from-slate-100 to-slate-200">
           <span className="text-3xl font-bold text-slate-500">{initial}</span>
         </div>
@@ -126,7 +140,7 @@ function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
         <p className="truncate text-center text-[10px] text-gray-500">
           @{member.member.username}
         </p>
-      </div>
+      </button>
     );
   }
 
@@ -142,9 +156,13 @@ function MemberSilhouetteCard({ member }: { member?: ClubMember }) {
 
 function HorizontalMemberCarousel({
   members,
+  selectedMemberId,
+  onSelect,
   slotCount = 5,
 }: {
   members: ClubMember[];
+  selectedMemberId?: string | null;
+  onSelect?: (memberId: string) => void;
   slotCount?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -175,7 +193,12 @@ function HorizontalMemberCarousel({
         className="flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2 overscroll-x-contain scrollbar-thin scrollbar-thumb-gray-300"
       >
         {slots.map((m, i) => (
-          <MemberSilhouetteCard key={m?.id ?? `empty-${i}`} member={m} />
+          <MemberSilhouetteCard
+            key={m?.id ?? `empty-${i}`}
+            member={m}
+            selected={Boolean(m && selectedMemberId === m.member.id)}
+            onSelect={onSelect}
+          />
         ))}
       </div>
       <button
@@ -380,12 +403,14 @@ export default function ClubOverviewPanel({
   const [lowerPanel, setLowerPanel] = useState<DashboardLowerPanel>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pageSettings, setPageSettings] = useState<DashboardPageSettings>(DEFAULT_DASHBOARD_SETTINGS);
+  const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPageSettings(readDashboardSettings(club?.id));
     setSettingsOpen(false);
     setLowerPanel(null);
+    setProfileMemberId(null);
   }, [club?.id]);
 
   useEffect(() => {
@@ -490,8 +515,15 @@ export default function ClubOverviewPanel({
         <h3 className="text-lg font-bold text-gray-900 mb-3">Recent Members</h3>
         <HorizontalMemberCarousel
           members={members.length > 0 ? members.slice(0, 20) : []}
+          selectedMemberId={profileMemberId}
+          onSelect={setProfileMemberId}
           slotCount={5}
         />
+        {club?.id && profileMemberId ? (
+          <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
+            <InlineMemberProfile clubId={club.id} memberId={profileMemberId} focus="profile" />
+          </div>
+        ) : null}
       </section>
       ) : null}
 

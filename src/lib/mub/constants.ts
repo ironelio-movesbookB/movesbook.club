@@ -92,8 +92,16 @@ export function mubTextColorCss(id: string): string {
 export function roleTemplateFromUserType(userType: string): MubRoleTemplate {
   const normalized = userType.toUpperCase();
   if (normalized === 'TEAM_MANAGER' || normalized === 'TEAM') return 'TEAM';
-  if (normalized === 'COACH' || normalized === 'CLUB_TRAINER') return 'COACH';
-  if (normalized === 'CLUB' || normalized === 'CLUB_ADMIN' || normalized === 'CLUB_MANAGER') return 'CLUB';
+  if (normalized === 'COACH') return 'COACH';
+  // CLUB_TRAINER is the legacy club account type (ID8) — admin lists group it with clubs.
+  if (
+    normalized === 'CLUB' ||
+    normalized === 'CLUB_TRAINER' ||
+    normalized === 'CLUB_ADMIN' ||
+    normalized === 'CLUB_MANAGER'
+  ) {
+    return 'CLUB';
+  }
   if (normalized === 'GROUP' || normalized === 'GROUP_ADMIN') return 'GROUP';
   // ATHLETE, ADMIN, and any other single-user style account
   return 'SINGLE_USER';

@@ -11,7 +11,7 @@ function text(value: unknown): string {
   return String(value ?? '').trim();
 }
 
-async function getLegacyUserId(userId: string): Promise<string | null> {
+export async function getLegacyUserId(userId: string): Promise<string | null> {
   const fromId = userId.match(/^legacy_(\d+)(?:_|$)/);
   if (fromId?.[1]) return fromId[1];
 
@@ -36,6 +36,8 @@ export type ExpenseFormOptions = {
   members: { id: string; name: string }[];
   operators: { id: string; name: string }[];
   companies: { id: string; name: string }[];
+  clubName: string;
+  clubMemberId: string;
   currentOperatorId: string | null;
 };
 
@@ -52,7 +54,15 @@ export async function fetchExpenseFormOptions(ctx: ClubAuthContext): Promise<Exp
       fetchClubOperatorOptions(ctx.club.id),
       listCompanies(ctx),
     ]);
-    return { expenses, members, operators, companies, currentOperatorId: ctx.userId };
+    return {
+      expenses,
+      members,
+      operators,
+      companies,
+      clubName: ctx.club.name,
+      clubMemberId: ctx.userId,
+      currentOperatorId: ctx.userId,
+    };
   }
 
   const legacyUserId = await getLegacyUserId(club.adminId);
@@ -62,6 +72,8 @@ export async function fetchExpenseFormOptions(ctx: ClubAuthContext): Promise<Exp
     const rows = await prisma.$queryRawUnsafe<{ id: bigint | number; name: string }[]>(
       `SELECT id, name FROM \`${expenseTable}\`
        WHERE user_id = ?
+         AND parent_id IS NOT NULL
+         AND parent_id <> 0
        ORDER BY name ASC`,
       legacyUserId
     );
@@ -77,5 +89,13 @@ export async function fetchExpenseFormOptions(ctx: ClubAuthContext): Promise<Exp
     listCompanies(ctx),
   ]);
 
-  return { expenses, members, operators, companies, currentOperatorId: ctx.userId };
+  return {
+    expenses,
+    members,
+    operators,
+    companies,
+    clubName: ctx.club.name,
+    clubMemberId: club.adminId,
+    currentOperatorId: ctx.userId,
+  };
 }

@@ -9,6 +9,7 @@ import {
 } from '@/lib/procedures/installmentService';
 import { DeadlineDeleteError, deleteSingleDeadline } from '@/lib/procedures/deleteDeadline';
 import { prisma } from '@/lib/prisma';
+import { verifyOperatorPassword } from '@/lib/procedures/operatorAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,12 +78,50 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     if (!(await recordBelongsToClub(params.id, auth.ctx.club.id))) return recordNotFound();
 
     const body = await request.json();
-    const installment = await updateInstallment(installmentId, params.id, {
-      ...(body.balance != null ? { balance: Number(body.balance) } : {}),
-      ...(body.paid != null ? { paid: Number(body.paid) } : {}),
-      ...(body.paymentDate ? { paymentDate: String(body.paymentDate) } : {}),
-      ...(body.expireDate !== undefined ? { expireDate: body.expireDate } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
+    if (
+      params.type === 'expense' &&
+      body.activateRecurrent === true &&
+      Number(body.balance) <= 0
+    ) {
+      return NextResponse.json(
+        { error: 'Deadline total must be greater than the amount already paid.' },
+        { status: 400 },
+      );
+    }
+
+    const installment = await prisma.$transaction(async (tx) => {
+      const updated = await updateInstallment(installmentId, params.id, {
+        ...(body.balance != null ? { balance: Number(body.balance) } : {}),
+        ...(body.paid != null ? { paid: Number(body.paid) } : {}),
+        ...(body.paymentDate ? { paymentDate: String(body.paymentDate) } : {}),
+        ...(body.expireDate !== undefined ? { expireDate: body.expireDate } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+      }, tx);
+
+      if (updated && params.type === 'expense' && body.activateRecurrent === true) {
+        const record = await tx.procedureRecord.findFirst({
+          where: { id: params.id, clubId: auth.ctx.club.id },
+          select: { metadata: true },
+        });
+        const metadata =
+          record?.metadata &&
+          typeof record.metadata === 'object' &&
+          !Array.isArray(record.metadata)
+            ? { ...record.metadata }
+            : {};
+        if (metadata.expenseRecurrence && typeof metadata.expenseRecurrence === 'object') {
+          metadata.recurrentActivated = true;
+        }
+        delete metadata.isRecurringOccurrence;
+        if (record) {
+          await tx.procedureRecord.update({
+            where: { id: params.id },
+            data: { metadata },
+          });
+        }
+      }
+
+      return updated;
     });
 
     if (!installment) {
@@ -108,6 +147,19 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (request.nextUrl.searchParams.get('mode') === 'archive') {
       if (!isKnownProcedureType(params.type)) {
         return NextResponse.json({ error: 'Unknown procedure type' }, { status: 400 });
+      }
+      const body = (await request.json().catch(() => null)) as { adminPassword?: string } | null;
+      if (!body?.adminPassword?.trim()) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is required' },
+          { status: 400 }
+        );
+      }
+      if (!(await verifyOperatorPassword(auth.ctx.userId, body.adminPassword))) {
+        return NextResponse.json(
+          { error: 'Club/team administrator code is incorrect' },
+          { status: 401 }
+        );
       }
       try {
         const result = await deleteSingleDeadline(auth.ctx, params.type, params.id, installmentId);
