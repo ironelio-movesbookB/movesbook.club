@@ -27,12 +27,19 @@ async function execIgnoreDuplicate(sql: string) {
     await prisma.$executeRawUnsafe(sql);
   } catch (e) {
     const code = typeof e === 'object' && e && 'code' in e ? String((e as { code?: string }).code) : '';
+    const metaCode =
+      typeof e === 'object' && e && 'meta' in e
+        ? String((e as { meta?: { code?: string } }).meta?.code ?? '')
+        : '';
     const message = e instanceof Error ? e.message : String(e);
     if (
       !code.includes('ER_DUP_FIELDNAME') &&
       !code.includes('ER_TABLE_EXISTS_ERROR') &&
       !code.includes('ER_DUP_KEYNAME') &&
-      !/Duplicate column|already exists|Duplicate table|Duplicate key name/i.test(message)
+      metaCode !== '1146' &&
+      !/Duplicate column|already exists|Duplicate table|Duplicate key name|doesn't exist/i.test(
+        message,
+      )
     ) {
       throw e;
     }
@@ -72,16 +79,6 @@ async function ensureSponsorGroupsSchema() {
       INDEX \`ogp_news_sponsor_groups_sortOrder_idx\` (\`sortOrder\`)
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
-
-  await execIgnoreDuplicate(
-    'ALTER TABLE `ogp_news_sponsor_settings` ADD COLUMN `enabled` BOOLEAN NOT NULL DEFAULT true',
-  );
-  await execIgnoreDuplicate(
-    'ALTER TABLE `ogp_news_sponsor_settings` ADD COLUMN `enabledFrom` DATETIME NULL',
-  );
-  await execIgnoreDuplicate(
-    'ALTER TABLE `ogp_news_sponsor_settings` ADD COLUMN `enabledTo` DATETIME NULL',
-  );
 
   await execIgnoreDuplicate(
     'ALTER TABLE `ogp_news_sponsors` ADD COLUMN `groupId` VARCHAR(191) NULL',
