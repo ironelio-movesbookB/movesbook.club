@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SportType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isValidSportType } from '@/lib/profileSports';
 
 export async function GET(
   request: NextRequest,
@@ -69,12 +71,17 @@ export async function POST(
     });
 
     if (sports && Array.isArray(sports) && sports.length > 0) {
-      await prisma.newsSettingSport.createMany({
-        data: sports.map((sport: string) => ({
-          newsSettingId: newsSetting.id,
-          sport: sport as any,
-        })),
-      });
+      const validSports = sports.filter(
+        (sport: string): sport is SportType => isValidSportType(sport)
+      );
+      if (validSports.length > 0) {
+        await prisma.newsSettingSport.createMany({
+          data: validSports.map((sport) => ({
+            newsSettingId: newsSetting.id,
+            sport,
+          })),
+        });
+      }
     }
 
     if (roles && Array.isArray(roles) && roles.length > 0) {

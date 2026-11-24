@@ -83,7 +83,6 @@ import {
   Check,
   RefreshCw,
   FileText,
-  Timer,
   Hourglass,
   Award,
   ArrowUpRight,
@@ -151,6 +150,7 @@ import {
 import SidebarClubMyEntityTop from '@/components/SidebarClubMyEntityTop';
 import ClubMyClubInfoSubmenu from '@/components/club/ClubMyClubInfoSubmenu';
 import ClubSocialSubmenu from '@/components/club/ClubSocialSubmenu';
+import ClubTrainingSubmenu from '@/components/club/ClubTrainingSubmenu';
 import ClubMembersDashboardSection from '@/components/club/ClubMembersDashboardSection';
 import PersonalMyTopicsSidebarBlock from '@/components/club/PersonalMyTopicsSidebarBlock';
 import ChangeProfilePhotoModal from '@/components/athlete/ChangeProfilePhotoModal';
@@ -287,6 +287,8 @@ interface DarkSidebarProps {
   onClubAddSongsPlaylistsClick?: () => void;
   /** My Club → Music for the club → Music Panel (same as navbar "Music Panel") */
   onClubMusicPanelClick?: () => void;
+  /** My Club → Music for the club → Mood Music (legacy clubs/mood_music) */
+  onClubMoodMusicClick?: () => void;
   /** General settings → Identification devices (card readers list in dashboard) */
   onIdentificationDevicesClick?: () => void;
   /** General settings → Access of outcome settings (dashboard panel) */
@@ -301,13 +303,19 @@ interface DarkSidebarProps {
   onClubStaffMessagesClick?: () => void;
   /** My Club → Club News → News (shared editorial news) */
   onClubNewsSectionClick?: () => void;
-  /** My Club → Club News → Movesbook News (superadmin Global News, read-only) */
+  /** My Club → Club News → Movesbook News (public archive, credential-filtered) */
+  onClubMovesbookArchiveNewsSectionClick?: () => void;
+  /** My Club → Club News → Movesbook Global News (superadmin Global News feed) */
   onClubMovesbookNewsSectionClick?: () => void;
   /** My Club → Club News → OGP News (shared OGP news) */
   onClubOgpNewsSectionClick?: () => void;
   /** My Club → Club News → Club Global News (all shared) */
   onClubGlobalNewsSectionClick?: () => void;
-  /** My Page → News → Movesbook News (superadmin Global News, read-only) */
+  /** My Club → Section Training → My Global library of exercises */
+  onClubGlobalExerciseLibraryClick?: () => void;
+  /** My Club → Section Training → My library of OGP Exercises */
+  onClubOgpExerciseLibraryClick?: () => void;
+  /** My Page → News → Movesbook Global News (superadmin Global News feed) */
   onMyPageMovesbookNewsClick?: () => void;
   /** My Page → News → News (same as top-nav MB News / news-by-movesbook) */
   onMyPageNewsClick?: () => void;
@@ -365,6 +373,7 @@ export default function DarkSidebar({
   onOrgFeedbacksClick,
   onClubAddSongsPlaylistsClick,
   onClubMusicPanelClick,
+  onClubMoodMusicClick,
   onIdentificationDevicesClick,
   onAccessOutcomeSettingsClick,
   onSuggestMovesbookClick,
@@ -372,9 +381,12 @@ export default function DarkSidebar({
   onClubMessagesClick,
   onClubStaffMessagesClick,
   onClubNewsSectionClick,
+  onClubMovesbookArchiveNewsSectionClick,
   onClubMovesbookNewsSectionClick,
   onClubOgpNewsSectionClick,
   onClubGlobalNewsSectionClick,
+  onClubGlobalExerciseLibraryClick,
+  onClubOgpExerciseLibraryClick,
   onMyPageMovesbookNewsClick,
   onMyPageNewsClick,
   onMyPageOgpNewsClick,
@@ -2500,7 +2512,7 @@ export default function DarkSidebar({
                     className="mb-1.5 flex w-full items-center gap-2.5 border-b-2 border-gray-400/70 px-4 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                   >
                     <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
-                    <span className="min-w-0 leading-snug">Movesbook News</span>
+                    <span className="min-w-0 leading-snug">Movesbook Global News</span>
                   </button>
                   <button
                     type="button"
@@ -2933,6 +2945,7 @@ export default function DarkSidebar({
                       </button>
                       <button
                         type="button"
+                        onClick={() => onClubMoodMusicClick?.()}
                         className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                       >
                         <Users className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
@@ -3247,7 +3260,7 @@ export default function DarkSidebar({
                       <div className="bg-[#4a4a4a] text-white">
                         <button
                           type="button"
-                          onClick={() => onClubMovesbookNewsSectionClick?.()}
+                          onClick={() => onClubMovesbookArchiveNewsSectionClick?.()}
                           className="mb-1.5 flex w-full items-center gap-2.5 border-b-2 border-gray-400/70 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                         >
                           <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
@@ -3255,11 +3268,19 @@ export default function DarkSidebar({
                         </button>
                         <button
                           type="button"
+                          onClick={() => onClubMovesbookNewsSectionClick?.()}
+                          className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
+                        >
+                          <BookOpen className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
+                          <span className="min-w-0 leading-snug">Movesbook Global News</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onClubNewsSectionClick?.()}
                           className="flex w-full items-center gap-2.5 border-b border-gray-500/60 px-3 py-2.5 text-left text-[12px] font-normal text-white transition-colors hover:bg-[#555]"
                         >
                           <Newspaper className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
-                          <span className="min-w-0 leading-snug">News</span>
+                          <span className="min-w-0 leading-snug">Club News</span>
                         </button>
                         <button
                           type="button"
@@ -3496,7 +3517,11 @@ export default function DarkSidebar({
 
                 {officialClubMyClub ? (
                   <>
-                    <ClubOfficialSectionRow icon={Timer} label="Section Training" />
+                    <ClubSocialSubmenu variant="section" onChatClick={onClubChatClick} />
+                    <ClubTrainingSubmenu
+                      onGlobalLibraryClick={onClubGlobalExerciseLibraryClick}
+                      onOgpLibraryClick={onClubOgpExerciseLibraryClick}
+                    />
                     <ClubOfficialSectionRow icon={Scale} label="Section Body Analisys" />
                     <ClubOfficialSectionRow icon={Salad} label="Section Nutrition" />
                   </>

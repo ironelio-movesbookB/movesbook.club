@@ -48,7 +48,8 @@ model User {
   sections                 WorkoutSection[]
   executionTechniques      ExecutionTechnique[]
   workoutTemplates         WorkoutTemplate[]
-  telegramAccount          String?
+  /// Telegram @username; must be unique across users when set (null allowed for many users).
+  telegramAccount          String?   @unique
   telegramChatId           String?   // Telegram chat id for sending/receiving via bot
   lastSeenAt               DateTime? // For chat online/offline status
   /// Profile/avatar: public path, remote URL, or data URL (operator-style upload stores data:image/...).
@@ -263,6 +264,8 @@ model OgpNewsGroup {
   visibilitySports      String?   @db.Text
   /// Club OGP News audience: only-me | me-and-club-members | me-club-members-and-filters
   audienceMode          String    @default("me-and-club-members")
+  /// Super admin: shown in Global News merged feed
+  inGlobalNews          Boolean   @default(false)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items                 OgpNewsGroupItem[]
   likes                 OgpNewsGroupLike[]
@@ -273,6 +276,7 @@ model OgpNewsGroup {
   @@index([userId, topic])
   @@index([topic])
   @@index([deletedAt])
+  @@index([inGlobalNews])
   @@map("ogp_news_groups")
 }
 
@@ -305,39 +309,47 @@ model OgpNewsGroupLike {
   @@map("ogp_news_group_likes")
 }
 
-/// Singleton placement rules for OGP News sponsored cards (super admin).
-model OgpNewsSponsorSettings {
-  id           String           @id @default("default")
-  /// A: first sponsor row (1?5). If that row does not exist on a page, use the last row available.
+/// Named group of OGP News sponsored cards (super admin). Multiple groups can show in the feed.
+model OgpNewsSponsorGroup {
+  id           String           @id @default(cuid())
+  name         String
+  /// A: first sponsor row (1–5). If that row does not exist on a page, use the last row available.
   startRow     Int              @default(2)
   /// B: repeat every N rows after the first sponsor (3?99), counting across pages.
   intervalRows Int              @default(12)
-  /// Rotation delay in milliseconds when more than one sponsor is configured.
+  /// Rotation delay in milliseconds when more than one sponsor is configured in this group.
   delayMs      Int              @default(5000)
-  /// When false, all sponsored cards are hidden from the news feed.
+  /// When false, this group’s sponsored cards are hidden from the news feed.
   enabled      Boolean          @default(true)
+  /// Inclusive calendar start (date-only); null = no start bound.
+  enabledFrom  DateTime?
+  /// Inclusive calendar end (date-only); null = no end bound.
+  enabledTo    DateTime?
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   sponsors     OgpNewsSponsor[]
 
-  @@map("ogp_news_sponsor_settings")
+  @@index([sortOrder])
+  @@map("ogp_news_sponsor_groups")
 }
 
 model OgpNewsSponsor {
-  id          String                  @id @default(cuid())
-  settingsId  String                  @default("default")
-  image       String                  @db.Text
-  /// "single" (1 grid cell) or "double" (2 grid cells).
-  size        String                  @default("single")
-  hoverTitle  String?                 @db.Text
-  linkUrl     String                  @db.Text
+  id          String               @id @default(cuid())
+  groupId     String
+  image       String               @db.Text
+  /// "single" (1 grid cell) or "double" / "triple" / "quadruple".
+  size        String               @default("single")
+  hoverTitle  String?              @db.Text
+  linkUrl     String               @db.Text
   /// "tab" (new browser tab) or "window" (new browser window).
-  linkTarget  String                  @default("tab")
-  sortOrder   Int                     @default(0)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  settings    OgpNewsSponsorSettings  @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  linkTarget  String               @default("tab")
+  sortOrder   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  group       OgpNewsSponsorGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  @@index([settingsId, sortOrder])
+  @@index([groupId, sortOrder])
   @@map("ogp_news_sponsors")
 }
 
@@ -350,6 +362,17 @@ model NewsTypedArticle {
 
   @@index([userId])
   @@map("news_typed_articles")
+}
+
+/// Legacy club Mood Music catalog (PHP clubs/mood_music). Used by MoodMusicPanel via raw SQL helpers.
+model MoodMusic {
+  id          Int    @id @default(autoincrement())
+  title       String @db.VarChar(255)
+  imageUrl    String @map("image_url") @db.Text
+  playlistId  String @map("playlistid") @db.VarChar(255)
+  updateOrder Int    @default(0) @map("update_order")
+
+  @@map("mood_music")
 }
 
 /// Custom topics for the Music OGP section (mirrors UserNewsTopic).
@@ -545,6 +568,10 @@ model ExerciseOgpArticle {
   url                   String    @db.Text
   siteName              String?
   type                  String?
+  /// "Single exercises" | "Playlist of exercises" (Add OGP exercise Typology).
+  typology              String?
+  /// Optional main-area value (same list as Machines → Main area) from Add OGP exercise.
+  sportEquipment        String?
   customDescription     String?   @db.Text
   topic                 String
   languageCode          String?
@@ -556,6 +583,10 @@ model ExerciseOgpArticle {
   visibilityCountries   String?   @db.Text
   visibilityLanguages   String?   @db.Text
   visibilitySports      String?   @db.Text
+  /// Super admin: marked for Global Exercises (same pattern as OGP News → Global News)
+  inGlobalNews          Boolean   @default(false)
+  /// Club admin creator: shared into the Movesbook exercise library (visible to super admin via “OGP exercises shared”).
+  sharedInMovesbookLibrary Boolean @default(false)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   deletedBy             User?     @relation("ExerciseOgpDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   likes                 ExerciseOgpArticleLike[]
@@ -566,6 +597,8 @@ model ExerciseOgpArticle {
   @@index([userId, category, topic])
   @@index([category])
   @@index([deletedAt])
+  @@index([inGlobalNews])
+  @@index([sharedInMovesbookLibrary])
   @@map("exercise_ogp_articles")
 }
 
@@ -600,6 +633,8 @@ model ExerciseOgpGroup {
   visibilityCountries   String?   @db.Text
   visibilityLanguages   String?   @db.Text
   visibilitySports      String?   @db.Text
+  /// Super admin: marked for Global Exercises (same pattern as OGP News groups → Global News)
+  inGlobalNews          Boolean   @default(false)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items                 ExerciseOgpGroupItem[]
   likes                 ExerciseOgpGroupLike[]
@@ -610,6 +645,7 @@ model ExerciseOgpGroup {
   @@index([userId, category, topic])
   @@index([category])
   @@index([deletedAt])
+  @@index([inGlobalNews])
   @@map("exercise_ogp_groups")
 }
 

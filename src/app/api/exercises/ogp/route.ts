@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuthWithUser, requireAuthForNews, getOrCreateUserForSuperAdmin, getSuperAdminCreatorIds } from '../auth';
 import { requireCategory } from '../category';
@@ -13,7 +14,84 @@ function parseJsonArray(str: string | null | undefined): string[] {
   }
 }
 
-/** Same rules as non-admin branch in GET: what OGPs can this user see (excluding admin bypass). */
+/** Load typology / sportEquipment even if Prisma client is stale (before regenerate). */
+async function loadExerciseOgpExtraFields(
+  ids: string[]
+): Promise<Map<string, { typology: string | null; sportEquipment: string | null }>> {
+  const map = new Map<string, { typology: string | null; sportEquipment: string | null }>();
+  if (ids.length === 0) return map;
+  try {
+    const rows = await prisma.$queryRaw<
+      { id: string; typology: string | null; sportEquipment: string | null }[]
+    >`
+      SELECT id, typology, sportEquipment FROM exercise_ogp_articles WHERE id IN (${Prisma.join(ids)})
+    `;
+    for (const row of rows) {
+      map.set(row.id, {
+        typology: row.typology ?? null,
+        sportEquipment: row.sportEquipment ?? null,
+      });
+    }
+  } catch (e) {
+    // Fallback if sportEquipment column does not exist yet.
+    try {
+      const rows = await prisma.$queryRaw<{ id: string; typology: string | null }[]>`
+        SELECT id, typology FROM exercise_ogp_articles WHERE id IN (${Prisma.join(ids)})
+      `;
+      for (const row of rows) {
+        map.set(row.id, { typology: row.typology ?? null, sportEquipment: null });
+      }
+    } catch (e2) {
+      console.warn('GET /api/exercises/ogp: typology/sportEquipment column read failed', e2 ?? e);
+    }
+  }
+  return map;
+}
+
+/** Load inGlobalNews even if Prisma client is stale (before regenerate). */
+async function loadExerciseOgpGlobalFlags(ids: string[]): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>();
+  if (ids.length === 0) return map;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string; inGlobalNews: number | boolean }>>`
+      SELECT id, inGlobalNews FROM exercise_ogp_articles WHERE id IN (${Prisma.join(ids)})
+    `;
+    for (const row of rows) {
+      map.set(row.id, row.inGlobalNews === true || row.inGlobalNews === 1);
+    }
+  } catch (e) {
+    console.warn('GET /api/exercises/ogp: inGlobalNews column read failed', e);
+  }
+  return map;
+}
+
+/** Load sharedInMovesbookLibrary even if Prisma client is stale (before regenerate). */
+async function loadExerciseOgpSharedLibraryFlags(ids: string[]): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>();
+  if (ids.length === 0) return map;
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; sharedInMovesbookLibrary: number | boolean }>
+    >`
+      SELECT id, sharedInMovesbookLibrary FROM exercise_ogp_articles WHERE id IN (${Prisma.join(ids)})
+    `;
+    for (const row of rows) {
+      map.set(
+        row.id,
+        row.sharedInMovesbookLibrary === true || row.sharedInMovesbookLibrary === 1
+      );
+    }
+  } catch (e) {
+    console.warn('GET /api/exercises/ogp: sharedInMovesbookLibrary column read failed', e);
+  }
+  return map;
+}
+
+/**
+ * Same rules as non-admin branch in GET: what OGPs can this user see (excluding admin bypass).
+ * Others' exercises are limited to Movesbook/super-admin creators and Global Exercises
+ * (`inGlobalNews`) promoted by super-admin after a user shared them into the library.
+ */
 function ogpVisibleToViewer(
   a: {
     userId: string;
@@ -24,13 +102,16 @@ function ogpVisibleToViewer(
     visibilityLanguages: string | null;
     visibilitySports: string | null;
   },
-  viewer: { userId: string; userType: string; country: string | null; userSports: string[]; languageCode: string }
+  viewer: { userId: string; userType: string; country: string | null; userSports: string[]; languageCode: string },
+  opts?: { createdBySuperAdmin?: boolean; inGlobalNews?: boolean }
 ): boolean {
   const isCreator = a.userId === viewer.userId;
   if (isCreator) return true;
   const now = new Date();
   if (a.deletedAt) return false;
   if (a.expiresAt && a.expiresAt < now) return false;
+  // Other users: only Movesbook/super-admin posts or super-admin–approved Global Exercises.
+  if (opts?.createdBySuperAdmin !== true && opts?.inGlobalNews !== true) return false;
   const vUserTypes = parseJsonArray(a.visibilityUserTypes);
   const vCountries = parseJsonArray(a.visibilityCountries);
   const vLanguages = parseJsonArray(a.visibilityLanguages);
@@ -117,8 +198,17 @@ export async function GET(request: NextRequest) {
       >;
 
       const superAdminCreatorIds = await getSuperAdminCreatorIds();
-      const filtered = list.filter((a) => ogpVisibleToViewer(a, viewer));
-
+      const globalById = await loadExerciseOgpGlobalFlags(list.map((a) => a.id));
+      const filtered = list.filter((a) =>
+        ogpVisibleToViewer(a, viewer, {
+          createdBySuperAdmin: superAdminCreatorIds.includes(a.userId),
+          inGlobalNews:
+            globalById.get(a.id) === true ||
+            (a as { inGlobalNews?: boolean }).inGlobalNews === true,
+        })
+      );
+      const extraById = await loadExerciseOgpExtraFields(filtered.map((a) => a.id));
+      const sharedLibraryById = await loadExerciseOgpSharedLibraryFlags(filtered.map((a) => a.id));
       const articles = filtered.map((a) => ({
         id: a.id,
         userId: a.userId,
@@ -133,10 +223,24 @@ export async function GET(request: NextRequest) {
         url: a.url,
         siteName: a.siteName,
         type: a.type,
+        typology:
+          extraById.get(a.id)?.typology ??
+          (a as { typology?: string | null }).typology ??
+          null,
+        sportEquipment:
+          extraById.get(a.id)?.sportEquipment ??
+          (a as { sportEquipment?: string | null }).sportEquipment ??
+          null,
         customDescription: a.customDescription,
         topic: a.topic,
         languageCode: a.languageCode ?? null,
         savedAt: a.savedAt.toISOString(),
+        inGlobalNews:
+          globalById.get(a.id) === true ||
+          (a as { inGlobalNews?: boolean }).inGlobalNews === true,
+        sharedInMovesbookLibrary:
+          sharedLibraryById.get(a.id) === true ||
+          (a as { sharedInMovesbookLibrary?: boolean }).sharedInMovesbookLibrary === true,
         visibilityUserTypes: parseJsonArray(a.visibilityUserTypes),
         visibilityCountries: parseJsonArray(a.visibilityCountries),
         visibilityLanguages: parseJsonArray(a.visibilityLanguages),
@@ -190,6 +294,9 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const superAdminCreatorIds = await getSuperAdminCreatorIds();
+    const globalByIdAll = isAdmin
+      ? new Map<string, boolean>()
+      : await loadExerciseOgpGlobalFlags(list.map((a) => a.id));
     const filtered = list.filter((a) => {
       const isCreator = a.userId === userId;
 
@@ -199,9 +306,14 @@ export async function GET(request: NextRequest) {
       // Normal user (creator): always see own OGPs, including deleted / expired / without settings.
       if (isCreator) return true;
 
-      // Non-admin viewing others' OGPs:
+      // Non-admin viewing others' OGPs: only Movesbook/super-admin or Global Exercises.
       if (a.deletedAt) return false;
       if (a.expiresAt && a.expiresAt < now) return false;
+      const createdBySuperAdmin = superAdminCreatorIds.includes(a.userId);
+      const inGlobalNews =
+        globalByIdAll.get(a.id) === true ||
+        (a as { inGlobalNews?: boolean }).inGlobalNews === true;
+      if (!createdBySuperAdmin && !inGlobalNews) return false;
       const vUserTypes = parseJsonArray(a.visibilityUserTypes);
       const vCountries = parseJsonArray(a.visibilityCountries);
       const vLanguages = parseJsonArray(a.visibilityLanguages);
@@ -222,6 +334,11 @@ export async function GET(request: NextRequest) {
       if (vSports.length > 0 && !vSports.some((s: string) => userSports.includes(s))) return false;
       return true;
     });
+    const extraById = await loadExerciseOgpExtraFields(filtered.map((a) => a.id));
+    const globalById = isAdmin
+      ? await loadExerciseOgpGlobalFlags(filtered.map((a) => a.id))
+      : globalByIdAll;
+    const sharedLibraryById = await loadExerciseOgpSharedLibraryFlags(filtered.map((a) => a.id));
 
     const articles = filtered.map((a) => ({
       id: a.id,
@@ -237,10 +354,24 @@ export async function GET(request: NextRequest) {
       url: a.url,
       siteName: a.siteName,
       type: a.type,
+      typology:
+        extraById.get(a.id)?.typology ??
+        (a as { typology?: string | null }).typology ??
+        null,
+      sportEquipment:
+        extraById.get(a.id)?.sportEquipment ??
+        (a as { sportEquipment?: string | null }).sportEquipment ??
+        null,
       customDescription: a.customDescription,
       topic: a.topic,
       languageCode: a.languageCode ?? null,
       savedAt: a.savedAt.toISOString(),
+      inGlobalNews:
+        globalById.get(a.id) === true ||
+        (a as { inGlobalNews?: boolean }).inGlobalNews === true,
+      sharedInMovesbookLibrary:
+        sharedLibraryById.get(a.id) === true ||
+        (a as { sharedInMovesbookLibrary?: boolean }).sharedInMovesbookLibrary === true,
       visibilityUserTypes: parseJsonArray(a.visibilityUserTypes),
       visibilityCountries: parseJsonArray(a.visibilityCountries),
       visibilityLanguages: parseJsonArray(a.visibilityLanguages),
@@ -262,7 +393,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthForNews(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, userType, isSuperAdmin } = auth;
+
+  if ((userType ?? '').toUpperCase() === 'ATHLETE') {
+    return NextResponse.json(
+      { error: 'Athletes cannot create OGP exercises' },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await request.json();
@@ -275,6 +413,8 @@ export async function POST(request: NextRequest) {
       url,
       siteName,
       type,
+      typology,
+      sportEquipment,
       customDescription,
       topic,
       languageCode,
@@ -288,26 +428,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
     const topicName = typeof topic === 'string' && topic.trim() ? topic.trim() : 'General';
-    const created = await prisma.exerciseOgpArticle.create({
-      data: {
-        userId,
-        category,
-        title: title ?? null,
-        image: image ?? null,
-        description: description ?? null,
-        url: url.trim(),
-        siteName: siteName ?? null,
-        type: type ?? null,
-        customDescription: customDescription ?? null,
-        topic: topicName,
-        languageCode: typeof languageCode === 'string' && languageCode.trim() ? languageCode.trim() : null,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-        visibilityUserTypes: Array.isArray(visibilityUserTypes) ? JSON.stringify(visibilityUserTypes) : null,
-        visibilityCountries: Array.isArray(visibilityCountries) ? JSON.stringify(visibilityCountries) : null,
-        visibilityLanguages: Array.isArray(visibilityLanguages) ? JSON.stringify(visibilityLanguages) : null,
-        visibilitySports: Array.isArray(visibilitySports) ? JSON.stringify(visibilitySports) : null,
-      },
-    });
+    const typologyName =
+      typeof typology === 'string' && typology.trim() ? typology.trim() : null;
+    const sportEquipmentName =
+      typeof sportEquipment === 'string' && sportEquipment.trim() ? sportEquipment.trim() : null;
+    const baseCreateData = {
+      userId,
+      category,
+      title: title ?? null,
+      image: image ?? null,
+      description: description ?? null,
+      url: url.trim(),
+      siteName: siteName ?? null,
+      type: type ?? null,
+      customDescription: customDescription ?? null,
+      topic: topicName,
+      languageCode: typeof languageCode === 'string' && languageCode.trim() ? languageCode.trim() : null,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      visibilityUserTypes: Array.isArray(visibilityUserTypes) ? JSON.stringify(visibilityUserTypes) : null,
+      visibilityCountries: Array.isArray(visibilityCountries) ? JSON.stringify(visibilityCountries) : null,
+      visibilityLanguages: Array.isArray(visibilityLanguages) ? JSON.stringify(visibilityLanguages) : null,
+      visibilitySports: Array.isArray(visibilitySports) ? JSON.stringify(visibilitySports) : null,
+      ...(typologyName ? ({ typology: typologyName } as { typology: string }) : {}),
+      ...(sportEquipmentName
+        ? ({ sportEquipment: sportEquipmentName } as { sportEquipment: string })
+        : {}),
+    } as Parameters<typeof prisma.exerciseOgpArticle.create>[0]['data'];
+
+    let created: Awaited<ReturnType<typeof prisma.exerciseOgpArticle.create>>;
+    try {
+      created = await prisma.exerciseOgpArticle.create({ data: baseCreateData });
+    } catch (createErr) {
+      // Stale Prisma client may reject unknown sportEquipment arg — retry without it.
+      const { sportEquipment: _omit, ...withoutSportEquipment } = baseCreateData as Record<
+        string,
+        unknown
+      > & { sportEquipment?: string };
+      created = await prisma.exerciseOgpArticle.create({
+        data: withoutSportEquipment as Parameters<typeof prisma.exerciseOgpArticle.create>[0]['data'],
+      });
+      console.warn(
+        'POST /api/exercises/ogp: create with sportEquipment failed, retried without it',
+        createErr
+      );
+    }
+    // Ensure typology / sportEquipment are persisted even if Prisma client was generated before the columns existed.
+    if (typologyName) {
+      try {
+        await prisma.$executeRaw`
+          UPDATE exercise_ogp_articles SET typology = ${typologyName} WHERE id = ${created.id}
+        `;
+      } catch (e) {
+        console.warn('POST /api/exercises/ogp: typology column update failed', e);
+      }
+    }
+    if (sportEquipmentName) {
+      try {
+        await prisma.$executeRaw`
+          UPDATE exercise_ogp_articles SET sportEquipment = ${sportEquipmentName} WHERE id = ${created.id}
+        `;
+      } catch (e) {
+        console.warn('POST /api/exercises/ogp: sportEquipment column update failed', e);
+      }
+    }
     return NextResponse.json({
       id: created.id,
       category: created.category,
@@ -317,10 +500,14 @@ export async function POST(request: NextRequest) {
       url: created.url,
       siteName: created.siteName,
       type: created.type,
+      typology: (created as { typology?: string | null }).typology ?? typologyName,
+      sportEquipment:
+        (created as { sportEquipment?: string | null }).sportEquipment ?? sportEquipmentName,
       customDescription: created.customDescription,
       topic: created.topic,
       languageCode: created.languageCode ?? null,
       savedAt: created.savedAt.toISOString(),
+      createdBySuperAdmin: isSuperAdmin,
     });
   } catch (e) {
     console.error('POST /api/exercises/ogp', e);

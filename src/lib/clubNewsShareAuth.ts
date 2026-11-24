@@ -69,6 +69,11 @@ export type ClubSharedFeedItem =
       title: string | null;
       date: string;
       author: string | null;
+      /** Creator user id when known (for posted-by filters). */
+      posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       categoryName: string | null;
       method: string | null;
       image: string | null;
@@ -85,10 +90,17 @@ export type ClubSharedFeedItem =
       date: string;
       topic: string;
       creatorUsername: string | null;
+      /** Creator user id when known (for posted-by filters). */
+      posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       image: string | null;
       url: string;
       description: string | null;
       customDescription: string | null;
+      /** Visibility language codes (for Language filter), empty = all. */
+      languages?: string[];
       sharedAt: string;
       inClubGlobalNews: boolean;
     }
@@ -100,11 +112,18 @@ export type ClubSharedFeedItem =
       date: string;
       topic: string;
       creatorUsername: string | null;
+      /** Creator user id when known (for posted-by filters). */
+      posterUserId?: string | null;
+      creatorCountry?: string | null;
+      expiresAt?: string | null;
+      deletedAt?: string | null;
       image: string | null;
       url: string;
       description: string | null;
       customDescription: string | null;
       memberCount: number;
+      /** Visibility language codes (for Language filter), empty = all. */
+      languages?: string[];
       sharedAt: string;
       inClubGlobalNews: boolean;
     };

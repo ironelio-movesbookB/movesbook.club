@@ -614,7 +614,10 @@ export default function AdminRegisteredUsersList({
     listPurpose !== 'subscriptions' &&
     appliedFilters.productType !== '' &&
     appliedFilters.productType !== RECORDED_MEMBERSHIP_PRODUCT;
-  const tableRows = productFilterHidesRows ? [] : rows;
+  const tableRows = useMemo(
+    () => (productFilterHidesRows ? [] : rows),
+    [productFilterHidesRows, rows],
+  );
   const shownPayments = productFilterHidesRows ? { count: 0, totalEur: 0 } : payments;
   const gridCardGroups = useMemo(() => groupRowsForAdminGrid(tableRows), [tableRows]);
 

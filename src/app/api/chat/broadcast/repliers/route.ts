@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { resolveMessageDatabaseUserId } from '@/lib/messages/resolveMessageUserId';
 import { resolveBroadcastAdminAuth } from '@/lib/chat/clubChannelAuth';
+import { messagePreview as formatMessagePreview } from '@/lib/chat/messageContent';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,9 +31,7 @@ function parseReplyMeta(recipientIds: string | null): {
 }
 
 function messagePreview(content: string, max = 80): string {
-  if (content.startsWith('data:image/')) return '[Image]';
-  const text = content.trim().replace(/\s+/g, ' ');
-  return text.length > max ? `${text.slice(0, max)}…` : text;
+  return formatMessagePreview(content, max);
 }
 
 function clubScopeWhere(clubId: string | null) {
@@ -238,5 +237,47 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Chat broadcast repliers GET:', error);
     return NextResponse.json({ error: 'Failed to load broadcast repliers' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE - Admin / club admin: clear Chat users inbox
+ * (user replies + admin messages to repliers). Does not wipe Broadcast modes.
+ * Optional `userId`: delete only that user's broadcast replies.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const clubId = parseClubId(request.nextUrl.searchParams.get('clubId'));
+    const adminAuth = await resolveBroadcastAdminAuth(request, clubId);
+    if (!adminAuth.ok) {
+      return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
+    }
+
+    const userId = request.nextUrl.searchParams.get('userId')?.trim() || '';
+    if (userId) {
+      const replyRows = await prisma.chatBroadcastMessage.findMany({
+        where: { mode: 'reply', ...clubScopeWhere(clubId) },
+        select: { id: true, recipientIds: true },
+      });
+      const ids = replyRows
+        .filter((row) => parseReplyMeta(row.recipientIds).senderUserId === userId)
+        .map((row) => row.id);
+      if (ids.length > 0) {
+        await prisma.chatBroadcastMessage.deleteMany({ where: { id: { in: ids } } });
+      }
+      return NextResponse.json({ success: true, deleted: ids.length });
+    }
+
+    const result = await prisma.chatBroadcastMessage.deleteMany({
+      where: {
+        ...clubScopeWhere(clubId),
+        mode: { in: ['reply', 'repliers'] },
+      },
+    });
+
+    return NextResponse.json({ success: true, deleted: result.count });
+  } catch (error) {
+    console.error('Chat broadcast repliers DELETE:', error);
+    return NextResponse.json({ error: 'Failed to reset chat users inbox' }, { status: 500 });
   }
 }

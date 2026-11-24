@@ -44,10 +44,13 @@ export async function PATCH(
       message.includes('required') ||
       message.includes('Select') ||
       message.includes('Password') ||
-      message.includes('not found')
+      message.includes('not found') ||
+      message.includes('already registered')
         ? message.includes('not found')
           ? 404
-          : 400
+          : message.includes('already registered')
+            ? 409
+            : 400
         : 500;
     if (status === 500) console.error('PATCH /api/club/staff/[id]:', error);
     return NextResponse.json({ error: message }, { status });

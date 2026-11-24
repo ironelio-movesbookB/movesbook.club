@@ -9,6 +9,7 @@ import {
   type ClubSharedFeedItem,
 } from '@/lib/clubNewsShareAuth';
 import { parseClubDescriptionMeta } from '@/lib/club/clubSidebarLabel';
+import { getSuperAdminCreatorIds } from '@/app/api/news/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const type = request.nextUrl.searchParams.get('type') ?? 'all';
     const detail = request.nextUrl.searchParams.get('detail') ?? 'summary';
+    const includeDeleted =
+      request.nextUrl.searchParams.get('includeDeleted') === '1' ||
+      request.nextUrl.searchParams.get('includeDeleted') === 'true';
 
     const viewerUser = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -499,7 +503,46 @@ export async function GET(request: NextRequest, context: RouteContext) {
         };
       });
 
-      return NextResponse.json({ news, items: news });
+      const [clubRow, staffRows, memberRows, movesbookUserIds] = await Promise.all([
+        prisma.club.findUnique({
+          where: { id: clubId },
+          select: { adminId: true },
+        }),
+        prisma.clubStaff.findMany({
+          where: { clubId },
+          select: { userId: true },
+        }),
+        prisma.clubMember.findMany({
+          where: { clubId },
+          select: { memberId: true },
+        }),
+        getSuperAdminCreatorIds(),
+      ]);
+      const adminStaffUserIds = [
+        ...new Set(
+          [clubRow?.adminId, ...staffRows.map((s) => s.userId)].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ];
+      const adminStaffSet = new Set(adminStaffUserIds);
+      const movesbookIdSet = new Set(movesbookUserIds);
+      const memberUserIds = [
+        ...new Set(
+          memberRows
+            .map((m) => m.memberId)
+            .filter((id) => id && !adminStaffSet.has(id) && !movesbookIdSet.has(id)),
+        ),
+      ];
+
+      return NextResponse.json({
+        news,
+        items: news,
+        currentUserId: decoded.userId,
+        adminStaffUserIds,
+        memberUserIds,
+        movesbookUserIds,
+      });
     }
 
     const items: ClubSharedFeedItem[] = [];
@@ -509,6 +552,39 @@ export async function GET(request: NextRequest, context: RouteContext) {
       ? { clubId, inClubGlobalNews: true }
       : { clubId };
 
+    const [clubRow, staffRows, memberRows, movesbookUserIds] = await Promise.all([
+      prisma.club.findUnique({
+        where: { id: clubId },
+        select: { adminId: true },
+      }),
+      prisma.clubStaff.findMany({
+        where: { clubId },
+        select: { userId: true },
+      }),
+      prisma.clubMember.findMany({
+        where: { clubId },
+        select: { memberId: true },
+      }),
+      getSuperAdminCreatorIds(),
+    ]);
+
+    const adminStaffUserIds = [
+      ...new Set(
+        [clubRow?.adminId, ...staffRows.map((s) => s.userId)].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    ];
+    const adminStaffSet = new Set(adminStaffUserIds);
+    const movesbookIdSet = new Set(movesbookUserIds);
+    const memberUserIds = [
+      ...new Set(
+        memberRows
+          .map((m) => m.memberId)
+          .filter((id) => id && !adminStaffSet.has(id) && !movesbookIdSet.has(id)),
+      ),
+    ];
+
     if (type === 'all' || type === 'news') {
       const newsShares = await prisma.clubSharedNews.findMany({
         where: shareWhere,
@@ -517,6 +593,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           news: {
             select: {
               id: true,
+              userId: true,
               title: true,
               date: true,
               author: true,
@@ -530,6 +607,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
           },
         },
       });
+      const newsUserIds = [
+        ...new Set(
+          newsShares.map((row) => row.news.userId).filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const newsUsers =
+        newsUserIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: newsUserIds } },
+              select: { id: true, country: true },
+            })
+          : [];
+      const newsCountryByUserId = new Map(
+        newsUsers.map((u) => [u.id, u.country ?? null] as const),
+      );
+
       for (const row of newsShares) {
         items.push({
           kind: 'news',
@@ -538,6 +631,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
           title: row.news.title,
           date: row.news.date.toISOString(),
           author: row.news.author ?? row.news.originalAuthor,
+          posterUserId: row.news.userId ?? null,
+          creatorCountry: row.news.userId
+            ? (newsCountryByUserId.get(row.news.userId) ?? null)
+            : null,
+          expiresAt: null,
+          deletedAt: null,
           categoryName: row.news.category?.categoryName ?? null,
           method: row.news.method,
           image: row.news.image,
@@ -557,6 +656,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           ogpArticle: {
             select: {
               id: true,
+              userId: true,
               title: true,
               savedAt: true,
               topic: true,
@@ -570,15 +670,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
               visibilityLanguages: true,
               visibilitySports: true,
               expiresAt: true,
-              user: { select: { username: true } },
+              user: { select: { username: true, country: true } },
             },
           },
         },
       });
       for (const row of ogpShares) {
-        if (row.ogpArticle.deletedAt) continue;
+        if (row.ogpArticle.deletedAt && !includeDeleted) continue;
         const a = row.ogpArticle;
+        // Soft-deleted items are only returned for client-side "Show deleted" filters.
         if (
+          !a.deletedAt &&
           !canViewerSeeClubSharedOgp({
             audienceMode: row.audienceMode,
             isClubAdmin: access.isClubAdmin,
@@ -589,7 +691,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
               countries: parseJsonStringArray(a.visibilityCountries),
               languages: parseJsonStringArray(a.visibilityLanguages),
               sports: parseJsonStringArray(a.visibilitySports),
-              expiresAt: a.expiresAt,
+              // When includeDeleted, allow expired through so client can filter.
+              expiresAt: includeDeleted ? null : a.expiresAt,
             },
           })
         ) {
@@ -603,10 +706,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
           date: row.ogpArticle.savedAt.toISOString(),
           topic: row.ogpArticle.topic,
           creatorUsername: row.ogpArticle.user?.username ?? null,
+          posterUserId: row.ogpArticle.userId ?? null,
+          creatorCountry: row.ogpArticle.user?.country ?? null,
+          expiresAt: a.expiresAt ? a.expiresAt.toISOString() : null,
+          deletedAt: a.deletedAt ? a.deletedAt.toISOString() : null,
           image: row.ogpArticle.image,
           url: row.ogpArticle.url,
           description: row.ogpArticle.description,
           customDescription: row.ogpArticle.customDescription,
+          languages: parseJsonStringArray(a.visibilityLanguages),
           sharedAt: row.createdAt.toISOString(),
           inClubGlobalNews: row.inClubGlobalNews === true,
         });
@@ -621,6 +729,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           ogpNewsGroup: {
             select: {
               id: true,
+              userId: true,
               name: true,
               topic: true,
               savedAt: true,
@@ -632,7 +741,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
               visibilityLanguages: true,
               visibilitySports: true,
               expiresAt: true,
-              user: { select: { username: true, name: true } },
+              user: { select: { username: true, name: true, country: true } },
               items: {
                 orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
                 take: 1,
@@ -654,9 +763,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
         },
       });
       for (const row of ogpGroupShares) {
-        if (row.ogpNewsGroup.deletedAt) continue;
+        if (row.ogpNewsGroup.deletedAt && !includeDeleted) continue;
         const g = row.ogpNewsGroup;
         if (
+          !g.deletedAt &&
           !canViewerSeeClubSharedOgp({
             audienceMode: row.audienceMode,
             isClubAdmin: access.isClubAdmin,
@@ -667,7 +777,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
               countries: parseJsonStringArray(g.visibilityCountries),
               languages: parseJsonStringArray(g.visibilityLanguages),
               sports: parseJsonStringArray(g.visibilitySports),
-              expiresAt: g.expiresAt,
+              expiresAt: includeDeleted ? null : g.expiresAt,
             },
           })
         ) {
@@ -682,11 +792,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
           date: g.savedAt.toISOString(),
           topic: g.topic,
           creatorUsername: g.user?.username ?? null,
+          posterUserId: g.userId ?? null,
+          creatorCountry: g.user?.country ?? null,
+          expiresAt: g.expiresAt ? g.expiresAt.toISOString() : null,
+          deletedAt: g.deletedAt ? g.deletedAt.toISOString() : null,
           image: g.coverImage ?? first?.image ?? null,
           url: first?.url ?? '',
           description: first?.description ?? null,
           customDescription: g.customDescription ?? first?.customDescription ?? null,
           memberCount: g._count.items,
+          languages: parseJsonStringArray(g.visibilityLanguages),
           sharedAt: row.createdAt.toISOString(),
           inClubGlobalNews: row.inClubGlobalNews === true,
         });
@@ -701,7 +816,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
         : new Date(b.sharedAt).getTime() - new Date(a.sharedAt).getTime(),
     );
 
-    return NextResponse.json({ items, isClubAdmin: access.isClubAdmin });
+    return NextResponse.json({
+      items,
+      isClubAdmin: access.isClubAdmin,
+      currentUserId: decoded.userId,
+      adminStaffUserIds,
+      memberUserIds,
+      movesbookUserIds,
+    });
   } catch (error) {
     console.error('Fetch club shared news:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageSquare, Send, Search, Menu, UserPlus, X, Trash2, Settings, ChevronDown, Reply, Copy, Forward } from 'lucide-react';
+import { MessageSquare, Send, Search, Menu, UserPlus, X, Trash2, Settings, ChevronDown, Reply, Copy, Forward, Pin, Mic, Square } from 'lucide-react';
 import ChatSettingsModal, {
   loadChatTheme,
   saveChatTheme,
@@ -16,7 +16,42 @@ import MovesbookChannel, {
 } from './MovesbookChannel';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
 import { notifyChatUnreadCountChanged } from '@/lib/chat/chatUnreadEvents';
+import {
+  buildAudioContent,
+  buildImageContent,
+  isAudioContent,
+  isImageContent,
+  messagePreview,
+  parseAudioContent,
+  parseImageContent,
+  parseReplyQuote,
+} from '@/lib/chat/messageContent';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
+
+const PIN_KEY_PREFIX = 'chatPanelPinned:';
+/** Keep voice data URLs under MySQL TEXT (~64KB) after base64 overhead. */
+const MAX_VOICE_SECONDS = 45;
+const MAX_VOICE_DATA_URL_CHARS = 58_000;
+
+function loadPinnedId(conversationId: string | null): string | null {
+  if (!conversationId) return null;
+  try {
+    return localStorage.getItem(`${PIN_KEY_PREFIX}${conversationId}`);
+  } catch {
+    return null;
+  }
+}
+
+function savePinnedId(conversationId: string | null, id: string | null) {
+  if (!conversationId) return;
+  try {
+    const key = `${PIN_KEY_PREFIX}${conversationId}`;
+    if (id) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Turn URLs in text into clickable links (http/https only). Returns array of React nodes. */
 function linkify(text: string, isOwn: boolean): (string | React.ReactNode)[] {
@@ -50,28 +85,15 @@ function linkify(text: string, isOwn: boolean): (string | React.ReactNode)[] {
   return parts.length > 0 ? parts : [text];
 }
 
-function isImageContent(content: string): boolean {
-  return content.startsWith('data:image/');
-}
-
-/** Parse "> SenderName: excerpt\n\nbody" reply prefix. Returns null if not a reply. */
-function parseReplyQuote(content: string): { replyLine: string; senderName: string; excerpt: string; body: string } | null {
-  if (!content.startsWith('> ') || !content.includes('\n\n')) return null;
-  const firstLine = content.split('\n')[0];
-  const colonIdx = firstLine.indexOf(': ', 2); // skip "> "
-  if (colonIdx === -1) return null;
-  const senderName = firstLine.slice(2, colonIdx).trim();
-  const excerpt = firstLine.slice(colonIdx + 2).trim();
-  const body = content.slice(firstLine.length + 2).trimStart(); // after \n\n
-  return { replyLine: firstLine, senderName, excerpt, body };
-}
-
 function findRepliedMessageId(messages: MessageItem[], senderName: string, excerpt: string): string | null {
   const norm = excerpt.trim().slice(0, 80);
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.senderName !== senderName) continue;
-    if (norm === '[Image]' && isImageContent(m.content)) return m.id;
+    if ((norm === '[Image]' || norm.startsWith('[Image]')) && isImageContent(m.content)) return m.id;
+    if (norm === '[Voice message]' && isAudioContent(m.content)) return m.id;
+    const preview = messagePreview(m.content, 80);
+    if (preview === norm || preview.startsWith(norm) || norm.startsWith(preview)) return m.id;
     const firstLine = m.content.split('\n')[0].trim();
     if (!firstLine) continue;
     if (firstLine === norm || firstLine.startsWith(norm) || norm.startsWith(firstLine)) return m.id;
@@ -152,6 +174,19 @@ type ChatPanelProps = {
    * for club-staff / club-member audiences.
    */
   userType?: string | null;
+  /**
+   * When the chat header name is clicked, open User Info for this peer in the dashboard right sidebar.
+   * Pass null when leaving a 1:1 conversation (channel selected / chat closed).
+   */
+  onPeerInfoSelect?: (userId: string | null) => void;
+};
+
+type SelectedPeer = {
+  id: string;
+  name: string;
+  telegramAccount?: string | null;
+  lastSeenAt?: string | null;
+  isOnline?: boolean;
 };
 
 const defaultGetAuthHeaders = (): Record<string, string> => {
@@ -168,6 +203,7 @@ export default function ChatPanel({
   chatAudience = null,
   clubId = null,
   userType = null,
+  onPeerInfoSelect,
 }: ChatPanelProps) {
   const getAuthHeaders = getAuthHeadersProp ?? defaultGetAuthHeaders;
   const effectiveAudience: ChatAudience | null =
@@ -176,7 +212,7 @@ export default function ChatPanel({
   const usesOwnedClubs = isClubAccountUserType(String(userType ?? ''));
 
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [selectedOtherUser, setSelectedOtherUser] = useState<{ id: string; name: string } | null>(null);
+  const [selectedOtherUser, setSelectedOtherUser] = useState<SelectedPeer | null>(null);
   const [channelSelected, setChannelSelected] = useState(false);
   const [channelLeft, setChannelLeft] = useState(false);
   const [message, setMessage] = useState('');
@@ -202,17 +238,28 @@ export default function ChatPanel({
   /** Club picker step: club-admin, or staff/member before a club is chosen. */
   const usesClubPicker =
     isClubAdminAudience || (needsAudienceClubPick && !audienceClubPick);
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MessageItem | null>(null);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [showChatSettings, setShowChatSettings] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: MessageItem } | null>(null);
   const [replyingTo, setReplyingTo] = useState<MessageItem | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<MessageItem | null>(null);
   const [forwarding, setForwarding] = useState(false);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingSendOnStopRef = useRef(false);
   const [chatTheme, setChatTheme] = useState<ChatTheme>({
     textColor: '#111827',
     backgroundType: 'color',
@@ -247,8 +294,8 @@ export default function ChatPanel({
       setChannelSelected(true);
       setSelectedConversationId(null);
       setSelectedOtherUser(null);
-      setSelectedMessageIds(new Set());
       setReplyingTo(null);
+      setDeleteTarget(null);
     };
     window.addEventListener(leftEvent, onLeft);
     window.addEventListener(rejoinedEvent, onRejoined);
@@ -263,8 +310,8 @@ export default function ChatPanel({
     setChannelSelected(false);
     setSelectedConversationId(null);
     setSelectedOtherUser(null);
-    setSelectedMessageIds(new Set());
     setReplyingTo(null);
+    setDeleteTarget(null);
     setChannelLeft(showMovesbookChannel ? loadChannelLeft(clubId) : false);
   }, [clubId, showMovesbookChannel]);
 
@@ -272,14 +319,21 @@ export default function ChatPanel({
     setChannelSelected(true);
     setSelectedConversationId(null);
     setSelectedOtherUser(null);
-    setSelectedMessageIds(new Set());
     setReplyingTo(null);
+    setDeleteTarget(null);
+    onPeerInfoSelect?.(null);
   };
 
   const selectConversation = (c: ConversationItem) => {
     setChannelSelected(false);
     setSelectedConversationId(c.id);
-    setSelectedOtherUser({ id: c.otherUser.id, name: c.otherUser.name });
+    setSelectedOtherUser({
+      id: c.otherUser.id,
+      name: c.otherUser.name,
+      telegramAccount: c.otherUser.telegramAccount,
+      lastSeenAt: c.otherUser.lastSeenAt,
+      isOnline: c.otherUser.isOnline,
+    });
   };
 
   const loadConversations = useCallback(async () => {
@@ -479,10 +533,12 @@ export default function ChatPanel({
     } else {
       setMessages([]);
     }
-    setSelectedMessageIds(new Set());
     setReplyingTo(null);
     setContextMenu(null);
     setForwardingMessage(null);
+    setDeleteTarget(null);
+    setPinnedId(loadPinnedId(selectedConversationId));
+    setHighlightMessageId(null);
   }, [selectedConversationId, loadMessages]);
 
   useEffect(() => {
@@ -495,6 +551,19 @@ export default function ChatPanel({
       window.removeEventListener('scroll', close, true);
     };
   }, [contextMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pinnedId || loadingMessages || messages.length === 0) return;
+    if (messages.some((m) => m.id === pinnedId)) return;
+    setPinnedId(null);
+    savePinnedId(selectedConversationId, null);
+  }, [pinnedId, messages, loadingMessages, selectedConversationId]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = messagesScrollRef.current;
@@ -510,8 +579,28 @@ export default function ChatPanel({
   }, []);
 
   const scrollToMessage = useCallback((messageId: string) => {
-    const el = messagesScrollRef.current?.querySelector(`[data-message-id="${messageId}"]`);
-    (el as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const container = messagesScrollRef.current;
+    if (!container || !messageId) return;
+    const target = container.querySelector(
+      `[data-message-id="${CSS.escape(messageId)}"]`
+    ) as HTMLElement | null;
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextTop =
+      targetRect.top -
+      containerRect.top +
+      container.scrollTop -
+      Math.max(24, container.clientHeight * 0.25);
+    container.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+    setShowScrollToBottom(true);
+
+    setHighlightMessageId(messageId);
+    if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    highlightClearTimerRef.current = setTimeout(() => {
+      setHighlightMessageId((cur) => (cur === messageId ? null : cur));
+    }, 1600);
   }, []);
 
   const handleMessagesScroll = useCallback(() => {
@@ -547,7 +636,13 @@ export default function ChatPanel({
         const data = await res.json();
         setChannelSelected(false);
         setSelectedConversationId(data.id);
-        setSelectedOtherUser({ id: data.otherUser.id, name: data.otherUser.name });
+        setSelectedOtherUser({
+          id: data.otherUser.id,
+          name: data.otherUser.name,
+          telegramAccount: data.otherUser.telegramAccount ?? null,
+          lastSeenAt: data.otherUser.lastSeenAt ?? null,
+          isOnline: data.otherUser.isOnline ?? false,
+        });
         setShowUserList(false);
         loadConversations();
       } else {
@@ -601,9 +696,7 @@ export default function ChatPanel({
   const buildContentWithReply = useCallback(
     (content: string) => {
       if (!replyingTo) return content;
-      const excerpt = isImageContent(replyingTo.content)
-        ? '[Image]'
-        : replyingTo.content.split('\n')[0].slice(0, 80);
+      const excerpt = messagePreview(replyingTo.content, 80);
       return `> ${replyingTo.senderName}: ${excerpt}\n\n${content}`;
     },
     [replyingTo]
@@ -612,11 +705,15 @@ export default function ChatPanel({
   const handleSendMessage = async () => {
     const textContent = message.trim();
     if (pendingImage) {
+      if (!selectedConversationId || sending) return;
       setSending(true);
       try {
-        const contentToSend = buildContentWithReply(pendingImage);
+        const contentToSend = buildContentWithReply(
+          buildImageContent(pendingImage, textContent)
+        );
         await sendContent(contentToSend);
         setPendingImage(null);
+        setMessage('');
         setReplyingTo(null);
       } catch (e) {
         console.error('Send image:', e);
@@ -640,66 +737,246 @@ export default function ChatPanel({
     }
   };
 
-  const toggleMessageSelection = (messageId: string, isOwn: boolean) => {
-    if (!isOwn) return;
-    setSelectedMessageIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(messageId)) next.delete(messageId);
-      else next.add(messageId);
-      return next;
-    });
+  const handleContextDelete = () => {
+    if (!contextMenu?.message.isOwn) return;
+    setDeleteTarget(contextMenu.message);
+    setContextMenu(null);
   };
 
-  const handleDeleteSelected = async () => {
-    if (selectedMessageIds.size === 0 || !selectedConversationId) return;
+  const handleContextPin = () => {
+    if (!contextMenu || !selectedConversationId) return;
+    const id = contextMenu.message.id;
+    setContextMenu(null);
+    const next = pinnedId === id ? null : id;
+    setPinnedId(next);
+    savePinnedId(selectedConversationId, next);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!deleteTarget || !selectedConversationId || deleting) return;
     setDeleting(true);
     try {
-      await Promise.all(
-        Array.from(selectedMessageIds).map((messageId) =>
-          fetch(
-            `/api/chat/conversations/${selectedConversationId}/messages/${messageId}`,
-            { method: 'DELETE', headers: getAuthHeaders() }
-          )
-        )
+      const res = await fetch(
+        `/api/chat/conversations/${selectedConversationId}/messages/${deleteTarget.id}`,
+        { method: 'DELETE', headers: getAuthHeaders() }
       );
-      setSelectedMessageIds(new Set());
-      loadMessages(selectedConversationId);
-      loadConversations();
+      if (res.ok) {
+        if (pinnedId === deleteTarget.id) {
+          setPinnedId(null);
+          savePinnedId(selectedConversationId, null);
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+        setDeleteTarget(null);
+        loadConversations();
+      }
     } catch (e) {
-      console.error('Delete messages:', e);
+      console.error('Delete message:', e);
     } finally {
       setDeleting(false);
     }
   };
 
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) {
-          e.preventDefault();
-          const file = items[i].getAsFile();
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            if (selectedConversationId && !sending) {
-              setSending(true);
-              sendContent(dataUrl)
-                .finally(() => setSending(false))
-                .catch((err) => console.error('Send pasted image:', err));
-            } else {
-              setPendingImage(dataUrl);
-            }
-          };
-          reader.readAsDataURL(file);
+  const pinnedMessage = pinnedId
+    ? messages.find((m) => m.id === pinnedId) ?? null
+    : null;
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+          if (dataUrl.startsWith('data:image/')) {
+            // Keep as pending so the user can add a caption, then Send posts both.
+            setPendingImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  }, []);
+
+  const stopRecordingTracks = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }, []);
+
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        if (result.startsWith('data:audio/')) resolve(result);
+        else reject(new Error('Invalid audio data'));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read audio'));
+      reader.readAsDataURL(blob);
+    });
+
+  const finishVoiceRecording = useCallback(
+    async (blob: Blob) => {
+      if (!blob.size) {
+        setVoiceError('Recording was empty. Try again.');
+        return;
+      }
+      try {
+        const dataUrl = await blobToDataUrl(blob);
+        if (dataUrl.length > MAX_VOICE_DATA_URL_CHARS) {
+          setVoiceError('Voice message is too long. Keep it under ~45 seconds.');
           return;
         }
+        if (!selectedConversationId || sending) return;
+        setSending(true);
+        setVoiceError(null);
+        try {
+          const contentToSend = buildContentWithReply(buildAudioContent(dataUrl));
+          await sendContent(contentToSend);
+          setReplyingTo(null);
+        } finally {
+          setSending(false);
+        }
+      } catch (e) {
+        console.error('Send voice:', e);
+        setVoiceError('Could not send voice message.');
       }
     },
-    [selectedConversationId, sending, sendContent]
+    [selectedConversationId, sending, buildContentWithReply, sendContent]
   );
+
+  const cancelVoiceRecording = useCallback(() => {
+    recordingSendOnStopRef.current = false;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    audioChunksRef.current = [];
+    stopRecordingTracks();
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    setVoiceError(null);
+  }, [stopRecordingTracks]);
+
+  const stopAndSendVoiceRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      setIsRecording(false);
+      return;
+    }
+    recordingSendOnStopRef.current = true;
+    try {
+      recorder.stop();
+    } catch {
+      recordingSendOnStopRef.current = false;
+      setIsRecording(false);
+      stopRecordingTracks();
+    }
+  }, [stopRecordingTracks]);
+
+  const startVoiceRecording = useCallback(async () => {
+    if (!selectedConversationId || sending || isRecording || pendingImage) return;
+    setVoiceError(null);
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceError('Voice messages are not supported in this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 24_000 })
+        : new MediaRecorder(stream, { audioBitsPerSecond: 24_000 });
+      mediaRecorderRef.current = recorder;
+      recordingSendOnStopRef.current = false;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const shouldSend = recordingSendOnStopRef.current;
+        const chunks = audioChunksRef.current;
+        audioChunksRef.current = [];
+        stopRecordingTracks();
+        setIsRecording(false);
+        setRecordingSeconds(0);
+        if (!shouldSend || chunks.length === 0) return;
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        void finishVoiceRecording(blob);
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => {
+          const next = prev + 1;
+          if (next >= MAX_VOICE_SECONDS) {
+            recordingSendOnStopRef.current = true;
+            try {
+              mediaRecorderRef.current?.stop();
+            } catch {
+              /* ignore */
+            }
+          }
+          return next;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error('Start voice recording:', e);
+      stopRecordingTracks();
+      setIsRecording(false);
+      setVoiceError('Microphone permission is required to send voice messages.');
+    }
+  }, [
+    selectedConversationId,
+    sending,
+    isRecording,
+    pendingImage,
+    stopRecordingTracks,
+    finishVoiceRecording,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      recordingSendOnStopRef.current = false;
+      try {
+        mediaRecorderRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const formatRecordingTime = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const canSendText = Boolean(message.trim() || pendingImage);
+  const showVoiceButton = !canSendText && !isRecording;
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -725,16 +1002,17 @@ export default function ChatPanel({
     if (!contextMenu) return;
     const msg = contextMenu.message;
     setContextMenu(null);
+    const image = parseImageContent(msg.content);
     try {
-      if (isImageContent(msg.content)) {
-        const res = await fetch(msg.content);
+      if (image) {
+        const res = await fetch(image.src);
         const blob = await res.blob();
         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       } else {
         await navigator.clipboard.writeText(msg.content);
       }
     } catch {
-      await navigator.clipboard.writeText(msg.content);
+      await navigator.clipboard.writeText(image?.caption || msg.content);
     }
   };
 
@@ -749,8 +1027,7 @@ export default function ChatPanel({
     if (!forwardingMessage || forwarding) return;
     setForwarding(true);
     try {
-      const isImage = isImageContent(forwardingMessage.content);
-      const content = isImage
+      const content = isImageContent(forwardingMessage.content)
         ? forwardingMessage.content
         : `Forwarded from ${forwardingMessage.senderName}: ${forwardingMessage.content}`;
       const res = await fetch(`/api/chat/conversations/${targetConversationId}/messages`, {
@@ -796,7 +1073,36 @@ export default function ChatPanel({
   };
 
   const currentConversation = conversations.find((c) => c.id === selectedConversationId);
-  const displayName = selectedOtherUser?.name ?? currentConversation?.otherUser.name ?? 'Chat';
+  const peerTelegram =
+    selectedOtherUser?.telegramAccount ?? currentConversation?.otherUser.telegramAccount ?? null;
+  const peerName = selectedOtherUser?.name ?? currentConversation?.otherUser.name ?? 'Chat';
+  const displayName = peerTelegram
+    ? peerTelegram.startsWith('@')
+      ? peerTelegram
+      : `@${peerTelegram}`
+    : peerName;
+  const peerIsOnline =
+    selectedOtherUser?.isOnline ?? currentConversation?.otherUser.isOnline ?? false;
+  const peerLastSeenAt =
+    selectedOtherUser?.lastSeenAt ?? currentConversation?.otherUser.lastSeenAt ?? null;
+  const peerStatusLabel = peerIsOnline
+    ? 'online'
+    : peerLastSeenAt
+      ? (() => {
+          try {
+            const d = new Date(peerLastSeenAt);
+            const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+            if (mins < 1) return 'last seen just now';
+            if (mins < 60) return `last seen ${mins} min ago`;
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return `last seen ${hours}h ago`;
+            return `last seen ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+          } catch {
+            return 'last seen recently';
+          }
+        })()
+      : 'last seen a long time ago';
+  const peerId = selectedOtherUser?.id ?? currentConversation?.otherUser.id ?? null;
 
   const containerClass = embedded
     ? 'flex-1 flex min-h-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'
@@ -1185,7 +1491,7 @@ export default function ChatPanel({
                               c.unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-600'
                             }`}
                           >
-                            {isImageContent(c.lastMessage.content) ? '[Image]' : c.lastMessage.content}
+                            {messagePreview(c.lastMessage.content, 60)}
                           </p>
                         )}
                       </div>
@@ -1230,13 +1536,31 @@ export default function ChatPanel({
           />
         ) : selectedConversationId ? (
           <>
-            <div className="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">{displayName}</h2>
+            <div className="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (peerId) onPeerInfoSelect?.(peerId);
+                }}
+                className={`min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 py-0.5 transition-colors ${
+                  peerId && onPeerInfoSelect
+                    ? 'hover:bg-gray-200/80 cursor-pointer'
+                    : 'cursor-default'
+                }`}
+                title={peerId && onPeerInfoSelect ? 'Show user info' : undefined}
+                disabled={!peerId || !onPeerInfoSelect}
+              >
+                <h2 className="text-lg font-semibold text-gray-900 truncate">{displayName}</h2>
+                <p className="text-xs text-gray-500 truncate">{peerStatusLabel}</p>
+              </button>
               {embedded && onClose && (
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="p-2 rounded-lg hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition-colors"
+                  onClick={() => {
+                    onPeerInfoSelect?.(null);
+                    onClose();
+                  }}
+                  className="p-2 rounded-lg hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
                   title="Close chat"
                 >
                   <X className="w-5 h-5" />
@@ -1244,26 +1568,34 @@ export default function ChatPanel({
               )}
             </div>
 
-            {selectedMessageIds.size > 0 && (
-              <div className="px-4 py-2 border-b border-gray-200 bg-gray-100 flex items-center gap-2 flex-shrink-0">
-                <span className="text-sm text-gray-700">
-                  {selectedMessageIds.size} message{selectedMessageIds.size !== 1 ? 's' : ''} selected
-                </span>
+            {pinnedMessage && (
+              <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
                 <button
                   type="button"
-                  onClick={handleDeleteSelected}
-                  disabled={deleting}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
+                  className="flex min-w-0 flex-1 items-start gap-2 rounded text-left hover:bg-amber-100/70"
+                  title="Jump to pinned message"
+                  onClick={() => scrollToMessage(pinnedMessage.id)}
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
+                  <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">
+                      Pinned · {pinnedMessage.senderName}
+                    </div>
+                    <div className="truncate">
+                      {messagePreview(pinnedMessage.content, 100)}
+                    </div>
+                  </div>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedMessageIds(new Set())}
-                  className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded"
+                  className="shrink-0 text-amber-700 hover:underline"
+                  title="Unpin"
+                  onClick={() => {
+                    setPinnedId(null);
+                    savePinnedId(selectedConversationId, null);
+                  }}
                 >
-                  Cancel
+                  Unpin
                 </button>
               </div>
             )}
@@ -1279,10 +1611,19 @@ export default function ChatPanel({
                 ) : (
                   <>
                     {messages.map((msg) => {
-                      const isSelected = selectedMessageIds.has(msg.id);
-                      const isImage = isImageContent(msg.content);
-                      const replyQuote = !isImage ? parseReplyQuote(msg.content) : null;
-                      const linkedMessageId = replyQuote ? findRepliedMessageId(messages, replyQuote.senderName, replyQuote.excerpt) : null;
+                      const replyQuote = parseReplyQuote(msg.content);
+                      const image = parseImageContent(msg.content);
+                      const audio = parseAudioContent(msg.content);
+                      const textBody = image
+                        ? image.caption
+                        : audio
+                          ? ''
+                          : replyQuote
+                            ? replyQuote.body
+                            : msg.content;
+                      const linkedMessageId = replyQuote
+                        ? findRepliedMessageId(messages, replyQuote.senderName, replyQuote.excerpt)
+                        : null;
                       return (
                         <div
                           key={msg.id}
@@ -1290,64 +1631,68 @@ export default function ChatPanel({
                           className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                         >
                           <div
-                            role={msg.isOwn ? 'button' : undefined}
-                            tabIndex={msg.isOwn ? 0 : undefined}
                             onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                            onDoubleClick={() => msg.isOwn && toggleMessageSelection(msg.id, true)}
-                            onKeyDown={(e) =>
-                              msg.isOwn && (e.key === 'Enter' || e.key === ' ') && toggleMessageSelection(msg.id, true)
-                            }
                             className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                               msg.isOwn ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-900'
-                            } ${msg.isOwn ? 'cursor-pointer select-none' : ''} ${
-                              isSelected ? 'ring-2 ring-offset-2 ring-blue-700' : ''
+                            } ${
+                              highlightMessageId === msg.id || pinnedId === msg.id
+                                ? 'ring-2 ring-offset-2 ring-amber-400'
+                                : ''
                             }`}
                           >
-                            {isImage ? (
+                            {replyQuote ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (linkedMessageId) scrollToMessage(linkedMessageId);
+                                }}
+                                className={`mb-1 text-left w-full rounded px-1 -mx-1 py-0.5 border-l-2 text-sm ${
+                                  msg.isOwn
+                                    ? 'border-blue-300 text-blue-100 hover:bg-blue-600'
+                                    : 'border-gray-400 text-gray-600 hover:bg-gray-300'
+                                } ${linkedMessageId ? 'cursor-pointer' : 'cursor-default'}`}
+                                title={linkedMessageId ? 'Jump to linked message' : undefined}
+                              >
+                                {replyQuote.replyLine}
+                              </button>
+                            ) : null}
+                            {image ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
-                                src={msg.content}
+                                src={image.src}
                                 alt="Shared"
                                 className="max-w-full max-h-48 rounded object-contain"
                               />
-                            ) : (
-                              <p className="text-sm whitespace-pre-wrap break-words">
-                                {replyQuote ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (linkedMessageId) scrollToMessage(linkedMessageId);
-                                      }}
-                                      className={`text-left w-full rounded px-1 -mx-1 py-0.5 border-l-2 ${
-                                        msg.isOwn
-                                          ? 'border-blue-300 text-blue-100 hover:bg-blue-600'
-                                          : 'border-gray-400 text-gray-600 hover:bg-gray-300'
-                                      } ${linkedMessageId ? 'cursor-pointer' : 'cursor-default'}`}
-                                      title={linkedMessageId ? 'Jump to linked message' : undefined}
-                                    >
-                                      {replyQuote.replyLine}
-                                    </button>
-                                    {replyQuote.body ? (
-                                      <>
-                                        {'\n\n'}
-                                        {linkify(replyQuote.body, msg.isOwn).map((part, i) => (
-                                          <span key={i}>{part}</span>
-                                        ))}
-                                      </>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  linkify(msg.content, msg.isOwn).map((part, i) => (
-                                    <span key={i}>{part}</span>
-                                  ))
-                                )}
+                            ) : null}
+                            {audio ? (
+                              <audio
+                                controls
+                                preload="metadata"
+                                src={audio.src}
+                                className="mt-0.5 max-w-full"
+                                style={{ width: '240px' }}
+                              >
+                                Your browser does not support audio playback.
+                              </audio>
+                            ) : null}
+                            {textBody ? (
+                              <p className={`text-sm whitespace-pre-wrap break-words ${image ? 'mt-2' : ''}`}>
+                                {linkify(textBody, msg.isOwn).map((part, i) => (
+                                  <span key={i}>{part}</span>
+                                ))}
                               </p>
-                            )}
-                            <p className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                              {formatTime(msg.createdAt)}
-                            </p>
+                            ) : null}
+                            <div
+                              className={`mt-1 flex items-center justify-end gap-1 text-xs ${
+                                msg.isOwn ? 'text-blue-100' : 'text-gray-500'
+                              }`}
+                            >
+                              {pinnedId === msg.id && (
+                                <Pin className="h-3 w-3 text-amber-300" />
+                              )}
+                              <span>{formatTime(msg.createdAt)}</span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1375,8 +1720,7 @@ export default function ChatPanel({
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-800">Replying to {replyingTo.senderName}</p>
                     <p className="truncate text-gray-600">
-                      {isImageContent(replyingTo.content) ? '[Image]' : replyingTo.content.split('\n')[0].slice(0, 60)}
-                      {replyingTo.content.length > 60 ? '…' : ''}
+                      {messagePreview(replyingTo.content, 60)}
                     </p>
                   </div>
                   <button
@@ -1397,7 +1741,9 @@ export default function ChatPanel({
                     alt="Paste preview"
                     className="h-16 w-16 object-cover rounded border border-gray-300"
                   />
-                  <span className="text-sm text-gray-600">Pasted image — click Send or paste again to replace</span>
+                  <span className="text-sm text-gray-600">
+                    Image ready — add a caption below, then Send (both post together)
+                  </span>
                   <button
                     type="button"
                     onClick={() => setPendingImage(null)}
@@ -1407,26 +1753,78 @@ export default function ChatPanel({
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  onPaste={handlePaste}
-                  placeholder="Message (paste image to send)"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendMessage}
-                  disabled={sending || (!message.trim() && !pendingImage)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-4 h-4" />
-                  Send
-                </button>
-              </div>
+              {voiceError && (
+                <p className="mb-2 text-sm text-red-600" role="alert">
+                  {voiceError}
+                </p>
+              )}
+              {isRecording ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={cancelVoiceRecording}
+                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                    title="Cancel recording"
+                    aria-label="Cancel recording"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    <span className="text-sm font-medium text-red-600 tabular-nums">
+                      {formatRecordingTime(recordingSeconds)}
+                    </span>
+                    <span className="text-sm text-gray-500 truncate">Recording…</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={stopAndSendVoiceRecording}
+                    disabled={sending || recordingSeconds < 1}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Send voice message"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    Send
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (voiceError) setVoiceError(null);
+                    }}
+                    onKeyDown={handleKeyPress}
+                    onPaste={handlePaste}
+                    placeholder={pendingImage ? 'Add a caption…' : 'Message (paste image to send)'}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {showVoiceButton ? (
+                    <button
+                      type="button"
+                      onClick={() => void startVoiceRecording()}
+                      disabled={sending || !selectedConversationId}
+                      className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Record voice message"
+                      aria-label="Record voice message"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSendMessage}
+                      disabled={sending || !canSendText}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-4 h-4" />
+                      Send
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1455,6 +1853,7 @@ export default function ChatPanel({
           className="fixed z-50 min-w-[180px] py-1 rounded-xl bg-gray-800 text-white shadow-xl border border-gray-700"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <button
             type="button"
@@ -1480,6 +1879,59 @@ export default function ChatPanel({
             <Forward className="w-4 h-4 flex-shrink-0" />
             Forward
           </button>
+          <button
+            type="button"
+            onClick={handleContextPin}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-700 transition-colors"
+          >
+            <Pin className="w-4 h-4 flex-shrink-0" />
+            {pinnedId === contextMenu.message.id ? 'Unpin' : 'Pin'}
+          </button>
+          {contextMenu.message.isOwn && (
+            <button
+              type="button"
+              onClick={handleContextDelete}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-red-300 hover:bg-gray-700 transition-colors"
+            >
+              <Trash2 className="w-4 h-4 flex-shrink-0" />
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !deleting && setDeleteTarget(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-gray-900 mb-2">Delete message</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Delete this message? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void confirmDeleteMessage()}
+                className="px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1495,7 +1947,7 @@ export default function ChatPanel({
             <div className="p-4 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900">Forward to</h3>
               <p className="text-sm text-gray-500 mt-0.5">
-                {isImageContent(forwardingMessage.content) ? 'Image' : forwardingMessage.content.slice(0, 40)}
+                {messagePreview(forwardingMessage.content, 40)}
                 {forwardingMessage.content.length > 40 ? '…' : ''}
               </p>
             </div>

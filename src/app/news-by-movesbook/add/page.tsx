@@ -4,16 +4,17 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Save, Upload, X, CheckCircle, AlertCircle, Settings, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Save, Upload, X, CheckCircle, AlertCircle, Settings, Link as LinkIcon, Eye } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { SPORTS_LIST } from '@/constants/moveframe.constants';
+import { PROFILE_SPORT_OPTIONS } from '@/lib/profileSports';
 import { DOCUMENT_TYPES, PRIORITY_OPTIONS, DISPLAY_MODE_OPTIONS } from '@/lib/news/mappings';
 import { COUNTRIES_WITH_CODES } from '@/lib/news/countries';
 import {
   CLUB_AUDIENCE_OPTIONS,
   type ClubOgpAudienceMode,
 } from '@/lib/clubOgpAudience';
+import { isClubAccountUserType } from '@/utils/dashboardRouting';
 
 const CKEditorComponent = dynamic(() => import('@/components/news/CKEditor'), {
   ssr: false,
@@ -49,6 +50,7 @@ function AddNewsPageContent() {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'display' | 'related'>('display');
   const [relatedPage, setRelatedPage] = useState(1);
   const [relatedPerPage, setRelatedPerPage] = useState(5);
+  const [showOnlySelectedRelated, setShowOnlySelectedRelated] = useState(false);
   const [userTypes, setUserTypes] = useState<Array<{ id: string; name: string }>>([]);
   
   const [formData, setFormData] = useState({
@@ -108,11 +110,13 @@ function AddNewsPageContent() {
     },
   });
 
-  const isClubAdmin = user?.userType === 'CLUB';
+  const isClubAdmin = Boolean(user?.userType && isClubAccountUserType(user.userType));
   const shareToClubId = searchParams.get('clubId');
   const fromClub = searchParams.get('from') === 'club';
+  const showClubAudienceRadios = isClubAdmin || fromClub;
   const filtersEnabled =
-    !isClubAdmin || formData.settings.clubAudienceMode === 'me-club-members-and-filters';
+    !showClubAudienceRadios ||
+    formData.settings.clubAudienceMode === 'me-club-members-and-filters';
 
   useEffect(() => {
     if (loading) return;
@@ -199,7 +203,10 @@ function AddNewsPageContent() {
     }
   }, [ogData]);
 
-  const handleFetchOGTags = async (e?: React.MouseEvent | React.FormEvent) => {
+  const handleFetchOGTags = async (
+    e?: React.MouseEvent | React.FormEvent,
+    urlOverride?: string,
+  ) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -208,7 +215,8 @@ function AddNewsPageContent() {
       }
     }
 
-    const url = formData.internetLink.trim();
+    // Prefer explicit URL (e.g. from paste) — formData can be stale in setTimeout closures
+    const url = (urlOverride ?? formData.internetLink).trim();
     if (!url) {
       setOgError('Please enter a URL first');
       return;
@@ -219,10 +227,12 @@ function AddNewsPageContent() {
     setOgData(null);
 
     try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
       const res = await fetch('/api/news/fetch-og-tags', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ url }),
       });
@@ -234,7 +244,9 @@ function AddNewsPageContent() {
         } catch {
           errorData = { message: `HTTP ${res.status}: ${res.statusText}` };
         }
-        throw new Error(errorData.message || `HTTP ${res.status}: ${res.statusText}`);
+        throw new Error(
+          errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`,
+        );
       }
 
       const data = await res.json();
@@ -606,7 +618,7 @@ function AddNewsPageContent() {
             printOption: formData.settings.functions.printOption ? 'Y' : 'N',
           },
         },
-        ...(isClubAdmin && shareToClubId
+        ...(showClubAudienceRadios && shareToClubId
           ? {
               shareToClubId,
               audienceMode: formData.settings.clubAudienceMode,
@@ -1100,15 +1112,21 @@ function AddNewsPageContent() {
                         type="url"
                         value={formData.internetLink}
                         onChange={(e) => {
-                          setFormData({ ...formData, internetLink: e.target.value });
+                          setFormData((prev) => ({ ...prev, internetLink: e.target.value }));
                           setOgError(null);
                           setOgData(null);
                         }}
-                        onPaste={async (e) => {
-                          const pastedText = e.clipboardData.getData('text');
+                        onPaste={(e) => {
+                          const pastedText = e.clipboardData.getData('text').trim();
                           if (pastedText && (pastedText.startsWith('http://') || pastedText.startsWith('https://'))) {
+                            // Prevent browser append (avoids duplicated URL when field already has a value)
+                            e.preventDefault();
+                            setFormData((prev) => ({ ...prev, internetLink: pastedText }));
+                            setOgError(null);
+                            setOgData(null);
+                            // Pass pasted URL directly — avoid stale formData from the delayed auto-fetch
                             setTimeout(() => {
-                              handleFetchOGTags();
+                              void handleFetchOGTags(undefined, pastedText);
                             }, 200);
                           }
                         }}
@@ -1139,7 +1157,7 @@ function AddNewsPageContent() {
                               setOgError('Please enter a URL first');
                               return;
                             }
-                            handleFetchOGTags(e).catch((err) => {
+                            handleFetchOGTags(e, url).catch((err) => {
                               console.error('Error in handleFetchOGTags:', err);
                               setOgError('An error occurred while fetching OG tags. Please try again.');
                             });
@@ -1649,7 +1667,7 @@ function AddNewsPageContent() {
                 <div className="bg-yellow-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-gray-900 mb-4">Who can see it?</h3>
 
-                  {isClubAdmin && (
+                  {showClubAudienceRadios && (
                     <fieldset className="mb-4 space-y-2.5">
                       <legend className="sr-only">Who can see this article in the club</legend>
                       {CLUB_AUDIENCE_OPTIONS.map((opt) => (
@@ -1704,12 +1722,12 @@ function AddNewsPageContent() {
                       <label className="flex items-center gap-2 mb-2">
                         <input
                           type="checkbox"
-                          checked={formData.settings.sports.length === SPORTS_LIST.length}
+                          checked={formData.settings.sports.length === PROFILE_SPORT_OPTIONS.length}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setFormData(prev => ({
                                 ...prev,
-                                settings: { ...prev.settings, sports: [...SPORTS_LIST] }
+                                settings: { ...prev.settings, sports: [...PROFILE_SPORT_OPTIONS] }
                               }));
                             } else {
                               setFormData(prev => ({
@@ -1724,7 +1742,7 @@ function AddNewsPageContent() {
                       </label>
                       <div className="border border-gray-300 rounded-lg p-4 max-h-48 overflow-y-auto bg-white">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {SPORTS_LIST.map((sport) => (
+                          {PROFILE_SPORT_OPTIONS.map((sport) => (
                             <label key={sport} className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
@@ -1949,9 +1967,31 @@ function AddNewsPageContent() {
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900">Related Articles</h3>
                 {availableArticles.length > 0 ? (
+                  (() => {
+                    const relatedTableArticles = showOnlySelectedRelated
+                      ? availableArticles.filter((a) =>
+                          relatedArticles.some((ra) => ra.id === a.id),
+                        )
+                      : availableArticles;
+                    const totalPages = Math.max(
+                      1,
+                      Math.ceil(relatedTableArticles.length / relatedPerPage),
+                    );
+                    const safePage = Math.min(relatedPage, totalPages);
+                    const pageArticles = relatedTableArticles.slice(
+                      (safePage - 1) * relatedPerPage,
+                      safePage * relatedPerPage,
+                    );
+                    const allVisibleSelected =
+                      relatedTableArticles.length > 0 &&
+                      relatedTableArticles.every((a) =>
+                        relatedArticles.some((ra) => ra.id === a.id),
+                      );
+
+                    return (
                   <>
                     <div className="flex items-center justify-between gap-4 flex-wrap">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-gray-600">Show</span>
                         <select
                           value={relatedPerPage}
@@ -1966,9 +2006,37 @@ function AddNewsPageContent() {
                           ))}
                         </select>
                         <span className="text-sm text-gray-600">per page</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowOnlySelectedRelated((prev) => !prev);
+                            setRelatedPage(1);
+                          }}
+                          disabled={!showOnlySelectedRelated && relatedArticles.length === 0}
+                          className={`ml-2 px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                            showOnlySelectedRelated
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {showOnlySelectedRelated ? 'View all' : 'View selected'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRelatedArticles([]);
+                            setShowOnlySelectedRelated(false);
+                            setRelatedPage(1);
+                          }}
+                          disabled={relatedArticles.length === 0}
+                          className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Reset selected
+                        </button>
                       </div>
                       <span className="text-sm text-gray-500">
                         {availableArticles.length} total · {relatedArticles.length} selected
+                        {showOnlySelectedRelated ? ' · showing selected' : ''}
                       </span>
                     </div>
 
@@ -1979,12 +2047,26 @@ function AddNewsPageContent() {
                             <th className="px-4 py-2 text-left">
                               <input
                                 type="checkbox"
-                                checked={availableArticles.every(a => relatedArticles.some(ra => ra.id === a.id))}
+                                checked={allVisibleSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setRelatedArticles([...availableArticles]);
-                                  } else {
+                                    setRelatedArticles((prev) => {
+                                      const ids = new Set(prev.map((a) => a.id));
+                                      const next = [...prev];
+                                      relatedTableArticles.forEach((a) => {
+                                        if (!ids.has(a.id)) next.push(a);
+                                      });
+                                      return next;
+                                    });
+                                  } else if (showOnlySelectedRelated) {
                                     setRelatedArticles([]);
+                                    setShowOnlySelectedRelated(false);
+                                    setRelatedPage(1);
+                                  } else {
+                                    const removeIds = new Set(relatedTableArticles.map((a) => a.id));
+                                    setRelatedArticles((prev) =>
+                                      prev.filter((a) => !removeIds.has(a.id)),
+                                    );
                                   }
                                 }}
                                 className="w-4 h-4"
@@ -1992,12 +2074,20 @@ function AddNewsPageContent() {
                             </th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Title</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Category</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Options</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {availableArticles
-                            .slice((relatedPage - 1) * relatedPerPage, relatedPage * relatedPerPage)
-                            .map((article) => {
+                          {pageArticles.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
+                                {showOnlySelectedRelated
+                                  ? 'No selected articles'
+                                  : 'No articles available'}
+                              </td>
+                            </tr>
+                          ) : (
+                            pageArticles.map((article) => {
                               const isSelected = relatedArticles.some(ra => ra.id === article.id);
                               return (
                                 <tr
@@ -2024,19 +2114,32 @@ function AddNewsPageContent() {
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-900">{article.title}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">{article.categoryName}</td>
+                                  <td className="px-4 py-2">
+                                    <a
+                                      href={`/news-by-movesbook/${article.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-blue-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                                      title="View article"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      View
+                                    </a>
+                                  </td>
                                 </tr>
                               );
-                            })}
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
 
                     {(() => {
-                      const totalPages = Math.ceil(availableArticles.length / relatedPerPage);
                       if (totalPages <= 1) return null;
                       const pages: (number | '…')[] = [];
                       for (let i = 1; i <= totalPages; i++) {
-                        if (i === 1 || i === totalPages || (i >= relatedPage - 1 && i <= relatedPage + 1)) {
+                        if (i === 1 || i === totalPages || (i >= safePage - 1 && i <= safePage + 1)) {
                           pages.push(i);
                         } else if (pages[pages.length - 1] !== '…') {
                           pages.push('…');
@@ -2046,8 +2149,8 @@ function AddNewsPageContent() {
                         <div className="flex items-center justify-center gap-1 flex-wrap">
                           <button
                             type="button"
-                            disabled={relatedPage === 1}
-                            onClick={() => setRelatedPage(p => p - 1)}
+                            disabled={safePage === 1}
+                            onClick={() => setRelatedPage(p => Math.max(1, p - 1))}
                             className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             ‹
@@ -2061,7 +2164,7 @@ function AddNewsPageContent() {
                                 type="button"
                                 onClick={() => setRelatedPage(p)}
                                 className={`px-3 py-1 text-sm border rounded ${
-                                  p === relatedPage
+                                  p === safePage
                                     ? 'bg-blue-600 text-white border-blue-600'
                                     : 'border-gray-300 hover:bg-gray-100 text-gray-700'
                                 }`}
@@ -2072,8 +2175,8 @@ function AddNewsPageContent() {
                           )}
                           <button
                             type="button"
-                            disabled={relatedPage === totalPages}
-                            onClick={() => setRelatedPage(p => p + 1)}
+                            disabled={safePage === totalPages}
+                            onClick={() => setRelatedPage(p => Math.min(totalPages, p + 1))}
                             className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             ›
@@ -2082,6 +2185,8 @@ function AddNewsPageContent() {
                       );
                     })()}
                   </>
+                    );
+                  })()
                 ) : (
                   <p className="text-sm text-gray-500">No articles available</p>
                 )}

@@ -73,8 +73,10 @@ import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import OrgFeedbacksPanel from '@/components/messages/OrgFeedbacksPanel';
 import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
 import ChatPanel from '@/components/chat/ChatPanel';
+import ChatPeerInfoSidebar from '@/components/chat/ChatPeerInfoSidebar';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
+import PersonalSettingsPanel from '@/components/settings/PersonalSettingsPanel';
 
 function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -111,6 +113,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [myClubTabVisible, setMyClubTabVisible] = useState(false);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [showStaffFeedbacks, setShowStaffFeedbacks] = useState(false);
+  const [showPersonalSettings, setShowPersonalSettings] = useState(false);
   const [orgFeedbackScope, setOrgFeedbackScope] = useState<'mine' | 'manage' | null>(null);
   const [showClubStaffMessages, setShowClubStaffMessages] = useState(false);
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
@@ -120,6 +123,16 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const [showChatAudienceModal, setShowChatAudienceModal] = useState(false);
   const [chatAudience, setChatAudience] = useState<ChatAudience | null>(null);
   const [showChatPanel, setShowChatPanel] = useState(false);
+  /** Chat header click → show peer profile in the dashboard right sidebar. */
+  const [chatPeerInfoUserId, setChatPeerInfoUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showChatPanel) setChatPeerInfoUserId(null);
+  }, [showChatPanel]);
+
+  useEffect(() => {
+    if (chatPeerInfoUserId) setShowRightSidebar(true);
+  }, [chatPeerInfoUserId, setShowRightSidebar]);
   const [myPageNewsPanel, setMyPageNewsPanel] = useState<ClubMyPageNewsPanel>(null);
   const [selectedMember, setSelectedMemberState] = useState<SelectedClubMember | null>(null);
 
@@ -324,6 +337,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleChatPanelClick = useCallback(() => {
+    setShowPersonalSettings(false);
     setShowStaffFeedbacks(false);
     setOrgFeedbackScope(null);
     writeClubWorkspaceTab('my-page');
@@ -338,9 +352,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   const handleChatAudienceSelect = useCallback((audience: ChatAudience) => {
     setChatAudience(audience);
     setShowChatAudienceModal(false);
+    setShowPersonalSettings(false);
     setShowStaffFeedbacks(false);
     setOrgFeedbackScope(null);
     setShowChatPanel(true);
+  }, []);
+
+  const openPersonalSettings = useCallback(() => {
+    setShowStaffFeedbacks(false);
+    setOrgFeedbackScope(null);
+    setShowChatPanel(false);
+    setChatAudience(null);
+    setMyPageNewsPanel(null);
+    setShowPersonalSettings(true);
   }, []);
 
   const handleJoinChat = useCallback(async () => {
@@ -368,7 +392,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setUserTelegramAccount(formattedAccount);
+          setUserTelegramAccount(data.telegramAccount || formattedAccount);
           setShowJoinModal(false);
           setTelegramAccount('');
           setShowChatAudienceModal(true);
@@ -541,6 +565,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
   }, [user, canUseClubShell, canUseMembersArchive, loadClubs, loadBannerProfile, loadTelegramAccount]);
 
   const handleTabChange = useCallback((tab: ClubWorkspaceTab) => {
+    setShowPersonalSettings(false);
     if (tab === 'my-page') {
       clearEntityCompanyLoginSession();
       hideMyClubTab();
@@ -665,7 +690,15 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       return;
     }
     router.push('/club/dashboard');
-  }, [selectedClubId, formClubs, router, isTeamWorkspaceUser, pathname, showMyClubTab]);
+  }, [
+    selectedClubId,
+    formClubs,
+    router,
+    isTeamWorkspaceUser,
+    onClubDashboard,
+    pathname,
+    showMyClubTab,
+  ]);
 
   const handleMyTeamClick = useCallback(() => {
     handleMyClubTabClick();
@@ -741,6 +774,10 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         | 'club-news-ogp'
         | 'club-global-news'
         | 'club-movesbook-news'
+        | 'club-movesbook-archive-news'
+        | 'club-exercise-global-library'
+        | 'club-exercise-ogp-library'
+        | 'mood-music'
     ) => {
       if (!hasFormClub) return;
       const clubId = selectedClubId ?? formClubs[0]?.id ?? null;
@@ -750,6 +787,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
       }
       writeClubWorkspaceTab('my-entity');
       setActiveTab('my-entity');
+      setShowPersonalSettings(false);
       setMyPageNewsPanel(null);
 
       if (panel === 'outcome-settings') {
@@ -771,6 +809,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
 
   const openMyPageNewsPanel = useCallback(
     (panel: Exclude<ClubMyPageNewsPanel, null>) => {
+      setShowPersonalSettings(false);
       setShowStaffFeedbacks(false);
       setOrgFeedbackScope(null);
       setShowChatPanel(false);
@@ -808,6 +847,10 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  /** With both sidebars off, chat grows to the bottom of the viewport. */
+  const chatFillsViewport =
+    showChatPanel && Boolean(chatAudience) && !showLeftSidebar && !showRightSidebar;
+
   if (gridShareMode) {
     return (
       <ClubWorkspaceContext.Provider
@@ -838,21 +881,29 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         sharingScope,
       }}
     >
-    <div className="bg-gray-50 flex flex-col min-h-screen">
-      <ModernNavbar />
+    <div
+      className={`bg-gray-50 flex flex-col ${
+        chatFillsViewport ? 'h-screen overflow-hidden' : 'min-h-screen'
+      }`}
+    >
+      <div className="shrink-0">
+        <ModernNavbar />
+      </div>
 
-      <DisplayOptionsToolbar
-        showAdBanner={showAdBanner}
-        showPersonalBanner={showPersonalBanner}
-        showLeftSidebar={showLeftSidebar}
-        showRightSidebar={showRightSidebar}
-        onToggleAdBanner={setShowAdBanner}
-        onTogglePersonalBanner={setShowPersonalBanner}
-        onToggleLeftSidebar={setShowLeftSidebar}
-        onToggleRightSidebar={setShowRightSidebar}
-      />
+      <div className="shrink-0">
+        <DisplayOptionsToolbar
+          showAdBanner={showAdBanner}
+          showPersonalBanner={showPersonalBanner}
+          showLeftSidebar={showLeftSidebar}
+          showRightSidebar={showRightSidebar}
+          onToggleAdBanner={setShowAdBanner}
+          onTogglePersonalBanner={setShowPersonalBanner}
+          onToggleLeftSidebar={setShowLeftSidebar}
+          onToggleRightSidebar={setShowRightSidebar}
+        />
+      </div>
 
-      <div className="flex-1 flex flex-col w-full py-2">
+      <div className="flex min-h-0 flex-1 flex-col w-full py-2">
         {showAdBanner && !shopManagementPage && (
           <div className="flex-shrink-0 px-4">
             <AdvertisementCarousel />
@@ -860,37 +911,39 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         )}
 
         {showPersonalBanner && hasFormClub && bannerClub && !shopManagementPage && (
-          <ClubDashboardMyPageBanner
-            clubName={getClubMyPageDisplayName(bannerClub)}
-            clubId={bannerClub.id}
-            onClubProfileClick={() => {
-              router.push(
-                ownEntityWorkspace
-                  ? getManagedEntityProfilePath(ownEntityWorkspace.profileKind, bannerClub.id)
-                  : `/my-club?clubId=${encodeURIComponent(bannerClub.id)}`,
-              );
-            }}
-            coverImageUrl={getHeroBannerDisplayUrl(bannerProfile)}
-            coverBannerAlignment={
-              bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
-            }
-            entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
-            entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
-            entityEdit={
-              showEntityBanner && bannerClub
-                ? { kind: entityLogoKind, entityId: bannerClub.id }
-                : null
-            }
-            onCoverCameraClick={() => setShowChangeBannerModal(true)}
-            onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
-            showSuggestMovesbook={showSuggestMovesbookForTab(user.userType, shellActiveTab)}
-            showSponsored={shellActiveTab === 'my-page'}
-            personal={shellActiveTab === 'my-page'}
-            avatarImagePath={bannerProfile?.image}
-          />
+          <div className="shrink-0">
+            <ClubDashboardMyPageBanner
+              clubName={getClubMyPageDisplayName(bannerClub)}
+              clubId={bannerClub.id}
+              onClubProfileClick={() => {
+                router.push(
+                  ownEntityWorkspace
+                    ? getManagedEntityProfilePath(ownEntityWorkspace.profileKind, bannerClub.id)
+                    : `/my-club?clubId=${encodeURIComponent(bannerClub.id)}`,
+                );
+              }}
+              coverImageUrl={getHeroBannerDisplayUrl(bannerProfile)}
+              coverBannerAlignment={
+                bannerProfile?.profileBannerAlignment === 'center' ? 'center' : 'default'
+              }
+              entityLogoUrl={showEntityBanner ? entityVisual.logoUrl : null}
+              entityBannerUrl={showEntityBanner ? entityVisual.bannerUrl || DEFAULT_HERO_BANNER_URL : null}
+              entityEdit={
+                showEntityBanner && bannerClub
+                  ? { kind: entityLogoKind, entityId: bannerClub.id }
+                  : null
+              }
+              onCoverCameraClick={() => setShowChangeBannerModal(true)}
+              onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
+              showSuggestMovesbook={showSuggestMovesbookForTab(user.userType, shellActiveTab)}
+              showSponsored={shellActiveTab === 'my-page'}
+              personal={shellActiveTab === 'my-page'}
+              avatarImagePath={bannerProfile?.image}
+            />
+          </div>
         )}
 
-        <div className="flex-1 flex gap-0 min-h-0 py-2 px-4">
+        <div className="flex min-h-0 flex-1 gap-0 py-2 px-4">
           {showLeftSidebar && (
             <aside className="w-80 flex-shrink-0 sticky top-0 self-start">
               <DarkSidebar
@@ -925,6 +978,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 }
                 onClubAddSongsPlaylistsClick={() => router.push('/add-songs')}
                 onClubMusicPanelClick={() => router.push('/music-panel')}
+                onClubMoodMusicClick={() => goToDashboardPanel('mood-music')}
                 onIdentificationDevicesClick={() => goToDashboardPanel('identification-devices')}
                 onAccessOutcomeSettingsClick={() => goToDashboardPanel('outcome-settings')}
                 onSuggestMovesbookClick={() => goToDashboardPanel('suggest-movesbook')}
@@ -947,15 +1001,25 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setShowClubStaffMessages(true);
                 }}
                 onClubNewsSectionClick={() => goToDashboardPanel('club-news')}
+                onClubMovesbookArchiveNewsSectionClick={() =>
+                  goToDashboardPanel('club-movesbook-archive-news')
+                }
                 onClubMovesbookNewsSectionClick={() => goToDashboardPanel('club-movesbook-news')}
                 onClubOgpNewsSectionClick={() => goToDashboardPanel('club-news-ogp')}
                 onClubGlobalNewsSectionClick={() => goToDashboardPanel('club-global-news')}
+                onClubGlobalExerciseLibraryClick={() =>
+                  goToDashboardPanel('club-exercise-global-library')
+                }
+                onClubOgpExerciseLibraryClick={() =>
+                  goToDashboardPanel('club-exercise-ogp-library')
+                }
                 onMyPageMovesbookNewsClick={() => openMyPageNewsPanel('movesbook-news')}
                 onMyPageNewsClick={() => openMyPageNewsPanel('mb-news')}
                 onMyPageOgpNewsClick={() => openMyPageNewsPanel('ogp-news')}
                 onCreateClubClick={openCreateClubFlow}
                 creatableCompaniesQuota={creatableCompaniesQuota}
                 onMyFeedbacksStaffClick={() => {
+                  setShowPersonalSettings(false);
                   setShowChatPanel(false);
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
@@ -965,6 +1029,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                   setShowStaffFeedbacks(true);
                 }}
                 onOrgFeedbacksClick={(scope) => {
+                  setShowPersonalSettings(false);
                   setShowChatPanel(false);
                   setChatAudience(null);
                   setMyPageNewsPanel(null);
@@ -976,9 +1041,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             </aside>
           )}
 
-          <main className="flex-1 min-w-0 flex flex-col px-4 overflow-y-auto">
-            <TopBar onChatPanelClick={handleChatPanelClick} />
-            {showStaffFeedbacks ? (
+          <main
+            className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+              chatFillsViewport ? 'overflow-hidden' : 'overflow-y-auto'
+            } ${showPersonalSettings ? '' : 'px-4'}`}
+          >
+            {!showPersonalSettings && (
+              <div className="shrink-0">
+                <TopBar onChatPanelClick={handleChatPanelClick} />
+              </div>
+            )}
+            {showPersonalSettings ? (
+              <PersonalSettingsPanel user={user} />
+            ) : showStaffFeedbacks ? (
               <MyStaffFeedbacksPanel onClose={() => setShowStaffFeedbacks(false)} />
             ) : showClubStaffMessages ? (
               <div className="w-full">
@@ -1000,13 +1075,19 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
                 onClose={() => setOrgFeedbackScope(null)}
               />
             ) : showChatPanel && chatAudience ? (
-              <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
+              <div
+                className={`flex min-h-0 flex-1 flex-col ${
+                  chatFillsViewport ? '' : 'max-h-[75vh]'
+                }`}
+              >
                 <ChatPanel
                   key={chatAudience}
                   embedded
                   chatAudience={chatAudience}
                   userType={user.userType}
+                  onPeerInfoSelect={setChatPeerInfoUserId}
                   onClose={() => {
+                    setChatPeerInfoUserId(null);
                     setShowChatPanel(false);
                     setChatAudience(null);
                   }}
@@ -1019,15 +1100,27 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
             )}
           </main>
 
-          {showRightSidebar && (
-            <RightSidebar
-              context={shellActiveTab === 'my-entity' ? 'my-club' : 'my-page'}
-              activeTab={shellActiveTab}
-              onAddMember={() => undefined}
-              isClubAccount
-              athleteMyPageRightSidebar={shellActiveTab === 'my-page'}
-              athleteMyClubRightSidebar={shellActiveTab === 'my-entity'}
-            />
+          {!showPersonalSettings && showRightSidebar && (
+            chatPeerInfoUserId ? (
+              <div className="w-80 flex-shrink-0 print:hidden">
+                <div className="bg-white rounded-lg shadow-sm border h-full min-h-0 flex flex-col overflow-y-auto">
+                  <ChatPeerInfoSidebar
+                    userId={chatPeerInfoUserId}
+                    onClose={() => setChatPeerInfoUserId(null)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <RightSidebar
+                context={shellActiveTab === 'my-entity' ? 'my-club' : 'my-page'}
+                activeTab={shellActiveTab}
+                onAddMember={() => undefined}
+                onNavigateToSettings={openPersonalSettings}
+                isClubAccount
+                athleteMyPageRightSidebar={shellActiveTab === 'my-page'}
+                athleteMyClubRightSidebar={shellActiveTab === 'my-entity'}
+              />
+            )
           )}
         </div>
       </div>
@@ -1156,7 +1249,7 @@ function ClubWorkspaceShellInner({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <SimpleFooter />
+      {!chatFillsViewport && <SimpleFooter />}
     </div>
     </ClubWorkspaceContext.Provider>
   );

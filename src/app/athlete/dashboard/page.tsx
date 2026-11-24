@@ -33,12 +33,7 @@ import {
   Save,
   Mail,
   Filter,
-  Palette,
   ExternalLink,
-  Star,
-  Trophy,
-  Grid,
-  Download,
   MessageSquare,
   Loader2,
   Bell
@@ -72,18 +67,16 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import WorkoutSection from '@/components/workouts/WorkoutSection';
 import NutritionSection from '@/components/nutrition/NutritionSection';
 import ChatPanel from '@/components/chat/ChatPanel';
+import ChatPeerInfoSidebar from '@/components/chat/ChatPeerInfoSidebar';
 import ChatAudienceSelectModal from '@/components/chat/ChatAudienceSelectModal';
 import ChatUnreadBadge from '@/components/chat/ChatUnreadBadge';
 import type { ChatAudience } from '@/lib/chat/chatAudience';
 import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
-import BackgroundsColorsSettings from '@/components/settings/BackgroundsColorsSettings';
-import ToolsSettings from '@/components/settings/ToolsSettings';
-import FavouritesSettings from '@/components/settings/FavouritesSettings';
-import MyBestSettings from '@/components/settings/MyBestSettings';
-import GridDisplaySettings from '@/components/settings/GridDisplaySettings';
+import PersonalSettingsPanel from '@/components/settings/PersonalSettingsPanel';
 import NewsOGPPanel from '@/components/news/NewsOGPPanel';
 import MyMusicPanel from '@/components/music/MyMusicPanel';
 import MusicOGPPanel from '@/components/music/MusicOGPPanel';
+import MoodMusicPanel from '@/components/music/MoodMusicPanel';
 import PostsPanel from '@/components/posts/PostsPanel';
 import MyStaffFeedbacksPanel from '@/components/messages/MyStaffFeedbacksPanel';
 import ClubStaffMessagesPanel from '@/components/messages/ClubStaffMessagesPanel';
@@ -120,7 +113,9 @@ type AthleteClubMainPanel =
   | 'club-news'
   | 'club-news-ogp'
   | 'club-global-news'
-  | 'club-movesbook-news';
+  | 'club-movesbook-news'
+  | 'club-movesbook-archive-news'
+  | 'mood-music';
 
 function heroBannerStripBgUrl(p: AthleteLegacyBannerProfile | null): string {
   return getHeroBannerDisplayUrl(p);
@@ -199,6 +194,8 @@ function AthleteDashboardContent() {
   const [telegramAccount, setTelegramAccount] = useState('');
   const [userTelegramAccount, setUserTelegramAccount] = useState<string | null>(null);
   const [isLoadingTelegram, setIsLoadingTelegram] = useState(false);
+  /** Chat header click → show peer profile in the dashboard right sidebar. */
+  const [chatPeerInfoUserId, setChatPeerInfoUserId] = useState<string | null>(null);
   /** Open Club Channel chat on My Club tab (member view). */
   const [clubChatOpen, setClubChatOpen] = useState(false);
   /** After Telegram join, open club chat instead of My Page audience picker. */
@@ -439,7 +436,7 @@ function AthleteDashboardContent() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setUserTelegramAccount(formattedAccount);
+          setUserTelegramAccount(data.telegramAccount || formattedAccount);
           setShowJoinModal(false);
           setTelegramAccount('');
           if (pendingClubChatOpen) {
@@ -471,7 +468,26 @@ function AthleteDashboardContent() {
     } else {
       setShowRightSidebar(true);
     }
-  }, [activeTab, activeSection]);
+  }, [activeTab, activeSection, setShowRightSidebar]);
+
+  // Clear peer User Info when leaving chat
+  useEffect(() => {
+    const chatOpen =
+      (activeTab === 'my-page' && activeSection === 'chat' && Boolean(chatAudience)) ||
+      (activeTab === 'my-entity' && clubChatOpen);
+    if (!chatOpen) setChatPeerInfoUserId(null);
+  }, [activeTab, activeSection, chatAudience, clubChatOpen]);
+
+  // Opening User Info should reveal the right sidebar
+  useEffect(() => {
+    if (chatPeerInfoUserId) setShowRightSidebar(true);
+  }, [chatPeerInfoUserId, setShowRightSidebar]);
+
+  const chatOpen =
+    (activeTab === 'my-page' && activeSection === 'chat' && Boolean(chatAudience)) ||
+    (activeTab === 'my-entity' && clubChatOpen);
+  /** With both sidebars off, chat grows to the bottom of the viewport. */
+  const chatFillsViewport = chatOpen && !showLeftSidebar && !showRightSidebar;
 
   const entityClub =
     activeTab === 'my-entity'
@@ -623,13 +639,18 @@ function AthleteDashboardContent() {
   };
 
   return (
-    <div className="bg-gray-50 flex flex-col" style={{ minHeight: '100vh' }}>
-      <div className="print:hidden">
+    <div
+      className={`bg-gray-50 flex flex-col ${
+        chatFillsViewport ? 'h-screen overflow-hidden' : ''
+      }`}
+      style={chatFillsViewport ? undefined : { minHeight: '100vh' }}
+    >
+      <div className="print:hidden shrink-0">
         <ModernNavbar />
       </div>
       
       {/* Display Options Toolbar */}
-      <div className={`bg-white border-b px-4 py-1 transition-all duration-300 print:hidden ${showToolbar ? '' : 'overflow-hidden'}`}>
+      <div className={`shrink-0 bg-white border-b px-4 py-1 transition-all duration-300 print:hidden ${showToolbar ? '' : 'overflow-hidden'}`}>
         <div className={`flex items-center justify-between flex-wrap gap-2 transition-all duration-300 ${showToolbar ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -702,7 +723,7 @@ function AthleteDashboardContent() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col w-full py-2">
+      <div className="flex min-h-0 flex-1 flex-col w-full py-2">
         {showAdBanner && (
           <div className="mb-4 flex-shrink-0">
             <AdvertisementCarousel />
@@ -948,7 +969,7 @@ function AthleteDashboardContent() {
           </div>
         )}
 
-        <div className="flex-1 flex gap-0">
+        <div className="flex min-h-0 flex-1 gap-0">
           {/* Left Sidebar - Hidden when News Expand is on */}
           {showLeftSidebar && !newsExpanded && !musicExpanded && !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 sticky top-0 self-start print:hidden">
@@ -1025,6 +1046,10 @@ function AthleteDashboardContent() {
                   setActiveSection('music');
                   setMusicExpanded(false);
                 }}
+                onClubMoodMusicClick={() => openClubNewsPanel('mood-music')}
+                onClubMovesbookArchiveNewsSectionClick={() =>
+                  openClubNewsPanel('club-movesbook-archive-news')
+                }
                 onClubMovesbookNewsSectionClick={() => openClubNewsPanel('club-movesbook-news')}
                 onClubNewsSectionClick={() => openClubNewsPanel('club-news')}
                 onClubOgpNewsSectionClick={() => openClubNewsPanel('club-news-ogp')}
@@ -1037,7 +1062,7 @@ function AthleteDashboardContent() {
           )}
 
           {/* Main Content Area */}
-          <div className={`flex-1 min-w-0 flex flex-col ${activeTab === 'my-page' && activeSection === 'personal-settings' ? '' : 'px-4'}`}>
+          <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${activeTab === 'my-page' && activeSection === 'personal-settings' ? '' : 'px-4'}`}>
             {activeTab === 'my-page' ? <SharingNotifications scope={{ type: 'mypage' }} /> : null}
             {activeTab === 'my-page' && (
               <div className="flex-1 flex flex-col min-h-0">
@@ -1052,14 +1077,20 @@ function AthleteDashboardContent() {
                 {activeSection === 'nutrition' && <NutritionSection onClose={() => setActiveSection('overview')} />}
                 {activeSection === 'progress' && <AthleteProgress t={t} />}
                 {activeSection === 'settings' && <AthleteSettings t={t} />}
-                {activeSection === 'personal-settings' && <PersonalSettingsContent t={t} user={user} />}
+                {activeSection === 'personal-settings' && <PersonalSettingsPanel user={user} />}
                 {activeSection === 'chat' && chatAudience && (
-                  <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
+                  <div
+                    className={`flex min-h-0 flex-1 flex-col ${
+                      chatFillsViewport ? '' : 'max-h-[75vh]'
+                    }`}
+                  >
                     <ChatPanel
                       key={chatAudience}
                       embedded
                       chatAudience={chatAudience}
+                      onPeerInfoSelect={setChatPeerInfoUserId}
                       onClose={() => {
+                        setChatPeerInfoUserId(null);
                         setActiveSection('overview');
                         setChatAudience(null);
                       }}
@@ -1069,7 +1100,7 @@ function AthleteDashboardContent() {
                 {activeSection === 'movesbook-news' && (
                   <div className="flex-1 flex flex-col min-h-0">
                     <ClubMovesbookNewsPanel
-                      title="Movesbook News"
+                      title="Movesbook Global News"
                       onClose={() => setActiveSection('overview')}
                     />
                   </div>
@@ -1186,13 +1217,21 @@ function AthleteDashboardContent() {
                   />
                 </div>
               ) : clubChatOpen && (selectedClubId ?? myClubs[0]?.id) ? (
-                <div className="flex-1 flex flex-col min-h-0 max-h-[75vh]">
+                <div
+                  className={`flex min-h-0 flex-1 flex-col ${
+                    chatFillsViewport ? '' : 'max-h-[75vh]'
+                  }`}
+                >
                   <ChatPanel
                     key={`club-chat-${selectedClubId ?? myClubs[0]?.id}`}
                     embedded
                     clubId={selectedClubId ?? myClubs[0]?.id}
                     chatAudience="club-member"
-                    onClose={() => setClubChatOpen(false)}
+                    onPeerInfoSelect={setChatPeerInfoUserId}
+                    onClose={() => {
+                      setChatPeerInfoUserId(null);
+                      setClubChatOpen(false);
+                    }}
                   />
                 </div>
               ) : clubMainPanel === 'club-news' ? (
@@ -1251,9 +1290,25 @@ function AthleteDashboardContent() {
                     </div>
                   )}
                 </div>
+              ) : clubMainPanel === 'club-movesbook-archive-news' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <ClubNewsArchivePanel
+                    title="Movesbook News"
+                    clubId={selectedClubId ?? myClubs[0]?.id ?? null}
+                    enableMovesbookGlobalShare
+                    onClose={() => setClubMainPanel('default')}
+                  />
+                </div>
               ) : clubMainPanel === 'club-movesbook-news' ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <ClubMovesbookNewsPanel title="Movesbook News" />
+                  <ClubMovesbookNewsPanel
+                    title="Movesbook Global News"
+                    clubId={selectedClubId ?? myClubs[0]?.id ?? null}
+                  />
+                </div>
+              ) : clubMainPanel === 'mood-music' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <MoodMusicPanel onClose={() => setClubMainPanel('default')} />
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border p-8 pt-12 flex-1 flex items-start justify-center">
@@ -1275,7 +1330,12 @@ function AthleteDashboardContent() {
             !clubAddSongsOgpExpanded && (
             <div className="w-80 flex-shrink-0 print:hidden">
               <div className="bg-white shadow-sm border h-full flex flex-col overflow-y-auto">
-                {activeTab === 'my-entity' && (!asMember || memberKind === 'club') ? (
+                {chatPeerInfoUserId ? (
+                  <ChatPeerInfoSidebar
+                    userId={chatPeerInfoUserId}
+                    onClose={() => setChatPeerInfoUserId(null)}
+                  />
+                ) : activeTab === 'my-entity' && (!asMember || memberKind === 'club') ? (
                   <AthleteMyClubRightSidebar clubId={selectedClubId ?? myClubs[0]?.id ?? null} />
                 ) : (
                   <div className="p-4 flex flex-col">
@@ -1340,9 +1400,11 @@ function AthleteDashboardContent() {
         </div>
       </div>
 
-      <div className="print:hidden">
-        <SimpleFooter />
-      </div>
+      {!chatFillsViewport && (
+        <div className="print:hidden shrink-0">
+          <SimpleFooter />
+        </div>
+      )}
 
       <ChangeBannerModal
         isOpen={showChangeBannerModal}
@@ -1751,134 +1813,6 @@ function AthleteSettings({ t }: { t: (key: string) => string }) {
         </div>
       </div>
       <SimpleFooter />
-    </div>
-  );
-}
-
-function PersonalSettingsContent({ t, user }: { t: (key: string) => string; user: any }) {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'backgrounds' | 'tools' | 'favourites' | 'mybest' | 'grid'>('backgrounds');
-  const [loading, setLoading] = useState(false);
-  const userLanguage = user?.language || 'en';
-
-  const loadDefaultSettings = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/user/settings/load-defaults?language=${userLanguage}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.success) {
-          const token = localStorage.getItem('token');
-          if (token) {
-            await fetch('/api/user/settings/save', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(data.settings)
-            });
-          }
-          
-          alert(`✅ Default settings for ${data.language.toUpperCase()} loaded and applied successfully!`);
-        } else {
-          alert('Failed to load default settings. Please try again.');
-        }
-      } else {
-        alert('Failed to load default settings. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error loading default settings:', error);
-      alert('Error loading default settings. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const settingsSections = [
-    { id: 'backgrounds' as const, label: 'Backgrounds & Colors', icon: Palette },
-    { id: 'tools' as const, label: 'Tools', icon: Settings },
-    { id: 'favourites' as const, label: 'Favourites', icon: Star },
-    { id: 'mybest' as const, label: 'My Best', icon: Trophy },
-    { id: 'grid' as const, label: 'Grid Display Mode', icon: Grid },
-  ];
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm border flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="bg-gray-800 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Settings size={24} />
-            <span>Personal Settings</span>
-          </h2>
-          <p className="text-sm text-gray-300 mt-1">
-            Language: <span className="font-semibold">{userLanguage.toUpperCase()}</span> - Configure your personal preferences
-          </p>
-        </div>
-      </div>
-
-      {/* Info Banner */}
-      <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex-1">
-          <p className="text-sm text-gray-800">
-            <strong>Your Personal Settings</strong> - Configure your own preferences
-          </p>
-          <p className="text-xs text-gray-600 mt-1">
-            Optional: Load {userLanguage.toUpperCase()} defaults created by admins as a starting template
-          </p>
-        </div>
-        <button
-          onClick={loadDefaultSettings}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          <Download size={16} />
-          <span>{loading ? 'Loading...' : 'Load Admin Defaults'}</span>
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation */}
-        <div className="w-64 bg-gray-50 border-r border-gray-200 overflow-y-auto flex-shrink-0">
-          <nav className="p-4 space-y-2">
-            {settingsSections.map((section) => {
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSettingsTab(section.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                    activeSettingsTab === section.id
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="font-medium">{section.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Settings Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-white">
-          {activeSettingsTab === 'backgrounds' && <BackgroundsColorsSettings />}
-          {activeSettingsTab === 'tools' && <ToolsSettings isAdmin={false} userType="ATHLETE" />}
-          {activeSettingsTab === 'favourites' && <FavouritesSettings />}
-          {activeSettingsTab === 'mybest' && <MyBestSettings />}
-          {activeSettingsTab === 'grid' && <GridDisplaySettings />}
-        </div>
-      </div>
-
-      {/* Footer - Auto-save enabled, no manual save button needed */}
-      <div className="border-t bg-gray-50 px-6 py-4 flex items-center justify-end flex-shrink-0">
-        <p className="text-sm text-gray-600 italic">
-          ✓ All changes are saved automatically
-        </p>
-      </div>
     </div>
   );
 }

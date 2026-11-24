@@ -58,6 +58,22 @@ export const EXERCISE_MARTIAL_ARTS_DEFAULT_TOPICS = [
   'Kickboxing',
 ] as const;
 
+/** Typology options for Add OGP exercise (persisted on ExerciseOgpArticle.typology). */
+export const EXERCISE_OGP_TYPOLOGY_SINGLE = 'Single exercises';
+export const EXERCISE_OGP_TYPOLOGY_PLAYLIST = 'Playlist of exercises';
+
+export const EXERCISE_OGP_TYPOLOGIES = [
+  EXERCISE_OGP_TYPOLOGY_SINGLE,
+  EXERCISE_OGP_TYPOLOGY_PLAYLIST,
+] as const;
+
+export type ExerciseOgpTypology = (typeof EXERCISE_OGP_TYPOLOGIES)[number];
+
+/** True when typology is Playlist of exercises. Null/empty/other → single. */
+export function isExerciseOgpPlaylistTypology(typology: string | null | undefined): boolean {
+  return (typology ?? '').trim() === EXERCISE_OGP_TYPOLOGY_PLAYLIST;
+}
+
 const MUSCLE_DEFAULT_CATEGORY_SET = new Set<string>(EXERCISE_CATEGORIES_WITH_MUSCLE_DEFAULT_TOPICS);
 
 const EMPTY_DEFAULT_TOPICS: readonly string[] = [];

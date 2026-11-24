@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ChevronDown,
   ChevronRight,
   Copy,
   DoorOpen,
@@ -20,6 +21,12 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
+import {
+  buildImageContent,
+  isImageContent,
+  messagePreview,
+  parseImageContent,
+} from '@/lib/chat/messageContent';
 
 export type ChannelBroadcastMessage = {
   id: string;
@@ -60,16 +67,6 @@ function channelLeftEventName(clubId?: string | null): string {
 function channelRejoinedEventName(clubId?: string | null): string {
   const id = typeof clubId === 'string' ? clubId.trim() : '';
   return id ? `club-channel-rejoined:${id}` : 'movesbook-channel-rejoined';
-}
-
-function isImageContent(content: string): boolean {
-  return content.startsWith('data:image/');
-}
-
-function messagePreview(content: string, max = 100): string {
-  if (isImageContent(content)) return '[Image]';
-  const text = content.trim();
-  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 type ConversationOption = {
@@ -295,6 +292,10 @@ export default function MovesbookChannel({
   const [forwardingMessage, setForwardingMessage] = useState<ChannelBroadcastMessage | null>(null);
   const [conversations, setConversations] = useState<ConversationOption[]>([]);
   const [forwarding, setForwarding] = useState(false);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stickToBottomRef = useRef(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -375,13 +376,53 @@ export default function MovesbookChannel({
     void loadMessages();
   }, [selected, loadMessages, clubId]);
 
-  useEffect(() => {
-    if (!selected || variant !== 'pane') return;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    // Scroll only the messages pane — never the page (scrollIntoView causes a jump).
-    el.scrollTop = el.scrollHeight;
-  }, [selected, messages.length, variant]);
+    const target = el.scrollHeight - el.clientHeight;
+    if (behavior === 'smooth') {
+      el.scrollTo({ top: target, behavior: 'smooth' });
+    } else {
+      el.scrollTop = target;
+    }
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+  }, [selected, clubId]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    };
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const container = messagesContainerRef.current;
+    if (!container || !messageId) return;
+    const target = container.querySelector(
+      `[data-message-id="${CSS.escape(messageId)}"]`,
+    ) as HTMLElement | null;
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextTop =
+      targetRect.top - containerRect.top + container.scrollTop - Math.max(24, container.clientHeight * 0.25);
+    container.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+    stickToBottomRef.current = false;
+    setShowScrollToBottom(true);
+
+    setHighlightMessageId(messageId);
+    if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+    highlightClearTimerRef.current = setTimeout(() => {
+      setHighlightMessageId((cur) => (cur === messageId ? null : cur));
+    }, 1600);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -471,9 +512,10 @@ export default function MovesbookChannel({
     if (!contextMenu) return;
     const msg = contextMenu.message;
     setContextMenu(null);
+    const image = parseImageContent(msg.content);
     try {
-      if (isImageContent(msg.content)) {
-        const res = await fetch(msg.content);
+      if (image) {
+        const res = await fetch(image.src);
         const blob = await res.blob();
         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       } else {
@@ -481,7 +523,7 @@ export default function MovesbookChannel({
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(isImageContent(msg.content) ? '[Image]' : msg.content);
+        await navigator.clipboard.writeText(image?.caption || messagePreview(msg.content));
       } catch {
         /* ignore */
       }
@@ -686,8 +728,8 @@ export default function MovesbookChannel({
     setSendingReply(true);
     setReplyError(null);
     try {
-      // Prefer image when attached; optional caption is ignored for image replies (matches 1:1 chat).
-      const content = image || text;
+      // Image + optional caption in one message (Telegram-style).
+      const content = image ? buildImageContent(image, text) : text;
       const res = await fetch('/api/chat/broadcast/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -720,13 +762,33 @@ export default function MovesbookChannel({
   const filtered =
     (searchOpen && searchQuery.trim()
       ? messages.filter((m) => {
+          const q = searchQuery.trim().toLowerCase();
           if (isImageContent(m.content)) {
-            return '[image]'.includes(searchQuery.trim().toLowerCase());
+            return messagePreview(m.content).toLowerCase().includes(q) || '[image]'.includes(q);
           }
-          return m.content.toLowerCase().includes(searchQuery.trim().toLowerCase());
+          return m.content.toLowerCase().includes(q);
         })
       : messages
     ).filter((m) => !hiddenIds.has(m.id));
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 80;
+    stickToBottomRef.current = atBottom;
+    setShowScrollToBottom(!atBottom && filtered.length > 0);
+  }, [filtered.length]);
+
+  useEffect(() => {
+    if (!selected || variant !== 'pane') return;
+    // Keep pinned to latest only when the user is already near the bottom.
+    if (!stickToBottomRef.current && filtered.length > 0) {
+      setShowScrollToBottom(true);
+      return;
+    }
+    scrollToBottom('auto');
+  }, [selected, filtered.length, variant, scrollToBottom]);
 
   const pinnedMessage = pinnedId ? messages.find((m) => m.id === pinnedId && !hiddenIds.has(m.id)) : null;
 
@@ -891,15 +953,22 @@ export default function MovesbookChannel({
 
       {pinnedMessage && (
         <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-[#fff8e7] px-3 py-2">
-          <Pin className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-              Pinned · {pinnedMessage.senderName}
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-start gap-2 rounded text-left hover:bg-amber-100/70"
+            title="Jump to pinned message"
+            onClick={() => scrollToMessage(pinnedMessage.id)}
+          >
+            <Pin className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                Pinned · {pinnedMessage.senderName}
+              </div>
+              <div className="truncate text-[13px] text-gray-800">
+                {messagePreview(pinnedMessage.content, 120)}
+              </div>
             </div>
-            <div className="truncate text-[13px] text-gray-800">
-              {messagePreview(pinnedMessage.content, 120)}
-            </div>
-          </div>
+          </button>
           <button
             type="button"
             className="shrink-0 text-amber-700/70 hover:text-amber-900"
@@ -914,7 +983,12 @@ export default function MovesbookChannel({
         </div>
       )}
 
-      <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-[#e8e8e8] p-4">
+      <div className="relative min-h-0 flex-1">
+      <div
+        ref={messagesContainerRef}
+        className="h-full overflow-y-auto bg-[#e8e8e8] p-4"
+        onScroll={handleMessagesScroll}
+      >
         {loading && messages.length === 0 ? (
           <p className="text-center text-sm text-gray-500">Loading channel…</p>
         ) : filtered.length === 0 ? (
@@ -923,10 +997,13 @@ export default function MovesbookChannel({
           <div className="flex w-full flex-col gap-5">
             {filtered.map((msg) => {
               const isReply = Boolean(msg.isReply || msg.mode === 'reply');
+              const isHighlighted = highlightMessageId === msg.id;
               if (isReply) {
+                const parentId = msg.parentId?.trim() || null;
                 return (
                   <div
                     key={msg.id}
+                    data-message-id={msg.id}
                     className={`flex flex-col gap-1 ${msg.isOwn ? 'items-end' : 'items-start'}`}
                     onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                   >
@@ -939,32 +1016,60 @@ export default function MovesbookChannel({
                       </div>
                     )}
                     <div
-                      className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 shadow-sm ${
+                      className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 shadow-sm transition ring-offset-1 ${
                         msg.isOwn
                           ? 'rounded-tr-md bg-[#dcf8c6]'
                           : 'rounded-tl-md bg-white'
-                      } ${pinnedId === msg.id ? 'ring-2 ring-amber-400' : ''}`}
+                      } ${pinnedId === msg.id ? 'ring-2 ring-amber-400' : ''} ${
+                        isHighlighted ? 'ring-2 ring-[#3390ec]' : ''
+                      }`}
                     >
                       {(msg.parentContent || msg.parentSenderName) && (
-                        <div className="mb-1.5 rounded-md border-l-2 border-[#6b9e3a] bg-black/5 px-2 py-1 text-[11px] text-gray-600">
+                        <button
+                          type="button"
+                          disabled={!parentId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (parentId) scrollToMessage(parentId);
+                          }}
+                          className={`mb-1.5 w-full rounded-md border-l-2 border-[#6b9e3a] bg-black/5 px-2 py-1 text-left text-[11px] text-gray-600 transition ${
+                            parentId
+                              ? 'cursor-pointer hover:bg-black/10'
+                              : 'cursor-default'
+                          }`}
+                          title={parentId ? 'Go to original message' : undefined}
+                        >
                           <div className="font-semibold text-[#4a6b2a]">
                             {msg.parentSenderName || 'Broadcast'}
                           </div>
                           <div className="truncate">{messagePreview(msg.parentContent || '', 100)}</div>
-                        </div>
+                        </button>
                       )}
-                      {isImageContent(msg.content) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={msg.content}
-                          alt="Shared media"
-                          className="max-h-64 max-w-full rounded-lg object-contain"
-                        />
-                      ) : (
-                        <p className="whitespace-pre-wrap break-words text-[14px] leading-snug text-gray-900">
-                          {msg.content}
-                        </p>
-                      )}
+                      {(() => {
+                        const image = parseImageContent(msg.content);
+                        if (image) {
+                          return (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={image.src}
+                                alt="Shared media"
+                                className="max-h-64 max-w-full rounded-lg object-contain"
+                              />
+                              {image.caption ? (
+                                <p className="mt-2 whitespace-pre-wrap break-words text-[14px] leading-snug text-gray-900">
+                                  {image.caption}
+                                </p>
+                              ) : null}
+                            </>
+                          );
+                        }
+                        return (
+                          <p className="whitespace-pre-wrap break-words text-[14px] leading-snug text-gray-900">
+                            {msg.content}
+                          </p>
+                        );
+                      })()}
                       <div className="mt-1.5 flex items-center justify-end gap-2 text-[11px] text-gray-400">
                         {pinnedId === msg.id && <Pin className="h-3 w-3 text-amber-600" />}
                         <span>{formatTime(msg.createdAt)}</span>
@@ -978,6 +1083,7 @@ export default function MovesbookChannel({
               return (
                 <div
                   key={msg.id}
+                  data-message-id={msg.id}
                   className="flex flex-col items-start gap-1"
                   onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                 >
@@ -988,23 +1094,34 @@ export default function MovesbookChannel({
                   <button
                     type="button"
                     onClick={() => openReply(msg.id)}
-                    className={`max-w-[92%] rounded-2xl rounded-tl-md bg-white px-3.5 py-2.5 text-left shadow-sm transition ${
+                    className={`max-w-[92%] rounded-2xl rounded-tl-md bg-white px-3.5 py-2.5 text-left shadow-sm transition ring-offset-1 ${
                       selectedForReply ? 'ring-2 ring-[#8ab4d9]' : 'hover:bg-gray-50'
-                    } ${pinnedId === msg.id ? 'ring-2 ring-amber-400' : ''}`}
+                    } ${pinnedId === msg.id ? 'ring-2 ring-amber-400' : ''} ${
+                      isHighlighted ? 'ring-2 ring-[#3390ec]' : ''
+                    }`}
                     title="Reply to this broadcast"
                   >
-                    <p className="whitespace-pre-wrap break-words text-[14px] leading-snug text-gray-900">
-                      {isImageContent(msg.content) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={msg.content}
-                          alt="Shared media"
-                          className="max-h-64 max-w-full rounded-lg object-contain"
-                        />
-                      ) : (
-                        msg.content
-                      )}
-                    </p>
+                    <div className="whitespace-pre-wrap break-words text-[14px] leading-snug text-gray-900">
+                      {(() => {
+                        const image = parseImageContent(msg.content);
+                        if (image) {
+                          return (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={image.src}
+                                alt="Shared media"
+                                className="max-h-64 max-w-full rounded-lg object-contain"
+                              />
+                              {image.caption ? (
+                                <p className="mt-2 whitespace-pre-wrap break-words">{image.caption}</p>
+                              ) : null}
+                            </>
+                          );
+                        }
+                        return msg.content;
+                      })()}
+                    </div>
                     <div className="mt-1.5 flex items-end justify-between gap-3 text-[11px] text-gray-400">
                       <span className="min-w-0 flex-1 leading-snug text-[#6b7280]">
                         {broadcastModeLabel(msg.mode, clubId)}
@@ -1025,6 +1142,17 @@ export default function MovesbookChannel({
             <div ref={endRef} />
           </div>
         )}
+      </div>
+      {showScrollToBottom && filtered.length > 0 && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom('smooth')}
+          className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-gray-700 text-white shadow-lg transition-opacity hover:bg-gray-800"
+          title="Jump to latest messages"
+        >
+          <ChevronDown className="h-6 w-6" />
+        </button>
+      )}
       </div>
 
       <div className="relative shrink-0 border-t border-gray-300 bg-[#dcdcdc] px-3 py-2.5">
@@ -1064,7 +1192,7 @@ export default function MovesbookChannel({
                   className="h-16 w-16 rounded border border-gray-300 object-cover"
                 />
                 <span className="min-w-0 flex-1 text-sm text-gray-600">
-                  Image ready — click Send or choose another
+                  Image ready — add a caption, then Send (both post together)
                 </span>
                 <button
                   type="button"
@@ -1102,7 +1230,9 @@ export default function MovesbookChannel({
                     void sendReply();
                   }
                 }}
-                placeholder="Reply… (or paste / attach an image)"
+                placeholder={
+                  pendingImage ? 'Add a caption…' : 'Reply… (or paste / attach an image)'
+                }
                 className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
                 autoFocus
                 disabled={sendingReply || !replyTarget}

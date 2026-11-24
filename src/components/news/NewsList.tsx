@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { deserializeMultiLanguageContent } from '@/lib/news/contentParser';
 import { LANGUAGE_ID_MAP, LANGUAGE_CODE_TO_ID_MAP } from '@/lib/news/mappings';
@@ -10,6 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import NewsCarousel from './NewsCarousel';
 import { ShareInMyClubsButtonIfClub } from '@/components/club/ShareInMyClubsButton';
 import ClubGlobalNewsToggleButton from '@/components/club/ClubGlobalNewsToggleButton';
+import MovesbookGlobalNewsToggleButton from '@/components/club/MovesbookGlobalNewsToggleButton';
 
 const newsListStyles = `
   .section-slider::-webkit-scrollbar {
@@ -75,6 +76,8 @@ interface NewsItem {
   } | null;
   /** Club: promoted into Club Global News for the current club. */
   inClubGlobalNews?: boolean;
+  /** Platform Movesbook Global News flag. */
+  inGlobalNews?: boolean;
 }
 
 interface NewsListProps {
@@ -92,6 +95,27 @@ interface NewsListProps {
   showClubGlobalNews?: boolean;
   clubGlobalNewsClubId?: string | null;
   onToggleClubGlobalNews?: (id: string, inClubGlobalNews: boolean) => void;
+  /** When Club Global toggle finds item not shared yet. */
+  onRequestClubGlobalShare?: (id: string, title: string) => void;
+  /** Club admin: show Share in Movesbook Global News. */
+  showMovesbookGlobalNews?: boolean;
+  onToggleMovesbookGlobalNews?: (id: string, inGlobalNews: boolean) => void;
+  /**
+   * When set with showOwnerEditDelete, show Edit/Delete only on articles
+   * whose creator (`item.user.id`) matches this logged-in user id.
+   */
+  currentUserId?: string | null;
+  showOwnerEditDelete?: boolean;
+  /** Extra query for edit links (e.g. `from=club&clubId=...`). */
+  ownerEditQuery?: string | null;
+  onDeleteOwnedNews?: (id: string) => void;
+}
+
+const overlayActionBtnClass =
+  'inline-flex items-center justify-center rounded-md border border-gray-200 bg-white/95 p-1.5 shadow-sm transition-colors hover:bg-gray-100';
+
+function isNewsCreator(item: NewsItem, currentUserId?: string | null): boolean {
+  return Boolean(currentUserId && item.user?.id && item.user.id === currentUserId);
 }
 
 export default function NewsList({
@@ -107,6 +131,13 @@ export default function NewsList({
   showClubGlobalNews = false,
   clubGlobalNewsClubId = null,
   onToggleClubGlobalNews,
+  onRequestClubGlobalShare,
+  showMovesbookGlobalNews = false,
+  onToggleMovesbookGlobalNews,
+  currentUserId = null,
+  showOwnerEditDelete = false,
+  ownerEditQuery = null,
+  onDeleteOwnedNews,
 }: NewsListProps) {
   const { t, currentLanguage: contextCurrentLanguage } = useLanguage();
   const [selectedLanguages, setSelectedLanguages] = useState<Record<string, string>>({});
@@ -268,6 +299,83 @@ export default function NewsList({
     return (
       <div className={`${sizeClass} rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold border border-gray-200`}>
         {initials}
+      </div>
+    );
+  };
+
+  const getOwnerEditHref = (id: string) => {
+    const base = `/news-by-movesbook/edit/${id}`;
+    if (!ownerEditQuery) return base;
+    const q = ownerEditQuery.startsWith('?') ? ownerEditQuery.slice(1) : ownerEditQuery;
+    return q ? `${base}?${q}` : base;
+  };
+
+  const CardOverlayActions = ({ item, title }: { item: NewsItem; title: string }) => {
+    const isOwner = showOwnerEditDelete && isNewsCreator(item, currentUserId);
+    const showShareRow =
+      showShareInMyClubs ||
+      (showClubGlobalNews && clubGlobalNewsClubId) ||
+      showMovesbookGlobalNews ||
+      isOwner;
+
+    if (!showShareRow) return null;
+
+    return (
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+        {isOwner ? (
+          <>
+            <Link
+              href={getOwnerEditHref(item.id)}
+              onClick={(e) => e.stopPropagation()}
+              className={`${overlayActionBtnClass} text-blue-600 hover:text-blue-800`}
+              title="Edit"
+              aria-label="Edit news article"
+            >
+              <Pencil className="h-4 w-4" />
+            </Link>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDeleteOwnedNews?.(item.id);
+              }}
+              className={`${overlayActionBtnClass} text-red-600 hover:text-red-800`}
+              title="Delete"
+              aria-label="Delete news article"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </>
+        ) : null}
+        {showShareInMyClubs ? (
+          <ShareInMyClubsButtonIfClub
+            userType={clubUserType}
+            kind="news"
+            itemId={item.id}
+            itemTitle={title}
+            adminUsername={clubAdminUsername ?? undefined}
+          />
+        ) : null}
+        {showClubGlobalNews && clubGlobalNewsClubId ? (
+          <ClubGlobalNewsToggleButton
+            kind="news"
+            itemId={item.id}
+            clubId={clubGlobalNewsClubId}
+            inClubGlobalNews={item.inClubGlobalNews === true}
+            variant="overlay"
+            onToggled={(next) => onToggleClubGlobalNews?.(item.id, next)}
+            onNotShared={() => onRequestClubGlobalShare?.(item.id, title)}
+          />
+        ) : null}
+        {showMovesbookGlobalNews ? (
+          <MovesbookGlobalNewsToggleButton
+            itemId={item.id}
+            inGlobalNews={item.inGlobalNews === true}
+            variant="overlay"
+            onToggled={(next) => onToggleMovesbookGlobalNews?.(item.id, next)}
+          />
+        ) : null}
       </div>
     );
   };
@@ -547,29 +655,7 @@ export default function NewsList({
                     key={item.id}
                     className="relative bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group"
                   >
-                    {(showShareInMyClubs || (showClubGlobalNews && clubGlobalNewsClubId)) ? (
-                      <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
-                        {showShareInMyClubs ? (
-                          <ShareInMyClubsButtonIfClub
-                            userType={clubUserType}
-                            kind="news"
-                            itemId={item.id}
-                            itemTitle={title}
-                            adminUsername={clubAdminUsername ?? undefined}
-                          />
-                        ) : null}
-                        {showClubGlobalNews && clubGlobalNewsClubId ? (
-                          <ClubGlobalNewsToggleButton
-                            kind="news"
-                            itemId={item.id}
-                            clubId={clubGlobalNewsClubId}
-                            inClubGlobalNews={item.inClubGlobalNews === true}
-                            variant="overlay"
-                            onToggled={(next) => onToggleClubGlobalNews?.(item.id, next)}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <CardOverlayActions item={item} title={title} />
                     <Link
                       href={`/news-by-movesbook/${item.id}`}
                       className="block"
@@ -619,29 +705,7 @@ export default function NewsList({
                     key={item.id}
                     className="relative bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group"
                   >
-                    {(showShareInMyClubs || (showClubGlobalNews && clubGlobalNewsClubId)) ? (
-                      <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
-                        {showShareInMyClubs ? (
-                          <ShareInMyClubsButtonIfClub
-                            userType={clubUserType}
-                            kind="news"
-                            itemId={item.id}
-                            itemTitle={title}
-                            adminUsername={clubAdminUsername ?? undefined}
-                          />
-                        ) : null}
-                        {showClubGlobalNews && clubGlobalNewsClubId ? (
-                          <ClubGlobalNewsToggleButton
-                            kind="news"
-                            itemId={item.id}
-                            clubId={clubGlobalNewsClubId}
-                            inClubGlobalNews={item.inClubGlobalNews === true}
-                            variant="overlay"
-                            onToggled={(next) => onToggleClubGlobalNews?.(item.id, next)}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <CardOverlayActions item={item} title={title} />
                     <Link
                       href={`/news-by-movesbook/${item.id}`}
                       className="block"

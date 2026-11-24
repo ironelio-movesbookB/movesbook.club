@@ -1,13 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Globe, Loader2, Newspaper, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  ArrowDownAZ,
+  Clock,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Newspaper,
+  Search,
+  X,
+} from 'lucide-react';
 import type { ClubSharedFeedItem } from '@/lib/clubNewsShareAuth';
 import SharedNewsItemPreviewModal, {
   previewPayloadFromFeedItem,
   type SharedNewsPreviewPayload,
 } from '@/components/news/SharedNewsItemPreviewModal';
 import NewsFeedMetaLine from '@/components/news/NewsFeedMetaLine';
+import { useAuth } from '@/hooks/useAuth';
 
 type ClubSharedNewsPanelProps = {
   clubId: string;
@@ -17,13 +28,26 @@ type ClubSharedNewsPanelProps = {
 };
 
 type GlobalKindFilter = 'all' | 'news' | 'ogp' | 'ogp-group';
+type SortMode = 'date-desc' | 'date-asc' | 'alpha-asc' | 'alpha-desc';
+/** Posted-by radio filter (empty = show all). */
+type PostedByFilter = '' | 'me' | 'admin-staff' | 'members' | 'movesbook' | 'my-country';
+
+const POSTED_BY_OPTIONS: { value: Exclude<PostedByFilter, ''>; label: string }[] = [
+  { value: 'me', label: 'posted by me' },
+  { value: 'admin-staff', label: 'posted by admin & staff' },
+  { value: 'members', label: 'posted by members' },
+  { value: 'movesbook', label: 'posted by movesbook' },
+  { value: 'my-country', label: 'posted by my country' },
+];
 
 const KIND_FILTER_OPTIONS: { value: GlobalKindFilter; label: string }[] = [
-  { value: 'all', label: 'All types' },
+  { value: 'all', label: 'Select' },
   { value: 'news', label: 'News' },
   { value: 'ogp', label: 'OGP News' },
   { value: 'ogp-group', label: 'OGP Group' },
 ];
+
+const ROWS_PER_PAGE = 10;
 
 function formatDate(iso: string) {
   try {
@@ -50,7 +74,13 @@ function itemSearchText(item: ClubSharedFeedItem): string {
   if (item.kind === 'news') {
     parts.push(item.author ?? '', item.categoryName ?? '', item.method ?? '');
   } else if (item.kind === 'ogp') {
-    parts.push(item.topic, item.creatorUsername ?? '', item.description ?? '', item.customDescription ?? '');
+    parts.push(
+      item.topic,
+      item.creatorUsername ?? '',
+      item.description ?? '',
+      item.customDescription ?? '',
+      item.url ?? '',
+    );
   } else {
     parts.push(
       item.topic,
@@ -63,6 +93,49 @@ function itemSearchText(item: ClubSharedFeedItem): string {
   return parts.filter(Boolean).join(' ').toLowerCase();
 }
 
+function itemPosterUserId(item: ClubSharedFeedItem): string | null {
+  return item.posterUserId?.trim() || null;
+}
+
+function getExpiresAtMs(item: ClubSharedFeedItem): number | null {
+  if (!item.expiresAt) return null;
+  const ms = new Date(item.expiresAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** No Duration (= null/empty) means unlimited — not expired. */
+function isNotExpired(item: ClubSharedFeedItem): boolean {
+  const expMs = getExpiresAtMs(item);
+  if (expMs == null) return true;
+  return expMs >= Date.now();
+}
+
+function hasExpirationDateSet(item: ClubSharedFeedItem): boolean {
+  return getExpiresAtMs(item) != null;
+}
+
+/** True only when an expiration date is set and that date is in the past. */
+function isPastExpired(item: ClubSharedFeedItem): boolean {
+  return hasExpirationDateSet(item) && !isNotExpired(item);
+}
+
+function highlightText(text: string, query: string): ReactNode {
+  if (!text) return '';
+  if (!query || !query.trim()) return text;
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  const parts = text.split(re);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="rounded bg-amber-200 px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 /**
  * Club Global News — merged News + OGP News promoted into this club,
  * sorted chronologically (mirrors admin Global News).
@@ -73,32 +146,144 @@ export default function ClubSharedNewsPanel({
   title,
   onClose,
 }: ClubSharedNewsPanelProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState<ClubSharedFeedItem[]>([]);
   const [isClubAdmin, setIsClubAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [adminStaffUserIds, setAdminStaffUserIds] = useState<string[]>([]);
+  const [memberUserIds, setMemberUserIds] = useState<string[]>([]);
+  const [movesbookUserIds, setMovesbookUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<GlobalKindFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [highlightMatches, setHighlightMatches] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortMode, setSortMode] = useState<SortMode>('date-desc');
+  const [postedByFilter, setPostedByFilter] = useState<PostedByFilter>('');
+  const [excludeExpiredAndDeleted, setExcludeExpiredAndDeleted] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [preview, setPreview] = useState<SharedNewsPreviewPayload | null>(null);
 
   const isGlobalFeed = type === 'all';
 
-  const openPreview = useCallback((item: ClubSharedFeedItem) => {
-    setPreview(previewPayloadFromFeedItem(item));
-  }, []);
+  const adminStaffIdSet = useMemo(() => new Set(adminStaffUserIds), [adminStaffUserIds]);
+  const memberIdSet = useMemo(() => new Set(memberUserIds), [memberUserIds]);
+  const movesbookIdSet = useMemo(() => new Set(movesbookUserIds), [movesbookUserIds]);
+  const currentUserCountry = (user?.country ?? '').trim().toLowerCase();
+
+  /** OGP groups open the member list page; news/OGP open the preview modal. */
+  const openPreview = useCallback(
+    (item: ClubSharedFeedItem) => {
+      if (item.kind === 'ogp-group') {
+        router.push(`/news/group/${encodeURIComponent(item.id)}`);
+        return;
+      }
+      setPreview(previewPayloadFromFeedItem(item));
+    },
+    [router],
+  );
 
   const filteredItems = useMemo(() => {
     let result = items;
+
     if (kindFilter !== 'all') {
       result = result.filter((item) => item.kind === kindFilter);
     }
+
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       result = result.filter((item) => itemSearchText(item).includes(q));
     }
-    return result;
-  }, [items, kindFilter, searchQuery]);
+
+    if (postedByFilter === 'me' && currentUserId) {
+      result = result.filter((item) => itemPosterUserId(item) === currentUserId);
+    } else if (postedByFilter === 'admin-staff') {
+      result = result.filter((item) => {
+        const id = itemPosterUserId(item);
+        return Boolean(id && adminStaffIdSet.has(id));
+      });
+    } else if (postedByFilter === 'members') {
+      result = result.filter((item) => {
+        const id = itemPosterUserId(item);
+        return Boolean(id && memberIdSet.has(id));
+      });
+    } else if (postedByFilter === 'movesbook') {
+      result = result.filter((item) => {
+        const id = itemPosterUserId(item);
+        return Boolean(id && movesbookIdSet.has(id));
+      });
+    } else if (postedByFilter === 'my-country') {
+      result = result.filter((item) => {
+        const creatorCountry = (item.creatorCountry ?? '').trim().toLowerCase();
+        return Boolean(currentUserCountry && creatorCountry && creatorCountry === currentUserCountry);
+      });
+    }
+
+    // Mirror Global News / Movesbook Global News expired/deleted filter behavior.
+    if (isGlobalFeed) {
+      if (excludeExpiredAndDeleted) {
+        result = result.filter((item) => !item.deletedAt && isNotExpired(item));
+      } else {
+        if (showExpired) {
+          result = result.filter(isPastExpired);
+          if (!showDeleted) {
+            result = result.filter((item) => !item.deletedAt);
+          }
+        }
+        if (showDeleted) {
+          result = result.filter((item) => Boolean(item.deletedAt));
+        }
+      }
+    }
+
+    const sorted = [...result];
+    sorted.sort((a, b) => {
+      if (sortMode === 'alpha-asc' || sortMode === 'alpha-desc') {
+        const cmp = itemTitle(a).localeCompare(itemTitle(b), undefined, {
+          sensitivity: 'base',
+        });
+        return sortMode === 'alpha-asc' ? cmp : -cmp;
+      }
+      const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      return sortMode === 'date-asc' ? diff : -diff;
+    });
+
+    return sorted;
+  }, [
+    items,
+    kindFilter,
+    searchQuery,
+    postedByFilter,
+    currentUserId,
+    currentUserCountry,
+    adminStaffIdSet,
+    memberIdSet,
+    movesbookIdSet,
+    excludeExpiredAndDeleted,
+    showExpired,
+    showDeleted,
+    isGlobalFeed,
+    sortMode,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ROWS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const pageItems = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return filteredItems.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
+  const applyShow = useCallback(() => {
+    setCurrentPage(1);
+  }, []);
 
   const loadItems = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -106,17 +291,34 @@ export default function ClubSharedNewsPanel({
     setLoading(true);
     setError(null);
     try {
+      const params = new URLSearchParams({ type });
+      if (type === 'all') params.set('includeDeleted', '1');
       const res = await fetch(
-        `/api/clubs/${encodeURIComponent(clubId)}/shared-news?type=${encodeURIComponent(type)}`,
+        `/api/clubs/${encodeURIComponent(clubId)}/shared-news?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error('Failed to load shared news');
-      const data = (await res.json()) as { items?: ClubSharedFeedItem[]; isClubAdmin?: boolean };
+      const data = (await res.json()) as {
+        items?: ClubSharedFeedItem[];
+        isClubAdmin?: boolean;
+        currentUserId?: string;
+        adminStaffUserIds?: string[];
+        memberUserIds?: string[];
+        movesbookUserIds?: string[];
+      };
       setItems(data.items ?? []);
       setIsClubAdmin(data.isClubAdmin === true);
+      setCurrentUserId(data.currentUserId ?? null);
+      setAdminStaffUserIds(data.adminStaffUserIds ?? []);
+      setMemberUserIds(data.memberUserIds ?? []);
+      setMovesbookUserIds(data.movesbookUserIds ?? []);
     } catch {
       setError('Could not load shared news for this club.');
       setIsClubAdmin(false);
+      setCurrentUserId(null);
+      setAdminStaffUserIds([]);
+      setMemberUserIds([]);
+      setMovesbookUserIds([]);
     } finally {
       setLoading(false);
     }
@@ -166,8 +368,116 @@ export default function ClubSharedNewsPanel({
         ? 'News'
         : 'Club News & OGP News');
 
+  const searchToolbar = isGlobalFeed ? (
+    <div className="flex flex-wrap items-center gap-2 bg-red-800 p-3">
+      <div className="flex min-w-[140px] max-w-[220px] flex-1 items-center rounded border border-gray-600 bg-gray-700">
+        <Search className="ml-2 h-4 w-4 flex-shrink-0 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search"
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setCurrentPage(1);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') applyShow();
+          }}
+          className="w-full bg-transparent px-2 py-1.5 text-sm text-white outline-none placeholder:text-gray-400"
+          aria-label="Search news"
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => setHighlightMatches((m) => !m)}
+        className={`rounded px-3 py-1.5 text-sm font-medium ${
+          highlightMatches
+            ? 'bg-amber-400 text-amber-900 hover:bg-amber-500'
+            : 'bg-white text-gray-800 hover:bg-gray-100'
+        }`}
+        title={highlightMatches ? 'Hide highlights' : 'Highlight search matches in results'}
+        aria-pressed={highlightMatches}
+      >
+        Highlight
+      </button>
+      <button
+        type="button"
+        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        disabled={currentPage >= totalPages}
+        className="rounded bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        next
+      </button>
+      <button
+        type="button"
+        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        disabled={currentPage <= 1}
+        className="rounded bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        prev
+      </button>
+      <select
+        value={kindFilter}
+        onChange={(e) => {
+          setKindFilter(e.target.value as GlobalKindFilter);
+          setCurrentPage(1);
+        }}
+        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800"
+        aria-label="Filter by type"
+      >
+        {KIND_FILTER_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={applyShow}
+        className="rounded bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+        title="Show"
+      >
+        Show
+      </button>
+      <div className="ml-auto flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() =>
+            setSortMode((s) => (s === 'alpha-asc' ? 'alpha-desc' : 'alpha-asc'))
+          }
+          className={`rounded-full p-2 transition-colors ${
+            sortMode === 'alpha-asc' || sortMode === 'alpha-desc'
+              ? 'bg-amber-500 text-amber-900'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+          title="Sort alphabetically"
+          aria-label="Sort alphabetically"
+        >
+          <ArrowDownAZ className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setSortMode((s) => (s === 'date-desc' ? 'date-asc' : 'date-desc'))
+          }
+          className={`rounded-full p-2 transition-colors ${
+            sortMode === 'date-desc' || sortMode === 'date-asc'
+              ? 'bg-amber-500 text-amber-900'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+          title="Sort by date"
+          aria-label="Sort by date"
+        >
+          <Clock className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      {searchToolbar}
+
       <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
         <div className="flex flex-wrap items-start gap-3">
           <Globe className="mt-0.5 h-5 w-5 shrink-0 text-teal-700" />
@@ -190,39 +500,92 @@ export default function ClubSharedNewsPanel({
             </button>
           ) : null}
         </div>
-
-        {isGlobalFeed ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 sm:justify-end">
-            <label className="flex min-w-[10rem] flex-1 items-center gap-2 sm:max-w-[11rem] sm:flex-none">
-              <span className="sr-only">Filter by type</span>
-              <select
-                value={kindFilter}
-                onChange={(e) => setKindFilter(e.target.value as GlobalKindFilter)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                aria-label="Filter by type"
-              >
-                {KIND_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="relative min-w-[12rem] flex-1 sm:max-w-xs sm:flex-none">
-              <span className="sr-only">Search news</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search news…"
-                className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                aria-label="Search news"
-              />
-            </label>
-          </div>
-        ) : null}
       </div>
+
+      {isGlobalFeed ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-700 bg-gray-800 px-4 py-2.5 text-sm">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="radio"
+              name="club-global-exclude-expired-deleted"
+              checked={excludeExpiredAndDeleted}
+              onChange={() => {
+                setExcludeExpiredAndDeleted(true);
+                setShowExpired(false);
+                setShowDeleted(false);
+                setCurrentPage(1);
+              }}
+              onClick={() => {
+                if (excludeExpiredAndDeleted) {
+                  setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }
+              }}
+              className="h-3.5 w-3.5 border-gray-400 text-cyan-600 focus:ring-cyan-500"
+              aria-label="Exclude expired & deleted"
+            />
+            <span className="whitespace-nowrap text-white">Exclude expired & deleted</span>
+          </label>
+
+          <fieldset className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+            <legend className="sr-only">Filter by poster and status</legend>
+            {POSTED_BY_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="inline-flex cursor-pointer items-center gap-1.5 select-none"
+              >
+                <input
+                  type="radio"
+                  name="club-global-posted-by"
+                  value={opt.value}
+                  checked={postedByFilter === opt.value}
+                  onChange={() => {
+                    setPostedByFilter(opt.value);
+                    setCurrentPage(1);
+                  }}
+                  onClick={() => {
+                    // Allow clearing the filter by clicking the active radio again.
+                    if (postedByFilter === opt.value) {
+                      setPostedByFilter('');
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="h-3.5 w-3.5 border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                />
+                <span className="whitespace-nowrap text-white">{opt.label}</span>
+              </label>
+            ))}
+            <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+              <input
+                type="checkbox"
+                checked={showExpired}
+                onChange={(e) => {
+                  setShowExpired(e.target.checked);
+                  if (e.target.checked) setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                aria-label="Show expired"
+              />
+              <span className="whitespace-nowrap text-yellow-300">Show expired</span>
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 select-none">
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(e) => {
+                  setShowDeleted(e.target.checked);
+                  if (e.target.checked) setExcludeExpiredAndDeleted(false);
+                  setCurrentPage(1);
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-400 text-cyan-600 focus:ring-cyan-500"
+                aria-label="Show deleted"
+              />
+              <span className="whitespace-nowrap text-yellow-300">Show deleted</span>
+            </label>
+          </fieldset>
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {loading ? (
@@ -251,14 +614,15 @@ export default function ClubSharedNewsPanel({
             <Globe className="mx-auto mb-3 h-10 w-10 text-gray-300" />
             <p className="font-medium text-gray-600">No matching items</p>
             <p className="mt-1 text-sm text-gray-500">
-              Try a different type filter or search term.
+              Try a different filter or search term.
             </p>
           </div>
         ) : isGlobalFeed ? (
           <ul className="mx-auto max-w-5xl space-y-3">
-            {filteredItems.map((item) => {
+            {pageItems.map((item) => {
               const titleText = itemTitle(item);
               const rowKey = `${item.kind}-${item.id}`;
+              const showHighlight = highlightMatches && Boolean(searchQuery.trim());
 
               return (
                 <li
@@ -318,7 +682,7 @@ export default function ClubSharedNewsPanel({
                     </div>
 
                     <h3 className="line-clamp-2 text-base font-semibold text-gray-900">
-                      {titleText}
+                      {showHighlight ? highlightText(titleText, searchQuery) : titleText}
                     </h3>
 
                     <NewsFeedMetaLine

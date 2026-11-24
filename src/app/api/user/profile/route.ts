@@ -6,6 +6,11 @@ import { verifyToken } from '@/lib/auth';
 import { collectReferencedUploadPaths, deleteUnreferencedUserMediaFiles } from '@/lib/userMediaUploadCleanup';
 import { isValidSportType, normalizeTelegramAccount } from '@/lib/profileSports';
 import {
+  assertTelegramAccountAvailable,
+  isTelegramAccountTakenError,
+  TELEGRAM_ACCOUNT_TAKEN_MESSAGE,
+} from '@/lib/telegramAccountUnique';
+import {
   mergeProfilePanelIntoAdminSettings,
   readAdminReferences,
 } from '@/lib/admin/userProfilePanelSettings';
@@ -309,6 +314,14 @@ export async function PATCH(request: NextRequest) {
 
     if (telegramAccount !== undefined) {
       data.telegramAccount = normalizeTelegramAccount(String(telegramAccount ?? ''));
+      try {
+        await assertTelegramAccountAvailable(data.telegramAccount, decoded.userId);
+      } catch (error) {
+        if (isTelegramAccountTakenError(error)) {
+          return NextResponse.json({ error: TELEGRAM_ACCOUNT_TAKEN_MESSAGE }, { status: 409 });
+        }
+        throw error;
+      }
     }
 
     if (youtubeChannelUrl !== undefined) {
@@ -470,6 +483,21 @@ export async function PATCH(request: NextRequest) {
         : user,
     });
   } catch (error) {
+    if (isTelegramAccountTakenError(error)) {
+      return NextResponse.json({ error: TELEGRAM_ACCOUNT_TAKEN_MESSAGE }, { status: 409 });
+    }
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'P2002'
+    ) {
+      const target = (error as { meta?: { target?: string | string[] } }).meta?.target;
+      const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+      if (targetText.toLowerCase().includes('telegram')) {
+        return NextResponse.json({ error: TELEGRAM_ACCOUNT_TAKEN_MESSAGE }, { status: 409 });
+      }
+    }
     console.error('Error updating user profile:', error);
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }

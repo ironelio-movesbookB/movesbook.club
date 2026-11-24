@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { resolveMessageDatabaseUserId } from '@/lib/messages/resolveMessageUserId';
 import { normalizeTelegramAccount } from '@/lib/profileSports';
+import {
+  assertTelegramAccountAvailable,
+  isTelegramAccountTakenError,
+  TELEGRAM_ACCOUNT_TAKEN_MESSAGE,
+} from '@/lib/telegramAccountUnique';
 
 async function resolveAuthenticatedUserId(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
@@ -67,6 +72,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await assertTelegramAccountAvailable(telegramAccount, userId);
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { telegramAccount },
@@ -78,6 +85,24 @@ export async function POST(request: NextRequest) {
       telegramAccount: updatedUser.telegramAccount,
     });
   } catch (error) {
+    if (isTelegramAccountTakenError(error)) {
+      return NextResponse.json(
+        { error: TELEGRAM_ACCOUNT_TAKEN_MESSAGE, success: false },
+        { status: 409 }
+      );
+    }
+    // Unique index race (when DB unique is applied)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'P2002'
+    ) {
+      return NextResponse.json(
+        { error: TELEGRAM_ACCOUNT_TAKEN_MESSAGE, success: false },
+        { status: 409 }
+      );
+    }
     console.error('Error saving Telegram account:', error);
     return NextResponse.json(
       {

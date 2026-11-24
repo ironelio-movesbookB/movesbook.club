@@ -7,8 +7,15 @@ import { formatMyClubsSidebarLabel } from '@/lib/club/clubSidebarLabel';
 
 export type ShareInMyClubsKind = 'ogp' | 'ogp-group' | 'news';
 
-/** Share into club OGP/News feed (default) vs Club Global News. */
-type ShareDestination = 'club-feed' | 'global';
+/** Per-club share targets — both may be selected. */
+type ShareDestinations = {
+  /** Club OGP News / News feed */
+  clubFeed: boolean;
+  /** Also promote into Club Global News */
+  global: boolean;
+};
+
+const DEFAULT_DESTINATIONS: ShareDestinations = { clubFeed: true, global: false };
 
 function destinationLabels(kind: ShareInMyClubsKind): { club: string; global: string } {
   if (kind === 'news') return { club: 'News', global: 'Global News' };
@@ -32,6 +39,10 @@ type ShareInMyClubsModalProps = {
   sharedClubIds?: string[];
   onShared?: (clubId: string) => void;
   onUnshared?: (clubId: string) => void;
+  /** Pre-select club when opening (e.g. current club on Movesbook Global News). */
+  preferredClubId?: string | null;
+  /** Override default destinations when opening (club feed / Club Global News). */
+  initialDestinations?: Partial<ShareDestinations>;
 };
 
 export default function ShareInMyClubsModal({
@@ -44,12 +55,14 @@ export default function ShareInMyClubsModal({
   sharedClubIds = [],
   onShared,
   onUnshared,
+  preferredClubId = null,
+  initialDestinations,
 }: ShareInMyClubsModalProps) {
   const [clubs, setClubs] = useState<MyClubOption[]>([]);
   const [loadingClubs, setLoadingClubs] = useState(false);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
-  /** Per-club share destination; defaults to club OGP/News feed. */
-  const [clubDestinations, setClubDestinations] = useState<Record<string, ShareDestination>>({});
+  /** Per-club share targets (checkboxes); defaults to club OGP/News feed only. */
+  const [clubDestinations, setClubDestinations] = useState<Record<string, ShareDestinations>>({});
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -75,22 +88,38 @@ export default function ShareInMyClubsModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedClubId(null);
-    setClubDestinations({});
+    const preferred =
+      preferredClubId && !sharedClubIds.includes(preferredClubId) ? preferredClubId : null;
+    const dest: ShareDestinations = {
+      clubFeed: initialDestinations?.clubFeed ?? DEFAULT_DESTINATIONS.clubFeed,
+      global: initialDestinations?.global ?? DEFAULT_DESTINATIONS.global,
+    };
+    setSelectedClubId(preferred);
+    setClubDestinations(preferred ? { [preferred]: dest } : {});
     setPassword('');
     setError(null);
     setSubmitting(false);
     setRemovingClubId(null);
     void loadClubs();
+    // Reset only when the dialog opens — not when parent re-renders share state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, loadClubs]);
 
   const destLabels = destinationLabels(kind);
 
-  const getClubDestination = (clubId: string): ShareDestination =>
-    clubDestinations[clubId] ?? 'club-feed';
+  const getClubDestinations = (clubId: string): ShareDestinations =>
+    clubDestinations[clubId] ?? DEFAULT_DESTINATIONS;
 
-  const setClubDestination = (clubId: string, destination: ShareDestination) => {
-    setClubDestinations((prev) => ({ ...prev, [clubId]: destination }));
+  const toggleClubDestination = (
+    clubId: string,
+    key: keyof ShareDestinations,
+    checked: boolean,
+  ) => {
+    setClubDestinations((prev) => {
+      const current = prev[clubId] ?? DEFAULT_DESTINATIONS;
+      return { ...prev, [clubId]: { ...current, [key]: checked } };
+    });
+    setSelectedClubId(clubId);
   };
 
   if (!isOpen) return null;
@@ -105,6 +134,11 @@ export default function ShareInMyClubsModal({
   const handleShare = async () => {
     if (!selectedClubId) {
       setError('Select a club first.');
+      return;
+    }
+    const destinations = getClubDestinations(selectedClubId);
+    if (!destinations.clubFeed && !destinations.global) {
+      setError(`Select at least one of ${destLabels.club} or ${destLabels.global}.`);
       return;
     }
     const trimmed = password.trim();
@@ -131,7 +165,9 @@ export default function ShareInMyClubsModal({
         body: JSON.stringify({
           clubId: selectedClubId,
           password: trimmed,
-          inClubGlobalNews: getClubDestination(selectedClubId) === 'global',
+          // Global News is a promotion flag on the club share; selecting either/both
+          // creates the share, and global sets inClubGlobalNews.
+          inClubGlobalNews: destinations.global,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -236,7 +272,7 @@ export default function ShareInMyClubsModal({
               {clubs.map((club) => {
                 const isShared = sharedClubIds.includes(club.id);
                 const isSelected = selectedClubId === club.id;
-                const destination = getClubDestination(club.id);
+                const destinations = getClubDestinations(club.id);
                 return (
                   <div
                     key={club.id}
@@ -278,29 +314,25 @@ export default function ShareInMyClubsModal({
                       >
                         <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-gray-800">
                           <input
-                            type="radio"
-                            name={`share-dest-${club.id}`}
-                            checked={destination === 'club-feed'}
+                            type="checkbox"
+                            checked={destinations.clubFeed}
                             disabled={submitting}
-                            onChange={() => {
-                              setClubDestination(club.id, 'club-feed');
-                              setSelectedClubId(club.id);
+                            onChange={(e) => {
+                              toggleClubDestination(club.id, 'clubFeed', e.target.checked);
                             }}
-                            className="h-3.5 w-3.5 accent-[#6b1020]"
+                            className="h-3.5 w-3.5 rounded border-gray-400 accent-[#6b1020]"
                           />
                           {destLabels.club}
                         </label>
                         <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-gray-800">
                           <input
-                            type="radio"
-                            name={`share-dest-${club.id}`}
-                            checked={destination === 'global'}
+                            type="checkbox"
+                            checked={destinations.global}
                             disabled={submitting}
-                            onChange={() => {
-                              setClubDestination(club.id, 'global');
-                              setSelectedClubId(club.id);
+                            onChange={(e) => {
+                              toggleClubDestination(club.id, 'global', e.target.checked);
                             }}
-                            className="h-3.5 w-3.5 accent-[#6b1020]"
+                            className="h-3.5 w-3.5 rounded border-gray-400 accent-[#6b1020]"
                           />
                           {destLabels.global}
                         </label>

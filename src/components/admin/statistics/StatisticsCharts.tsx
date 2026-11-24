@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   PieChart,
   Pie,
@@ -465,13 +465,13 @@ export function StatisticsVerticalCountryBars({
   const singleKindMode = kinds.length === 1;
   const colorFor = (k: StatsUserKind) => theme.kindColor(k);
   const labelFor = (k: StatsUserKind) => SIDE_TABLE_LABELS[k];
-  const cellValue = (
-    row: VerticalCountryBarsProps['rows'][number],
-    k: StatsUserKind,
-  ) =>
-    metric === 'income'
-      ? Number(row.byKindIncome?.[k] ?? 0)
-      : Number(row.byKind[k] ?? 0);
+  const cellValue = useCallback(
+    (row: VerticalCountryBarsProps['rows'][number], k: StatsUserKind) =>
+      metric === 'income'
+        ? Number(row.byKindIncome?.[k] ?? 0)
+        : Number(row.byKind[k] ?? 0),
+    [metric],
+  );
 
   const [hovered, setHovered] = useState<BarFocus | null>(null);
   const [selected, setSelected] = useState<BarFocus | null>(null);
@@ -533,7 +533,7 @@ export function StatisticsVerticalCountryBars({
       }
     }
     return max;
-  }, [rows, kinds, metric]);
+  }, [rows, kinds, cellValue]);
 
   const axisTicks = useMemo(() => {
     const nice = Math.ceil(maxValue);

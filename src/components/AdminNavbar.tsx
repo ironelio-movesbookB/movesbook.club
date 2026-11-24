@@ -27,6 +27,9 @@ import {
   navSearchScopeFromLabel,
   type NavSearchScope,
 } from '@/lib/adminNavUserSearchScope';
+import AdminPageTranslate, {
+  AdminPageTranslateButton,
+} from '@/components/admin/AdminPageTranslate';
 
 interface AdminUser {
   id: string;
@@ -205,6 +208,7 @@ export default function AdminNavbar({ onToggleLeft, onToggleRight }: AdminNavbar
             {/* User Info Section - Desktop */}
             {adminUser && (
               <div className="hidden md:flex items-center gap-2 lg:gap-3">
+                <AdminPageTranslateButton />
                 <div className="text-right text-xs lg:text-sm leading-tight">
                   <p className="font-semibold text-yellow-200 hidden lg:block">Current Operator</p>
                   <p className="font-bold text-sm lg:text-base">
@@ -642,6 +646,9 @@ export default function AdminNavbar({ onToggleLeft, onToggleRight }: AdminNavbar
                 <div className="px-6 py-3 bg-gray-600 text-xs font-semibold uppercase text-gray-300">
                   Account
                 </div>
+                <div className="px-6 py-3" onClick={() => setMobileMenuOpen(false)}>
+                  <AdminPageTranslateButton className="w-full justify-center bg-gray-600 border-gray-500" />
+                </div>
                 <Link
                   href="/settings"
                   onClick={() => setMobileMenuOpen(false)}
@@ -705,6 +712,8 @@ export default function AdminNavbar({ onToggleLeft, onToggleRight }: AdminNavbar
           </nav>
         </div>
       )}
+
+      <AdminPageTranslate />
     </div>
   );
 }

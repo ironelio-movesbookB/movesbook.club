@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SportType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, verifyPassword } from '@/lib/auth';
 import { verifyClubOwnership } from '@/lib/clubNewsShareAuth';
 import { isClubOgpAudienceMode } from '@/lib/clubOgpAudience';
+import { isValidSportType } from '@/lib/profileSports';
 import * as serialize from 'php-serialize';
 
 export async function GET(request: NextRequest) {
@@ -337,12 +339,17 @@ export async function POST(request: NextRequest) {
       });
 
       if (settings.sports && Array.isArray(settings.sports)) {
-        await prisma.newsSettingSport.createMany({
-          data: settings.sports.map((sport: string) => ({
-            newsSettingId: newsSetting.id,
-            sport: sport as any,
-          })),
-        });
+        const validSports = settings.sports.filter(
+          (sport: string): sport is SportType => isValidSportType(sport)
+        );
+        if (validSports.length > 0) {
+          await prisma.newsSettingSport.createMany({
+            data: validSports.map((sport) => ({
+              newsSettingId: newsSetting.id,
+              sport,
+            })),
+          });
+        }
       }
 
       if (settings.roles && Array.isArray(settings.roles)) {

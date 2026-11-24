@@ -336,7 +336,10 @@ export default function PlannedExpensePaymentsPage() {
     () => categories.find((category) => category.id === chartBranchId) ?? null,
     [categories, chartBranchId],
   );
-  const chartSubBranches = chartBranch?.children ?? [];
+  const chartSubBranches = useMemo(
+    () => chartBranch?.children ?? [],
+    [chartBranch],
+  );
   const expenseChartData = useMemo(() => {
     const subBranch = chartSubBranches.find(
       (category) => category.id === chartSubBranchId,

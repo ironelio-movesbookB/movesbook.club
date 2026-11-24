@@ -294,7 +294,7 @@ export default function AdminSuperAdminOGPNewsContent({
           {viewAsUsername ? (
             <>
               <h1 className="text-lg font-semibold text-gray-900 flex-1 min-w-0">
-                News visible by user <span className="text-pink-600">{viewAsUsername}</span>
+                OGP News visible by user <span className="text-pink-600">{viewAsUsername}</span>
               </h1>
               <button
                 type="button"
@@ -305,7 +305,7 @@ export default function AdminSuperAdminOGPNewsContent({
               </button>
             </>
           ) : (
-            <h1 className="text-lg font-semibold text-gray-900">News</h1>
+            <h1 className="text-lg font-semibold text-gray-900">OGP News</h1>
           )}
           <a
             href={closeHref}
@@ -317,7 +317,7 @@ export default function AdminSuperAdminOGPNewsContent({
         </div>
 
         <div className="p-4 min-w-0">
-          {loading && <p className="text-sm text-gray-500 mb-2">Loading news...</p>}
+          {loading && <p className="text-sm text-gray-500 mb-2">Loading OGP News...</p>}
           {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
 
           <NewsTopicBar
@@ -381,7 +381,7 @@ export default function AdminSuperAdminOGPNewsContent({
               aria-labelledby="ogp-modal-title"
             >
               <div
-                className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.key === 'Escape' && setShowOgpForm(false)}
               >

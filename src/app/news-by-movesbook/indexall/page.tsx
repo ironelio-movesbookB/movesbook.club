@@ -312,6 +312,14 @@ export default function NewsIndexAllPage() {
               />
               <span>{t('news_display_picture')}</span>
             </label>
+            {isSuperAdmin && (
+              <Link
+                href="/news-by-movesbook"
+                className="flex items-center justify-center px-3 sm:px-4 py-2 border border-gray-300 text-blue-600 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base w-full sm:w-auto whitespace-nowrap"
+              >
+                {t('news_preview_front_end_users')}
+              </Link>
+            )}
             <Link
               href="/news-by-movesbook/add"
               className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto"

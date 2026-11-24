@@ -9,6 +9,11 @@ type ClubGlobalNewsToggleButtonProps = {
   clubId: string;
   inClubGlobalNews: boolean;
   onToggled?: (inClubGlobalNews: boolean) => void;
+  /**
+   * When enabling Global share but the item is not yet shared to this club (404),
+   * call this so the parent can open the Share in My Clubs modal instead.
+   */
+  onNotShared?: () => void;
   /** Compact matches OGP card actions; overlay sits on news card thumbnails. */
   variant?: 'compact' | 'overlay';
   className?: string;
@@ -24,6 +29,7 @@ export default function ClubGlobalNewsToggleButton({
   clubId,
   inClubGlobalNews,
   onToggled,
+  onNotShared,
   variant = 'compact',
   className = '',
 }: ClubGlobalNewsToggleButtonProps) {
@@ -58,6 +64,10 @@ export default function ClubGlobalNewsToggleButton({
         body: JSON.stringify({ clubId, inClubGlobalNews: next }),
       });
       if (!res.ok) {
+        if (res.status === 404 && next && onNotShared) {
+          onNotShared();
+          return;
+        }
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || 'Failed to update Club Global News');
       }

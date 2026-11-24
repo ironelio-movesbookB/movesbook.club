@@ -103,10 +103,10 @@ export default function RegistrationPackageInfoModal({
     node.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [isOpen, selectedEntity, detailScroll, purchasePanelTab, purchaseClubSubTab]);
 
-  const packages = useMemo(
-    () => getPackageReviewRowsForCategory(userType, lang, category),
-    [userType, lang, category, settingsTick],
-  );
+  const packages = useMemo(() => {
+    void settingsTick; // force refresh after ensurePackageSettingsLoaded()
+    return getPackageReviewRowsForCategory(userType, lang, category);
+  }, [userType, lang, category, settingsTick]);
 
   if (!isOpen) return null;
 

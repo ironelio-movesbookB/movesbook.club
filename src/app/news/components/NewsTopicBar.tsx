@@ -132,9 +132,11 @@ export default function NewsTopicBar({
   );
 
   const translateTopic = useCallback((topic: string) => {
+    // Superadmin OGP News section: label the default "News" topic as "OGP News".
+    if (showSuperAdminAllButton && topic === 'News') return 'OGP News';
     const key = NEWS_TOPIC_KEYS[topic];
     return key ? t(key) : topic;
-  }, [t]);
+  }, [t, showSuperAdminAllButton]);
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;

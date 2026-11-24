@@ -12,6 +12,7 @@ import {
   Trash2,
   User,
   Globe,
+  Library,
 } from 'lucide-react';
 import type { ArticlePasted } from './NewsArticlesList';
 
@@ -27,6 +28,12 @@ export type OgpArticleActionBarProps = {
   showGlobalNewsButton?: boolean;
   globalNewsLoading?: boolean;
   onToggleGlobalNews?: () => void;
+  /** Tooltip/aria copy for the globe toggle (defaults to Global News). */
+  globalFeedLabel?: string;
+  /** Club admin creator: Share in Movesbook library toggle. */
+  showShareInMovesbookLibraryButton?: boolean;
+  shareInMovesbookLibraryLoading?: boolean;
+  onToggleShareInMovesbookLibrary?: () => void;
   /** Optional club / extra buttons rendered after Share (e.g. Share in My Clubs). */
   extraSocialButtons?: ReactNode;
   canEditAsCreator: boolean;
@@ -64,6 +71,10 @@ export default function OgpArticleActionBar({
   showGlobalNewsButton,
   globalNewsLoading,
   onToggleGlobalNews,
+  globalFeedLabel = 'Global News',
+  showShareInMovesbookLibraryButton,
+  shareInMovesbookLibraryLoading,
+  onToggleShareInMovesbookLibrary,
   extraSocialButtons,
   canEditAsCreator,
   canManage,
@@ -150,6 +161,30 @@ export default function OgpArticleActionBar({
       >
         <Share2 className={iconSize} />
       </button>
+      {showShareInMovesbookLibraryButton && onToggleShareInMovesbookLibrary ? (
+        <button
+          type="button"
+          onClick={(e) => stop(e, onToggleShareInMovesbookLibrary)}
+          disabled={readOnly || shareInMovesbookLibraryLoading}
+          className={`inline-flex items-center justify-center rounded-md border ${dense ? 'px-1.5 py-0.5' : 'px-2 py-1'} transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+            article.sharedInMovesbookLibrary
+              ? 'border-teal-500 bg-teal-50 text-teal-700 hover:bg-teal-100'
+              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:border-gray-300'
+          }`}
+          title={
+            article.sharedInMovesbookLibrary
+              ? 'Shared in Movesbook library (click to remove)'
+              : 'Share in Movesbook library'
+          }
+          aria-label={
+            article.sharedInMovesbookLibrary
+              ? 'Remove from Movesbook library'
+              : 'Share in Movesbook library'
+          }
+        >
+          <Library className={iconSize} />
+        </button>
+      ) : null}
       {showGlobalNewsButton && onToggleGlobalNews ? (
         <button
           type="button"
@@ -162,11 +197,13 @@ export default function OgpArticleActionBar({
           }`}
           title={
             article.inGlobalNews
-              ? 'Shared in Global News (click to remove)'
-              : 'Share in Global News'
+              ? `Shared in ${globalFeedLabel} (click to remove)`
+              : `Share in ${globalFeedLabel}`
           }
           aria-label={
-            article.inGlobalNews ? 'Remove from Global News' : 'Share in Global News'
+            article.inGlobalNews
+              ? `Remove from ${globalFeedLabel}`
+              : `Share in ${globalFeedLabel}`
           }
         >
           <Globe className={iconSize} />

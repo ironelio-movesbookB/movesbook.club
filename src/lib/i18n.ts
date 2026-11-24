@@ -1159,6 +1159,7 @@ export interface LanguageStrings {
         // News Module
         'news_archive': 'News Archive',
         'news_add_article': 'Add News Article',
+        'news_preview_front_end_users': 'Preview front end users',
         'news_edit_article': 'Edit News Article',
         'news_search_placeholder': 'Search news articles...',
         'news_search': 'Search',
@@ -1185,6 +1186,7 @@ export interface LanguageStrings {
         'news_related_articles': 'Related Articles',
         'news_share': 'Share',
         'news_share_article': 'Share Article',
+        'news_edit_article_btn': 'Edit article',
         'news_post_to_movesbook': 'Post on Movesbook',
         'news_back_to_list': 'Back to News List',
         'news_back_to_news': 'Back to News',

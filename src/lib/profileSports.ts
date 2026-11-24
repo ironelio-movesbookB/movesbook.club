@@ -16,5 +16,7 @@ export function isValidSportType(value: string): value is SportType {
 export function normalizeTelegramAccount(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+  const handle = trimmed.replace(/^@+/, '').trim().toLowerCase();
+  if (!handle) return null;
+  return `@${handle}`;
 }

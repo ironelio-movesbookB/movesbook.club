@@ -216,29 +216,45 @@ export default function NewsHeadlinesExpandedView({
                 >
                   <button
                     type="button"
-                    className="relative h-40 sm:h-44 w-full text-left shrink-0"
+                    className={`relative w-full text-left shrink-0 ${
+                      displayPicture
+                        ? 'h-40 sm:h-44'
+                        : 'min-h-[8.5rem] sm:min-h-[9.5rem] p-3 flex flex-col justify-end bg-slate-50'
+                    }`}
                     onClick={() => onOpenArticle(a)}
                   >
-                    {a.image ? (
-                      <Image
-                        src={a.image}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 80vw, 24rem"
-                        unoptimized
-                      />
+                    {displayPicture ? (
+                      <>
+                        {a.image ? (
+                          <Image
+                            src={a.image}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 80vw, 24rem"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5 text-[12px] text-white/90">
+                            <SourceMark article={a} light />
+                            <span className="truncate">{sourceName(a)}</span>
+                          </div>
+                          <h3 className="text-[15px] font-bold text-white leading-snug line-clamp-3">{title}</h3>
+                        </div>
+                      </>
                     ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900" />
+                      <>
+                        <div className="flex items-center gap-1.5 text-[12px] text-gray-500">
+                          <SourceMark article={a} />
+                          <span className="truncate">{sourceName(a)}</span>
+                        </div>
+                        <h3 className="mt-1.5 text-[15px] font-bold text-gray-900 leading-snug line-clamp-3">{title}</h3>
+                      </>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-[12px] text-white/90">
-                        <SourceMark article={a} light />
-                        <span className="truncate">{sourceName(a)}</span>
-                      </div>
-                      <h3 className="text-[15px] font-bold text-white leading-snug line-clamp-3">{title}</h3>
-                    </div>
                   </button>
                   <div className="px-2.5 py-2 bg-white border-t border-gray-100">
                     {renderActions(a)}
@@ -252,7 +268,7 @@ export default function NewsHeadlinesExpandedView({
               <button
                 type="button"
                 onClick={() => scrollByCard(-1)}
-                className="absolute left-1 top-[5.5rem] -translate-y-1/2 z-10 p-1.5 rounded-md bg-white/90 border border-gray-200 text-gray-800 shadow-sm hover:bg-white opacity-0 group-hover/carousel:opacity-100 focus:opacity-100"
+                className="absolute left-1 top-[calc(50%-1.25rem)] -translate-y-1/2 z-10 p-1.5 rounded-md bg-white/90 border border-gray-200 text-gray-800 shadow-sm hover:bg-white opacity-0 group-hover/carousel:opacity-100 focus:opacity-100"
                 aria-label="Previous top stories"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -260,7 +276,7 @@ export default function NewsHeadlinesExpandedView({
               <button
                 type="button"
                 onClick={() => scrollByCard(1)}
-                className="absolute right-1 top-[5.5rem] -translate-y-1/2 z-10 p-1.5 rounded-md bg-white/90 border border-gray-200 text-gray-800 shadow-sm hover:bg-white opacity-0 group-hover/carousel:opacity-100 focus:opacity-100"
+                className="absolute right-1 top-[calc(50%-1.25rem)] -translate-y-1/2 z-10 p-1.5 rounded-md bg-white/90 border border-gray-200 text-gray-800 shadow-sm hover:bg-white opacity-0 group-hover/carousel:opacity-100 focus:opacity-100"
                 aria-label="Next top stories"
               >
                 <ChevronRight className="w-5 h-5" />

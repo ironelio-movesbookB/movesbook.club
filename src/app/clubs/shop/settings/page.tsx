@@ -224,6 +224,8 @@ export default function SettingsPage() {
 
         {label === 'settings' && settings.publicPath && (
           <div className="flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+            {/* External QR API URL — next/image needs remotePatterns; plain img is fine here. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${origin}${settings.publicPath}`)}`}
               alt="QR code for the purchase page"

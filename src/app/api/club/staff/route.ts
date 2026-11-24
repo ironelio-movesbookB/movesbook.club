@@ -35,8 +35,9 @@ export async function POST(request: NextRequest) {
       message.includes('required') ||
       message.includes('Select') ||
       message.includes('Password') ||
-      message.includes('already exists')
-        ? message.includes('already exists')
+      message.includes('already exists') ||
+      message.includes('already registered')
+        ? message.includes('already exists') || message.includes('already registered')
           ? 409
           : 400
         : 500;

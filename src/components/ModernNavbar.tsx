@@ -41,6 +41,9 @@ import { clearClubWorkspaceSessionOnLogout } from '@/lib/club/clearClubWorkspace
 import SuggestMovesbookLoginPrompt from '@/components/promocodes/SuggestMovesbookLoginPrompt';
 import { persistAdminLoginSession } from '@/lib/panelSession';
 import QuickMenuButton from '@/app/my-page/components/QuickMenuButton';
+import AdminPageTranslate, {
+  AdminPageTranslateButton,
+} from '@/components/admin/AdminPageTranslate';
 
 // Map language codes to flag file names
 const getFlagFileName = (code: string): string => {
@@ -1025,6 +1028,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
               {isAdmin ? (
                 /* Admin Logged In - Show Admin Button and Logout */
                 <div className="flex items-center space-x-3">
+                  <AdminPageTranslateButton />
                   <button
                     onClick={handleAdminClick}
                     className="flex items-center space-x-2 px-4 py-2 bg-red-500 bg-opacity-10 hover:bg-opacity-20 rounded-xl border border-red-500 border-opacity-30 transition-all duration-300 cursor-pointer"
@@ -1042,6 +1046,8 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                 </div>
               ) : isAuthenticated ? (
                 /* User Dropdown */
+                <>
+                <AdminPageTranslateButton />
                 <div className="relative" ref={userDropdownRef} style={{ zIndex: 150 }}>
                   <button
                     onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
@@ -1102,6 +1108,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                     </div>
                   )}
                 </div>
+                </>
               ) : (
                 /* Inline Login Form */
                 <div className="flex flex-col items-end gap-1">
@@ -1287,6 +1294,9 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                   {isAdmin ? (
                     /* Admin Logged In - Mobile View */
                     <>
+                      <div className="px-6" onClick={() => setIsMobileMenuOpen(false)}>
+                        <AdminPageTranslateButton className="w-full justify-center" />
+                      </div>
                       <button
                         onClick={handleAdminClick}
                         className="w-full px-6 py-3 bg-red-500 bg-opacity-10 hover:bg-opacity-20 rounded-2xl border border-red-500 border-opacity-30 transition-all duration-300"
@@ -1311,6 +1321,9 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
                       <div className="px-6 py-3 bg-white bg-opacity-10 rounded-2xl">
                         <p className="text-white font-semibold text-sm">{user?.name}</p>
                         <p className="text-cyan-200 text-xs">{user?.email}</p>
+                      </div>
+                      <div className="px-6" onClick={() => setIsMobileMenuOpen(false)}>
+                        <AdminPageTranslateButton className="w-full justify-center" />
                       </div>
                       <button
                         onClick={handleDashboardClick}
@@ -1651,6 +1664,7 @@ export default function ModernNavbar({ onLoginClick, onAdminClick, hideContentNa
         </div>
       )}
       <SuggestMovesbookLoginPrompt />
+      {(isAuthenticated || isAdmin) && <AdminPageTranslate />}
     </>
   );
 }
