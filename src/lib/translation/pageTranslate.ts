@@ -1,6 +1,11 @@
 /**
  * Machine-translates visible text in a DOM subtree ("Translate page").
  * Only text-node values and a few attributes are changed so React can keep reconciling.
+ *
+ * Hardening for chatty admin UIs (polling + lazy menus):
+ * - sessionStorage dictionary so expand/poll does not re-hit the API for known strings
+ * - single-flight request queue so parallel follow-ups cannot stampede the free providers
+ * - longer debounce + short negative cache for strings the API could not translate
  */
 
 import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
@@ -16,6 +21,12 @@ function getPageTranslateBearerToken(): string | null {
 const ATTRIBUTES = ['placeholder', 'title', 'aria-label'] as const;
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE', 'PRE', 'NOSCRIPT', 'SVG']);
 const BATCH_SIZE = 80;
+/** Wait for DOM churn (polls / accordion open) to settle before follow-up API calls. */
+const FOLLOW_UP_DEBOUNCE_MS = 1200;
+/** Do not re-request a string that just failed / came back empty. */
+const NEGATIVE_CACHE_MS = 60_000;
+const CACHE_PREFIX = 'movesbook:page-translate:v1:';
+const CACHE_MAX_ENTRIES = 4000;
 
 type Shown = { source: string; shown: string };
 
@@ -71,33 +82,91 @@ function applyPreservingSpacing(text: string, translatedCore: string): string {
   return lead + translatedCore + trail;
 }
 
+function cacheKey(sourceLanguage: string, targetLanguage: string): string {
+  return `${CACHE_PREFIX}${sourceLanguage}:${targetLanguage}`;
+}
+
+function loadDictionaryCache(sourceLanguage: string, targetLanguage: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (typeof sessionStorage === 'undefined') return map;
+  try {
+    const raw = sessionStorage.getItem(cacheKey(sourceLanguage, targetLanguage));
+    if (!raw) return map;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return map;
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof k === 'string' && typeof v === 'string' && k && v) map.set(k, v);
+    }
+  } catch {
+    // ignore corrupt cache
+  }
+  return map;
+}
+
+function persistDictionaryCache(
+  sourceLanguage: string,
+  targetLanguage: string,
+  dictionary: Map<string, string>,
+): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    const entries = [...dictionary.entries()];
+    const trimmed =
+      entries.length > CACHE_MAX_ENTRIES
+        ? entries.slice(entries.length - CACHE_MAX_ENTRIES)
+        : entries;
+    sessionStorage.setItem(
+      cacheKey(sourceLanguage, targetLanguage),
+      JSON.stringify(Object.fromEntries(trimmed)),
+    );
+  } catch {
+    // quota / private mode — ignore
+  }
+}
+
+/** Serialize all page-translate HTTP calls across controllers. */
+let translateQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueTranslate<T>(task: () => Promise<T>): Promise<T> {
+  const run = translateQueue.then(task, task);
+  translateQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function fetchTranslations(
   texts: string[],
   targetLanguage: string,
   sourceLanguage: string,
 ): Promise<Record<string, string>> {
-  const token = getPageTranslateBearerToken();
-  if (!token) throw new Error('Session not found. Please log in again.');
+  if (texts.length === 0) return {};
 
-  const out: Record<string, string> = {};
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const chunk = texts.slice(i, i + BATCH_SIZE);
-    const response = await fetch('/api/admin/page-translate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ texts: chunk, targetLanguage, sourceLanguage }),
-    });
-    if (!response.ok) {
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error || `Translation request failed (${response.status})`);
+  return enqueueTranslate(async () => {
+    const token = getPageTranslateBearerToken();
+    if (!token) throw new Error('Session not found. Please log in again.');
+
+    const out: Record<string, string> = {};
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const chunk = texts.slice(i, i + BATCH_SIZE);
+      const response = await fetch('/api/admin/page-translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ texts: chunk, targetLanguage, sourceLanguage }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || `Translation request failed (${response.status})`);
+      }
+      const data = (await response.json()) as { translations?: Record<string, string> };
+      Object.assign(out, data.translations ?? {});
     }
-    const data = (await response.json()) as { translations?: Record<string, string> };
-    Object.assign(out, data.translations ?? {});
-  }
-  return out;
+    return out;
+  });
 }
 
 export function createPageTranslateController(root: HTMLElement): PageTranslateController {
@@ -105,22 +174,57 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
   const attrState = new WeakMap<Element, Map<string, Shown>>();
   /** source core → translated core for the active target language */
   let dictionary = new Map<string, string>();
+  /** source core → earliest time we may ask the API again */
+  const negativeUntil = new Map<string, number>();
   let targetLanguage: string | null = null;
   let sourceLanguage = 'en';
   let busy = false;
   let observer: MutationObserver | null = null;
   let pendingFetch: Set<string> | null = null;
   let fetchTimer: ReturnType<typeof setTimeout> | null = null;
+  let followUpInFlight = false;
   let generation = 0;
 
   const lookup = (core: string): string | null => dictionary.get(core) ?? null;
+
+  const isNegativelyCached = (core: string): boolean => {
+    const until = negativeUntil.get(core);
+    if (until == null) return false;
+    if (until <= Date.now()) {
+      negativeUntil.delete(core);
+      return false;
+    }
+    return true;
+  };
+
+  const markMissingAsNegative = (requested: string[], translations: Record<string, string>) => {
+    const now = Date.now();
+    for (const text of requested) {
+      if (!translations[text]) negativeUntil.set(text, now + NEGATIVE_CACHE_MS);
+    }
+  };
+
+  const mergeTranslations = (translations: Record<string, string>) => {
+    let added = false;
+    for (const [k, v] of Object.entries(translations)) {
+      if (!k || !v) continue;
+      dictionary.set(k, v);
+      negativeUntil.delete(k);
+      added = true;
+    }
+    if (added && targetLanguage) {
+      persistDictionaryCache(sourceLanguage, targetLanguage, dictionary);
+    }
+  };
 
   const translateTextValue = (text: string): string => {
     const core = coreOf(text);
     if (!isTranslatableCore(core)) return text;
     const translated = lookup(core);
     if (translated == null) {
-      if (pendingFetch && targetLanguage) pendingFetch.add(core);
+      if (pendingFetch && targetLanguage && !isNegativelyCached(core)) {
+        pendingFetch.add(core);
+      }
       return text;
     }
     return applyPreservingSpacing(text, translated);
@@ -256,19 +360,39 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
     if (!targetLanguage || !pendingFetch || pendingFetch.size === 0) return;
     if (fetchTimer) clearTimeout(fetchTimer);
     fetchTimer = setTimeout(async () => {
-      const missing = [...(pendingFetch ?? [])].filter((t) => !dictionary.has(t));
+      if (followUpInFlight) {
+        // Another follow-up is running; retry after debounce so we keep coalescing.
+        schedulePendingFetch();
+        return;
+      }
+      const missing = [...(pendingFetch ?? [])].filter(
+        (t) => !dictionary.has(t) && !isNegativelyCached(t),
+      );
       pendingFetch = new Set();
       if (missing.length === 0 || !targetLanguage) return;
+
       const gen = generation;
+      const lang = targetLanguage;
+      const src = sourceLanguage;
+      followUpInFlight = true;
       try {
-        const translations = await fetchTranslations(missing, targetLanguage, sourceLanguage);
+        const translations = await fetchTranslations(missing, lang, src);
         if (gen !== generation) return;
-        Object.entries(translations).forEach(([k, v]) => dictionary.set(k, v));
+        markMissingAsNegative(missing, translations);
+        mergeTranslations(translations);
         walk(root);
       } catch (error) {
         console.error('Page translate follow-up failed:', error);
+        const until = Date.now() + NEGATIVE_CACHE_MS;
+        for (const text of missing) negativeUntil.set(text, until);
+      } finally {
+        followUpInFlight = false;
+        // Mutations during the request may have queued more strings.
+        if (gen === generation && pendingFetch && pendingFetch.size > 0) {
+          schedulePendingFetch();
+        }
       }
-    }, 400);
+    }, FOLLOW_UP_DEBOUNCE_MS);
   };
 
   const startObserver = () => {
@@ -305,16 +429,21 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
       try {
         stopObserver();
         restoreOriginal();
-        dictionary = new Map();
+        negativeUntil.clear();
         targetLanguage = nextTarget;
         sourceLanguage = nextSource;
+        dictionary = loadDictionaryCache(nextSource, nextTarget);
 
         if (nextTarget === nextSource) {
           targetLanguage = null;
+          dictionary = new Map();
           return;
         }
 
-        const cores = collectCores();
+        // Apply cached strings immediately so polls/menus feel translated while we fetch the rest.
+        walk(root);
+
+        const cores = collectCores().filter((c) => !dictionary.has(c));
         if (cores.length === 0) {
           startObserver();
           return;
@@ -322,7 +451,8 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
 
         const translations = await fetchTranslations(cores, nextTarget, nextSource);
         if (gen !== generation) return;
-        Object.entries(translations).forEach(([k, v]) => dictionary.set(k, v));
+        markMissingAsNegative(cores, translations);
+        mergeTranslations(translations);
         walk(root);
         startObserver();
       } finally {
@@ -335,6 +465,7 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
       stopObserver();
       restoreOriginal();
       dictionary = new Map();
+      negativeUntil.clear();
       targetLanguage = null;
       busy = false;
     },
@@ -352,6 +483,7 @@ export function createPageTranslateController(root: HTMLElement): PageTranslateC
       stopObserver();
       restoreOriginal();
       dictionary = new Map();
+      negativeUntil.clear();
       targetLanguage = null;
       busy = false;
     },
