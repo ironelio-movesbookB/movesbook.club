@@ -59,7 +59,6 @@ next-env.d.ts
 /config/tools-defaults/
 /config/favourites-defaults/
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -80,9 +79,6 @@ tmp/
 test-*.js
 
 # Environment / secrets (never commit)
-.env
-.env.*
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -105,3 +101,4 @@ package-lock.json
 branch_structure.json
 *.bak
 data/long-text-keys.json
+config.bat
