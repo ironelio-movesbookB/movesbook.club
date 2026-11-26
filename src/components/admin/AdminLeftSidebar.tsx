@@ -777,7 +777,7 @@ export default function AdminLeftSidebar({ isOpen, onToggle }: AdminSidebarProps
                    <span>OGP News</span>
                 </Link>
 
-                <Link href="/news-by-movesbook/indexall" className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
+                <Link href={isSuperAdmin ? '/admin/news/clubs' : '/news-by-movesbook/indexall'} className="flex items-center gap-3 px-3 py-2 bg-[#4f4f4f] border border-[#aeaeae] hover:bg-[#3d3d3d] transition text-sm text-white">
                    <Clipboard className="w-4 h-4 text-white" />
                    <span>News from clubs</span>
                 </Link>

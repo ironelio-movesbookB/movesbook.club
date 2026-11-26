@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { isClubAccountUserType } from '@/utils/dashboardRouting';
 
-type LegendKey =
+export type LegendKey =
   | 'single_user'
   | 'coach'
   | 'group'
@@ -17,7 +17,7 @@ type LegendKey =
   | 'club'
   | 'public_figure';
 
-type ListRow = {
+export type ListRow = {
   legendKey: LegendKey;
   resultType: 'user' | 'group' | 'team' | 'club';
   id: string;
@@ -82,17 +82,44 @@ function targetIsInvitableMember(legendKey: LegendKey): boolean {
 type Props = {
   initialQuery: string;
   initialSource: 'mypage' | 'myclub';
+  /** Legend kinds offered (and searchable). Defaults to all kinds. */
+  legendKeys?: LegendKey[];
+  /** Kinds enabled on first render (subset of legendKeys). */
+  initialEnabledKinds?: LegendKey[];
+  /** Hide the "Request Friendship" button on each result (e.g. super admin News from clubs). */
+  hideRequestFriendship?: boolean;
+  /** When set, clicking a result (image / title) selects it instead of only visiting its page. */
+  onSelectRow?: (row: ListRow) => void;
+  /** Overrides the page heading. */
+  title?: string;
+  /** Hide the "mypage / myclub" source tag next to the query. */
+  hideSourceTag?: boolean;
+  /** localStorage keys tried (in order) for the Bearer token. Super admin pages use 'adminToken'. */
+  tokenStorageKeys?: string[];
 };
 
-export function NetworkSearchListClient({ initialQuery, initialSource }: Props) {
+const DEFAULT_TOKEN_KEYS = ['token'];
+
+export function NetworkSearchListClient({
+  initialQuery,
+  initialSource,
+  legendKeys = ALL_LEGEND_KEYS,
+  initialEnabledKinds,
+  hideRequestFriendship = false,
+  onSelectRow,
+  title,
+  hideSourceTag = false,
+  tokenStorageKeys = DEFAULT_TOKEN_KEYS,
+}: Props) {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [rows, setRows] = useState<ListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enabledKinds, setEnabledKinds] = useState<Set<LegendKey>>(() => {
+    if (initialEnabledKinds?.length) return new Set<LegendKey>(initialEnabledKinds);
     if (initialSource === 'myclub') return new Set<LegendKey>(['club']);
-    return new Set(ALL_LEGEND_KEYS);
+    return new Set(legendKeys);
   });
 
   const load = useCallback(async () => {
@@ -105,8 +132,13 @@ export function NetworkSearchListClient({ initialQuery, initialSource }: Props) 
     setLoading(true);
     setError(null);
     try {
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      let token: string | null = null;
+      if (typeof window !== 'undefined') {
+        for (const key of tokenStorageKeys) {
+          token = localStorage.getItem(key);
+          if (token) break;
+        }
+      }
       const headers: HeadersInit = {};
       if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -127,7 +159,7 @@ export function NetworkSearchListClient({ initialQuery, initialSource }: Props) 
     } finally {
       setLoading(false);
     }
-  }, [initialQuery, initialSource, t]);
+  }, [initialQuery, initialSource, t, tokenStorageKeys]);
 
   useEffect(() => {
     void load();
@@ -143,21 +175,23 @@ export function NetworkSearchListClient({ initialQuery, initialSource }: Props) 
       const next = new Set(prev);
       if (next.has(kind)) next.delete(kind);
       else next.add(kind);
-      if (next.size === 0) return new Set(ALL_LEGEND_KEYS);
+      if (next.size === 0) return new Set(legendKeys);
       return next;
     });
   };
 
-  const resetLegend = () => setEnabledKinds(new Set(ALL_LEGEND_KEYS));
+  const resetLegend = () => setEnabledKinds(new Set(legendKeys));
 
-  const legendItems: { key: LegendKey; label: string }[] = [
-    { key: 'single_user', label: t('searchlist_legend_single_user') },
-    { key: 'coach', label: t('searchlist_legend_coach') },
-    { key: 'group', label: t('searchlist_legend_group') },
-    { key: 'team', label: t('searchlist_legend_team') },
-    { key: 'club', label: t('searchlist_legend_club') },
-    { key: 'public_figure', label: t('searchlist_legend_public_figure') },
-  ];
+  const legendItems: { key: LegendKey; label: string }[] = (
+    [
+      { key: 'single_user', label: t('searchlist_legend_single_user') },
+      { key: 'coach', label: t('searchlist_legend_coach') },
+      { key: 'group', label: t('searchlist_legend_group') },
+      { key: 'team', label: t('searchlist_legend_team') },
+      { key: 'club', label: t('searchlist_legend_club') },
+      { key: 'public_figure', label: t('searchlist_legend_public_figure') },
+    ] as { key: LegendKey; label: string }[]
+  ).filter((item) => legendKeys.includes(item.key));
 
   const viewerUserType = user?.userType;
   const isClubViewer = isClubAccountUserType(viewerUserType ?? '');
@@ -165,15 +199,19 @@ export function NetworkSearchListClient({ initialQuery, initialSource }: Props) 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-6 sm:px-4 lg:px-6">
       <h1 className="mb-1 text-lg font-semibold text-zinc-900 sm:text-xl">
-        {t('searchlist_title')}
+        {title ?? t('searchlist_title')}
       </h1>
       <p className="mb-4 text-sm text-zinc-600">
         {t('searchlist_query_heading')}
         <span className="font-medium text-zinc-800">&ldquo;{initialQuery}&rdquo;</span>
-        <span className="text-zinc-400"> · </span>
-        <span className="text-xs uppercase tracking-wide text-zinc-500">
-          {initialSource === 'myclub' ? 'myclub' : 'mypage'}
-        </span>
+        {hideSourceTag ? null : (
+          <>
+            <span className="text-zinc-400"> · </span>
+            <span className="text-xs uppercase tracking-wide text-zinc-500">
+              {initialSource === 'myclub' ? 'myclub' : 'mypage'}
+            </span>
+          </>
+        )}
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs text-zinc-700 shadow-sm sm:text-sm">
@@ -214,6 +252,8 @@ export function NetworkSearchListClient({ initialQuery, initialSource }: Props) 
               t={t}
               viewerUserType={viewerUserType}
               isClubViewer={isClubViewer}
+              hideRequestFriendship={hideRequestFriendship}
+              onSelect={onSelectRow}
             />
           ))}
         </ul>
@@ -227,11 +267,15 @@ function SearchResultCard({
   t,
   viewerUserType,
   isClubViewer,
+  hideRequestFriendship = false,
+  onSelect,
 }: {
   row: ListRow;
   t: (key: string) => string;
   viewerUserType: string | undefined;
   isClubViewer: boolean;
+  hideRequestFriendship?: boolean;
+  onSelect?: (row: ListRow) => void;
 }) {
   const isUser = row.resultType === 'user';
   const subscribedLabel = t('searchlist_user_since').replace(
@@ -252,7 +296,12 @@ function SearchResultCard({
       <div className="grid gap-4 p-4 sm:grid-cols-12 sm:items-start">
         <div className="flex flex-col gap-2 sm:col-span-3 lg:col-span-2">
           <div className="flex gap-2">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded border border-zinc-200 bg-zinc-100">
+            <div
+              className={`relative h-20 w-20 shrink-0 overflow-hidden rounded border border-zinc-200 bg-zinc-100 ${
+                onSelect ? 'cursor-pointer hover:ring-2 hover:ring-cyan-400' : ''
+              }`}
+              onClick={onSelect ? () => onSelect(row) : undefined}
+            >
               {row.image ? (
                 <Image src={row.image} alt="" className="h-full w-full object-cover" width={56} height={80} unoptimized />
               ) : (
@@ -288,7 +337,17 @@ function SearchResultCard({
             />
           </div>
           <p className="text-base font-semibold text-blue-700">
-            {row.title}
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(row)}
+                className="text-left hover:text-blue-900 hover:underline"
+              >
+                {row.title}
+              </button>
+            ) : (
+              row.title
+            )}
             {isUser && row.username ? (
               <span className="block text-sm font-normal text-zinc-600 sm:inline sm:pl-2">
                 ({row.username})
@@ -333,13 +392,15 @@ function SearchResultCard({
         </div>
 
         <div className="flex flex-col gap-2 sm:col-span-3">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-2 rounded border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 sm:text-sm"
-          >
-            <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
-            {t('searchlist_btn_request_friend')}
-          </button>
+          {hideRequestFriendship ? null : (
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 sm:text-sm"
+            >
+              <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
+              {t('searchlist_btn_request_friend')}
+            </button>
+          )}
           <Link
             href={`/searchresults/search/${encodeURIComponent(
               isUser ? (row.username || '').trim() || row.id : row.title

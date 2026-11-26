@@ -9,6 +9,7 @@
  */
 
 import { getAdminBearerToken } from '@/lib/admin/clientAdminAuth';
+import { mapLangForTranslationApi } from '@/utils/richTextTranslation';
 
 /** Prefer admin panel token; fall back to regular user JWT (athlete/club/team/…). */
 function getPageTranslateBearerToken(): string | null {
@@ -136,6 +137,120 @@ function enqueueTranslate<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Max characters per browser → Google request (one text per line). */
+const BROWSER_GTX_CHARS = 3500;
+/** Parallel browser → Google requests. */
+const BROWSER_GTX_CONCURRENCY = 3;
+/** After a CORS/network/429 failure, skip the browser path for a while and use the server. */
+const BROWSER_GTX_COOLDOWN_MS = 5 * 60_000;
+let browserGtxDisabledUntil = 0;
+
+function chunkByChars(texts: string[], maxChars: number): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let size = 0;
+  for (const text of texts) {
+    if (current.length > 0 && size + text.length + 1 > maxChars) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(text);
+    size += text.length + 1;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+class BrowserGtxUnavailable extends Error {}
+
+/**
+ * Free Google endpoint called from the viewer's browser, so traffic comes from each
+ * user's own IP instead of the server's datacenter IP (which Google throttles).
+ * Returns null per text when the response lines do not line up.
+ */
+async function browserGtxChunk(
+  texts: string[],
+  targetLanguage: string,
+  sourceLanguage: string,
+): Promise<(string | null)[]> {
+  const url =
+    `https://translate.googleapis.com/translate_a/single?client=gtx&dt=t` +
+    `&sl=${encodeURIComponent(mapLangForTranslationApi(sourceLanguage))}` +
+    `&tl=${encodeURIComponent(mapLangForTranslationApi(targetLanguage))}`;
+
+  let response: Response;
+  try {
+    // URLSearchParams body = form-urlencoded "simple" request → no CORS preflight.
+    response = await fetch(url, {
+      method: 'POST',
+      body: new URLSearchParams({ q: texts.join('\n') }),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new BrowserGtxUnavailable('network/CORS');
+  }
+  if (response.status === 429 || response.status === 403) {
+    throw new BrowserGtxUnavailable(String(response.status));
+  }
+  if (!response.ok) return texts.map(() => null);
+
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data) || !Array.isArray(data[0])) return texts.map(() => null);
+  const joined = (data[0] as unknown[][])
+    .map((part) => (typeof part?.[0] === 'string' ? part[0] : ''))
+    .join('');
+  const lines = joined.split('\n').map((l) => l.trim());
+  if (lines.length === texts.length) return lines.map((l) => l || null);
+
+  // Google merged/split lines: retry halves so one odd string doesn't lose the whole chunk.
+  if (texts.length === 1) return [null];
+  const mid = Math.ceil(texts.length / 2);
+  const [a, b] = await Promise.all([
+    browserGtxChunk(texts.slice(0, mid), targetLanguage, sourceLanguage),
+    browserGtxChunk(texts.slice(mid), targetLanguage, sourceLanguage),
+  ]);
+  return [...a, ...b];
+}
+
+/** Translate as much as possible in the browser; whatever fails is left for the server. */
+async function translateInBrowser(
+  texts: string[],
+  targetLanguage: string,
+  sourceLanguage: string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (typeof window === 'undefined' || Date.now() < browserGtxDisabledUntil) return out;
+
+  // Multi-line strings can't be sent one-per-line; the server handles those.
+  const single = texts.filter((t) => !t.includes('\n'));
+  const chunks = chunkByChars(single, BROWSER_GTX_CHARS);
+  let next = 0;
+
+  const worker = async () => {
+    while (next < chunks.length && Date.now() >= browserGtxDisabledUntil) {
+      const chunk = chunks[next++];
+      try {
+        const translated = await browserGtxChunk(chunk, targetLanguage, sourceLanguage);
+        translated.forEach((value, i) => {
+          if (value) out[chunk[i]] = value;
+        });
+      } catch (error) {
+        if (error instanceof BrowserGtxUnavailable) {
+          browserGtxDisabledUntil = Date.now() + BROWSER_GTX_COOLDOWN_MS;
+          console.warn('Browser translate unavailable, using server fallback:', error.message);
+        }
+        return;
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(BROWSER_GTX_CONCURRENCY, chunks.length) }, worker),
+  );
+  return out;
+}
+
 async function fetchTranslations(
   texts: string[],
   targetLanguage: string,
@@ -144,12 +259,18 @@ async function fetchTranslations(
   if (texts.length === 0) return {};
 
   return enqueueTranslate(async () => {
-    const token = getPageTranslateBearerToken();
-    if (!token) throw new Error('Session not found. Please log in again.');
+    const out = await translateInBrowser(texts, targetLanguage, sourceLanguage);
+    const remaining = texts.filter((t) => !out[t]);
+    if (remaining.length === 0) return out;
 
-    const out: Record<string, string> = {};
-    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-      const chunk = texts.slice(i, i + BATCH_SIZE);
+    const token = getPageTranslateBearerToken();
+    if (!token) {
+      if (Object.keys(out).length > 0) return out;
+      throw new Error('Session not found. Please log in again.');
+    }
+
+    for (let i = 0; i < remaining.length; i += BATCH_SIZE) {
+      const chunk = remaining.slice(i, i + BATCH_SIZE);
       const response = await fetch('/api/admin/page-translate', {
         method: 'POST',
         headers: {
@@ -159,6 +280,8 @@ async function fetchTranslations(
         body: JSON.stringify({ texts: chunk, targetLanguage, sourceLanguage }),
       });
       if (!response.ok) {
+        // Keep what the browser already translated rather than failing the whole page.
+        if (Object.keys(out).length > 0) return out;
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || `Translation request failed (${response.status})`);
       }

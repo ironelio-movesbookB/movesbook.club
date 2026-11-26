@@ -30,7 +30,8 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   /** OGP News needs the full main column; Current Users sidebar crowds the card grid. */
   const isOgpNewsPage = pathname?.startsWith('/admin/news/links');
   const isGlobalNewsPage = pathname?.startsWith('/admin/news/global');
-  const hideRightSidebar = isOgpNewsPage || isGlobalNewsPage;
+  const isClubsNewsPage = pathname?.startsWith('/admin/news/clubs');
+  const hideRightSidebar = isOgpNewsPage || isGlobalNewsPage || isClubsNewsPage;
 
   useEffect(() => {
     if (hideRightSidebar) {
